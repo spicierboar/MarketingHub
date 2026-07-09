@@ -2,9 +2,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import type { IntegrationHealthBundle, IntegrationHealthRow } from "@/lib/security-slice";
+import type { PublishingPlatformHealthRow } from "@/lib/publishing-connectors";
 
 function statusTone(
-  status: IntegrationHealthRow["status"],
+  status: IntegrationHealthRow["status"] | PublishingPlatformHealthRow["status"],
 ): "success" | "warning" | "danger" | "neutral" {
   switch (status) {
     case "healthy":
@@ -18,7 +19,9 @@ function statusTone(
   }
 }
 
-function statusLabel(status: IntegrationHealthRow["status"]): string {
+function statusLabel(
+  status: IntegrationHealthRow["status"] | PublishingPlatformHealthRow["status"],
+): string {
   switch (status) {
     case "healthy":
       return "Healthy";
@@ -86,6 +89,25 @@ export function SecurityHealthPanel({
                     ) : (
                       "—"
                     )}
+                  </td>
+                </tr>
+              ))}
+              {bundle.publishingPlatforms.map((row) => (
+                <tr key={`pub-${row.platform}`} className="align-top bg-muted/30">
+                  <td className="py-3 pr-4 pl-4 text-muted-foreground">
+                    <span className="text-xs">↳</span> {row.label}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <Badge tone={row.liveEligible ? "success" : "neutral"}>
+                      {row.liveEligible ? "Live" : "Off"}
+                    </Badge>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
+                    <p className="mt-1 text-xs text-muted-foreground">{row.detail}</p>
+                  </td>
+                  <td className="py-3 pr-4 text-muted-foreground">
+                    {row.oauthConfigured ? "OAuth configured" : "OAuth not configured"}
                   </td>
                 </tr>
               ))}

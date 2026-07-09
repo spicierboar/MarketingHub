@@ -31,6 +31,7 @@ import {
 import { logAction } from "@/lib/audit";
 import { assetsBlockingChannel } from "@/lib/assets";
 import { dispatchPublish } from "@/lib/publishing-connectors";
+import { recordProviderFailure } from "@/lib/security-slice";
 import { now } from "@/lib/utils";
 import type {
   ActingUser,
@@ -92,6 +93,7 @@ async function sendToPlatform(
     idempotencyKey?: string;
     lookup?: () => string | undefined;
     onPublish?: (detail: string) => void;
+    tenantId?: string;
   },
 ): Promise<{ ok: boolean; detail: string }> {
   const cached = sim?.lookup?.();
@@ -103,6 +105,9 @@ async function sendToPlatform(
   }
   const live = await dispatchPublish(integration, body);
   if (live) {
+    if (!live.ok && sim?.tenantId) {
+      recordProviderFailure("publishing", live.detail, sim.tenantId);
+    }
     if (live.ok && sim?.onPublish) sim.onPublish(live.detail);
     return live;
   }
@@ -258,6 +263,7 @@ export async function attemptScheduledPost(
     idempotencyKey: opts?.idempotencyKey,
     lookup: opts?.lookupSimulatedDetail,
     onPublish: opts?.onSimulatedPublish,
+    tenantId: actor.tenantId,
   });
   if (!result.ok) {
     const log = await settle("failed", result.detail);

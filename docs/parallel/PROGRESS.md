@@ -1,6 +1,6 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-09 (**W1 COMPLETE**)
+Last updated: 2026-07-09 (**W2 in flight**)
 
 **Owner lock:** Full SRS · vision · go-live = non-negotiable. See `docs/FULL-IMPLEMENTATION-PLAN.md` · `docs/parallel/FULL-ORCHESTRATION.md`.
 
@@ -36,16 +36,36 @@ Last updated: 2026-07-09 (**W1 COMPLETE**)
 | `m22_handoff` | yes |
 | `m23_handoff` | yes |
 | `w1_complete` | yes |
-| `w2_launched` | no |
+| `w2_launched` | yes |
 | `full_complete` | no |
 
 **Fixtures:** self-test **90/90** · queue-test **20/20** · migration **0028** on main (owner paste when ready)
 
 **Live flags:** OFF until W6.
 
-## Waves 2–7 — QUEUED
+## Wave 2 — IN FLIGHT
 
-W2 M24–M27 · W3 CRM/email/SMS/reviews · W4–W7 per FULL-IMPLEMENTATION-PLAN.md
+| Agent | Branch | Status |
+|-------|--------|--------|
+| M24 | `w2/m24-live-publish` | ✅ handoff |
+| M25 | `w2/m25-live-ads` | building |
+| M26 | `w2/m26-live-analytics` | building |
+| M27 | `w2/m27-public-api` | building |
+| M01-W2 | → main | waiting |
+
+| Flag | Status |
+|------|--------|
+| `m24_handoff` | yes |
+| `m25_handoff` | no |
+| `m26_handoff` | no |
+| `m27_handoff` | no |
+| `w2_complete` | no |
+
+**Fixtures:** self-test **93+** (90 baseline + M24) · live flags **OFF**
+
+## Waves 3–7 — QUEUED
+
+W3 CRM/email/SMS/reviews · W4–W7 per FULL-IMPLEMENTATION-PLAN.md
 
 ## Owner ops
 
