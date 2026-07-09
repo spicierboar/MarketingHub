@@ -79,6 +79,7 @@ const NAV: NavItem[] = [
   { href: "/branding", label: "Branding", icon: Palette, ownerOnly: true },
   { href: "/billing", label: "Billing & Plan", icon: CreditCard, ownerOnly: true },
   { href: "/admin", label: "Admin & Security", icon: ShieldAlert, adminOnly: true },
+  { href: "/developers", label: "Developers & API", icon: Handshake, adminOnly: true },
   { href: "/ai-control", label: "AI Control", icon: ShieldCheck, adminOnly: true },
   { href: "/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
   { href: "/platform-admin", label: "Platform Admin", icon: Landmark, platformAdminOnly: true },

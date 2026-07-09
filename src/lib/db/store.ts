@@ -56,6 +56,8 @@ import type {
   PublishingControls,
   PublishingIntegration,
   ConnectInvite,
+  ApiKey,
+  PartnerWebhook,
   PublishLog,
   Recommendation,
   ScheduledPost,
@@ -109,6 +111,8 @@ export interface DataStore {
   // Phase 7: Automated Publishing
   integrations: PublishingIntegration[];
   connectInvites: ConnectInvite[];
+  apiKeys: ApiKey[];
+  partnerWebhooks: PartnerWebhook[];
   publishLogs: PublishLog[];
   publishingControls: PublishingControls[]; // one per tenant (T1)
   // Phase 8: UTM tracking
@@ -1500,6 +1504,8 @@ function seed(): DataStore {
       },
     ],
     connectInvites: [],
+    apiKeys: [],
+    partnerWebhooks: [],
     publishLogs: [],
     publishingControls: tenants.map((tn) => ({
       tenantId: tn.id,

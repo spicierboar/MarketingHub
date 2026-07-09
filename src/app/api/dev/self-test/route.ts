@@ -17,6 +17,7 @@ import { timingSafeEqual } from "node:crypto";
 import { runIsolationSelfTest } from "@/lib/selftest/isolation";
 import { runPortalSelfTest } from "@/lib/selftest/portal";
 import { runClientReportsSelfTest } from "@/lib/selftest/client-reports";
+import { runPublicApiSelfTest } from "@/lib/selftest/public-api";
 import { devToolsOpen } from "@/lib/env";
 
 function constantTimeEquals(a: string, b: string): boolean {
@@ -47,19 +48,20 @@ function authorize(req: NextRequest): { ok: true } | { ok: false; status: number
 async function handle(req: NextRequest) {
   const auth = authorize(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const [iso, portal, reports] = await Promise.all([
+  const [iso, portal, reports, publicApi] = await Promise.all([
     runIsolationSelfTest(),
     runPortalSelfTest(),
     runClientReportsSelfTest(),
+    runPublicApiSelfTest(),
   ]);
-  const checks = [...iso.checks, ...portal.checks, ...reports.checks];
+  const checks = [...iso.checks, ...portal.checks, ...reports.checks, ...publicApi.checks];
   const failed = checks.filter((c) => !c.ok).length;
   const report = {
-    ok: iso.ok && portal.ok && reports.ok,
+    ok: iso.ok && portal.ok && reports.ok && publicApi.ok,
     passed: checks.length - failed,
     failed,
-    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed, ...reports.purgeFailed],
-    durationMs: iso.durationMs + portal.durationMs + reports.durationMs,
+    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed, ...reports.purgeFailed, ...publicApi.purgeFailed],
+    durationMs: iso.durationMs + portal.durationMs + reports.durationMs + publicApi.durationMs,
     checks,
   };
   return NextResponse.json(report, { status: report.ok ? 200 : 500 });

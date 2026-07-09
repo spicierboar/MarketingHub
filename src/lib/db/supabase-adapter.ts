@@ -42,6 +42,8 @@ import type {
   MenuDesign,
   Offer, OrderMenuItem, OrderingSettings, PhotoShoot, PhotographerProfile, PhotographerPackage, PhotoMarketplaceBooking, PromptTemplate, PublishingControls, PublishingIntegration, PublishLog,
   ConnectInvite,
+  ApiKey,
+  PartnerWebhook,
   RestaurantOrder,
   Recommendation, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
   SocialMention, SocialResponseDraft, Task, Tenant, TenantMember,
@@ -801,6 +803,58 @@ export const supabaseRepo = {
     }
     const { data } = await sb.from("connect_invites").update({ ...toRow(patch), updated_at: now() }).eq("id", inviteId).select("*").maybeSingle();
     return data ? toDomain<ConnectInvite>(data) : undefined;
+  },
+
+  async listApiKeys(tenantId: string): Promise<ApiKey[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("api_keys").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+    return many<ApiKey>(data);
+  },
+  async getApiKey(keyId: string): Promise<ApiKey | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("api_keys").select("*").eq("id", keyId).maybeSingle();
+    return data ? toDomain<ApiKey>(data) : undefined;
+  },
+  async getApiKeyByPrefix(prefix: string): Promise<ApiKey | undefined> {
+    const sb = svc(); if (!sb) return undefined;
+    const { data } = await sb.from("api_keys").select("*").eq("key_prefix", prefix).maybeSingle();
+    return data ? toDomain<ApiKey>(data) : undefined;
+  },
+  async createApiKey(input: Omit<ApiKey, "id" | "createdAt" | "updatedAt">): Promise<ApiKey> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("api_keys").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createApiKey: " + error.message);
+    return toDomain<ApiKey>(data);
+  },
+  async updateApiKey(keyId: string, patch: Partial<ApiKey>): Promise<ApiKey | undefined> {
+    const sb = svc(); if (!sb) return undefined;
+    const { data } = await sb.from("api_keys").update({ ...toRow(patch), updated_at: now() }).eq("id", keyId).select("*").maybeSingle();
+    return data ? toDomain<ApiKey>(data) : undefined;
+  },
+  async listPartnerWebhooks(tenantId: string): Promise<PartnerWebhook[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("partner_webhooks").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+    return many<PartnerWebhook>(data);
+  },
+  async getPartnerWebhook(webhookId: string): Promise<PartnerWebhook | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("partner_webhooks").select("*").eq("id", webhookId).maybeSingle();
+    return data ? toDomain<PartnerWebhook>(data) : undefined;
+  },
+  async createPartnerWebhook(input: Omit<PartnerWebhook, "id" | "createdAt" | "updatedAt">): Promise<PartnerWebhook> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("partner_webhooks").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createPartnerWebhook: " + error.message);
+    return toDomain<PartnerWebhook>(data);
+  },
+  async updatePartnerWebhook(webhookId: string, patch: Partial<PartnerWebhook>): Promise<PartnerWebhook | undefined> {
+    const sb = await usr(); if (!sb) {
+      const sbs = svc(); if (!sbs) return undefined;
+      const { data } = await sbs.from("partner_webhooks").update({ ...toRow(patch), updated_at: now() }).eq("id", webhookId).select("*").maybeSingle();
+      return data ? toDomain<PartnerWebhook>(data) : undefined;
+    }
+    const { data } = await sb.from("partner_webhooks").update({ ...toRow(patch), updated_at: now() }).eq("id", webhookId).select("*").maybeSingle();
+    return data ? toDomain<PartnerWebhook>(data) : undefined;
   },
 
   async appendPublishLog(input: Omit<PublishLog, "id" | "createdAt">): Promise<PublishLog> {

@@ -41,8 +41,8 @@ Last updated: 2026-07-09 (**W2 in flight**)
 | M24 | 2–3d | ✅ handoff |
 | M25 | 2–3d | ✅ handoff |
 | M26 | 1–2d | ✅ handoff |
-| M27 | 3–4d | ✅ handoff |
-| M01-W2 | 1–2d | waiting |
+| M27 | 3–4d | **building** |
+| M01-W2 | 1–2d | waiting (needs M27) |
 
 | Flag | Status |
 |------|--------|
@@ -50,7 +50,7 @@ Last updated: 2026-07-09 (**W2 in flight**)
 | `m24_handoff` | yes |
 | `m25_handoff` | yes |
 | `m26_handoff` | yes |
-| `m27_handoff` | yes |
+| `m27_handoff` | no |
 | `w2_complete` | no |
 
 **Target:** ~98/98 fixtures (90 baseline + 3 M24 + 5 M26) · live flags **OFF**
