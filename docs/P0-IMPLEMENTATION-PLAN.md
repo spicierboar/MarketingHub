@@ -14,7 +14,7 @@
 | 3 | Auto-publish on client approve | §21 |
 | 4 | Invite-only UX (signup hide) | §7 parked |
 
-**Out of P0:** CRM, public REST API, full video studio, continuous learning, `PUBLISHING_LIVE`/`ADS_LIVE` flip.
+**Out of P0 (Wave 0 only):** See `docs/FULL-IMPLEMENTATION-PLAN.md` — deferred items ship in Waves 1–7 (non-negotiable).
 
 ## Architecture
 
