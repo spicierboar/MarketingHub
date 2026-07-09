@@ -1,4 +1,4 @@
-﻿// Public REST API self-test — tenant isolation + key scoping.
+// Public REST API self-test — tenant isolation + key scoping.
 
 import {
   addMembership,
@@ -37,51 +37,30 @@ export async function runPublicApiSelfTest(): Promise<PublicApiReport> {
     name: "API Test A",
     kind: "agency",
     plan: "starter",
-    status: "active",
     timezone: "Australia/Sydney",
+    status: "active",
   });
   const t2 = await createTenant({
     name: "API Test B",
     kind: "agency",
     plan: "starter",
-    status: "active",
     timezone: "Australia/Sydney",
+    status: "active",
   });
   const user = await createUser({
     email: `api-test-${Date.now()}@example.dev`,
     name: "API Tester",
     role: "admin",
-    active: true,
   });
   await addMembership({ tenantId: t1.id, userId: user.id, role: "owner" });
   const c1 = await createCompany({
     tenantId: t1.id,
     name: "Co A",
-    status: "active",
-    profile: {
-      serviceAreas: [],
-      services: [],
-      callsToAction: [],
-      prohibitedClaims: [],
-      approvedClaims: [],
-      requiredDisclaimers: [],
-    },
-    documents: [],
     createdBy: user.id,
   });
   const c2 = await createCompany({
     tenantId: t2.id,
     name: "Co B",
-    status: "active",
-    profile: {
-      serviceAreas: [],
-      services: [],
-      callsToAction: [],
-      prohibitedClaims: [],
-      approvedClaims: [],
-      requiredDisclaimers: [],
-    },
-    documents: [],
     createdBy: user.id,
   });
 

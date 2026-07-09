@@ -1,0 +1,1 @@
+# M01-W2 integrator — merge m24->m25->m26->m27 · w2_complete=yes · spawn W3

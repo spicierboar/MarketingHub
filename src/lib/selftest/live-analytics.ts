@@ -31,12 +31,13 @@ function stubContent(): ContentItem {
     companyId: "co_analytics_stub",
     type: "social_post",
     title: "Analytics stub",
+    body: "stub",
     status: "published",
     versions: [],
     createdById: "u_stub",
     createdAt: t,
     updatedAt: t,
-  } as ContentItem;
+  };
 }
 
 export async function checkAnalyticsSimulatedWhenLiveOff(): Promise<{

@@ -1,26 +1,24 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-09, **P0 SHIPPED** — Wave 0 complete)
+> ## ▶ NEXT SESSION — START HERE (2026-07-09, **W2 SHIPPED** — Wave 2 complete)
 >
-> **P0 merged to `main`:** client portal (`/client`) · field sales wizard (`/sales/new-client`) · auto-publish on client approval · invite-only signup · portal RBAC + post-login routing. Handoffs archived under `docs/parallel/archive/M{16,17,18,19}-handoff.md`.
+> **W2 merged to `main`:** live publish adapters (M24) · live ads execution (M25) · live analytics import (M26) · public REST API + partner webhooks (M27). Handoffs: `docs/parallel/M{24,25,26,27}-handoff.md`.
 >
-> **Build state:** tsc clean · clean build (**62 routes**) · fixtures **self-test 77/77 + queue-test 20/20** (+10 portal checks in `src/lib/selftest/portal.ts`). Runner: `npx tsx scripts/run-fixtures.mjs`.
+> **Build state:** tsc clean · clean build (**68 routes**) · fixtures **self-test 103/103 + queue-test 20/20**. Runner: `npx tsx scripts/run-fixtures.mjs`.
 >
-> **Hard locks (unchanged):** `PUBLISHING_LIVE` / `ADS_LIVE` still **OFF** · migration **0028 DEFERRED** · no live flag flips until Wave 6.
+> **Hard locks (unchanged):** `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` still **OFF** · no live flag flips until Wave 6.
 >
-> **Owner session (unchanged):** migrations **0001–0015 + 0027 APPLIED** on Supabase. Meta business verification DONE. Google Cloud **billing blocked** · `GOOGLE_OAUTH_*` missing. Park Meta App Review + Google live work **together**.
+> **Owner migrations (paste when ready):**
+> ```powershell
+> notepad F:\MarketingHub\command-centre\supabase\migrations\0029_public_api.sql
+> notepad F:\MarketingHub\command-centre\supabase\migrations\0030_ad_campaign_external_id.sql
+> ```
+>
+> **Owner session (unchanged):** migrations **0001–0015 + 0027 + 0028 APPLIED** on Supabase. Meta business verification DONE. Google Cloud **billing blocked** · `GOOGLE_OAUTH_*` missing. Park Meta App Review + Google live work **together**.
 >
 > **Domains:** primary **`mangotickle.com.au`** · global **`mangotickle.com`** → redirect to `.com.au`.
 >
-> **▶ OWNER PILOT (~30 min on `https://mangotickle.com.au`):**
-> 1. Agency admin → `/sales/new-client` → test company + client member
-> 2. Client magic link → lands on `/client`
-> 3. Client request → agency drafts → client approves in portal
-> 4. Auto-publish sim path (audit / queue; live flags stay OFF)
-> 5. Token `/approve/[token]` still works
-> 6. `/signup` shows invite-only
->
-> **NEXT (orchestration):** W1 agents (M20–M23) auto-chain per `docs/parallel/FULL-ORCHESTRATION.md` when owner launches. **No further P0 agent spawns.**
+> **NEXT (orchestration):** W3 agents (M30–M33) auto-chain per `docs/parallel/FULL-ORCHESTRATION.md`. **`w3_launched=yes`** — spawn 4 parallel Tasks (CRM · email · SMS · reviews).
 >
 > **V1 builder track (prior):** modules 1–15 DONE (67/67 baseline). See history below.
 >

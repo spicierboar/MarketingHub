@@ -67,6 +67,13 @@ import {
   checkLiveAdsTranslateGoogle,
   checkLiveAdsTranslateMeta,
 } from "@/lib/selftest/live-ads";
+import {
+  checkAnalyticsSimulatedWhenLiveOff,
+  checkFetchLiveMetricsNullWhenOff,
+  checkGooglePlatformRoutedWhenLive,
+  checkPlatformPostIdParse,
+  checkResolvePostMetricsDeterministic,
+} from "@/lib/selftest/live-analytics";
 import { encryptToken } from "@/lib/crypto";
 import { createHmac } from "node:crypto";
 import {
@@ -666,8 +673,8 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("liveAds.simulatedWhenOff", () => checkLiveAdsSimulatedWhenOff());
     await expect("liveAds.dispatchNullWhenOff", () => checkLiveAdsDispatchNullWhenOff());
-    await expect("liveAds.translateMeta", () => checkLiveAdsTranslateMeta());
-    await expect("liveAds.translateGoogle", () => checkLiveAdsTranslateGoogle());
+    await expect("liveAds.translateMeta", async () => checkLiveAdsTranslateMeta());
+    await expect("liveAds.translateGoogle", async () => checkLiveAdsTranslateGoogle());
     await expect("liveAds.resolveFallsBack", () => checkLiveAdsResolveFallsBack());
 
     await expect("analytics.simulatedWhenLiveOff", () => checkAnalyticsSimulatedWhenLiveOff());
