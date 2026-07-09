@@ -9,6 +9,7 @@ import {
   createUser,
   getCompany,
   getCompanyEntitlement,
+  getMembership,
   getTenant,
   getUserByEmail,
   grantAccess,
@@ -21,6 +22,7 @@ import { isAddonId } from "@/lib/addons";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
 import { resolveOrigin } from "@/lib/origin";
+import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import type { AddonId, BusinessType, CompanyProfile } from "@/lib/types";
 
 const BUSINESS_TYPES: BusinessType[] = [
@@ -138,9 +140,26 @@ export async function provisionClientAction(formData: FormData) {
   if (!email || !name) throw new Error("Client name and email are required");
   const user = await assertSalesCompanyInTenant(companyId);
   const client = (await getUserByEmail(email)) ?? (await createUser({ email, name, role: "user" }));
-  await addMembership({ tenantId: user.tenantId, userId: client.id, role: "member" });
+  if (!(await getMembership(user.tenantId, client.id))) {
+    await addMembership({ tenantId: user.tenantId, userId: client.id, role: "member" });
+  }
   await grantAccess(client.id, companyId);
-  await logAction(user, "user.created", { targetType: "user", targetId: client.id, companyId, detail: name });
+  if (isSupabaseConfigured()) {
+    const sb = await getServerSupabase();
+    if (sb) {
+      const origin = await requestOrigin();
+      await sb.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${origin}/auth/callback` },
+      });
+    }
+  }
+  await logAction(user, "user.created", {
+    targetType: "user",
+    targetId: client.id,
+    companyId,
+    detail: `Field sales portal client ${name} (${email})`,
+  });
   revalidatePath("/users");
   redirect(wizardPath("done", companyId, { clientEmail: email }));
 }
