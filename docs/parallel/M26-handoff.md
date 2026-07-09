@@ -4,12 +4,16 @@
 
 ## Shipped
 
-- src/lib/analytics-connectors.ts - Meta + Google insights; CRM merge hook
-- src/lib/analytics.ts - resolvePostMetrics + publishedInScope wiring
-- src/lib/health-scores.ts - live/sim metrics in lead-volume factor
+- src/lib/analytics-connectors.ts - Meta Graph + Google Business Profile Performance API; CRM merge hook; platformPostIdFromPublishDetail()
+- src/lib/analytics.ts - resolvePostMetrics() + publishedInScope batch live/sim resolution
+- src/lib/health-scores.ts - lead-volume factor uses pre-resolved metrics
 - Self-test +5 (analytics.*)
 
 ## Flags
 
 - ANALYTICS_LIVE not flipped (hard lock)
 - m26_handoff=yes
+
+## Fan-in
+
+Push branch -> M01-W2 when M24-M27 handoffs ready.
