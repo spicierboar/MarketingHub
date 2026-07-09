@@ -43,6 +43,7 @@ Last updated: 2026-07-09 (**P0 COMPLETE**)
 | Flag | Status |
 |------|--------|
 | `w1_launched` | yes |
+| `m20_handoff` | yes |
 | `full_complete` | no |
 
 **M00 spawns W1** when `p0_complete=yes` ✅. **Live flags flip W6 only.**
