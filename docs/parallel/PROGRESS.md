@@ -2,7 +2,7 @@
 
 **Maintained by agent `M99-Orchestrator` + P0 finishing agents (orchestration flags only).**
 
-Last updated: 2026-07-09 (**M16 merged** — spawn M17+M18+M19)
+Last updated: 2026-07-09 (**M17+M18+M19 parallel launched**)
 
 ## Tracker (15 modules)
 
@@ -46,7 +46,7 @@ Last updated: 2026-07-09 (**M16 merged** — spawn M17+M18+M19)
 | Flag | Status |
 |------|--------|
 | `m16_merged` | yes |
-| `parallel_launched` | no |
+| `parallel_launched` | yes |
 | `m17_handoff` | no |
 | `m18_handoff` | no |
 | `m19_handoff` | no |
