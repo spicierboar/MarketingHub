@@ -321,6 +321,12 @@ export interface CompanyProfile {
     consentRecordedBy?: string;
     lastUrls?: string[];
   };
+  /** W1 M20 — client portal scheduled ROI reports (jsonb slice, no migration). */
+  clientReports?: {
+    scheduledEmail?: boolean;
+    lastSentAt?: string;
+    frequencyDays?: number;
+  };
 }
 
 export interface UploadedAsset {

@@ -20,6 +20,7 @@ import { runInServiceContext } from "@/lib/db/service-context";
 import { planIncludesAutomations } from "@/lib/billing";
 import { emptyQueueCounts, publishDuePosts } from "@/lib/publish-queue";
 import { runAutomations } from "@/lib/automation";
+import { runScheduledClientReports } from "@/lib/client-reports";
 import type { ActingUser } from "@/lib/types";
 
 // A synthetic actor scoped to one tenant. Its audit entries are honestly
@@ -45,9 +46,11 @@ export interface TenantTickResult {
   deferred: number; // held under a platform ceiling (see src/lib/platform-limits.ts)
   dead: number; // dead-lettered this tick after exhausting retries
   automationOutcomes: number;
+  clientReportsSent: number;
 }
 
 export async function runScheduledTick(): Promise<TenantTickResult[]> {
+  const origin = process.env.APP_ORIGIN?.trim().replace(/\/+$/, "") ?? "http://localhost:3000";
   const results: TenantTickResult[] = [];
   for (const tenant of await listTenants()) {
     if (tenant.status !== "active") continue;
@@ -74,10 +77,15 @@ export async function runScheduledTick(): Promise<TenantTickResult[]> {
       } catch {
         /* automation gate/errors never abort the tick */
       }
-      return { ...pub, automationOutcomes };
+      return { ...pub, automationOutcomes, clientReportsSent: 0 };
     });
-
     results.push({ tenantId: tenant.id, ...tick });
   }
+  try {
+    for (const rt of await runScheduledClientReports(origin)) {
+      const row = results.find((r) => r.tenantId === rt.tenantId);
+      if (row) row.clientReportsSent = rt.reportsSent;
+    }
+  } catch { /* best-effort */ }
   return results;
 }

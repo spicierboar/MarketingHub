@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { visibleContent, visibleRequests } from "@/lib/scope";
+import { buildClientRoiReport } from "@/lib/client-reports";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +9,12 @@ import { buttonClasses } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 
 export default async function ClientDashboardPage() {
-  const { user } = await requirePortalUser();
-  const requests = await visibleRequests(user);
-  const content = await visibleContent(user);
+  const { user, companyId } = await requirePortalUser();
+  const [requests, content, roi] = await Promise.all([
+    visibleRequests(user),
+    visibleContent(user),
+    buildClientRoiReport(user.tenantId, companyId),
+  ]);
   const openRequests = requests.filter((r) => !["completed", "cancelled", "published"].includes(r.status));
   const pendingApprovals = content.filter(
     (c) => c.status === "pending_approval" && c.clientReview?.status === "pending",
@@ -21,10 +25,11 @@ export default async function ClientDashboardPage() {
       <PageHeader title={`Welcome, ${user.name.split(" ")[0]}`} description="Track requests and approve content.">
         <Link href="/client/requests/new" className={buttonClasses()}>New request</Link>
       </PageHeader>
-      <div className="grid gap-4 p-6 sm:grid-cols-2">
+      <div className="grid gap-4 p-6 sm:grid-cols-3">
         {[
           { label: "Open requests", value: openRequests.length, href: "/client/requests" },
           { label: "Awaiting your approval", value: pendingApprovals.length, href: "/client/approvals" },
+          { label: "Leads (30 days)", value: roi.combined.totalLeads, href: "/client/reports" },
         ].map((s) => (
           <Link key={s.label} href={s.href}>
             <Card className="transition-colors hover:border-primary/40">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, CheckSquare, LogOut } from "lucide-react";
+import { LayoutDashboard, Inbox, CheckSquare, LogOut, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -10,6 +10,7 @@ const NAV = [
   { href: "/client", label: "Dashboard", icon: LayoutDashboard },
   { href: "/client/requests", label: "Requests", icon: Inbox },
   { href: "/client/approvals", label: "Approvals", icon: CheckSquare },
+  { href: "/client/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 
 export function ClientShell({
