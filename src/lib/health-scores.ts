@@ -14,7 +14,7 @@ import {
   listScheduledPosts,
   getTenant,
 } from "@/lib/db";
-import { metricsForPost } from "@/lib/analytics";
+import { metricsForPost, resolvePostMetrics, type PostMetrics } from "@/lib/analytics";
 import {
   detectPublishingCadence,
   type PublishingCadenceSignal,
@@ -60,6 +60,7 @@ export interface HealthScoreInput {
   campaigns: AdCampaign[];
   leads: Lead[];
   contentById?: Map<string, ContentItem>;
+  postMetricsById?: Map<string, PostMetrics>;
 }
 
 // ---- weights & thresholds ----------------------------------------------------
@@ -170,8 +171,9 @@ export function scoreLeadVolumeFactor(args: {
   companyId: string;
   contentById: Map<string, ContentItem>;
   todayIso: string;
+  postMetricsById?: Map<string, PostMetrics>;
 }): { score: number; evidence: string } {
-  const { leads, campaigns, posts, companyId, contentById, todayIso } = args;
+  const { leads, campaigns, posts, companyId, contentById, todayIso, postMetricsById } = args;
   const windowStart = addDays(todayIso, -30);
   const recentLeads = leads.filter(
     (l) => l.companyId === companyId && l.capturedAt.slice(0, 10) >= windowStart,
@@ -187,7 +189,10 @@ export function scoreLeadVolumeFactor(args: {
   const postLeads = published.reduce((sum, p) => {
     if (!p.id) return sum;
     const content = p.contentId ? contentById.get(p.contentId) : undefined;
-    return sum + metricsForPost(p as ScheduledPost, content).leads;
+    const metrics =
+      postMetricsById?.get(p.id) ??
+      metricsForPost(p as ScheduledPost, content);
+    return sum + metrics.leads;
   }, 0);
 
   const totalLeads = recentLeads.length + postLeads;
@@ -215,7 +220,8 @@ export function computeCompanyHealthScore(
   opts?: { attentionThreshold?: number },
 ): CompanyHealthScore {
   const threshold = opts?.attentionThreshold ?? DEFAULT_ATTENTION_THRESHOLD;
-  const { company, todayIso, posts, content, campaigns, leads, contentById } = input;
+  const { company, todayIso, posts, content, campaigns, leads, contentById, postMetricsById } =
+    input;
   const companyPosts = posts.filter((p) => p.companyId === company.id);
   const cadenceSignal = detectPublishingCadence(companyPosts, company.id, todayIso);
   const pendingCount = content.filter(
@@ -238,6 +244,7 @@ export function computeCompanyHealthScore(
     companyId: company.id,
     contentById: contentById ?? new Map(),
     todayIso,
+    postMetricsById,
   });
 
   const raw: { id: HealthFactorId; result: { score: number; evidence: string } }[] = [
@@ -288,6 +295,25 @@ export async function buildCompanyHealthScore(
     listLeads(tenantId, company.id),
   ]);
   const contentById = new Map(content.map((c) => [c.id, c]));
+  const windowStart = addDays(clock.today, -30);
+  const publishedForMetrics = posts.filter(
+    (p) =>
+      p.companyId === company.id &&
+      p.status === "published" &&
+      p.scheduledDate >= windowStart &&
+      p.scheduledDate <= clock.today,
+  );
+  const postMetricsById = new Map(
+    await Promise.all(
+      publishedForMetrics.map(async (post) => {
+        const metrics = await resolvePostMetrics(
+          post,
+          contentById.get(post.contentId),
+        );
+        return [post.id, metrics] as const;
+      }),
+    ),
+  );
 
   return computeCompanyHealthScore(
     {
@@ -298,6 +324,7 @@ export async function buildCompanyHealthScore(
       campaigns,
       leads,
       contentById,
+      postMetricsById,
     },
     opts,
   );
@@ -319,6 +346,24 @@ export async function buildTenantHealthScores(
     listLeads(tenantId),
   ]);
   const contentById = new Map(content.map((c) => [c.id, c]));
+  const windowStart = addDays(clock.today, -30);
+  const publishedForMetrics = posts.filter(
+    (p) =>
+      p.status === "published" &&
+      p.scheduledDate >= windowStart &&
+      p.scheduledDate <= clock.today,
+  );
+  const postMetricsById = new Map(
+    await Promise.all(
+      publishedForMetrics.map(async (post) => {
+        const metrics = await resolvePostMetrics(
+          post,
+          contentById.get(post.contentId),
+        );
+        return [post.id, metrics] as const;
+      }),
+    ),
+  );
 
   return companies
     .map((company) =>
@@ -331,6 +376,7 @@ export async function buildTenantHealthScores(
           campaigns,
           leads,
           contentById,
+          postMetricsById,
         },
         opts,
       ),

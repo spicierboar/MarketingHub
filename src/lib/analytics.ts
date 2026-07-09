@@ -8,10 +8,15 @@
 // real reporting logic that works unchanged on real numbers.
 
 import {
+  fetchLiveMetrics,
+  platformPostIdFromPublishDetail,
+} from "@/lib/analytics-connectors";
+import {
   listAiRuns,
   listCampaigns,
   listCompanies,
   listContent,
+  listPublishLogsForPosts,
   listRequests,
   listScheduledPosts,
   listSocial,
@@ -91,6 +96,16 @@ export function metricsForPost(
   return { reach, engagement, clicks, leads, emailOpens: 0, emailClicks: 0 };
 }
 
+export async function resolvePostMetrics(
+  post: ScheduledPost,
+  content: ContentItem | undefined,
+  platformPostId?: string,
+): Promise<PostMetrics> {
+  const live = await fetchLiveMetrics(post, { platformPostId });
+  if (live) return live;
+  return metricsForPost(post, content);
+}
+
 // Rough per-lead value by industry (production: from the CRM's won-deal data).
 export function leadValue(company: Company | undefined): number {
   const ind = (company?.profile.industry ?? "").toLowerCase();
@@ -110,22 +125,50 @@ export interface EnrichedPost {
 }
 
 async function publishedInScope(tenantId: string, companyIds?: Set<string>): Promise<EnrichedPost[]> {
-  // Prefetch content + companies once (Map lookups instead of per-post reads —
-  // one round-trip each on the Supabase path).
   const contentById = new Map((await listContent(tenantId)).map((c) => [c.id, c]));
   const companyById = new Map((await listCompanies(tenantId)).map((c) => [c.id, c]));
-  return (await listScheduledPosts(tenantId))
+  const published = (await listScheduledPosts(tenantId))
     .filter((p) => p.status === "published")
-    .filter((p) => !companyIds || companyIds.has(p.companyId))
-    .map((post) => {
-      const content = contentById.get(post.contentId);
-      return {
-        post,
-        content,
-        company: companyById.get(post.companyId),
-        metrics: metricsForPost(post, content),
-      };
-    });
+    .filter((p) => !companyIds || companyIds.has(p.companyId));
+
+  const logs =
+    published.length > 0
+      ? await listPublishLogsForPosts(
+          tenantId,
+          published.map((p) => p.id),
+        )
+      : [];
+  const platformPostIds = new Map<string, string>();
+  for (const log of logs) {
+    if (log.status !== "published" || !log.scheduledPostId) continue;
+    if (platformPostIds.has(log.scheduledPostId)) continue;
+    const pid = platformPostIdFromPublishDetail(log.detail);
+    if (pid) platformPostIds.set(log.scheduledPostId, pid);
+  }
+
+  const metricsByPostId = new Map(
+    await Promise.all(
+      published.map(async (post) => {
+        const content = contentById.get(post.contentId);
+        const metrics = await resolvePostMetrics(
+          post,
+          content,
+          platformPostIds.get(post.id),
+        );
+        return [post.id, metrics] as const;
+      }),
+    ),
+  );
+
+  return published.map((post) => {
+    const content = contentById.get(post.contentId);
+    return {
+      post,
+      content,
+      company: companyById.get(post.companyId),
+      metrics: metricsByPostId.get(post.id) ?? metricsForPost(post, content),
+    };
+  });
 }
 
 function sumMetrics(posts: EnrichedPost[]): PostMetrics {

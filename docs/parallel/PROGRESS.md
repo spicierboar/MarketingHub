@@ -39,8 +39,8 @@ Last updated: 2026-07-09 (**W2 integrator in flight**)
 | Agent | Branch | Status |
 |-------|--------|--------|
 | M24 | `w2/m24-live-publish` | ✅ merged |
-| M25 | `w2/m25-live-ads` | ✅ merging |
-| M26 | `w2/m26-live-analytics` | pending |
+| M25 | `w2/m25-live-ads` | ✅ merged |
+| M26 | `w2/m26-live-analytics` | ✅ merging |
 | M27 | `w2/m27-public-api` | pending |
 | M01-W2 | → main | **running** |
 
