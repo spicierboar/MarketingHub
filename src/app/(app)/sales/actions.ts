@@ -141,7 +141,12 @@ export async function provisionClientAction(formData: FormData) {
   const user = await assertSalesCompanyInTenant(companyId);
   const client = (await getUserByEmail(email)) ?? (await createUser({ email, name, role: "user" }));
   if (!(await getMembership(user.tenantId, client.id))) {
-    await addMembership({ tenantId: user.tenantId, userId: client.id, role: "member" });
+    await addMembership({
+      tenantId: user.tenantId,
+      userId: client.id,
+      role: "member",
+      portalOnly: true,
+    });
   }
   await grantAccess(client.id, companyId);
   if (isSupabaseConfigured()) {

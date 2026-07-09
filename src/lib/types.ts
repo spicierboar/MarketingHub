@@ -132,6 +132,7 @@ export interface TenantMember {
   userId: string;
   role: TenantRole;
   roleTitle?: RoleTitle; // granular §9 title within this tenant
+  portalOnly?: boolean; // explicit client-portal flag (migration 0028; field sales)
   createdAt: string;
 }
 

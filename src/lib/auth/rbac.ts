@@ -15,6 +15,7 @@ import {
   accessForUser,
   currentTerms,
   getCompany,
+  getMembership,
   getTenant,
   hasAcceptedTerms,
   listCompanies,
@@ -32,8 +33,12 @@ async function portalCompanyIdsInTenant(user: ActingUser): Promise<string[]> {
     .filter((id) => tenantIds.has(id));
 }
 
-// Portal user = tenant member with exactly one company_access row in the tenant.
+// Portal user = explicit portal_only on membership, or tenant member with exactly
+// one company_access row in the tenant (inference path when flag unset).
 export async function isPortalUser(user: ActingUser): Promise<boolean> {
+  if (user.tenantRole !== "member") return false;
+  const membership = await getMembership(user.tenantId, user.id);
+  if (membership?.portalOnly === true) return true;
   return (await portalCompanyIdsInTenant(user)).length === 1;
 }
 
