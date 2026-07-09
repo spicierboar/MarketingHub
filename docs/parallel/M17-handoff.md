@@ -28,9 +28,9 @@
 - `requirePortalUser()` in `src/lib/auth/rbac.ts` — returns `{ user, companyId }`
 - `(app)/layout.tsx` — portal users redirected to `/client`
 
-### M18 dependency (imported for E2E approve)
+### M18 dependency (portal approve API)
 
-- `src/lib/client-approval.ts` + `src/lib/auto-publish-on-approve.ts` from `p0/m18-auto-publish`
+- `src/app/(client)/actions.ts` calls `completeClientApproval()` from `@/lib/client-approval` (M16 stub on this branch; full engine on `p0/m18-auto-publish` — M00 merges m18 before m17)
 
 ## Do not touch (M17 boundary)
 
