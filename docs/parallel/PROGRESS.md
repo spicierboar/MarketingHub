@@ -32,7 +32,7 @@ Last updated: 2026-07-09 (**Full orchestration** — W0 in flight, W1–W7 queue
 | `m16_merged` | yes |
 | `parallel_launched` | yes |
 | `m17_handoff` | no |
-| `m18_handoff` | no |
+| `m18_handoff` | yes |
 | `m19_handoff` | no |
 | `m00_launched` | no |
 | `p0_complete` | no |
