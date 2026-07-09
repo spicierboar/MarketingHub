@@ -1,0 +1,445 @@
+
+Master AI Prompt
+SMB Marketing SaaS Enhancement
+Restaurants, Retail Stores, Hotels, and Marketing Agencies
+Version 1.0 | 07/07/2026
+Purpose
+This document contains a complete master prompt for instructing an AI coding agent to audit, extend, and improve an existing SaaS platform for SMB marketing. It integrates restaurant, retail, hotel, and agency requirements, including the AI Marketing Operating System.
+Use
+Paste the master prompt into an AI coding agent with access to the repository, database schema, environment variables, product documentation, and deployment configuration.
+Require the coding agent to audit the existing product before implementing any feature.
+Use the roadmap and acceptance criteria to control scope and avoid duplicated functionality.
+Prioritise backwards compatibility, data integrity, tenant isolation, and measurable business value.
+Prompt Structure
+Role and objective
+Product direction and target users
+Non-negotiable implementation rules
+Twenty-one implementation phases
+Security, compliance, testing, deployment, and documentation requirements
+Final platform outcome
+
+BEGIN MASTER PROMPT
+Role and Objective
+You are a senior SaaS Product Manager, UX Designer, Growth Marketer, Marketing Strategist, AI Engineer, Full Stack Software Architect, Security Architect, Data Architect, and QA Lead.
+Your objective is to transform our existing SaaS platform into a modern AI-powered marketing platform for small to medium businesses and marketing agencies. The platform must support restaurants, cafés, bars, retail stores, hotels, and agencies managing multiple clients.
+Do not rebuild the application from scratch. First analyse the existing codebase, database schema, APIs, UI, integrations, user roles, permissions, tenancy model, deployment process, and product workflows. Extend the existing system carefully while preserving backwards compatibility.
+The final product should operate as an AI-powered marketing operating system that enables users to plan, generate, publish, automate, analyse, and optimise marketing from a single secure SaaS platform.
+Core Product Direction
+Move the platform beyond simple content generation into an integrated marketing command centre.
+Support business owners who need simple, guided marketing execution without specialist knowledge.
+Support marketing agencies that need multi-client management, approvals, reporting, white labelling, and repeatable workflows.
+Prioritise high-return marketing activities: local discovery, review management, first-party customer data, email, SMS, social content, paid campaigns, loyalty, and AI-assisted recommendations.
+Design every feature around measurable outcomes: leads, bookings, orders, occupancy, repeat purchases, revenue, customer retention, and return on marketing spend.
+Use AI to assist, recommend, draft, analyse, and automate, but preserve human approval controls where risk, budget, compliance, or brand reputation is involved.
+Target Users
+Restaurant owners, café owners, bar operators, and venue managers.
+Retail store owners and managers, including single-store and multi-location retailers.
+Hotel owners, accommodation managers, revenue managers, event managers, and hospitality marketers.
+Marketing agency owners, account managers, content creators, campaign managers, and client approvers.
+Franchise groups and multi-location operators that need central oversight with local execution.
+Non-Negotiable Implementation Rules
+1. Audit before implementing. Do not modify major architecture until the existing system has been inspected and summarised.
+2. Do not duplicate existing functionality. Reuse existing components, services, patterns, permissions, UI elements, and database conventions where appropriate.
+3. Maintain backwards compatibility for existing users, data, integrations, subscriptions, permissions, and APIs.
+4. Use feature flags for substantial new capabilities so they can be enabled per tenant, role, plan, or beta group.
+5. Preserve tenant isolation. No user, agency, or client must be able to access another tenant's data unless explicitly authorised by the platform model.
+6. Treat AI output as untrusted until validated. Implement guardrails, brand rules, approval workflows, audit logs, and content safety checks.
+7. Design for extensibility. Future business types, social channels, AI providers, payment providers, and integrations should be addable without major rewrites.
+8. Write migrations carefully. Include rollbacks where possible and never perform destructive schema changes without a data migration and fallback plan.
+9. Write tests for critical logic, tenancy isolation, permissions, billing limits, automations, AI workflows, publishing flows, and integrations.
+10. Document every major feature, API change, environment variable, scheduled job, migration, permission, and admin setting.
+Platform Architecture Principles
+Use a modular domain-driven structure where practical: accounts, tenants, business profiles, campaigns, content, publishing, CRM, automations, analytics, reviews, billing, and AI services.
+Separate AI orchestration from provider-specific implementation so the platform can switch or support multiple AI providers.
+Use background jobs for long-running tasks such as publishing, analytics syncs, review imports, AI generation, report generation, and data enrichment.
+Use robust retry logic, rate-limit handling, error logging, and dead-letter queues for integrations and scheduled workflows.
+Centralise permissions and access control. Do not scatter permission checks inconsistently across controllers, services, and UI routes.
+Use event logging for important business events, such as campaign created, campaign approved, content published, review received, automation triggered, AI recommendation generated, and billing limit reached.
+Ensure observability through structured logs, error tracking, performance metrics, job monitoring, and admin health checks.
+Primary Product Outcomes
+Restaurants should increase bookings, repeat diners, online orders, loyalty participation, event attendance, and review quality.
+Retail stores should increase store visits, online sales, product discovery, repeat purchases, average order value, inventory movement, and customer retention.
+Hotels should increase direct bookings, occupancy, package sales, event enquiries, food and beverage spend, guest retention, and review quality.
+Agencies should manage more clients with less manual work, clearer approvals, consistent reporting, white-label delivery, and scalable campaign execution.
+Phase 1 - Platform Audit
+Perform a complete audit of the existing system before writing production code.
+Objectives
+Understand the existing product architecture, business model, and user workflows.
+Identify what can be reused, what should be refactored, and what must not be disturbed.
+Create an implementation roadmap that prioritises commercial value and technical safety.
+Required capabilities
+Map the current frontend architecture, backend architecture, database schema, authentication, authorisation, tenancy model, billing model, integrations, scheduled jobs, and deployment process.
+Identify existing modules related to campaigns, content, users, customers, analytics, social publishing, email, SMS, reviews, subscriptions, and admin settings.
+Identify duplicate functions, fragile code paths, untested critical areas, slow database queries, missing indexes, inconsistent UI patterns, and security risks.
+Produce a gap analysis for restaurant, retail, hotel, and agency requirements.
+Assess current AI features, prompts, provider usage, cost controls, token logging, output storage, safety checks, and brand controls.
+Acceptance criteria
+A written audit summary exists before implementation begins.
+Every proposed major feature has a clear reuse, extend, or build decision.
+High-risk changes are isolated behind feature flags or staged migrations.
+The roadmap separates MVP, next release, and later enterprise capabilities.
+Phase 2 - Business Type Profiles
+Implement configurable business profiles that drive AI context, feature availability, templates, dashboards, recommended campaigns, and data models.
+Required capabilities
+Restaurant, café, and bar profiles must support:
+menus, menu categories, daily specials, happy hours, events, bookings, online ordering, table capacity, service periods, dietary tags, gift cards, loyalty, QR menus, and review sources.
+campaign goals such as more weekday customers, more lunch bookings, more function enquiries, more repeat diners, more online orders, and higher average spend.
+Retail profiles must support:
+products, categories, brands, inventory, promotions, coupons, loyalty, product launches, seasonal campaigns, store events, online store links, click and collect, and Google Shopping readiness.
+campaign goals such as clearing stock, launching new products, driving foot traffic, increasing basket size, improving repeat purchases, and promoting seasonal ranges.
+Hotel profiles must support:
+rooms, rates, packages, amenities, food and beverage outlets, local attractions, conference rooms, wedding packages, event spaces, spa offers, direct booking links, occupancy data, and review sources.
+campaign goals such as increasing direct bookings, filling low-occupancy dates, selling packages, promoting events, attracting corporate bookings, and improving guest retention.
+Agency profiles must support:
+multi-client workspaces, white labelling, team permissions, client approvals, templates, reporting, billing, usage controls, client onboarding, and portfolio-level dashboards.
+client-level configuration for business type, brand voice, permissions, integrations, reporting cadence, and AI automation limits.
+Acceptance criteria
+A tenant can select or change its business type without corrupting existing data.
+Feature availability and templates adapt to the selected business type.
+AI outputs use the selected business type and business profile as persistent context.
+Agency accounts can manage multiple client profiles independently.
+Phase 3 - AI Marketing Assistant
+Create or enhance the AI Marketing Assistant so it produces commercially useful, brand-consistent marketing assets for each supported business type.
+Required capabilities
+Generate social posts, short-form video scripts, blog articles, website copy, landing pages, emails, SMS messages, ads, product descriptions, menu descriptions, hotel packages, local SEO content, FAQs, and promotional campaigns.
+Allow users to select campaign objective, audience, channel, location, offer, tone, brand voice, target demographic, season, budget level, urgency, and compliance restrictions.
+Use business profile data, prior content, approved brand guidelines, product or service details, customer segments, location details, and active promotions as context.
+Support variants for A/B testing, including different hooks, offers, calls to action, subject lines, captions, and ad angles.
+Provide AI critique and improvement suggestions before publication.
+Add plagiarism-style similarity checks or duplicate-content warnings where feasible.
+Store generated content with metadata: prompt, model, context sources, user, tenant, approval status, version, publication channel, and cost where available.
+Acceptance criteria
+AI content is generated from structured business context, not generic prompts only.
+Users can regenerate, edit, save, approve, schedule, and publish assets.
+Agency users can create content for specific clients without cross-client contamination.
+AI output includes clear disclaimers or review requirements for sensitive claims, regulated industries, and legal compliance.
+Implementation notes
+Do not hard-code a single AI vendor. Abstract model calls through an AI provider service.
+Implement token, cost, and usage limits per plan, tenant, user, and agency client where applicable.
+Phase 4 - Content Calendar
+Implement a marketing calendar that becomes the operational planning layer for campaigns and scheduled content.
+Required capabilities
+Support daily, weekly, monthly, and campaign timeline views.
+Allow drag-and-drop rescheduling where the frontend stack supports it.
+Support posts, email sends, SMS sends, ads, promotions, events, booking pushes, product launches, review requests, and local SEO updates.
+Add seasonal planning prompts for public holidays, school holidays, local events, annual campaigns, restaurant occasions, retail seasons, and hotel demand periods.
+Recommend optimal posting and send times using available analytics, channel rules, audience behaviour, and historical performance.
+Allow per-channel status tracking: draft, pending approval, approved, scheduled, publishing, published, failed, paused, archived.
+Provide agency-level calendar views across all clients with filtering by client, team member, approval status, business type, and channel.
+Acceptance criteria
+Users can plan a multi-channel campaign from one calendar interface.
+Scheduled items retain audit history and change history.
+Failed publishing jobs are visible and retryable.
+Agency users can prevent accidental publishing to the wrong client account.
+Phase 5 - Social Media Management
+Implement or extend social media planning, publishing, approval, and analytics workflows.
+Required capabilities
+Integrate where technically and commercially feasible with Facebook, Instagram, LinkedIn, TikTok, X, Pinterest, YouTube Shorts, and Google Business Profile.
+Support multi-account management, OAuth connection status, token refresh, permissions, disconnection flows, and channel-specific publishing rules.
+Generate channel-specific copy, hashtags, image prompts, video scripts, calls to action, and post variants.
+Support drafts, approvals, scheduled posts, media library selection, link tracking, UTM parameters, and publication logs.
+Provide engagement monitoring where APIs permit: likes, comments, shares, impressions, reach, clicks, saves, follows, and profile actions.
+Add safeguards for missing media, incorrect aspect ratios, excessive text, unsupported formats, expired tokens, and channel rate limits.
+Include a content repurposing workflow that turns one campaign idea into channel-specific assets.
+Acceptance criteria
+Users can create, approve, schedule, and publish social content from within the platform.
+Channel errors are clear, logged, and recoverable.
+Agency approvals prevent accidental publication before client approval where configured.
+Analytics are tied back to campaigns where possible.
+Phase 6 - Review Management and Reputation
+Centralise review monitoring, response drafting, sentiment analysis, and reputation reporting.
+Required capabilities
+Connect review sources where available, including Google, Facebook, TripAdvisor, Yelp, and industry-specific sources for hospitality and accommodation.
+Import review rating, review text, reviewer name where available, date, source, business location, response status, and response history.
+Provide AI sentiment analysis, topic extraction, urgency scoring, complaint detection, praise detection, and trend summaries.
+Generate response drafts that match brand voice, acknowledge specifics, avoid defensive language, and escalate serious complaints for human handling.
+Create review request campaigns through email, SMS, QR code, receipt links, post-stay emails, and post-purchase flows.
+Provide reputation score, rating trend, review volume, response time, unresolved reviews, and recurring issue reports.
+Support competitor benchmarking where reliable and lawful data is available.
+Acceptance criteria
+Users can see reviews from connected sources in one place.
+AI response drafts can be edited, approved, and tracked.
+Review alerts can be configured for low ratings, urgent sentiment, or unresolved complaints.
+Reports identify recurring operational issues, not just marketing metrics.
+Phase 7 - Customer CRM and First-Party Data
+Implement or enhance a CRM that allows SMBs and agencies to build owned customer relationships.
+Required capabilities
+Support customer profiles, contact details, consent status, marketing preferences, tags, segments, notes, purchase history, booking history, visit history, loyalty data, review history, and engagement history.
+Support import, export, deduplication, merge, consent tracking, unsubscribe handling, and data deletion requests.
+Create segments based on behaviour, recency, frequency, spend, product interest, room interest, dining preference, location, birthday, anniversary, campaign engagement, and loyalty status.
+For restaurants, track diners, bookings, dietary preferences, visits, spend, and event attendance where data is available.
+For retail, track product interest, purchases, cart activity, replenishment cycles, average order value, and store preference where data is available.
+For hotels, track stays, booking source, stay purpose, guest preferences, package interest, event enquiries, and post-stay feedback where data is available.
+Provide AI recommendations for segments and campaigns based on customer behaviour.
+Acceptance criteria
+CRM data is tenant-isolated and permission-controlled.
+Consent and unsubscribe rules are enforced across email and SMS workflows.
+Segments can be used in campaigns, automations, analytics, and AI recommendations.
+Data imports include validation, error reporting, and duplicate handling.
+Phase 8 - Marketing Automation Workflows
+Create visual or structured automation workflows for common SMB marketing scenarios.
+Required capabilities
+Support triggers, conditions, delays, actions, goals, exits, and suppression rules.
+Triggers should include customer created, booking made, booking abandoned, purchase made, cart abandoned, review received, loyalty threshold reached, birthday upcoming, anniversary upcoming, email clicked, SMS clicked, campaign ended, occupancy below threshold, table bookings below target, and inventory overstocked.
+Actions should include send email, send SMS, create task, request review, add tag, remove tag, update segment, notify staff, draft social post, create campaign recommendation, and pause sequence.
+Include templates for welcome sequence, birthday offer, abandoned booking, abandoned cart, loyalty reminder, win-back campaign, review request, event reminder, reservation confirmation, post-stay follow-up, and product replenishment reminder.
+Support quiet hours, frequency caps, opt-out enforcement, duplicate prevention, and failure retries.
+Allow agencies to create reusable automation templates and deploy them across clients with client-specific variables.
+Acceptance criteria
+Automations can be created, tested, enabled, paused, cloned, and audited.
+Users can see enrolment, completion, failure, conversion, and revenue attribution where available.
+Automations respect consent, unsubscribes, permissions, tenant boundaries, and plan limits.
+No automation should send external communications without a clear trigger and compliance check.
+Phase 9 - AI Analytics and Insight Narratives
+Build analytics dashboards that explain performance in plain commercial terms and recommend action.
+Required capabilities
+Track revenue trends, campaign ROI, leads, bookings, orders, occupancy, table utilisation, inventory performance, social growth, review trends, email performance, SMS performance, customer growth, retention, repeat purchase rate, average order value, customer lifetime value, and conversion rates.
+Provide business-type dashboards: restaurant performance, retail performance, hotel performance, and agency portfolio performance.
+Connect metrics to campaigns and customer segments where data allows.
+Generate AI insight summaries explaining what changed, why it may have changed, what action is recommended, and what risk or uncertainty exists.
+Flag anomalies such as sudden review drops, campaign underperformance, unexplained traffic loss, booking declines, revenue spikes, or channel failures.
+Allow comparison by period, location, channel, campaign, audience, and client.
+Support exportable reports in formats suitable for owners, managers, and agency clients.
+Acceptance criteria
+Dashboards show metrics that matter commercially, not vanity metrics alone.
+AI insights are grounded in available platform data and state uncertainty where data is incomplete.
+Agency reports can be generated per client and across the client portfolio.
+Users can trace recommendations back to underlying data.
+Phase 10 - Local Marketing, SEO, and AI Search Readiness
+Implement tools that improve visibility in local search, map results, traditional search, and AI-driven answer engines.
+Required capabilities
+Generate and schedule Google Business Profile posts, offers, updates, events, products, menu updates, and service descriptions where available.
+Audit business name, address, phone, opening hours, categories, services, attributes, photos, FAQs, reviews, and links across connected profiles.
+Generate local landing pages, suburb or neighbourhood pages, FAQ content, service pages, product collection pages, event pages, and destination content.
+Support AI search optimisation by producing clear, factual, structured answers that describe the business, services, location, products, offers, menu, rooms, packages, and policies.
+Recommend schema markup where the tech stack supports it: local business, restaurant, product, hotel, event, FAQ, offer, review, and organisation.
+Provide SEO score, local visibility score, content gaps, review gaps, competitor gaps, and technical recommendations.
+Track ranking and visibility data where available through approved integrations or user-provided data.
+Acceptance criteria
+The platform can generate local marketing assets specific to each business type and location.
+SEO recommendations are actionable and linked to pages, profiles, or content items.
+AI-generated SEO content avoids unsupported claims and uses business-approved facts.
+Multi-location businesses can manage local content without duplicating effort.
+Phase 11 - Loyalty, Offers, and Referrals
+Create loyalty and offer tools that improve repeat business and measurable customer retention.
+Required capabilities
+Support points, membership tiers, digital cards, coupons, referral rewards, birthday rewards, anniversary rewards, visit-based rewards, spend-based rewards, and VIP segments.
+Allow businesses to create offers with rules: expiry, usage limits, channel restrictions, customer segment, location, product category, minimum spend, booking window, stay date, or service period.
+Support restaurant offers such as weekday lunch offers, happy hour, tasting menu promotions, event tickets, and birthday dining rewards.
+Support retail offers such as flash sales, stock clearance, product bundle offers, new arrival campaigns, and replenishment reminders.
+Support hotel offers such as stay packages, direct booking perks, midweek offers, spa bundles, restaurant credits, and event packages.
+Track redemption, revenue, cost, repeat purchase, and campaign attribution where data is available.
+Generate AI offer recommendations based on business goals, demand gaps, inventory, booking trends, and customer segments.
+Acceptance criteria
+Offers can be created, distributed, redeemed, tracked, and reported.
+Customers are not sent offers if they lack the correct consent or are suppressed by frequency rules.
+Loyalty status can be used in segmentation, automations, and AI recommendations.
+Offer abuse controls are implemented where redemption is handled by the platform.
+Phase 12 - Email Marketing
+Implement email marketing tools suitable for both direct SMB use and agency-managed campaigns.
+Required capabilities
+Build or extend an email builder with templates, sections, personalisation tokens, brand styling, preview, testing, scheduling, and campaign analytics.
+Support AI-generated subject lines, preview text, body copy, calls to action, product blocks, menu blocks, room package blocks, event blocks, and offer blocks.
+Support segmentation, suppression lists, unsubscribe handling, consent checks, bounced email tracking, spam-risk warnings, and send throttling.
+Support A/B testing for subject lines, offers, creative, calls to action, and send times.
+Provide templates for newsletters, product launches, weekly specials, event promotions, review requests, post-stay follow-ups, abandoned booking, abandoned cart, win-back, and loyalty campaigns.
+Track opens, clicks, conversions, unsubscribes, bounces, complaints, revenue where available, and attribution to campaigns.
+Allow agencies to create reusable templates with client-specific brand variables.
+Acceptance criteria
+Emails can be drafted, tested, approved, scheduled, sent, and reported.
+Unsubscribe and consent rules are enforced before sending.
+A/B test results are visible and can inform AI recommendations.
+Email assets are linked to campaigns, segments, and calendar items.
+Phase 13 - SMS Marketing
+Implement SMS marketing for timely, consent-based communication.
+Required capabilities
+Support promotional SMS, booking reminders, reservation confirmations, delivery updates, flash sales, coupons, review requests, loyalty updates, event reminders, and post-stay follow-ups.
+Implement strict consent management, opt-out handling, sender identity settings, quiet hours, frequency caps, country rules, and audit logs.
+Support short links, UTM tracking, coupon codes, personalisation tokens, and segment targeting.
+Provide AI-generated SMS variants that respect character limits, clarity, brand voice, and compliance requirements.
+Track delivery, clicks, opt-outs, failures, conversions where available, and campaign attribution.
+Allow agencies to manage SMS campaigns per client with spending limits and approval workflows.
+Acceptance criteria
+No SMS can be sent to customers without valid consent and opt-out support.
+SMS campaigns show estimated cost before sending where provider pricing is available.
+Opt-outs are processed immediately across future SMS workflows.
+SMS templates can be reused in automations and campaign builder flows.
+Phase 14 - AI Campaign Builder
+Create an AI campaign builder that converts plain-language business goals into complete multi-channel campaign plans.
+Required capabilities
+Accept goals such as: I want more weekday customers, I want to fill hotel rooms next weekend, I want to clear excess stock, I want more repeat customers, I want to increase average order value, I want more direct bookings, I want more reviews, and I want to promote a local event.
+Ask only necessary clarifying questions. Use known business profile data where available instead of repeatedly asking the user.
+Generate campaign strategy, target audience, offer, channel plan, content assets, email, SMS, social posts, ads, landing page copy, budget recommendation, schedule, KPIs, and reporting plan.
+Support industry-specific campaign types: restaurant specials and events, retail product launches and stock clearance, hotel packages and occupancy pushes, and agency client campaigns.
+Allow users to approve the campaign plan before individual assets are created or scheduled.
+Allow one-click creation of campaign calendar items, automation flows, segments, landing pages, and reports where supported by the system.
+Provide risk warnings for unrealistic claims, overly aggressive discounts, insufficient audience size, budget mismatch, and compliance concerns.
+Acceptance criteria
+A user can move from business objective to draft campaign assets in one guided workflow.
+Every generated campaign has measurable KPIs and a reporting plan.
+Users can edit, approve, schedule, and publish generated campaign assets.
+Agencies can run the same workflow for individual clients while preserving client-specific brand rules.
+Phase 15 - Marketing Agency Features
+Implement agency-specific features that make the platform commercially useful for agencies managing multiple SMB clients.
+Required capabilities
+Support agency accounts with multiple client workspaces and strong data separation between clients.
+Support roles such as agency owner, admin, account manager, strategist, content creator, analyst, client admin, client approver, and viewer.
+Implement white labelling: agency logo, colours, custom domain where supported, email branding, client portal branding, and report branding.
+Implement client onboarding: intake forms, brand questionnaire, business profile, integrations checklist, asset upload, goals, approval rules, and reporting preferences.
+Create client approval workflows for campaign plans, social posts, emails, SMS, ads, landing pages, and AI-MOS recommendations.
+Provide agency dashboards across clients: campaign status, overdue approvals, performance, usage, AI spend, social publishing status, review alerts, and client health scores.
+Support agency-level templates, reusable campaign kits, reusable automation recipes, reusable reports, and bulk operations with careful safeguards.
+Support client billing and usage reporting where the existing billing architecture permits.
+Acceptance criteria
+Agency users can manage multiple clients without data leakage.
+Client users see only their workspace and approval items.
+White-labelled client-facing views do not expose platform branding where white label is enabled.
+Agencies can standardise delivery without sacrificing client-specific configuration.
+Phase 16 - AI Knowledge Base and RAG
+Implement a business knowledge base so AI output is grounded in current and approved business information.
+Required capabilities
+Store structured business knowledge: brand guidelines, tone, approved phrases, banned phrases, products, services, menus, rooms, packages, staff, locations, FAQs, policies, customer personas, competitors, seasonal events, and past campaign results.
+Allow uploads or imports of documents, menus, product lists, room sheets, brand guides, price lists, FAQs, and previous marketing materials.
+Use retrieval-augmented generation where appropriate so AI references current business information rather than relying on model memory.
+Version important knowledge sources and record when they were created, updated, approved, archived, or superseded.
+Allow users to mark content as approved, draft, outdated, prohibited, or seasonal.
+Prevent AI from using outdated or unapproved information where the workflow requires approved sources only.
+Cite or display the internal sources used for important AI recommendations where the UI supports it.
+Acceptance criteria
+AI generation can use tenant-specific knowledge safely and consistently.
+Knowledge sources are scoped correctly to tenant, agency, and client.
+Users can update business information without code changes.
+AI outputs can show what business facts or documents were used.
+Phase 17 - AI Recommendations
+Create a recommendation engine that surfaces practical marketing opportunities based on business profile, customer data, campaigns, reviews, and analytics.
+Required capabilities
+Recommend campaign ideas, seasonal promotions, content topics, SEO improvements, social improvements, review improvements, loyalty offers, cross-sells, upsells, pricing opportunities, retention campaigns, and revenue opportunities.
+Rank recommendations by expected commercial value, confidence, effort, urgency, required data, and risk.
+Explain why each recommendation is being made and what data supports it.
+Allow users to accept, dismiss, snooze, delegate, or convert recommendations into campaigns, tasks, content, automations, or calendar items.
+Avoid repetitive recommendations. Learn from user dismissals, approvals, campaign results, and business preferences.
+Provide agency portfolio recommendations, such as clients needing attention, underperforming accounts, overdue approvals, and reusable campaign opportunities.
+Allow recommendation settings by tenant, business type, client, plan, and user role.
+Acceptance criteria
+Recommendations are specific enough to act on.
+Users can trace recommendations to data or stated assumptions.
+Dismissed recommendations are not immediately repeated without new supporting data.
+Accepted recommendations can become workflows inside the platform.
+Phase 18 - Executive Dashboard and Health Scores
+Create a dashboard that gives owners, managers, and agencies a fast view of marketing health and recommended action.
+Required capabilities
+Show marketing health score, reputation score, local SEO score, AI readiness score, customer engagement score, retention score, campaign performance, revenue performance, and team productivity where data is available.
+Create business-type scorecards for restaurants, retail, hotels, and agencies.
+Use clear status indicators: healthy, watch, action needed, urgent, data missing.
+Explain the score methodology in plain language and allow admin configuration where appropriate.
+Surface next best actions rather than only charts.
+Provide owner-level summaries, manager-level operational views, and agency-level portfolio views.
+Support date comparison, location comparison, channel comparison, and client comparison.
+Acceptance criteria
+The dashboard gives a user a clear view of what is working, what is failing, and what to do next.
+Scores are not black boxes. Users can inspect contributing factors.
+Missing data is clearly identified and not hidden behind false precision.
+Agency users can identify which clients require immediate attention.
+Phase 19 - AI Marketing Operating System
+Implement an AI Marketing Operating System, referred to as AI-MOS, that acts as a proactive marketing manager for each business or agency client.
+Objectives
+Move the product beyond AI content generation into proactive business growth management.
+Continuously monitor key marketing, sales, customer, reputation, and operational signals.
+Detect opportunities or risks and convert them into recommended campaigns or actions.
+Respect approval settings, budget limits, risk tolerance, compliance rules, and brand restrictions.
+Required capabilities
+AI-MOS must continuously monitor:
+campaign performance, revenue trends, booking trends, occupancy trends, table utilisation, customer retention, customer lifetime value, average order value, review sentiment, social engagement, email performance, SMS performance, website traffic, local SEO performance, competitor activity where available, and integration health.
+AI-MOS should identify opportunities such as:
+slow weekday trade, unsold hotel inventory, low booking periods, declining repeat customer rates, poor review trends, underperforming campaigns, seasonal promotion opportunities, stock clearance opportunities, cross-selling opportunities, upselling opportunities, direct booking opportunities, abandoned booking recovery, customer win-back opportunities, and review recovery campaigns.
+For each opportunity, AI-MOS should generate:
+diagnosis, recommended campaign, target audience, marketing channels, content assets, offer strategy, campaign schedule, budget recommendation, forecasted impact, KPIs, risk level, approval requirements, and expected measurement window.
+AI-MOS must support configurable execution modes:
+auto-suggest only, draft campaign for approval, schedule after approval, publish after approval, and fully automated execution within approved limits.
+Agency users must be able to configure AI-MOS settings per client, including:
+risk tolerance, monthly budget limits, campaign approval rules, brand restrictions, excluded topics, preferred channels, reporting frequency, automation limits, and escalation rules.
+AI-MOS must include audit logs showing:
+what the AI detected, what it recommended, what data it used, what assumptions it made, who approved it, what was scheduled, what was published, what budget was used, and what result occurred.
+Implement explainability. AI-MOS must clearly state the evidence behind each recommendation and distinguish between observed data and inferred causes.
+Implement guardrails. AI-MOS must not spend money, publish externally, send customer communications, or change business-critical settings unless the tenant's approval rules allow it.
+Implement feedback loops. Campaign outcomes should improve future recommendations and prioritisation.
+Acceptance criteria
+AI-MOS can detect at least one actionable opportunity per supported business type using available platform data or mock data in development.
+AI-MOS recommendations can be converted into campaigns, calendar items, tasks, or automations.
+AI-MOS respects approval rules and budget limits.
+Every AI-MOS action is auditable.
+The system can run safely in suggest-only mode for conservative tenants and fully automated mode only within explicit limits.
+Phase 20 - Security, Compliance, and Operational Controls
+Review and strengthen security, privacy, permissions, compliance, and operational resilience across the platform.
+Required capabilities
+Audit authentication, authorisation, role-based access control, tenant isolation, agency-client permissions, session handling, password policies, MFA support where available, and admin impersonation controls.
+Ensure encryption in transit and at rest where infrastructure permits.
+Protect API endpoints with authentication, authorisation, validation, rate limiting, request size limits, and structured error handling.
+Implement audit logging for login events, permission changes, billing changes, integration connections, campaign approvals, external publications, AI actions, exports, imports, and destructive changes.
+Review privacy controls for customer data, consent, unsubscribe handling, data deletion, exports, and retention.
+Add AI-specific controls: prompt injection resistance, tenant context isolation, model output filtering, sensitive data minimisation, cost monitoring, and provider failure handling.
+Add backup, disaster recovery, job monitoring, integration health checks, error alerting, and admin diagnostics.
+Include compliance reminders for applicable anti-spam, privacy, consumer protection, advertising, platform, and industry-specific rules. Do not provide legal advice inside the product unless explicitly reviewed and approved.
+Acceptance criteria
+Critical permission and tenancy paths are tested.
+Sensitive actions are logged and reviewable by authorised admins.
+Marketing communications respect consent and unsubscribe controls.
+AI systems do not leak data between tenants, clients, or users.
+Operational failures are visible, logged, and recoverable.
+Phase 21 - Deliverables, Testing, Deployment, and Documentation
+Produce complete implementation deliverables suitable for a production SaaS environment.
+Required capabilities
+Create a prioritised roadmap with MVP, phase 2, phase 3, and enterprise backlog items.
+Create implementation tickets or tasks grouped by domain, business value, dependencies, and effort.
+Create database migration scripts only where necessary, with rollback notes and data migration plans.
+Update APIs without breaking existing integrations. Version APIs where required.
+Update frontend routes, components, forms, validation, empty states, loading states, error states, and permission handling.
+Write unit tests, integration tests, end-to-end tests, permission tests, AI workflow tests, automation tests, and migration tests for critical paths.
+Create seed data or mock data for restaurants, retail stores, hotels, and agency clients to support local development and testing.
+Document environment variables, background jobs, webhooks, integration setup, AI provider configuration, billing limits, feature flags, and deployment steps.
+Create user documentation for business owners, managers, agency staff, client approvers, and admins.
+Create release notes and migration notes for existing customers.
+Acceptance criteria
+Implementation is delivered in safe, reviewable increments.
+All new production features have testing and documentation appropriate to their risk level.
+Existing users can continue using the platform after deployment.
+Admins can monitor system health, AI usage, integration failures, campaign failures, and billing limits.
+The platform is ready for progressive rollout by plan, tenant, agency, business type, or feature flag.
+MVP Prioritisation Guidance
+If the full scope is too large for one release, implement in this order unless the existing platform architecture suggests a safer alternative.
+1. Business profiles and tenant-safe agency-client structure.
+2. AI Marketing Assistant grounded in business profile data.
+3. Content calendar with approval workflow.
+4. Review management and Google Business Profile support.
+5. CRM, segmentation, and consent management.
+6. Email and SMS campaign workflows.
+7. AI campaign builder.
+8. Analytics and executive dashboard.
+9. AI knowledge base and RAG.
+10. AI recommendations.
+11. AI Marketing Operating System.
+12. Advanced automation, white label, advanced reporting, and enterprise controls.
+Required Technical Output from the Coding Agent
+Audit report summarising current architecture, feature gaps, risks, and reuse opportunities.
+Implementation roadmap with dependencies and priority order.
+Database migration plan and schema changes.
+API design or API changes.
+Frontend component and UX plan.
+AI orchestration plan, prompt strategy, RAG strategy, guardrails, usage logging, and cost controls.
+Permissions matrix for SMB users, agency users, client users, and admins.
+Testing plan and test implementation.
+Deployment plan, rollback plan, and feature flag plan.
+User documentation and admin documentation.
+Quality Bar
+The product must feel coherent, not like disconnected feature patches.
+The user experience must be simple enough for a non-technical business owner and powerful enough for an agency account manager.
+The AI must be useful, specific, auditable, and constrained by business context and approval rules.
+The analytics must connect marketing activity to commercial outcomes wherever the available data allows.
+The agency model must be secure, scalable, and genuinely useful for managing many clients.
+The system must protect existing customers, data, permissions, and integrations during rollout.
+Final Platform Outcome
+The final platform must operate as an AI-powered marketing operating system for restaurants, retail stores, hotels, and marketing agencies. It should allow users to define business context, plan campaigns, generate content, publish across channels, collect reviews, manage customers, automate retention, measure performance, receive AI recommendations, and use AI-MOS to proactively identify and act on growth opportunities. It must be secure, tenant-safe, extensible, testable, and commercially focused.
+END MASTER PROMPT
+Appendix - Optional First Message to the Coding Agent
+Use this shorter instruction before the master prompt if the coding agent needs a clear initial operating instruction.
+First inspect the repository, database schema, existing product documentation, environment configuration, routes, API endpoints, permissions, billing logic, integrations, and tests. Do not start implementation until you have produced an audit summary, a gap analysis against the master prompt, and a prioritised implementation plan. Preserve backwards compatibility and tenant isolation at all times.
