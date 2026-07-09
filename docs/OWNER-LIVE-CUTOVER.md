@@ -646,10 +646,11 @@ Update `docs/parallel/PROGRESS.md` owner-ops table when each phase completes.
 
 | Phase | Status (2026-07-09) |
 |-------|----------------------|
-| 1 — Deploy | ⏳ Owner executes |
-| 2 — Resend SMTP | ⏳ After Phase 1 |
+| 1 — Deploy | ✅ **GO** |
+| 2 — Resend SMTP | ✅ **GO** (sender via parked `recrutd.com`; `token_hash` template) |
 | 3 — Google prep | ⏳ Billing **blocked** |
 | 4 — Meta+Google cutover | ⏳ Parked (Meta verification ✅; App Review pending) |
+| **P0 builder** | ⏳ Planned — see `docs/P0-IMPLEMENTATION-PLAN.md` |
 
 ---
 
