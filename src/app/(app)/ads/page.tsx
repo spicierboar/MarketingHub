@@ -8,7 +8,7 @@ import {
   listCompanies,
   listLeads,
 } from "@/lib/db";
-import { companyPaidSummary, campaignMetrics, sumPaid, type PaidMetrics } from "@/lib/paid";
+import { companyPaidSummary, campaignMetrics, resolveCampaignMetrics, sumPaid, type PaidMetrics } from "@/lib/paid";
 import { recommendAllocation } from "@/lib/ai/allocation";
 import { targetingSummary, estimateReach } from "@/lib/targeting";
 import { adsLive } from "@/lib/ad-connectors";
@@ -121,6 +121,17 @@ export default async function AdsPage({
         connectedPlatforms: selConnected,
       })
     : undefined;
+
+  const accountById = new Map((sel?.accounts ?? []).map((a) => [a.id, a]));
+  const metricsByCampaignId = new Map<string, PaidMetrics>();
+  if (sel) {
+    await Promise.all(
+      sel.campaigns.map(async (c) => {
+        const account = accountById.get(c.adAccountId);
+        metricsByCampaignId.set(c.id, await resolveCampaignMetrics(c, sel.company, account));
+      }),
+    );
+  }
 
   return (
     <div>
@@ -402,7 +413,7 @@ export default async function AdsPage({
                     </thead>
                     <tbody className="divide-y divide-border">
                       {sel.campaigns.map((c) => {
-                        const m = campaignMetrics(c, sel.company);
+                        const m = metricsByCampaignId.get(c.id) ?? campaignMetrics(c, sel.company);
                         const matched = sel.segments.filter((s) => s.platform === "all" || s.platform === c.platform);
                         const current = c.audienceSegmentId ? segmentById.get(c.audienceSegmentId) : undefined;
                         // Always show the CURRENT audience as an option even if it's

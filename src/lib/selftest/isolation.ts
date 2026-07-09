@@ -60,6 +60,13 @@ import {
   parseMetaLeadPayload,
   verifyMetaLeadSignature,
 } from "@/lib/ad-leads";
+import {
+  checkLiveAdsDispatchNullWhenOff,
+  checkLiveAdsResolveFallsBack,
+  checkLiveAdsSimulatedWhenOff,
+  checkLiveAdsTranslateGoogle,
+  checkLiveAdsTranslateMeta,
+} from "@/lib/selftest/live-ads";
 import { encryptToken } from "@/lib/crypto";
 import { createHmac } from "node:crypto";
 import {
@@ -103,13 +110,6 @@ import {
   checkGbpNapConsistency,
   checkGbpSimulatedWhenLiveOff,
 } from "@/lib/selftest/gbp-audit";
-import {
-  checkAnalyticsSimulatedWhenLiveOff,
-  checkFetchLiveMetricsNullWhenOff,
-  checkGooglePlatformRoutedWhenLive,
-  checkPlatformPostIdParse,
-  checkResolvePostMetricsDeterministic,
-} from "@/lib/selftest/live-analytics";
 import {
   checkCampaignBuilderGoalProducesPlan,
   checkCampaignBuilderKpisPresent,
@@ -664,15 +664,11 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("gbpAudit.checklistActionable", () => checkGbpChecklistActionable());
 
-    await expect("analytics.simulatedWhenLiveOff", () => checkAnalyticsSimulatedWhenLiveOff());
-
-    await expect("analytics.fetchNullWhenLiveOff", () => checkFetchLiveMetricsNullWhenOff());
-
-    await expect("analytics.platformPostIdParse", async () => checkPlatformPostIdParse());
-
-    await expect("analytics.resolveDeterministic", () => checkResolvePostMetricsDeterministic());
-
-    await expect("analytics.googleRoutedWhenLiveOff", () => checkGooglePlatformRoutedWhenLive());
+    await expect("liveAds.simulatedWhenOff", () => checkLiveAdsSimulatedWhenOff());
+    await expect("liveAds.dispatchNullWhenOff", () => checkLiveAdsDispatchNullWhenOff());
+    await expect("liveAds.translateMeta", () => checkLiveAdsTranslateMeta());
+    await expect("liveAds.translateGoogle", () => checkLiveAdsTranslateGoogle());
+    await expect("liveAds.resolveFallsBack", () => checkLiveAdsResolveFallsBack());
 
     await expect("campaignBuilder.goalProducesPlan", () =>
       checkCampaignBuilderGoalProducesPlan(),

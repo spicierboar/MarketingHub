@@ -1037,6 +1037,60 @@ export interface ConnectInvite {
   updatedAt: string;
 }
 
+// ---- Public REST API (M27) ---------------------------------------------------
+
+export const API_KEY_SCOPES = [
+  "companies:read",
+  "content:read",
+  "content:write",
+  "leads:read",
+  "leads:write",
+] as const;
+
+export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+
+export interface ApiKey {
+  id: string;
+  tenantId: string;
+  name: string;
+  keyPrefix: string;
+  keyHash: string;
+  scopes: ApiKeyScope[];
+  companyIds: string[] | null;
+  createdById: string;
+  lastUsedAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const PARTNER_WEBHOOK_EVENTS = [
+  "content.created",
+  "content.updated",
+  "lead.created",
+  "ping",
+] as const;
+
+export type PartnerWebhookEvent = (typeof PARTNER_WEBHOOK_EVENTS)[number];
+
+export type PartnerWebhookStatus = "pending" | "active" | "disabled";
+
+export interface PartnerWebhook {
+  id: string;
+  tenantId: string;
+  label: string;
+  url: string;
+  events: PartnerWebhookEvent[];
+  secretEnc: string;
+  status: PartnerWebhookStatus;
+  createdById: string;
+  verifiedAt?: string | null;
+  lastDeliveryAt?: string | null;
+  lastDeliveryStatus?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // "requeued" is an operator marker: a dead-lettered post was manually put back
 // in the queue. It resets the derived attempt count (attempts are counted as
 // the failed logs SINCE the newest requeued/published marker), so the retry
@@ -1358,6 +1412,8 @@ export interface AdCampaign {
   // Which saved audience this campaign runs against (Module 6 targeting).
   // Optional/null = broad/untargeted. On delete of the segment this nulls.
   audienceSegmentId?: string | null;
+  /** Platform campaign id once live execution creates/syncs the object. */
+  externalCampaignId?: string | null;
   createdById: string;
   createdAt: string;
   updatedAt: string;

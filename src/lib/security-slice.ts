@@ -5,9 +5,13 @@
 // Compute-only — no migration (slot 0028 reserved).
 
 import { aiConfigured, callClaude } from "@/lib/ai/claude";
-import { adsLive } from "@/lib/ad-connectors";
+import { adsLive, adsPlatformConfigured } from "@/lib/ad-connectors";
 import { analyticsLive } from "@/lib/analytics-connectors";
-import { publishingLive } from "@/lib/publishing-connectors";
+import {
+  buildPublishingPlatformHealth,
+  publishingLive,
+} from "@/lib/publishing-connectors";
+import type { PublishingPlatformHealthRow } from "@/lib/publishing-connectors";
 import { visualsLive } from "@/lib/visuals-connectors";
 
 // ---- prompt-injection resistance ---------------------------------------------
@@ -129,6 +133,7 @@ export interface IntegrationHealthBundle {
   computedAt: string;
   tenantId: string;
   rows: IntegrationHealthRow[];
+  publishingPlatforms: PublishingPlatformHealthRow[];
   aiProviderConfigured: boolean;
 }
 
@@ -173,7 +178,11 @@ function simulatedFailureHint(kind: IntegrationKind): string {
     case "publishing":
       return "Simulated: PUBLISHING_LIVE off — deterministic publish simulator";
     case "ads":
-      return "Simulated: ADS_LIVE off — campaign metrics seeded locally";
+      return adsLive()
+        ? adsPlatformConfigured()
+          ? "Live gate on — awaiting first successful campaign sync"
+          : "Live gate on — set GOOGLE_ADS_DEVELOPER_TOKEN and/or META_APP_*"
+        : "Simulated: ADS_LIVE off — campaign metrics seeded locally";
     case "analytics":
       return "Simulated: ANALYTICS_LIVE off — engagement metrics seeded locally";
     case "visuals":
@@ -255,6 +264,7 @@ export function buildIntegrationHealthBundle(tenantId: string): IntegrationHealt
     tenantId,
     aiProviderConfigured: aiConfigured(),
     rows: kinds.map((kind) => buildHealthRow(kind, tenantId)),
+    publishingPlatforms: buildPublishingPlatformHealth(),
   };
 }
 

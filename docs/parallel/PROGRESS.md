@@ -7,7 +7,8 @@ Last updated: 2026-07-09 (**W2 in flight**)
 
 ## Standing instructions (integrators + M99)
 
-**Auto-spawn next wave — no owner wait (except W6).** See `FULL-ORCHESTRATION.md`.
+**Auto-spawn next wave — no owner wait (except W6).** See `FULL-ORCHESTRATION.md`.  
+**Token discipline:** one chat per agent · handoffs mandatory · fresh M99 per wave · `HANDOFF-TEMPLATE.md`
 
 ---
 
@@ -38,18 +39,18 @@ Last updated: 2026-07-09 (**W2 in flight**)
 | Agent | Est. | Status |
 |-------|------|--------|
 | M24 | 2–3d | ✅ handoff |
-| M25 | 2–3d | building |
+| M25 | 2–3d | ✅ handoff |
 | M26 | 1–2d | ✅ handoff |
-| M27 | 3–4d | building |
+| M27 | 3–4d | ✅ handoff |
 | M01-W2 | 1–2d | waiting |
 
 | Flag | Status |
 |------|--------|
 | `w2_launched` | yes |
 | `m24_handoff` | yes |
-| `m25_handoff` | no |
+| `m25_handoff` | yes |
 | `m26_handoff` | yes |
-| `m27_handoff` | no |
+| `m27_handoff` | yes |
 | `w2_complete` | no |
 
 **Target:** ~98/98 fixtures (90 baseline + 3 M24 + 5 M26) · live flags **OFF**
