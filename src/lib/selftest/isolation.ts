@@ -104,6 +104,13 @@ import {
   checkGbpSimulatedWhenLiveOff,
 } from "@/lib/selftest/gbp-audit";
 import {
+  checkAnalyticsSimulatedWhenLiveOff,
+  checkFetchLiveMetricsNullWhenOff,
+  checkGooglePlatformRoutedWhenLive,
+  checkPlatformPostIdParse,
+  checkResolvePostMetricsDeterministic,
+} from "@/lib/selftest/live-analytics";
+import {
   checkCampaignBuilderGoalProducesPlan,
   checkCampaignBuilderKpisPresent,
   checkCampaignBuilderSpawnsDraftContentNotScheduled,
@@ -152,6 +159,11 @@ import {
   checkMarketplaceTenantIsolation,
   checkSimulatedBillingWhenLiveOff,
 } from "@/lib/selftest/photo-marketplace";
+import {
+  checkPublishingHealthInBundle,
+  checkPublishingPlatformHealthRows,
+  checkPublishingSimWhenLiveOff,
+} from "@/lib/selftest/publishing-connectors";
 import {
   checkLogRecordsDedupeKey,
   checkRetrySkipsWhenAlreadyPublished,
@@ -652,6 +664,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("gbpAudit.checklistActionable", () => checkGbpChecklistActionable());
 
+    await expect("analytics.simulatedWhenLiveOff", () => checkAnalyticsSimulatedWhenLiveOff());
+
+    await expect("analytics.fetchNullWhenLiveOff", () => checkFetchLiveMetricsNullWhenOff());
+
+    await expect("analytics.platformPostIdParse", async () => checkPlatformPostIdParse());
+
+    await expect("analytics.resolveDeterministic", () => checkResolvePostMetricsDeterministic());
+
+    await expect("analytics.googleRoutedWhenLiveOff", () => checkGooglePlatformRoutedWhenLive());
+
     await expect("campaignBuilder.goalProducesPlan", () =>
       checkCampaignBuilderGoalProducesPlan(),
     );
@@ -727,6 +749,14 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("securitySlice.tenantContextFence", () => checkTenantContextFence());
 
     await expect("securitySlice.providerFailureRecorded", () => checkProviderFailureRecorded());
+
+    await expect("publishingConnectors.simWhenLiveOff", () => checkPublishingSimWhenLiveOff());
+
+    await expect("publishingConnectors.platformHealthRows", () =>
+      checkPublishingPlatformHealthRows(),
+    );
+
+    await expect("publishingConnectors.healthInBundle", () => checkPublishingHealthInBundle());
 
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());
 
