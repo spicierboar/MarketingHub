@@ -132,6 +132,7 @@ export interface TenantMember {
   userId: string;
   role: TenantRole;
   roleTitle?: RoleTitle; // granular §9 title within this tenant
+  portalOnly?: boolean; // explicit client-portal flag (migration 0028; field sales)
   createdAt: string;
 }
 
@@ -310,6 +311,8 @@ export interface CompanyProfile {
   restaurant?: RestaurantProfileFields;
   /** V1 module 11 — AI-MOS opportunities (jsonb slice, no migration). */
   aiMos?: { opportunities?: AiMosOpportunity[] };
+  /** W1 M22 — calendar assist suggestions (jsonb slice, no migration). */
+  calendarAssist?: { suggestions?: CalendarAssistSuggestion[] };
   /** V1 module 13 — auto-onboarding scrape audit trail (jsonb slice, no migration). */
   autoOnboarding?: {
     lastScrapeAt?: string;
@@ -859,7 +862,10 @@ export interface AiRun {
     | "content_critique"
     | "ai_mos_scan"
     | "ai_mos_convert"
-    | "ai_mos_dismiss";
+    | "ai_mos_dismiss"
+    | "calendar_assist_scan"
+    | "calendar_assist_accept"
+    | "calendar_assist_dismiss";
   model: string;
   promptSummary: string;
   outputChars: number;
@@ -1138,6 +1144,44 @@ export interface AiMosOpportunity {
   dismissReason?: string | null;
   resultType?: "campaign" | "content" | "request" | null;
   resultId?: string | null;
+}
+
+// ---- W1 M22: Calendar assist (30-day governed suggestions) -------------------
+
+export type CalendarAssistSuggestionKind =
+  | "seasonal_prompt"
+  | "calendar_gap"
+  | "cadence_fill"
+  | "optimal_window";
+
+export type CalendarAssistSuggestionStatus = "open" | "accepted" | "dismissed";
+
+export interface CalendarAssistEvidence {
+  signal: string;
+  observed: string;
+}
+
+export interface CalendarAssistSuggestion {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  kind: CalendarAssistSuggestionKind;
+  title: string;
+  brief: string;
+  proposedDate: string;
+  proposedTime?: string;
+  platform: string;
+  requestType: RequestType;
+  evidence: CalendarAssistEvidence[];
+  priority: number;
+  status: CalendarAssistSuggestionStatus;
+  aiRunId?: string | null;
+  createdById: string;
+  createdAt: string;
+  acceptedAt?: string | null;
+  dismissedAt?: string | null;
+  dismissReason?: string | null;
+  resultContentId?: string | null;
 }
 
 // ---- Phase 9: AI Recommendation Engine (§44) ---------------------------------------

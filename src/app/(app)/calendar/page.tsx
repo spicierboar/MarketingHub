@@ -33,6 +33,8 @@ import {
   CalendarIntelligencePanel,
   PortfolioCalendarTable,
 } from "@/components/calendar-intelligence-panel";
+import { CalendarAssistPanel } from "@/components/calendar-assist-panel";
+import { listOpenCalendarAssistForTenant } from "@/lib/ai/calendar-assist";
 import { Select, Input } from "@/components/ui/form";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { now, titleCase } from "@/lib/utils";
@@ -187,6 +189,11 @@ export default async function CalendarPage({
   const businessTypes = distinctBusinessTypes(companies);
   const scheduledCount = filtered.filter((e) => e.kind === "post").length;
   const summary = portfolioSummary(filtered);
+  const assistSuggestions = await listOpenCalendarAssistForTenant(
+    user.tenantId,
+    [...companyIds],
+    12,
+  );
 
   const filterQs = (extra?: Record<string, string>) =>
     new URLSearchParams({ ...params, month, ...extra } as Record<string, string>);
@@ -281,6 +288,12 @@ export default async function CalendarPage({
             Reset
           </Link>
         </form>
+
+        <CalendarAssistPanel
+          suggestions={assistSuggestions}
+          companies={companies}
+          filterCompanyId={fCompany}
+        />
 
         <CalendarIntelligencePanel
           clock={intelligence.clock}

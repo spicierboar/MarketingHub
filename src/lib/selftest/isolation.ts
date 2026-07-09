@@ -126,6 +126,11 @@ import {
   checkSignalsProduceOpportunity,
 } from "@/lib/selftest/ai-mos";
 import {
+  checkAcceptCreatesDraftOnly as checkCalendarAssistAcceptDraftOnly,
+  checkBuildCalendarAssistDrafts,
+  checkDismissAudited as checkCalendarAssistDismissAudited,
+} from "@/lib/selftest/calendar-assist";
+import {
   checkApplyPrefillsProfile,
   checkConsentRequired,
   checkSimulatedWhenLiveOff,
@@ -684,6 +689,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("aiMos.convertCreatesDraftOnly", () =>
       checkConvertCreatesDraftOnly(companyA.id, ownerAUser.id, tenantAId!),
+    );
+
+    await expect("calendarAssist.buildDrafts", () => checkBuildCalendarAssistDrafts());
+
+    await expect("calendarAssist.acceptDraftOnly", () =>
+      checkCalendarAssistAcceptDraftOnly(companyA.id, ownerAUser.id, tenantAId!),
+    );
+
+    await expect("calendarAssist.dismissAudited", () =>
+      checkCalendarAssistDismissAudited(companyA.id, ownerAUser.id, tenantAId!),
     );
 
     await expect("aiMos.dismissAudited", () =>

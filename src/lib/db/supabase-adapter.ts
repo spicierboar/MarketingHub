@@ -35,7 +35,7 @@ import { now } from "@/lib/utils";
 import { randomUUID } from "node:crypto";
 import type {
   AdAccount, AdBudget, AdCampaign, AdPlatform, AddonId, AudienceSegment,
-  AiRun, AiMosOpportunity, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
+  AiRun, AiMosOpportunity, CalendarAssistSuggestion, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
   AutomationSettings, BrandTemplate, Campaign, CampaignItem, Company,
   CompanyAccess, CompanyEntitlement, ConsentRecord, ContentComment, ContentItem, EvidenceRecord,
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
@@ -1056,6 +1056,71 @@ export const supabaseRepo = {
       profile: { ...company.profile, aiMos: { opportunities } },
     });
     return opportunities.find((o) => o.id === oppId);
+  },
+
+  // ============================ Calendar assist (profile jsonb) ===========
+  async listCalendarAssistSuggestions(
+    tenantId: string,
+    companyIdsFilter?: string[],
+    status?: CalendarAssistSuggestion["status"],
+  ): Promise<CalendarAssistSuggestion[]> {
+    const sb = await usr(); if (!sb) return [];
+    const ids = companyIdsFilter ?? (await companyIds(sb, tenantId));
+    if (!ids.length) return [];
+    const { data } = await sb.from("companies").select("id,tenant_id,profile").in("id", ids);
+    const out: CalendarAssistSuggestion[] = [];
+    for (const row of data ?? []) {
+      const company = normaliseCompany(toDomain<Company>(row as Row, COMPANY_ALIAS));
+      for (const s of company.profile.calendarAssist?.suggestions ?? []) {
+        if (status && s.status !== status) continue;
+        out.push({ ...s, tenantId: company.tenantId, companyId: company.id });
+      }
+    }
+    return out.sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt));
+  },
+  async getCalendarAssistSuggestion(suggestionId: string): Promise<CalendarAssistSuggestion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("companies").select("id,tenant_id,profile");
+    for (const row of data ?? []) {
+      const company = normaliseCompany(toDomain<Company>(row as Row, COMPANY_ALIAS));
+      const hit = company.profile.calendarAssist?.suggestions?.find((s) => s.id === suggestionId);
+      if (hit) return { ...hit, tenantId: company.tenantId, companyId: company.id };
+    }
+    return undefined;
+  },
+  async createCalendarAssistSuggestion(
+    input: Omit<CalendarAssistSuggestion, "id" | "createdAt">,
+  ): Promise<CalendarAssistSuggestion> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const company = await this.getCompany(input.companyId);
+    if (!company) throw new Error("createCalendarAssistSuggestion: company not found");
+    const row: CalendarAssistSuggestion = {
+      ...input,
+      id: randomUUID(),
+      createdAt: now(),
+    };
+    const suggestions = [...(company.profile.calendarAssist?.suggestions ?? []), row];
+    await this.updateCompany(company.id, {
+      profile: { ...company.profile, calendarAssist: { suggestions } },
+    });
+    return row;
+  },
+  async updateCalendarAssistSuggestion(
+    suggestionId: string,
+    patch: Partial<CalendarAssistSuggestion>,
+  ): Promise<CalendarAssistSuggestion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const existing = await this.getCalendarAssistSuggestion(suggestionId);
+    if (!existing) return undefined;
+    const company = await this.getCompany(existing.companyId);
+    if (!company) return undefined;
+    const suggestions = (company.profile.calendarAssist?.suggestions ?? []).map((s) =>
+      s.id === suggestionId ? { ...s, ...patch, id: s.id } : s,
+    );
+    await this.updateCompany(company.id, {
+      profile: { ...company.profile, calendarAssist: { suggestions } },
+    });
+    return suggestions.find((s) => s.id === suggestionId);
   },
 
   // ============================ UTM links (RLS) ============================
