@@ -6,6 +6,12 @@ import { getUserByEmail } from "@/lib/db";
 import { startSession, endSession } from "@/lib/auth/session";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
+import { resolveOrigin } from "@/lib/origin";
+
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  return resolveOrigin((k) => h.get(k));
+}
 
 // Passwordless sign-in.
 //   • Demo: verify the email exists against an individual account, start a
@@ -20,7 +26,7 @@ export async function signIn(_prev: unknown, formData: FormData) {
   if (isSupabaseConfigured()) {
     const sb = await getServerSupabase();
     if (!sb) return { error: "Auth is not available right now." };
-    const origin = (await headers()).get("origin") ?? "";
+    const origin = await requestOrigin();
     const { error } = await sb.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${origin}/auth/callback` },
@@ -56,7 +62,7 @@ export async function signInWithOAuth(provider: "google" | "azure") {
   if (!isSupabaseConfigured()) return;
   const sb = await getServerSupabase();
   if (!sb) return;
-  const origin = (await headers()).get("origin") ?? "";
+  const origin = await requestOrigin();
   const { data } = await sb.auth.signInWithOAuth({
     provider,
     options: { redirectTo: `${origin}/auth/callback` },

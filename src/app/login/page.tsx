@@ -80,6 +80,9 @@ export default function LoginPage() {
               {state?.error && (
                 <p className="text-sm text-red-600">{state.error}</p>
               )}
+              {state?.message && (
+                <p className="text-sm text-green-700">{state.message}</p>
+              )}
               <Button type="submit" className="w-full" disabled={pending}>
                 {pending ? "Signing in…" : "Continue"}
               </Button>
