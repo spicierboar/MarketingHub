@@ -11,7 +11,7 @@ Last updated: 2026-07-09 (**Full orchestration active**)
 | Agent | Branch | Status |
 |-------|--------|--------|
 | M16 | `p0/m16-foundation` | ✅ merged |
-| M17 | `p0/m17-client-portal` | **building** |
+| M17 | `p0/m17-client-portal` | ✅ handoff on branch |
 | M18 | `p0/m18-auto-publish` | ✅ handoff on branch |
 | M19 | `p0/m19-field-sales` | **building** |
 | M00 | → main | waiting |
@@ -20,7 +20,7 @@ Last updated: 2026-07-09 (**Full orchestration active**)
 |------|--------|
 | `m16_merged` | yes |
 | `parallel_launched` | yes |
-| `m17_handoff` | no |
+| `m17_handoff` | yes |
 | `m18_handoff` | yes |
 | `m19_handoff` | no |
 | `m00_launched` | no |

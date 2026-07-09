@@ -156,6 +156,17 @@ export async function requirePlatformAdmin(): Promise<ActingUser> {
   return user;
 }
 
+export async function requirePortalUser(): Promise<{
+  user: ActingUser;
+  companyId: string;
+}> {
+  const user = await requireUser();
+  if (!(await isPortalUser(user))) redirect("/dashboard");
+  const companyId = await portalCompanyId(user);
+  if (!companyId) redirect("/dashboard");
+  return { user, companyId };
+}
+
 // For server actions where redirect isn't appropriate — throws instead.
 export async function assertCompanyAccess(companyId: string): Promise<ActingUser> {
   const user = await requireUser();
