@@ -1,18 +1,18 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-09 (**Full orchestration active**)
+Last updated: 2026-07-09 (**M00 integrating P0**)
 
 **Owner lock:** Full SRS · vision · go-live = non-negotiable. See `docs/FULL-IMPLEMENTATION-PLAN.md` · `docs/parallel/FULL-ORCHESTRATION.md`.
 
-## V1 — DONE (67/67 · 20/20)
+## V1 — DONE (67/67 · 20/20 baseline)
 
-## Wave 0 (P0) — IN FLIGHT
+## Wave 0 (P0) — INTEGRATING
 
 | Agent | Branch | Status |
 |-------|--------|--------|
 | M16 | `p0/m16-foundation` | ✅ merged |
 | M17 | `p0/m17-client-portal` | ✅ handoff on branch |
-| M18 | `p0/m18-auto-publish` | ✅ handoff on branch |
+| M18 | `p0/m18-auto-publish` | ✅ merging |
 | M19 | `p0/m19-field-sales` | ✅ handoff on branch |
 | M00 | → main | **integrating** |
 
@@ -25,6 +25,8 @@ Last updated: 2026-07-09 (**Full orchestration active**)
 | `m19_handoff` | yes |
 | `m00_launched` | yes |
 | `p0_complete` | no |
+
+**W0 fixture target:** 77/77 · 20/20
 
 ## Waves 1–7 — QUEUED (auto-chain after W0)
 
@@ -48,3 +50,24 @@ Last updated: 2026-07-09 (**Full orchestration active**)
 ## Owner ops
 
 Phases 1–2 ✅ · Phase 3 Google blocked · Phase 4 parked
+
+**Canonical:** `https://mangotickle.com.au`
+
+---
+
+## Checklists
+
+### W0 (M00)
+
+- [ ] Portal · sales · auto-publish · invite-only
+- [ ] 77/77 · 20/20 · build green
+- [ ] Spawn W1
+
+### Owner pilot (after `p0_complete=yes`)
+
+1. Agency admin → `/sales/new-client` → test company + client member
+2. Client magic link → lands on `/client`
+3. Client request → agency drafts → client approves in portal
+4. Auto-publish sim path (audit / queue; live flags stay OFF)
+5. Token `/approve/[token]` still works
+6. `/signup` shows invite-only
