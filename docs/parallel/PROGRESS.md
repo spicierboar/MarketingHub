@@ -2,7 +2,7 @@
 
 **Maintained by agent `M99-Orchestrator` + P0 finishing agents (orchestration flags only).**
 
-Last updated: 2026-07-09 (**P0 batch kickoff** — M16 pending)
+Last updated: 2026-07-09 (**M16 merged** — spawn M17+M18+M19)
 
 ## Tracker (15 modules)
 
@@ -23,10 +23,10 @@ Last updated: 2026-07-09 (**P0 batch kickoff** — M16 pending)
 
 | Agent | Scope | Branch | Status | Migration |
 |-------|-------|--------|--------|-----------|
-| **M16-Foundation** | Scheduling extract · portal RBAC helpers · signup hide · client-approval stub | `p0/m16-foundation` | **pending** — launch D1 | none |
-| **M17-ClientPortal** | `/client` route group · requests · approvals UI | `p0/m17-client-portal` | **blocked** — wait M16 merge | none |
-| **M18-AutoPublish** | `client-approval.ts` · auto-publish · token approve wire | `p0/m18-auto-publish` | **blocked** — wait M16 merge | none |
-| **M19-FieldSales** | `/sales/new-client` wizard · provision client | `p0/m19-field-sales` | **blocked** — wait M16 merge | none |
+| **M16-Foundation** | Scheduling extract · portal RBAC helpers · signup hide · client-approval stub | `p0/m16-foundation` | ✅ **merged** `ba684ce` | none |
+| **M17-ClientPortal** | `/client` route group · requests · approvals UI | `p0/m17-client-portal` | **launch now** | none |
+| **M18-AutoPublish** | `client-approval.ts` · auto-publish · token approve wire | `p0/m18-auto-publish` | **launch now** | none |
+| **M19-FieldSales** | `/sales/new-client` wizard · provision client | `p0/m19-field-sales` | **launch now** | none |
 | **M00-Integrator** | Merge · self-tests · HANDOVER | merge → `main` | **waiting** — after M16–M19 handoffs | none |
 
 **Launch:** Owner starts **M16 only** — M16 spawns M17+M18+M19; fan-in spawns M00. See `docs/parallel/P0-ORCHESTRATION.md`.
@@ -45,7 +45,7 @@ Last updated: 2026-07-09 (**P0 batch kickoff** — M16 pending)
 
 | Flag | Status |
 |------|--------|
-| `m16_merged` | no |
+| `m16_merged` | yes |
 | `parallel_launched` | no |
 | `m17_handoff` | no |
 | `m18_handoff` | no |
