@@ -32,6 +32,11 @@ import {
 import { logAction } from "@/lib/audit";
 import { encryptToken } from "@/lib/crypto";
 import { recommendAllocation } from "@/lib/ai/allocation";
+import {
+  adsLive,
+  dispatchCampaignSync,
+  type CampaignLifecycleOp,
+} from "@/lib/ad-connectors";
 import { companyPaidSummary } from "@/lib/paid";
 import { createManagementFeeInvoice } from "@/lib/billing";
 import { normaliseTargeting, suggestTargeting } from "@/lib/targeting";
@@ -120,6 +125,27 @@ function asPlatform(v: string): AdPlatform {
 }
 function refresh() {
   revalidatePath("/ads");
+}
+
+async function syncCampaignToPlatform(args: {
+  campaign: Awaited<ReturnType<typeof getAdCampaign>>;
+  op: CampaignLifecycleOp;
+}): Promise<void> {
+  const campaign = args.campaign;
+  if (!campaign || !adsLive()) return;
+  const account = await getAdAccount(campaign.adAccountId);
+  if (!account || account.status !== "connected") return;
+  let targeting;
+  if (campaign.audienceSegmentId) {
+    const seg = await getAudienceSegment(campaign.audienceSegmentId);
+    if (seg) targeting = seg.targeting;
+  }
+  const result = await dispatchCampaignSync({ account, campaign, targeting, op: args.op });
+  if (!result) return;
+  if (!result.ok) throw new Error(result.detail);
+  if (result.externalCampaignId && result.externalCampaignId !== campaign.externalCampaignId) {
+    await updateAdCampaign(campaign.id, { externalCampaignId: result.externalCampaignId });
+  }
 }
 
 // Connect a DELEGATED ad account. In this build the grant is captured manually
@@ -287,6 +313,10 @@ export async function createAdCampaignAction(formData: FormData) {
     companyId,
     detail: `${platform}: ${name} ($${dailyBudgetUsd}/day, ${objective})`,
   });
+  if (adsLive()) {
+    const fresh = await getAdCampaign(campaign.id);
+    await syncCampaignToPlatform({ campaign: fresh, op: "create" });
+  }
   refresh();
 }
 
@@ -301,6 +331,15 @@ export async function updateAdCampaignStatusAction(formData: FormData) {
   if (!campaign) throw new Error("Campaign not found");
   if (!(await canAccessCompany(user, campaign.companyId))) {
     throw new Error("Forbidden: no access to this company");
+  }
+  const op: CampaignLifecycleOp =
+    status === "active"
+      ? campaign.externalCampaignId
+        ? "activate"
+        : "create"
+      : "pause";
+  if (adsLive() && status !== "draft") {
+    await syncCampaignToPlatform({ campaign, op });
   }
   await updateAdCampaign(campaignId, { status: status as "draft" | "active" | "paused" | "ended" });
   await logAction(user, "ad_campaign.status_changed", {
