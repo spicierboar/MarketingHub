@@ -23,10 +23,10 @@ Last updated: 2026-07-09 (**W1 integrating**)
 | Agent | Branch | Status |
 |-------|--------|--------|
 | M20 | `w1/m20-client-reports` | ✅ merged |
-| M21 | `w1/m21-intel-panel` | ✅ merging |
-| M22 | `w1/m22-calendar-assist` | pending merge |
+| M21 | `w1/m21-intel-panel` | ✅ merged |
+| M22 | `w1/m22-calendar-assist` | ✅ merged |
 | M23 | `w1/m23-portal-migration` | ✅ merged |
-| M01-W1 | → main | **in progress** |
+| M01-W1 | → main | **verifying** |
 
 | Flag | Status |
 |------|--------|

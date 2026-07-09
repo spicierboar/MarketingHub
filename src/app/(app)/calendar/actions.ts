@@ -1,8 +1,10 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
   activeSchedulesForContent,
+  getCalendarAssistSuggestion,
   getCampaign,
   getCampaignItem,
   getContent,
@@ -17,6 +19,11 @@ import { assertCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { addDaysIso } from "@/lib/calendar-utils";
 import { scheduleOne } from "@/lib/scheduling";
+import {
+  acceptCalendarAssistSuggestion,
+  dismissCalendarAssistSuggestion,
+  surfaceCalendarAssistSuggestions,
+} from "@/lib/ai/calendar-assist";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -153,4 +160,53 @@ export async function bulkScheduleCampaignAction(formData: FormData) {
     detail: `${scheduled} item(s) scheduled`,
   });
   refreshPaths(undefined, campaignId);
+}
+
+export async function scanCalendarAssistAction(formData: FormData) {
+  const companyId = text(formData, "companyId");
+  const user = companyId
+    ? await assertCompanyAccess(companyId)
+    : await (async () => {
+        const { requireUser } = await import("@/lib/auth/rbac");
+        return requireUser();
+      })();
+
+  const created = await surfaceCalendarAssistSuggestions(
+    user.tenantId,
+    user.id,
+    companyId ? { companyIds: [companyId] } : undefined,
+  );
+
+  await logAction(user, "calendar_assist.scanned", {
+    companyId: companyId || undefined,
+    detail: `${created} suggestion(s) surfaced`,
+  });
+
+  revalidatePath("/calendar");
+}
+
+export async function acceptCalendarAssistSuggestionAction(formData: FormData) {
+  const suggestionId = text(formData, "suggestionId");
+  const suggestion = await getCalendarAssistSuggestion(suggestionId);
+  if (!suggestion) throw new Error("Suggestion not found");
+  const user = await assertCompanyAccess(suggestion.companyId);
+  if (suggestion.status !== "open") throw new Error("Suggestion is no longer open");
+
+  const contentId = await acceptCalendarAssistSuggestion(suggestion, user);
+
+  revalidatePath("/calendar");
+  revalidatePath("/content");
+  redirect(`/content/${contentId}`);
+}
+
+export async function dismissCalendarAssistSuggestionAction(formData: FormData) {
+  const suggestionId = text(formData, "suggestionId");
+  const dismissReason = text(formData, "dismissReason");
+  const suggestion = await getCalendarAssistSuggestion(suggestionId);
+  if (!suggestion) throw new Error("Suggestion not found");
+  const user = await assertCompanyAccess(suggestion.companyId);
+  if (suggestion.status !== "open") throw new Error("Suggestion is no longer open");
+
+  await dismissCalendarAssistSuggestion(suggestion, user, dismissReason || undefined);
+  revalidatePath("/calendar");
 }

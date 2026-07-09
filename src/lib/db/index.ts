@@ -16,6 +16,7 @@ import type {
   AudienceSegment,
   AiRun,
   AiMosOpportunity,
+  CalendarAssistSuggestion,
   ApprovedClaim,
   ApprovedResponse,
   Asset,
@@ -591,6 +592,7 @@ export async function exportTenantData(tenantId: string): Promise<Record<string,
     recommendations: byCompany(s.recommendations),
     tasks: byCompany(s.tasks),
     aiMosOpportunities: byTenant(s.aiMosOpportunities),
+    calendarAssistSuggestions: byTenant(s.calendarAssistSuggestions),
     securitySettings: s.security.filter((x) => x.tenantId === tenantId),
     legalHolds: byTenant(s.legalHolds),
     assets: byCompany(s.assets),
@@ -654,6 +656,7 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.recommendations = keepCompany(s.recommendations);
   s.tasks = keepCompany(s.tasks);
   s.aiMosOpportunities = keepTenant(s.aiMosOpportunities);
+  s.calendarAssistSuggestions = keepTenant(s.calendarAssistSuggestions);
   s.assets = keepCompany(s.assets);
   // Tenant-keyed rows (platform-library null rows survive).
   s.responses = keepTenant(s.responses);
@@ -1699,6 +1702,52 @@ export async function updateAiMosOpportunity(
   if (!opp) return undefined;
   Object.assign(opp, patch);
   return opp;
+}
+
+// ---- W1 M22: Calendar assist suggestions ---------------------------------------
+
+export async function listCalendarAssistSuggestions(
+  tenantId: string,
+  companyIds?: string[],
+  status?: CalendarAssistSuggestion["status"],
+): Promise<CalendarAssistSuggestion[]> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.listCalendarAssistSuggestions(tenantId, companyIds, status);
+  }
+  let rows = db().calendarAssistSuggestions.filter((s) => s.tenantId === tenantId);
+  if (companyIds) {
+    const allowed = new Set(companyIds);
+    rows = rows.filter((s) => allowed.has(s.companyId));
+  }
+  if (status) rows = rows.filter((s) => s.status === status);
+  return rows.sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getCalendarAssistSuggestion(
+  suggestionId: string,
+): Promise<CalendarAssistSuggestion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCalendarAssistSuggestion(suggestionId);
+  return db().calendarAssistSuggestions.find((s) => s.id === suggestionId);
+}
+
+export async function createCalendarAssistSuggestion(
+  input: Omit<CalendarAssistSuggestion, "id" | "createdAt">,
+): Promise<CalendarAssistSuggestion> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCalendarAssistSuggestion(input);
+  const row: CalendarAssistSuggestion = { ...input, id: id("calas"), createdAt: now() };
+  db().calendarAssistSuggestions.push(row);
+  return row;
+}
+
+export async function updateCalendarAssistSuggestion(
+  suggestionId: string,
+  patch: Partial<CalendarAssistSuggestion>,
+): Promise<CalendarAssistSuggestion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateCalendarAssistSuggestion(suggestionId, patch);
+  const row = await getCalendarAssistSuggestion(suggestionId);
+  if (!row) return undefined;
+  Object.assign(row, patch);
+  return row;
 }
 
 // ---- Phase 8: UTM links ------------------------------------------------------------
