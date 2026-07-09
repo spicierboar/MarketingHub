@@ -26,6 +26,7 @@ import {
   ShoppingBag,
   Building2,
   Users,
+  Handshake,
   ScrollText,
   Send,
   ShieldCheck,
@@ -46,6 +47,7 @@ interface NavItem {
   adminOnly?: boolean;
   ownerOnly?: boolean; // tenant owner only (billing / commercial)
   platformAdminOnly?: boolean; // platform operator only (cross-tenant surface)
+  salesAccess?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -71,6 +73,7 @@ const NAV: NavItem[] = [
   { href: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
   { href: "/ads", label: "Paid Advertising", icon: Target, adminOnly: true },
   { href: "/companies", label: "Companies", icon: Building2, adminOnly: true },
+  { href: "/sales/new-client", label: "New client", icon: Handshake, salesAccess: true },
   { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
   { href: "/users", label: "Users", icon: Users, adminOnly: true },
   { href: "/branding", label: "Branding", icon: Palette, ownerOnly: true },
@@ -89,6 +92,7 @@ export function AppShell({
   isAdmin,
   isOwner = false,
   isPlatformAdmin = false,
+  canFieldSales = false,
   branding = null,
   banner,
   envLabel = null,
@@ -101,6 +105,7 @@ export function AppShell({
   isAdmin: boolean;
   isOwner?: boolean;
   isPlatformAdmin?: boolean;
+  canFieldSales?: boolean;
   branding?: { accentColor?: string; logoUrl?: string } | null;
   banner?: { tone: "danger" | "warning"; text: string } | null;
   envLabel?: string | null; // "STAGING"/"DEVELOPMENT" ribbon; null in production
@@ -111,7 +116,8 @@ export function AppShell({
     (n) =>
       (!n.adminOnly || isAdmin) &&
       (!n.ownerOnly || isOwner) &&
-      (!n.platformAdminOnly || isPlatformAdmin),
+      (!n.platformAdminOnly || isPlatformAdmin) &&
+      (!n.salesAccess || canFieldSales),
   );
   // T6 white-label: override the theme accent for this tenant.
   const brandStyle = branding?.accentColor

@@ -56,6 +56,14 @@ export function isAdmin(user: User): boolean {
   return user.role === "admin" || user.role === "super_admin";
 }
 
+export function isSalesRep(user: ActingUser): boolean {
+  return (user.roleTitle as string | undefined) === "sales_rep";
+}
+
+export function canAccessFieldSales(user: ActingUser): boolean {
+  return isAdmin(user) || isSalesRep(user);
+}
+
 export function isTenantOwner(user: User): boolean {
   return user.tenantRole === "owner" || user.role === "super_admin";
 }
@@ -139,6 +147,12 @@ export async function requireTenantOwnerRaw(): Promise<ActingUser> {
 export async function requireAdmin(): Promise<ActingUser> {
   const user = await requireUser();
   if (!isAdmin(user)) redirect("/dashboard");
+  return user;
+}
+
+export async function requireSalesRepOrAdmin(): Promise<ActingUser> {
+  const user = await requireUser();
+  if (!canAccessFieldSales(user)) redirect("/dashboard");
   return user;
 }
 

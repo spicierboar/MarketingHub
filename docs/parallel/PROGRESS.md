@@ -13,7 +13,7 @@ Last updated: 2026-07-09 (**M00 integrating P0**)
 | M16 | `p0/m16-foundation` | ✅ merged |
 | M17 | `p0/m17-client-portal` | ✅ merged |
 | M18 | `p0/m18-auto-publish` | ✅ merged |
-| M19 | `p0/m19-field-sales` | ✅ handoff on branch |
+| M19 | `p0/m19-field-sales` | ✅ merged |
 | M00 | → main | **integrating** |
 
 | Flag | Status |

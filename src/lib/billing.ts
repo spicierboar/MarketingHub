@@ -247,9 +247,12 @@ export async function createAddonCheckoutSession(
   addonId: AddonId,
   companyId: string,
   origin: string,
+  returnPaths?: { successPath?: string; cancelPath?: string },
 ): Promise<string | null> {
   const price = stripeAddonPriceId(addonId);
   if (!stripeConfigured() || !price) return null;
+  const successUrl = returnPaths?.successPath ? `${origin}${returnPaths.successPath}` : `${origin}/billing?addon=success`;
+  const cancelUrl = returnPaths?.cancelPath ? `${origin}${returnPaths.cancelPath}` : `${origin}/billing?addon=cancelled`;
   const params: Record<string, string> = {
     mode: "subscription",
     "line_items[0][price]": price,
@@ -263,8 +266,8 @@ export async function createAddonCheckoutSession(
     "subscription_data[metadata][kind]": "addon",
     "subscription_data[metadata][addonId]": addonId,
     "subscription_data[metadata][companyId]": companyId,
-    success_url: `${origin}/billing?addon=success`,
-    cancel_url: `${origin}/billing?addon=cancelled`,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
   };
   if (tenant.stripeCustomerId) params.customer = tenant.stripeCustomerId;
   const session = await stripePost("checkout/sessions", params);

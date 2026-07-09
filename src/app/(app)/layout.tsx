@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { requireUser, isAdmin, isTenantOwner, isPlatformAdmin, isPortalUser } from "@/lib/auth/rbac";
+import {
+  requireUser,
+  isAdmin,
+  isTenantOwner,
+  isPlatformAdmin,
+  isPortalUser,
+  canAccessFieldSales,
+} from "@/lib/auth/rbac";
 import { getSecuritySettings, getTenant, membershipsForUser } from "@/lib/db";
 import { envRibbonLabel } from "@/lib/env";
 
@@ -18,7 +25,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ? { tone: "danger" as const, text: `Crisis Communications Mode is active — publishing is frozen and all social replies are escalated.${s.crisisNote ? ` (${s.crisisNote})` : ""}` }
     : s.sandboxMode ? { tone: "warning" as const, text: "Sandbox / training mode is active — publishing is disabled." } : null;
   return (
-    <AppShell user={{ name: user.name, email: user.email, role: user.role }} tenantName={tenant?.name ?? "Workspace"} activeTenantId={user.tenantId} tenants={tenants} isAdmin={isAdmin(user)} isOwner={isTenantOwner(user)} isPlatformAdmin={isPlatformAdmin(user)} branding={tenant?.branding ?? null} banner={banner} envLabel={envRibbonLabel()}>
+    <AppShell
+      user={{ name: user.name, email: user.email, role: user.role }}
+      tenantName={tenant?.name ?? "Workspace"}
+      activeTenantId={user.tenantId}
+      tenants={tenants}
+      isAdmin={isAdmin(user)}
+      isOwner={isTenantOwner(user)}
+      isPlatformAdmin={isPlatformAdmin(user)}
+      canFieldSales={canAccessFieldSales(user)}
+      branding={tenant?.branding ?? null}
+      banner={banner}
+      envLabel={envRibbonLabel()}
+    >
       {children}
     </AppShell>
   );
