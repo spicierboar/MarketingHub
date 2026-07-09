@@ -22,6 +22,7 @@ import {
   setKnowledgeDocStatusAction,
   uploadRagDocumentAction,
 } from "../../brand-actions";
+import { LocalIntelFields } from "../../local-intel-fields";
 
 const SOURCE_TYPES = [
   "website_copy",
@@ -253,34 +254,7 @@ export default async function BrandBrainPage({
             </p>
             <form action={saveLocalProfileAction} className="space-y-4">
               <input type="hidden" name="companyId" value={company.id} />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Suburbs / regions served" htmlFor="suburbs" hint="One per line">
-                  <Textarea id="suburbs" name="suburbs" defaultValue={local?.suburbs.join("\n")} />
-                </Field>
-                <Field label="Local competitors" htmlFor="competitors" hint="One per line">
-                  <Textarea id="competitors" name="competitors" defaultValue={local?.competitors.join("\n")} />
-                </Field>
-              </div>
-              <Field label="Customer demographics" htmlFor="demographics">
-                <Textarea id="demographics" name="demographics" defaultValue={local?.demographics} />
-              </Field>
-              <Field label="Common local customer needs" htmlFor="commonNeeds">
-                <Textarea id="commonNeeds" name="commonNeeds" defaultValue={local?.commonNeeds} />
-              </Field>
-              <Field label="Local events" htmlFor="localEvents">
-                <Textarea id="localEvents" name="localEvents" defaultValue={local?.localEvents} />
-              </Field>
-              <Field label="Seasonal demand patterns" htmlFor="seasonalPatterns">
-                <Textarea id="seasonalPatterns" name="seasonalPatterns" defaultValue={local?.seasonalPatterns} />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Common search terms" htmlFor="searchTerms" hint="One per line">
-                  <Textarea id="searchTerms" name="searchTerms" defaultValue={local?.searchTerms.join("\n")} />
-                </Field>
-                <Field label="Buying triggers" htmlFor="buyingTriggers">
-                  <Textarea id="buyingTriggers" name="buyingTriggers" defaultValue={local?.buyingTriggers} />
-                </Field>
-              </div>
+              <LocalIntelFields local={local} variant="full" />
               <Button type="submit">Save local profile</Button>
             </form>
           </CardContent>
