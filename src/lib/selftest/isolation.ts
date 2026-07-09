@@ -60,6 +60,13 @@ import {
   parseMetaLeadPayload,
   verifyMetaLeadSignature,
 } from "@/lib/ad-leads";
+import {
+  checkLiveAdsDispatchNullWhenOff,
+  checkLiveAdsResolveFallsBack,
+  checkLiveAdsSimulatedWhenOff,
+  checkLiveAdsTranslateGoogle,
+  checkLiveAdsTranslateMeta,
+} from "@/lib/selftest/live-ads";
 import { encryptToken } from "@/lib/crypto";
 import { createHmac } from "node:crypto";
 import {
@@ -651,6 +658,12 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("gbpAudit.simulatedWhenLiveOff", () => checkGbpSimulatedWhenLiveOff());
 
     await expect("gbpAudit.checklistActionable", () => checkGbpChecklistActionable());
+
+    await expect("liveAds.simulatedWhenOff", () => checkLiveAdsSimulatedWhenOff());
+    await expect("liveAds.dispatchNullWhenOff", () => checkLiveAdsDispatchNullWhenOff());
+    await expect("liveAds.translateMeta", () => checkLiveAdsTranslateMeta());
+    await expect("liveAds.translateGoogle", () => checkLiveAdsTranslateGoogle());
+    await expect("liveAds.resolveFallsBack", () => checkLiveAdsResolveFallsBack());
 
     await expect("campaignBuilder.goalProducesPlan", () =>
       checkCampaignBuilderGoalProducesPlan(),

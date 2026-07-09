@@ -16,8 +16,9 @@
 // Stripe. Nothing in this module moves the client's ad money.
 
 import { leadValue } from "@/lib/analytics";
+import { adsLive, fetchLiveCampaignMetrics } from "@/lib/ad-connectors";
 import { now } from "@/lib/utils";
-import type { AdBudget, AdCampaign, AdPlatform, Company, Lead } from "@/lib/types";
+import type { AdBudget, AdAccount, AdCampaign, AdPlatform, Company, Lead } from "@/lib/types";
 import { AD_PLATFORMS } from "@/lib/types";
 
 // ---- deterministic seed (same FNV-1a scheme as analytics.ts) ------------------
@@ -101,6 +102,25 @@ export function campaignMetrics(campaign: AdCampaign, company: Company | undefin
     revenueUsd,
     roas: spendUsd ? revenueUsd / spendUsd : null,
   };
+}
+
+export async function resolveCampaignMetrics(
+  campaign: AdCampaign,
+  company: Company | undefined,
+  account?: AdAccount,
+): Promise<PaidMetrics> {
+  if (adsLive() && account) {
+    const live = await fetchLiveCampaignMetrics(account, campaign);
+    if (live) {
+      const revenueUsd = live.leads * leadValue(company);
+      return {
+        ...live,
+        revenueUsd,
+        roas: live.spendUsd ? revenueUsd / live.spendUsd : null,
+      };
+    }
+  }
+  return campaignMetrics(campaign, company);
 }
 
 export function sumPaid(rows: PaidMetrics[]): PaidMetrics {

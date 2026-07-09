@@ -1,65 +1,70 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-09 (**W1 COMPLETE**)
+Last updated: 2026-07-09 (**W2 in flight**)
 
-**Owner lock:** Full SRS · vision · go-live = non-negotiable. See `docs/FULL-IMPLEMENTATION-PLAN.md` · `docs/parallel/FULL-ORCHESTRATION.md`.
+**Owner lock:** Full SRS · vision · go-live = non-negotiable.  
+**Schedule:** `docs/parallel/FULL-ORCHESTRATION.md` → **Schedule — per-agent estimates**
 
-## V1 — DONE (67/67 · 20/20 baseline)
+## Standing instructions (integrators + M99)
 
-## Wave 0 (P0) — DONE ✅
-
-| Agent | Branch | Status |
-|-------|--------|--------|
-| M16–M19 + M00 | merged | ✅ |
-
-| Flag | Status |
-|------|--------|
-| `p0_complete` | yes |
-
-**Fixtures:** self-test **77/77** · queue-test **20/20**
-
-## Wave 1 — DONE ✅
-
-| Agent | Branch | Status |
-|-------|--------|--------|
-| M20 | `w1/m20-client-reports` | ✅ merged |
-| M21 | `w1/m21-intel-panel` | ✅ merged |
-| M22 | `w1/m22-calendar-assist` | ✅ merged |
-| M23 | `w1/m23-portal-migration` | ✅ merged |
-| M01-W1 | → main | ✅ integrated |
-
-| Flag | Status |
-|------|--------|
-| `w1_launched` | yes |
-| `m20_handoff` | yes |
-| `m21_handoff` | yes |
-| `m22_handoff` | yes |
-| `m23_handoff` | yes |
-| `w1_complete` | yes |
-| `w2_launched` | no |
-| `full_complete` | no |
-
-**Fixtures:** self-test **90/90** · queue-test **20/20** · migration **0028** on main (owner paste when ready)
-
-**Live flags:** OFF until W6.
-
-## Waves 2–7 — QUEUED
-
-W2 M24–M27 · W3 CRM/email/SMS/reviews · W4–W7 per FULL-IMPLEMENTATION-PLAN.md
-
-## Owner ops
-
-Phases 1–2 ✅ · Phase 3 Google blocked · Phase 4 parked
-
-**Canonical:** `https://mangotickle.com.au`
+**Auto-spawn next wave — no owner wait (except W6).** See `FULL-ORCHESTRATION.md`.  
+**Token discipline:** one chat per agent · handoffs mandatory · fresh M99 per wave · `HANDOFF-TEMPLATE.md`
 
 ---
 
-## Owner pilot (P0 — run anytime)
+## Schedule at a glance
 
-1. `/sales/new-client` → test company + client member
-2. Client magic link → `/client`
-3. Request → draft → portal approve
-4. Auto-publish sim path
-5. Token `/approve/[token]`
-6. `/signup` invite-only
+| Wave | Status | Wall-clock est. | ETA (planning) |
+|------|--------|-----------------|----------------|
+| W0 P0 | ✅ DONE | ~4–6d (observed ~1–2d) | — |
+| W1 | ✅ DONE | ~2–3d (observed ~1d) | — |
+| **W2** | **in flight** | **~4–6d** | **~Jul 13–15** |
+| W3 | queued | ~4–6d | ~Jul 17–21 |
+| W4 | queued | ~4–6d | ~Jul 21–27 |
+| W5 | queued | ~4–6d | ~Jul 25 – Aug 2 |
+| W6 | owner gate | days + **weeks?** | blocked (Google) |
+| W7 | queued | ~6–8d post-W6 | after go-live |
+| **`full_complete`** | — | **~22–32d code** + W6 | **~early Aug** (code) |
+
+---
+
+## V1 — DONE (67/67 · 20/20 baseline)
+
+## Wave 0 (P0) — DONE ✅ · `p0_complete=yes` · 77/77
+
+## Wave 1 — DONE ✅ · `w1_complete=yes` · 90/90 · **0028 applied** ✅
+
+## Wave 2 — IN FLIGHT
+
+| Agent | Est. | Status |
+|-------|------|--------|
+| M24 | 2–3d | ✅ handoff |
+| M25 | 2–3d | ✅ handoff |
+| M26 | 1–2d | ✅ handoff |
+| M27 | 3–4d | ✅ handoff |
+| M01-W2 | 1–2d | waiting |
+
+| Flag | Status |
+|------|--------|
+| `w2_launched` | yes |
+| `m24_handoff` | yes |
+| `m25_handoff` | yes |
+| `m26_handoff` | yes |
+| `m27_handoff` | yes |
+| `w2_complete` | no |
+
+**Target:** ~98/98 fixtures (90 baseline + 3 M24 + 5 M26) · live flags **OFF**
+
+## Waves 3–7 — QUEUED
+
+`w3_launched=no` · `full_complete=no` · W6 Phase 3 **blocked**
+
+## Owner ops
+
+Phases 1–2 ✅ · Phase 3 Google blocked · Phase 4 parked · `https://mangotickle.com.au`
+
+---
+
+## Owner pilot (optional anytime)
+
+P0 checklist (6 steps) + W1 smoke (`/client/reports`, intel panel, calendar assist) in prior sessions.
