@@ -1,6 +1,6 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-09 (**P0 COMPLETE**)
+Last updated: 2026-07-09 (**W1 integrating**)
 
 **Owner lock:** Full SRS · vision · go-live = non-negotiable. See `docs/FULL-IMPLEMENTATION-PLAN.md` · `docs/parallel/FULL-ORCHESTRATION.md`.
 
@@ -10,43 +10,42 @@ Last updated: 2026-07-09 (**P0 COMPLETE**)
 
 | Agent | Branch | Status |
 |-------|--------|--------|
-| M16 | `p0/m16-foundation` | ✅ merged |
-| M17 | `p0/m17-client-portal` | ✅ merged |
-| M18 | `p0/m18-auto-publish` | ✅ merged |
-| M19 | `p0/m19-field-sales` | ✅ merged |
-| M00 | → main | ✅ integrated |
+| M16–M19 + M00 | merged | ✅ |
 
 | Flag | Status |
 |------|--------|
-| `m16_merged` | yes |
-| `parallel_launched` | yes |
-| `m17_handoff` | yes |
-| `m18_handoff` | yes |
-| `m19_handoff` | yes |
-| `m00_launched` | yes |
 | `p0_complete` | yes |
 
-**Fixtures:** self-test **77/77** · queue-test **20/20** · build **62 routes**
+**Fixtures:** self-test **77/77** · queue-test **20/20**
 
-## Waves 1–7 — QUEUED (auto-chain after W0)
+## Wave 1 — INTEGRATING
 
-| Wave | Agents | Status |
-|------|--------|--------|
-| W1 | M20–M23 → M01-W1 | queued |
-| W2 | M24–M27 | queued |
-| W3 | M30–M33 (CRM·email·SMS·reviews) | queued |
-| W4 | M34–M37 | queued |
-| W5 | M40–M43 | queued |
-| W6 | M-OWNER-OPS + M45 go-live | queued (Phase 3 blocked) |
-| W7 | M50–M55 → M01-FINAL | queued |
+| Agent | Branch | Status |
+|-------|--------|--------|
+| M20 | `w1/m20-client-reports` | ✅ merged |
+| M21 | `w1/m21-intel-panel` | ✅ merging |
+| M22 | `w1/m22-calendar-assist` | pending merge |
+| M23 | `w1/m23-portal-migration` | ✅ merged |
+| M01-W1 | → main | **in progress** |
 
 | Flag | Status |
 |------|--------|
 | `w1_launched` | yes |
 | `m20_handoff` | yes |
+| `m21_handoff` | yes |
+| `m22_handoff` | yes |
+| `m23_handoff` | yes |
+| `w1_complete` | no |
+| `w2_launched` | no |
 | `full_complete` | no |
 
-**M00 spawns W1** when `p0_complete=yes` ✅. **Live flags flip W6 only.**
+**Target post-W1:** ~85/85 self-test · **20/20** queue · migration **0028** file on main (owner paste when ready)
+
+**Live flags:** OFF until W6.
+
+## Waves 2–7 — QUEUED
+
+W2 M24–M27 · W3 CRM/email/SMS/reviews · W4–W7 per FULL-IMPLEMENTATION-PLAN.md
 
 ## Owner ops
 
@@ -54,30 +53,13 @@ Phases 1–2 ✅ · Phase 3 Google blocked · Phase 4 parked
 
 **Canonical:** `https://mangotickle.com.au`
 
-**Hard locks (unchanged):** `PUBLISHING_LIVE` / `ADS_LIVE` OFF · migration **0028 DEFERRED**
-
 ---
 
-## Checklists
+## Owner pilot (P0 — run anytime)
 
-### W0 (M00) — DONE
-
-- [x] Portal · sales · auto-publish · invite-only
-- [x] 77/77 · 20/20 · build green
-- [x] Spawn W1 (M20–M23 launched 2026-07-09)
-
-### Owner pilot (NOW — ~30 min on live URL)
-
-1. Agency admin → `/sales/new-client` → test company + client member
-2. Client magic link → lands on `/client`
-3. Client request → agency drafts → client approves in portal
-4. Auto-publish sim path (audit / queue; live flags stay OFF)
-5. Token `/approve/[token]` still works
-6. `/signup` shows invite-only
-
-### full_complete (M01-FINAL)
-
-- [ ] All waves W1–W7 merged
-- [ ] CRM · email · SMS · reviews
-- [ ] Phase 4 GO · live flags ON
-- [ ] Owner pilot on live URL
+1. `/sales/new-client` → test company + client member
+2. Client magic link → `/client`
+3. Request → draft → portal approve
+4. Auto-publish sim path
+5. Token `/approve/[token]`
+6. `/signup` invite-only

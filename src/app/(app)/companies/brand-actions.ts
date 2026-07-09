@@ -15,6 +15,7 @@ import {
   getClaim,
   getConsent,
   getKnowledgeDoc,
+  getLocalProfile,
   getOffer,
   getResponse,
   getService,
@@ -196,14 +197,23 @@ export async function saveLocalProfileAction(formData: FormData) {
   const user = await assertAdminCompanyAccess(companyId);
   if (!companyId) throw new Error("Company is required");
 
+  const keyOnly = text(formData, "intelScope") === "key";
+  const existing = keyOnly ? await getLocalProfile(companyId) : undefined;
+
   await upsertLocalProfile({
     companyId,
     suburbs: lines(formData, "suburbs"),
-    demographics: text(formData, "demographics") || undefined,
-    commonNeeds: text(formData, "commonNeeds") || undefined,
+    demographics: keyOnly
+      ? existing?.demographics
+      : text(formData, "demographics") || undefined,
+    commonNeeds: keyOnly
+      ? existing?.commonNeeds
+      : text(formData, "commonNeeds") || undefined,
     competitors: lines(formData, "competitors"),
     localEvents: text(formData, "localEvents") || undefined,
-    seasonalPatterns: text(formData, "seasonalPatterns") || undefined,
+    seasonalPatterns: keyOnly
+      ? existing?.seasonalPatterns
+      : text(formData, "seasonalPatterns") || undefined,
     searchTerms: lines(formData, "searchTerms"),
     buyingTriggers: text(formData, "buyingTriggers") || undefined,
   });
@@ -212,6 +222,7 @@ export async function saveLocalProfileAction(formData: FormData) {
     targetId: companyId,
     companyId,
   });
+  revalidatePath(`/companies/${companyId}`);
   revalidatePath(`/companies/${companyId}/brand-brain`);
 }
 

@@ -48,6 +48,8 @@ import {
   createIntegration,
   createConnectInvite,
   updateCompany,
+  upsertLocalProfile,
+  getLocalProfile,
 } from "@/lib/db";
 import { companyHasAddon } from "@/lib/entitlements";
 import { listAudit, logAction } from "@/lib/audit";
@@ -91,6 +93,11 @@ import {
   recommendedCampaignGoals,
   resolveBusinessType,
 } from "@/lib/business-profiles";
+import {
+  buildLocalIntelAiContext,
+  localIntelCompleteness,
+  localIntelSummary,
+} from "@/lib/local-area-intel";
 import {
   checkGbpChecklistActionable,
   checkGbpNapConsistency,
@@ -774,6 +781,57 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
         ctx.includes("Occupancy language") &&
         ctx.includes("Wine weekend");
       return { ok, detail: `type=${resolveBusinessType(updated)}` };
+    });
+
+    await expect("localIntel.completenessAndSummary", async () => {
+      await upsertLocalProfile({
+        companyId: companyA.id,
+        suburbs: ["Millbrook", "Riverstone"],
+        competitors: ["Coles"],
+        localEvents: "School fete",
+        searchTerms: ["iga near me"],
+        buyingTriggers: "Catalogue Wednesday",
+      });
+      const local = await getLocalProfile(companyA.id);
+      if (!local) return { ok: false, detail: "profile missing" };
+      const { score, missing } = localIntelCompleteness(local);
+      const summary = localIntelSummary(local);
+      const ctx = buildLocalIntelAiContext(local);
+      const ok =
+        score >= 60 &&
+        missing.some((m: string) => /demographics|seasonal/i.test(m)) &&
+        summary.includes("2 suburbs") &&
+        ctx.includes("Suburbs: Millbrook, Riverstone") &&
+        ctx.includes("Buying triggers: Catalogue Wednesday");
+      return { ok, detail: `score=${score} missing=${missing.length}` };
+    });
+
+    await expect("localIntel.keyScopePreservesExtended", async () => {
+      await upsertLocalProfile({
+        companyId: companyA.id,
+        suburbs: ["A"],
+        competitors: [],
+        demographics: "Families",
+        commonNeeds: "Weekly shop",
+        searchTerms: [],
+        seasonalPatterns: "Winter soups",
+      });
+      const before = await getLocalProfile(companyA.id);
+      await upsertLocalProfile({
+        companyId: companyA.id,
+        suburbs: ["A", "B"],
+        competitors: ["Rival"],
+        demographics: before?.demographics,
+        commonNeeds: before?.commonNeeds,
+        searchTerms: ["local"],
+        seasonalPatterns: before?.seasonalPatterns,
+      });
+      const after = await getLocalProfile(companyA.id);
+      const ok =
+        after?.suburbs.length === 2 &&
+        after?.demographics === "Families" &&
+        after?.seasonalPatterns === "Winter soups";
+      return { ok, detail: `suburbs=${after?.suburbs.length}` };
     });
 
     await expect("export.noCrossTenantLeak", async () => {

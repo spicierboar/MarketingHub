@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canAccessCompany, requireAdmin } from "@/lib/auth/rbac";
-import { getCompany, listContent, listIntegrations, listRecommendations, usersForCompany } from "@/lib/db";
+import { getCompany, listContent, listIntegrations, listRecommendations, getLocalProfile, usersForCompany } from "@/lib/db";
 import { buildCompanyHealthScore } from "@/lib/health-scores";
 import { HealthScoreCard } from "@/components/health-score-card";
 import { activeAddonsForCompany } from "@/lib/entitlements";
@@ -13,6 +13,7 @@ import {
   resolveBusinessType,
 } from "@/lib/business-profiles";
 import { BusinessTypeSection } from "../business-profile-fields";
+import { LocalIntelPanel } from "../local-intel-panel";
 import { RecommendationStrip } from "@/components/recommendation-cards";
 import { AutoOnboardingPanel } from "@/components/auto-onboarding-panel";
 import { PageHeader } from "@/components/page-header";
@@ -48,12 +49,13 @@ export default async function CompanyOnboardingPage({
 
   // "Getting started" checklist — computed from real state so it walks a new
   // client from onboarding through connect-and-go.
-  const [integrations, allContent, activeAddons, recommendations, health] = await Promise.all([
+  const [integrations, allContent, activeAddons, recommendations, health, localProfile] = await Promise.all([
     listIntegrations(user.tenantId, company.id),
     listContent(user.tenantId),
     activeAddonsForCompany(user.tenantId, company.id),
     listRecommendations(user.tenantId, [company.id], "open"),
     buildCompanyHealthScore(user.tenantId, company),
+    getLocalProfile(company.id),
   ]);
   const companyContent = allContent.filter((c) => c.companyId === company.id);
   const steps: { label: string; done: boolean; href: string; cta: string }[] = [
@@ -175,6 +177,8 @@ export default async function CompanyOnboardingPage({
                 </Field>
               </CardContent>
             </Card>
+
+            <LocalIntelPanel companyId={company.id} local={localProfile} />
 
             <Card>
               <CardContent className="space-y-5 p-6">

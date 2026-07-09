@@ -7,6 +7,7 @@
 import { AI_MODEL } from "@/lib/ai/claude";
 import { guardedClaudeCall, sanitizeAiUserInput } from "@/lib/security-slice";
 import { buildBusinessProfileAiContext } from "@/lib/business-profiles";
+import { buildLocalIntelAiContext } from "@/lib/local-area-intel";
 import {
   applyCitationsToBody,
   retrieveApprovedSnippets,
@@ -125,19 +126,9 @@ async function gatherGrounding(input: DraftInput): Promise<{
 
   // Local Area Intelligence Profile.
   const local = await getLocalProfile(company.id);
-  if (local) {
-    contextBlocks.push(
-      "LOCAL AREA INTELLIGENCE:\n" +
-        [
-          local.suburbs.length && `Suburbs: ${local.suburbs.join(", ")}`,
-          local.demographics && `Demographics: ${local.demographics}`,
-          local.seasonalPatterns && `Seasonal patterns: ${local.seasonalPatterns}`,
-          local.localEvents && `Local events: ${local.localEvents}`,
-          local.buyingTriggers && `Buying triggers: ${local.buyingTriggers}`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-    );
+  const localCtx = buildLocalIntelAiContext(local);
+  if (localCtx) {
+    contextBlocks.push(localCtx);
     sources.push("Local Area Intelligence Profile");
   }
 
