@@ -1,16 +1,18 @@
 # Agent M16-P0-Foundation
 
 **Chat title:** `M16-P0-Foundation`  
-**Run:** Before all other P0 builders · **Branch:** `p0/m16-foundation`
+**Run:** Before all other P0 builders · **Branch:** `p0/m16-foundation`  
+**This is the only chat the owner must launch manually** — see `docs/parallel/P0-OWNER-STEPOUT.md`
 
 ```
 AGENT: M16-P0-Foundation
 Path: F:/MarketingHub/command-centre
 
 READ FIRST:
-1. docs/P0-IMPLEMENTATION-PLAN.md
-2. docs/parallel/P0-MULTI-AGENT-PLAN.md (file ownership)
-3. HANDOVER.md — THE ISOLATION RULE + appEnv() only
+1. docs/parallel/P0-ORCHESTRATION.md (mandatory exit sequence)
+2. docs/P0-IMPLEMENTATION-PLAN.md
+3. docs/parallel/P0-MULTI-AGENT-PLAN.md (file ownership)
+4. HANDOVER.md — THE ISOLATION RULE + appEnv() only
 
 BLOCKS: M17, M18, M19 (must merge before they start)
 
@@ -41,5 +43,25 @@ DO NOT:
 
 OUTPUT:
 - docs/parallel/M16-handoff.md (interface contract for M17/M18)
-- Tell owner: M16 merged — launch M17 + M18 + M19 in parallel
+
+═══════════════════════════════════════════════════════════════
+AUTO-ORCHESTRATION (mandatory on success — owner steps away)
+═══════════════════════════════════════════════════════════════
+Read docs/parallel/P0-ORCHESTRATION.md § "M16 exit sequence"
+
+1. Commit on p0/m16-foundation
+2. Merge to main + push origin main
+3. Update docs/parallel/PROGRESS.md:
+   - m16_merged = yes
+4. If parallel_launched ≠ yes:
+   - Set parallel_launched = yes · commit + push main
+   - Launch THREE Task subagents IN THE SAME MESSAGE (run_in_background: true):
+     a) M17 — prompt from docs/parallel/M17-P0-client-portal-prompt.md
+     b) M18 — prompt from docs/parallel/M18-P0-auto-publish-prompt.md
+     c) M19 — prompt from docs/parallel/M19-P0-field-sales-prompt.md
+5. Final message to owner:
+   "M16 complete. M17+M18+M19 running in parallel. M00 will auto-start when all finish.
+    You can step away — see docs/parallel/P0-OWNER-STEPOUT.md"
+
+DO NOT ask owner to launch M17/M18/M19 manually.
 ```

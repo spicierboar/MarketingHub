@@ -1,6 +1,6 @@
 # V1 module progress — orchestrator ledger
 
-**Maintained by agent `M99-Orchestrator` only.** Integrator and builders read this; they do not edit it.
+**Maintained by agent `M99-Orchestrator` + P0 finishing agents (orchestration flags only).**
 
 Last updated: 2026-07-09 (**P0 batch kickoff** — M16 pending)
 
@@ -29,13 +29,31 @@ Last updated: 2026-07-09 (**P0 batch kickoff** — M16 pending)
 | **M19-FieldSales** | `/sales/new-client` wizard · provision client | `p0/m19-field-sales` | **blocked** — wait M16 merge | none |
 | **M00-Integrator** | Merge · self-tests · HANDOVER | merge → `main` | **waiting** — after M16–M19 handoffs | none |
 
-**Launch order (enforced):**
+**Launch:** Owner starts **M16 only** — M16 spawns M17+M18+M19; fan-in spawns M00. See `docs/parallel/P0-ORCHESTRATION.md`.
 
-1. **D1:** M16 alone → merge to `main`
-2. **D2+:** M17 + M18 + M19 parallel (max 3)
-3. **Then:** M00 integrator
+**Launch order (automatic):**
 
-**M99 gate:** M16 must be **merged to `main`** before launching M17/M18/M19.
+1. Owner → M16 → merge → spawn parallel
+2. M17 + M18 + M19 (background)
+3. Fan-in → M00 → `p0_complete`
+
+**M99 gate:** M16 must merge and set `m16_merged=yes` before parallel agents run (M16 spawns them).
+
+### P0 orchestration state (auto-chain dedup)
+
+**Any finishing agent may update this table.** Read before spawning; skip if flag already `yes`.
+
+| Flag | Status |
+|------|--------|
+| `m16_merged` | no |
+| `parallel_launched` | no |
+| `m17_handoff` | no |
+| `m18_handoff` | no |
+| `m19_handoff` | no |
+| `m00_launched` | no |
+| `p0_complete` | no |
+
+Mechanics: `docs/parallel/P0-ORCHESTRATION.md` · Owner step-away: `docs/parallel/P0-OWNER-STEPOUT.md`
 
 ### Migration reservations
 

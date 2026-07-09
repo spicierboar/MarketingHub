@@ -4,7 +4,22 @@
 
 **Model:** Modify existing monolith · TGLT = one tenant → many companies · no microservices · no live flag flips.
 
-**Related:** `docs/P0-IMPLEMENTATION-PLAN.md` · live ledger `docs/parallel/PROGRESS.md`
+**Related:** `docs/P0-IMPLEMENTATION-PLAN.md` · live ledger `docs/parallel/PROGRESS.md`  
+**Hands-off chain:** `docs/parallel/P0-ORCHESTRATION.md` · owner: `docs/parallel/P0-OWNER-STEPOUT.md`
+
+---
+
+## Auto-orchestration (owner step-away)
+
+**Owner launches M16 once only.** Every agent spawns the next group per `P0-ORCHESTRATION.md`.
+
+| Finisher | Spawns |
+|----------|--------|
+| **M16** (merged) | M17 + M18 + M19 (Task ×3, parallel) |
+| **M17 or M18 or M19** (fan-in) | M00 when all three handoffs exist |
+| **M00** | Nothing — outputs pilot checklist |
+
+Dedup via `PROGRESS.md` **P0 orchestration state** flags.
 
 ---
 
@@ -39,17 +54,16 @@
 
 ---
 
-## Launch order (enforced by M99)
+## Launch order
 
-| Day | Activity |
-|-----|----------|
-| **D0** | M99 assigns agents, reserves file ownership, publishes interface contract |
-| **D1** | **M16 only** → merge foundation to `main` (**blocks** M17/M18/M19) |
-| **D2–D4** | **M17 + M18 + M19 in parallel** (max 3) |
-| **D5–D6** | **M00** merge, conflict resolve, self-tests, build |
-| **D7** | Owner pilot smoke on production |
+| Phase | Who starts it | How |
+|-------|---------------|-----|
+| **Foundation** | Owner → M16 once | `M16-P0-foundation-prompt.md` |
+| **Parallel build** | **M16 auto-spawns** | Task ×3: M17, M18, M19 |
+| **Integrate** | **Fan-in auto-spawns** | First of M17/M18/M19 with all handoffs → M00 |
+| **Done** | M00 | Push main · pilot checklist |
 
-**M99 gate:** Do **not** launch M17/M18/M19 until M16 is **merged to `main`**.
+**M99 is optional** if auto-orchestration is used — M16 replaces the D0 kickoff for parallel launch.
 
 ---
 
@@ -101,9 +115,21 @@ export async function completeClientApproval(args: {
 
 ---
 
-## Builder prompts
+## Builder prompts (per-agent files)
 
-### M16-Foundation (run first — blocks parallel)
+| Agent | Prompt file |
+|-------|-------------|
+| M16 | `docs/parallel/M16-P0-foundation-prompt.md` |
+| M17 | `docs/parallel/M17-P0-client-portal-prompt.md` |
+| M18 | `docs/parallel/M18-P0-auto-publish-prompt.md` |
+| M19 | `docs/parallel/M19-P0-field-sales-prompt.md` |
+| M00 | `docs/parallel/M00-P0-integrator-prompt.md` |
+
+Inline copies below are **deprecated** — use files above (include auto-orchestration blocks).
+
+---
+
+## Builder prompts (legacy inline — use files above)
 
 ```
 AGENT: M16-P0-Foundation

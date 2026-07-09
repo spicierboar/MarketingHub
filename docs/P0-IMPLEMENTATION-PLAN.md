@@ -84,5 +84,7 @@ Portal users: `member` + exactly one `company_access` row (infer in code; no mig
 ## Related docs
 
 - Multi-agent execution: `docs/parallel/P0-MULTI-AGENT-PLAN.md`
+- **Auto-orchestration (hands-off):** `docs/parallel/P0-ORCHESTRATION.md`
+- **Owner step-away:** `docs/parallel/P0-OWNER-STEPOUT.md`
 - Owner cutover: `docs/OWNER-LIVE-CUTOVER.md`
 - Live ledger: `docs/parallel/PROGRESS.md`
