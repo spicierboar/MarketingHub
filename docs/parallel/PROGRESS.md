@@ -20,9 +20,9 @@ Last updated: 2026-07-09 (**Full orchestration active**)
 |------|--------|
 | `m16_merged` | yes |
 | `parallel_launched` | yes |
-| `m17_handoff` | no |
+| `m17_handoff` | yes |
 | `m18_handoff` | yes |
-| `m19_handoff` | no |
+| `m19_handoff` | yes |
 | `m00_launched` | no |
 | `p0_complete` | no |
 

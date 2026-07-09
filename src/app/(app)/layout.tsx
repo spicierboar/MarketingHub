@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { requireUser, isAdmin, isTenantOwner, isPlatformAdmin } from "@/lib/auth/rbac";
+import { requireUser, isAdmin, isTenantOwner, isPlatformAdmin, canAccessFieldSales } from "@/lib/auth/rbac";
 import { getSecuritySettings, getTenant, membershipsForUser } from "@/lib/db";
 import { envRibbonLabel } from "@/lib/env";
 
@@ -39,6 +39,7 @@ export default async function AppLayout({
       isAdmin={isAdmin(user)}
       isOwner={isTenantOwner(user)}
       isPlatformAdmin={isPlatformAdmin(user)}
+      canFieldSales={canAccessFieldSales(user)}
       branding={tenant?.branding ?? null}
       banner={banner}
       envLabel={envRibbonLabel()}
