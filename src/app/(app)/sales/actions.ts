@@ -9,7 +9,6 @@ import {
   createUser,
   getCompany,
   getCompanyEntitlement,
-  getMembership,
   getTenant,
   getUserByEmail,
   grantAccess,
@@ -22,7 +21,6 @@ import { isAddonId } from "@/lib/addons";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
 import { resolveOrigin } from "@/lib/origin";
-import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import type { AddonId, BusinessType, CompanyProfile } from "@/lib/types";
 
 const BUSINESS_TYPES: BusinessType[] = [
@@ -104,14 +102,13 @@ export async function saveBusinessStepAction(formData: FormData) {
 
 export async function saveAddonsStepAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertSalesCompanyInTenant(companyId);
+  await assertSalesCompanyInTenant(companyId);
   const selected = formData.getAll("addonId").map(String).filter(isAddonId);
   if (!selected.length) redirect(wizardPath("provision", companyId));
   redirect(wizardPath("checkout", companyId, { addons: selected.join(",") }));
 }
 
 export async function startAddonCheckoutAction(formData: FormData) {
-  const user = await requireSalesRepOrAdmin();
   const companyId = String(formData.get("companyId") || "");
   const addonId = String(formData.get("addonId") || "");
   const remaining = String(formData.get("remaining") || "");
@@ -135,12 +132,11 @@ export async function startAddonCheckoutAction(formData: FormData) {
 }
 
 export async function provisionClientAction(formData: FormData) {
-  const user = await requireSalesRepOrAdmin();
   const companyId = String(formData.get("companyId") || "");
   const email = String(formData.get("email") || "").trim();
   const name = String(formData.get("name") || "").trim();
   if (!email || !name) throw new Error("Client name and email are required");
-  await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesCompanyInTenant(companyId);
   const client = (await getUserByEmail(email)) ?? (await createUser({ email, name, role: "user" }));
   await addMembership({ tenantId: user.tenantId, userId: client.id, role: "member" });
   await grantAccess(client.id, companyId);
@@ -150,16 +146,14 @@ export async function provisionClientAction(formData: FormData) {
 }
 
 export async function skipAddonsAction(formData: FormData) {
-  await requireSalesRepOrAdmin();
   const companyId = String(formData.get("companyId") || "");
-  await assertAdminCompanyAccess(companyId);
+  await assertSalesCompanyInTenant(companyId);
   redirect(wizardPath("provision", companyId));
 }
 
 export async function skipCheckoutAction(formData: FormData) {
-  await requireSalesRepOrAdmin();
   const companyId = String(formData.get("companyId") || "");
-  await assertAdminCompanyAccess(companyId);
+  await assertSalesCompanyInTenant(companyId);
   redirect(wizardPath("provision", companyId));
 }
 
