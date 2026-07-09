@@ -8,21 +8,11 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "@/lib/db/supabase";
 
-export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const nextParam = url.searchParams.get("next") ?? "/dashboard";
-  const next = nextParam.startsWith("/") ? nextParam : "/dashboard";
-
-  if (!isSupabaseConfigured() || !code) {
-    return NextResponse.redirect(new URL("/login?error=auth", url.origin));
-  }
-
-  const redirectTo = new URL(next, url.origin);
+function supabaseOnResponse(request: NextRequest, redirectTo: URL) {
   const response = NextResponse.redirect(redirectTo);
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -39,11 +29,38 @@ export async function GET(request: NextRequest) {
       },
     },
   );
+  return { supabase, response };
+}
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) {
-    return NextResponse.redirect(new URL("/login?error=auth", url.origin));
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const tokenHash = url.searchParams.get("token_hash");
+  const type = url.searchParams.get("type");
+  const nextParam = url.searchParams.get("next") ?? "/dashboard";
+  const next = nextParam.startsWith("/") ? nextParam : "/dashboard";
+  const loginError = () =>
+    NextResponse.redirect(new URL("/login?error=auth", url.origin));
+
+  if (!isSupabaseConfigured()) return loginError();
+
+  const redirectTo = new URL(next, url.origin);
+  const { supabase, response } = supabaseOnResponse(request, redirectTo);
+
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) return loginError();
+    return response;
   }
 
-  return response;
+  if (tokenHash && type) {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as EmailOtpType,
+    });
+    if (error) return loginError();
+    return response;
+  }
+
+  return loginError();
 }

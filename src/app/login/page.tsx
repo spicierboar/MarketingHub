@@ -1,16 +1,4 @@
-"use client";
-
-import { useActionState } from "react";
-import { signIn } from "./actions";
-import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { LoginForm } from "./login-form";
 
 // Two demo tenants prove multi-tenant isolation: a business group and a
 // marketing agency. Sign in to one and you can never see the other.
@@ -41,8 +29,6 @@ const DEMO_TENANTS: { tenant: string; accounts: { email: string; role: string }[
 ];
 
 export default function LoginPage() {
-  const [state, formAction, pending] = useActionState(signIn, null);
-
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
@@ -58,37 +44,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>
-              Passwordless access — you&apos;ll never be issued a password.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={formAction} className="space-y-4">
-              <Field label="Work email" htmlFor="email">
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@company.com"
-                  required
-                />
-              </Field>
-              {state?.error && (
-                <p className="text-sm text-red-600">{state.error}</p>
-              )}
-              {state?.message && (
-                <p className="text-sm text-green-700">{state.message}</p>
-              )}
-              <Button type="submit" className="w-full" disabled={pending}>
-                {pending ? "Signing in…" : "Continue"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <LoginForm />
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           New here?{" "}
