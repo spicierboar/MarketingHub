@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { LoginForm } from "./login-form";
+import { LoginAuthError } from "./login-auth-error";
 
 // Two demo tenants prove multi-tenant isolation: a business group and a
 // marketing agency. Sign in to one and you can never see the other.
@@ -43,6 +45,10 @@ export default function LoginPage() {
             AI drafts · you review · admins approve
           </p>
         </div>
+
+        <Suspense fallback={null}>
+          <LoginAuthError />
+        </Suspense>
 
         <LoginForm />
 
