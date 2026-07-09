@@ -1,18 +1,28 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-08, **V1 builder track COMPLETE** — batches 1–8)
+> ## ▶ NEXT SESSION — START HERE (2026-07-09, **P0 SHIPPED** — Wave 0 complete)
 >
-> **Module 3 (payment-tier matrix) was DONE 2026-07-07** — do NOT rebuild it. **Phases 4–6 (visuals, menus, Order Now) DONE 2026-07-08.** **Phase 7 lead-ingestion webhook DONE (2026-07-08).** **V1 scale:** timezones ✅ (**0013**) · bulk connect ✅ (**0014**) · AI hardening ✅ (**0015**) · **publish idempotency ✅ (M01b / batch 8 — no migration)**. **V1 modules 2–15 DONE** (batches 1–7). **V1 builders complete — no further parallel module agents.**
+> **P0 merged to `main`:** client portal (`/client`) · field sales wizard (`/sales/new-client`) · auto-publish on client approval · invite-only signup · portal RBAC + post-login routing. Handoffs archived under `docs/parallel/archive/M{16,17,18,19}-handoff.md`.
 >
-> **Owner session:** migrations **0012 + 0013 + 0014 + 0015 APPLIED + verified** on Supabase. Meta: **The Great Learning Tree Pty Ltd business verification DONE** (admins notified). Google Cloud still **billing blocked** · `GOOGLE_OAUTH_*` missing. **Owner lock:** park Meta App Review + Google live work **together** until both ready — do **NOT** flip `ADS_LIVE` / `PUBLISHING_LIVE` yet. Resend magic-link = owner keys (parked with live cutover).
+> **Build state:** tsc clean · clean build (**62 routes**) · fixtures **self-test 77/77 + queue-test 20/20** (+10 portal checks in `src/lib/selftest/portal.ts`). Runner: `npx tsx scripts/run-fixtures.mjs`.
 >
-> **Domains (registered 2026-07-08):** primary **`mangotickle.com.au`** · global **`mangotickle.com`** → redirect to `.com.au`. Production cutover: `APP_ORIGIN=https://mangotickle.com.au` + OAuth/webhook URLs on that origin (when Meta+Google unparked).
+> **Hard locks (unchanged):** `PUBLISHING_LIVE` / `ADS_LIVE` still **OFF** · migration **0028 DEFERRED** · no live flag flips until Wave 6.
 >
-> **Build state:** tsc + clean build (**56 routes**); fixtures **self-test 67/67 + queue-test 20/20** in-memory demo mode (… · M14 +3 · M15 +3 · M01b +3 self / +2 queue). Runner: `npx tsx scripts/run-fixtures.mjs` (rename `.env.local` first if Supabase TLS blocks HTTP fixtures). Supabase mode: `npm run dev:supabase` / `npm run start:supabase` (corporate TLS — `--use-system-ca`).
+> **Owner session (unchanged):** migrations **0001–0015 + 0027 APPLIED** on Supabase. Meta business verification DONE. Google Cloud **billing blocked** · `GOOGLE_OAUTH_*` missing. Park Meta App Review + Google live work **together**.
 >
-> **✅ MIGRATIONS 0001–0015 + 0027 APPLIED** on Supabase (0027 probed 2026-07-08 — `photographer_profiles` / packages / bookings exist, empty until seed/use).
+> **Domains:** primary **`mangotickle.com.au`** · global **`mangotickle.com`** → redirect to `.com.au`.
 >
-> **NEXT (owner ops only — no V1 builders):** (1) keep Meta+Google parked until both ready · (2) DNS/deploy **mangotickle.com.au** + `APP_ORIGIN` · (3) Resend SMTP · (4) unpark live flags together. **V2 BACKLOG** = owner-DEFERRED.
+> **▶ OWNER PILOT (~30 min on `https://mangotickle.com.au`):**
+> 1. Agency admin → `/sales/new-client` → test company + client member
+> 2. Client magic link → lands on `/client`
+> 3. Client request → agency drafts → client approves in portal
+> 4. Auto-publish sim path (audit / queue; live flags stay OFF)
+> 5. Token `/approve/[token]` still works
+> 6. `/signup` shows invite-only
+>
+> **NEXT (orchestration):** W1 agents (M20–M23) auto-chain per `docs/parallel/FULL-ORCHESTRATION.md` when owner launches. **No further P0 agent spawns.**
+>
+> **V1 builder track (prior):** modules 1–15 DONE (67/67 baseline). See history below.
 >
 > **OWNER WAITING (parked cutover):** Meta App Review + lead webhook on `https://mangotickle.com.au/api/ads/leads/webhook` · Google Cloud billing → `GOOGLE_OAUTH_*` + GBP API · then flip `PUBLISHING_LIVE` / `ADS_LIVE` together.
 >

@@ -1,12 +1,12 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-09 (**M00 integrating P0**)
+Last updated: 2026-07-09 (**P0 COMPLETE**)
 
 **Owner lock:** Full SRS · vision · go-live = non-negotiable. See `docs/FULL-IMPLEMENTATION-PLAN.md` · `docs/parallel/FULL-ORCHESTRATION.md`.
 
 ## V1 — DONE (67/67 · 20/20 baseline)
 
-## Wave 0 (P0) — INTEGRATING
+## Wave 0 (P0) — DONE ✅
 
 | Agent | Branch | Status |
 |-------|--------|--------|
@@ -14,7 +14,7 @@ Last updated: 2026-07-09 (**M00 integrating P0**)
 | M17 | `p0/m17-client-portal` | ✅ merged |
 | M18 | `p0/m18-auto-publish` | ✅ merged |
 | M19 | `p0/m19-field-sales` | ✅ merged |
-| M00 | → main | **integrating** |
+| M00 | → main | ✅ integrated |
 
 | Flag | Status |
 |------|--------|
@@ -24,9 +24,9 @@ Last updated: 2026-07-09 (**M00 integrating P0**)
 | `m18_handoff` | yes |
 | `m19_handoff` | yes |
 | `m00_launched` | yes |
-| `p0_complete` | no |
+| `p0_complete` | yes |
 
-**W0 fixture target:** 77/77 · 20/20
+**Fixtures:** self-test **77/77** · queue-test **20/20** · build **62 routes**
 
 ## Waves 1–7 — QUEUED (auto-chain after W0)
 
@@ -45,7 +45,7 @@ Last updated: 2026-07-09 (**M00 integrating P0**)
 | `w1_launched` | no |
 | `full_complete` | no |
 
-**M00 spawns W1** when `p0_complete=yes`. **Live flags flip W6 only.**
+**M00 spawns W1** when `p0_complete=yes` ✅. **Live flags flip W6 only.**
 
 ## Owner ops
 
@@ -53,17 +53,19 @@ Phases 1–2 ✅ · Phase 3 Google blocked · Phase 4 parked
 
 **Canonical:** `https://mangotickle.com.au`
 
+**Hard locks (unchanged):** `PUBLISHING_LIVE` / `ADS_LIVE` OFF · migration **0028 DEFERRED**
+
 ---
 
 ## Checklists
 
-### W0 (M00)
+### W0 (M00) — DONE
 
-- [ ] Portal · sales · auto-publish · invite-only
-- [ ] 77/77 · 20/20 · build green
-- [ ] Spawn W1
+- [x] Portal · sales · auto-publish · invite-only
+- [x] 77/77 · 20/20 · build green
+- [ ] Spawn W1 (next orchestrator action)
 
-### Owner pilot (after `p0_complete=yes`)
+### Owner pilot (NOW — ~30 min on live URL)
 
 1. Agency admin → `/sales/new-client` → test company + client member
 2. Client magic link → lands on `/client`
@@ -71,3 +73,10 @@ Phases 1–2 ✅ · Phase 3 Google blocked · Phase 4 parked
 4. Auto-publish sim path (audit / queue; live flags stay OFF)
 5. Token `/approve/[token]` still works
 6. `/signup` shows invite-only
+
+### full_complete (M01-FINAL)
+
+- [ ] All waves W1–W7 merged
+- [ ] CRM · email · SMS · reviews
+- [ ] Phase 4 GO · live flags ON
+- [ ] Owner pilot on live URL

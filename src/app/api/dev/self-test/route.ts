@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runIsolationSelfTest } from "@/lib/selftest/isolation";
+import { runPortalSelfTest } from "@/lib/selftest/portal";
 import { devToolsOpen } from "@/lib/env";
 
 function constantTimeEquals(a: string, b: string): boolean {
@@ -45,7 +46,17 @@ function authorize(req: NextRequest): { ok: true } | { ok: false; status: number
 async function handle(req: NextRequest) {
   const auth = authorize(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const report = await runIsolationSelfTest();
+  const [iso, portal] = await Promise.all([runIsolationSelfTest(), runPortalSelfTest()]);
+  const checks = [...iso.checks, ...portal.checks];
+  const failed = checks.filter((c) => !c.ok).length;
+  const report = {
+    ok: iso.ok && portal.ok,
+    passed: checks.length - failed,
+    failed,
+    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed],
+    durationMs: iso.durationMs + portal.durationMs,
+    checks,
+  };
   return NextResponse.json(report, { status: report.ok ? 200 : 500 });
 }
 

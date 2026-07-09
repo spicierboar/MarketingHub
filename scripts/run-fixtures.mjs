@@ -1,10 +1,15 @@
 import { runIsolationSelfTest } from "../src/lib/selftest/isolation.ts";
+import { runPortalSelfTest } from "../src/lib/selftest/portal.ts";
 import { runQueueSelfTest } from "../src/lib/selftest/queue.ts";
 
-const self = await runIsolationSelfTest();
-console.log(`self-test: ${self.passed}/${self.checks.length} ok=${self.ok}`);
-if (!self.ok) {
-  for (const c of self.checks.filter((x) => !x.ok)) {
+const iso = await runIsolationSelfTest();
+const portal = await runPortalSelfTest();
+const selfChecks = [...iso.checks, ...portal.checks];
+const selfPassed = selfChecks.filter((c) => c.ok).length;
+const selfOk = iso.ok && portal.ok;
+console.log(`self-test: ${selfPassed}/${selfChecks.length} ok=${selfOk}`);
+if (!selfOk) {
+  for (const c of selfChecks.filter((x) => !x.ok)) {
     console.log(`  FAIL ${c.name}: ${c.detail}`);
   }
 }
@@ -17,4 +22,4 @@ if (!queue.ok) {
   }
 }
 
-process.exit(self.ok && queue.ok ? 0 : 1);
+process.exit(selfOk && queue.ok ? 0 : 1);
