@@ -1,6 +1,6 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-09 (**W1 integrating**)
+Last updated: 2026-07-09 (**W1 COMPLETE**)
 
 **Owner lock:** Full SRS · vision · go-live = non-negotiable. See `docs/FULL-IMPLEMENTATION-PLAN.md` · `docs/parallel/FULL-ORCHESTRATION.md`.
 
@@ -18,7 +18,7 @@ Last updated: 2026-07-09 (**W1 integrating**)
 
 **Fixtures:** self-test **77/77** · queue-test **20/20**
 
-## Wave 1 — INTEGRATING
+## Wave 1 — DONE ✅
 
 | Agent | Branch | Status |
 |-------|--------|--------|
@@ -26,7 +26,7 @@ Last updated: 2026-07-09 (**W1 integrating**)
 | M21 | `w1/m21-intel-panel` | ✅ merged |
 | M22 | `w1/m22-calendar-assist` | ✅ merged |
 | M23 | `w1/m23-portal-migration` | ✅ merged |
-| M01-W1 | → main | **verifying** |
+| M01-W1 | → main | ✅ integrated |
 
 | Flag | Status |
 |------|--------|
@@ -35,11 +35,11 @@ Last updated: 2026-07-09 (**W1 integrating**)
 | `m21_handoff` | yes |
 | `m22_handoff` | yes |
 | `m23_handoff` | yes |
-| `w1_complete` | no |
+| `w1_complete` | yes |
 | `w2_launched` | no |
 | `full_complete` | no |
 
-**Target post-W1:** ~85/85 self-test · **20/20** queue · migration **0028** file on main (owner paste when ready)
+**Fixtures:** self-test **90/90** · queue-test **20/20** · migration **0028** on main (owner paste when ready)
 
 **Live flags:** OFF until W6.
 
