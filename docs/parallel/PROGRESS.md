@@ -40,8 +40,8 @@ Last updated: 2026-07-09 (**W2 integrator in flight**)
 |-------|--------|--------|
 | M24 | `w2/m24-live-publish` | ✅ merged |
 | M25 | `w2/m25-live-ads` | ✅ merged |
-| M26 | `w2/m26-live-analytics` | ✅ merging |
-| M27 | `w2/m27-public-api` | pending |
+| M26 | `w2/m26-live-analytics` | ✅ merged |
+| M27 | `w2/m27-public-api` | ✅ merging |
 | M01-W2 | → main | **running** |
 
 | Flag | Status |
@@ -54,7 +54,7 @@ Last updated: 2026-07-09 (**W2 integrator in flight**)
 | `w2_integrator_launched` | yes |
 | `w2_complete` | no |
 
-**Target:** ~98/98 fixtures (90 baseline + 3 M24 + 5 M26) · live flags **OFF**
+**Target:** ~98/98 fixtures (90 baseline + 3 M24 + 5 M26 + public API) · live flags **OFF**
 
 ## Waves 3–7 — QUEUED
 

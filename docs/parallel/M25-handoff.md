@@ -1,30 +1,30 @@
-# M25 — Live ads execution handoff (2026-07-09)
+﻿# M25 ΓÇö Live ads execution handoff (2026-07-09)
 
-**Agent:** M25-W2-LiveAds · **Branch:** `w2/m25-live-ads`
+**Agent:** M25-W2-LiveAds ┬╖ **Branch:** `w2/m25-live-ads`
 
 `m25_handoff=yes`
 
 ## Shipped
 
-### Live connectors — Google Ads + Meta Marketing API
+### Live connectors ΓÇö Google Ads + Meta Marketing API
 
 - **Extended:** `src/lib/ad-connectors.ts`
-  - `adsConfigured()` / `adsPlatformConfigured()` — env gate (requires `ADS_LIVE` + `PUBLISHING_TOKEN_KEY` + provider creds)
-  - `dispatchCampaignSync()` — create / activate / pause on delegated accounts (client-billed; we never front spend)
-  - `fetchLiveCampaignMetrics()` — trailing-30 platform insights when `externalCampaignId` is set
-  - `translateTargeting()` — `AdTargeting` -> Meta / Google payload shapes
+  - `adsConfigured()` / `adsPlatformConfigured()` ΓÇö env gate (requires `ADS_LIVE` + `PUBLISHING_TOKEN_KEY` + provider creds)
+  - `dispatchCampaignSync()` ΓÇö create / activate / pause on delegated accounts (client-billed; we never front spend)
+  - `fetchLiveCampaignMetrics()` ΓÇö trailing-30 platform insights when `externalCampaignId` is set
+  - `translateTargeting()` ΓÇö `AdTargeting` -> Meta / Google payload shapes
 
 ### Sim -> live transition
 
-- **Extended:** `src/lib/paid.ts` — `resolveCampaignMetrics()` tries live pull, falls back to seeded simulator
-- **Wired:** `src/app/(app)/ads/actions.ts` — campaign create + status changes sync to platform when `ADS_LIVE`
-- **Wired:** `src/app/(app)/ads/page.tsx` — per-campaign metrics via `resolveCampaignMetrics`
-- **Extended:** `src/lib/types.ts` — `AdCampaign.externalCampaignId`
-- **Extended:** `src/lib/security-slice.ts` — richer ads health hint when live gate on
+- **Extended:** `src/lib/paid.ts` ΓÇö `resolveCampaignMetrics()` tries live pull, falls back to seeded simulator
+- **Wired:** `src/app/(app)/ads/actions.ts` ΓÇö campaign create + status changes sync to platform when `ADS_LIVE`
+- **Wired:** `src/app/(app)/ads/page.tsx` ΓÇö per-campaign metrics via `resolveCampaignMetrics`
+- **Extended:** `src/lib/types.ts` ΓÇö `AdCampaign.externalCampaignId`
+- **Extended:** `src/lib/security-slice.ts` ΓÇö richer ads health hint when live gate on
 
-### Migration (owner paste — not blocking code)
+### Migration (owner paste ΓÇö not blocking code)
 
-- **New:** `supabase/migrations/0030_ad_campaign_external_id.sql` — `ad_campaigns.external_campaign_id`
+- **New:** `supabase/migrations/0030_ad_campaign_external_id.sql` ΓÇö `ad_campaigns.external_campaign_id`
 
 ### Self-test +5 (`liveAds.*`) -> target ~95/95
 
@@ -32,11 +32,11 @@
 
 ## Hard lock (unchanged)
 
-- **`ADS_LIVE` not flipped** — code paths only; simulator remains default
+- **`ADS_LIVE` not flipped** ΓÇö code paths only; simulator remains default
 
 ## Do not touch (parallel W2)
 
-- M24 publish · M26 analytics · M27 public API
+- M24 publish ┬╖ M26 analytics ┬╖ M27 public API
 
 ## Owner paste (when ready)
 

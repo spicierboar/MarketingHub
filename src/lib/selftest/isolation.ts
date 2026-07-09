@@ -111,13 +111,6 @@ import {
   checkGbpSimulatedWhenLiveOff,
 } from "@/lib/selftest/gbp-audit";
 import {
-  checkAnalyticsSimulatedWhenLiveOff,
-  checkFetchLiveMetricsNullWhenOff,
-  checkGooglePlatformRoutedWhenLive,
-  checkPlatformPostIdParse,
-  checkResolvePostMetricsDeterministic,
-} from "@/lib/selftest/live-analytics";
-import {
   checkCampaignBuilderGoalProducesPlan,
   checkCampaignBuilderKpisPresent,
   checkCampaignBuilderSpawnsDraftContentNotScheduled,

@@ -54,6 +54,8 @@ import type {
   PublishingControls,
   PublishingIntegration,
   ConnectInvite,
+  ApiKey,
+  PartnerWebhook,
   PublishLog,
   Recommendation,
   ScheduledPost,
@@ -632,6 +634,8 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.scheduledPosts = keepCompany(s.scheduledPosts);
   s.integrations = keepCompany(s.integrations);
   s.connectInvites = keepTenant(s.connectInvites);
+  s.apiKeys = keepTenant(s.apiKeys);
+  s.partnerWebhooks = keepTenant(s.partnerWebhooks);
   s.publishLogs = keepCompany(s.publishLogs);
   s.utmLinks = keepCompany(s.utmLinks);
   s.adAccounts = keepCompany(s.adAccounts);
@@ -1363,6 +1367,55 @@ export async function updateConnectInvite(
 ): Promise<ConnectInvite | undefined> {
   if (isSupabaseConfigured()) return supabaseRepo.updateConnectInvite(inviteId, patch);
   const rec = await getConnectInvite(inviteId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+export async function listApiKeys(tenantId: string): Promise<ApiKey[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listApiKeys(tenantId);
+  return db().apiKeys.filter((k) => k.tenantId === tenantId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+export async function getApiKey(keyId: string): Promise<ApiKey | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getApiKey(keyId);
+  return db().apiKeys.find((k) => k.id === keyId);
+}
+export async function getApiKeyByPrefix(prefix: string): Promise<ApiKey | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getApiKeyByPrefix(prefix);
+  return db().apiKeys.find((k) => k.keyPrefix === prefix);
+}
+export async function createApiKey(input: Omit<ApiKey, "id" | "createdAt" | "updatedAt">): Promise<ApiKey> {
+  if (isSupabaseConfigured()) return supabaseRepo.createApiKey(input);
+  const t = now();
+  const rec: ApiKey = { ...input, id: id("apk"), createdAt: t, updatedAt: t };
+  db().apiKeys.push(rec);
+  return rec;
+}
+export async function updateApiKey(keyId: string, patch: Partial<ApiKey>): Promise<ApiKey | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateApiKey(keyId, patch);
+  const rec = await getApiKey(keyId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function listPartnerWebhooks(tenantId: string): Promise<PartnerWebhook[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listPartnerWebhooks(tenantId);
+  return db().partnerWebhooks.filter((w) => w.tenantId === tenantId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+export async function getPartnerWebhook(webhookId: string): Promise<PartnerWebhook | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getPartnerWebhook(webhookId);
+  return db().partnerWebhooks.find((w) => w.id === webhookId);
+}
+export async function createPartnerWebhook(input: Omit<PartnerWebhook, "id" | "createdAt" | "updatedAt">): Promise<PartnerWebhook> {
+  if (isSupabaseConfigured()) return supabaseRepo.createPartnerWebhook(input);
+  const t = now();
+  const rec: PartnerWebhook = { ...input, id: id("pwh"), createdAt: t, updatedAt: t };
+  db().partnerWebhooks.push(rec);
+  return rec;
+}
+export async function updatePartnerWebhook(webhookId: string, patch: Partial<PartnerWebhook>): Promise<PartnerWebhook | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updatePartnerWebhook(webhookId, patch);
+  const rec = await getPartnerWebhook(webhookId);
   if (!rec) return undefined;
   Object.assign(rec, patch, { updatedAt: now() });
   return rec;
