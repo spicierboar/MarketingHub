@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getUserByEmail } from "@/lib/db";
-import { startSession, endSession } from "@/lib/auth/session";
+import { startSession, endSession, getCurrentUser } from "@/lib/auth/session";
+import { postLoginRedirectPath } from "@/lib/auth/rbac";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
 import { resolveOrigin } from "@/lib/origin";
@@ -53,7 +54,8 @@ export async function signIn(_prev: unknown, formData: FormData) {
 
   await startSession(user.id);
   await logAction(user, "user.login", { detail: "Passwordless sign-in" });
-  redirect("/dashboard");
+  const acting = await getCurrentUser();
+  redirect(acting ? await postLoginRedirectPath(acting) : "/dashboard");
 }
 
 // OAuth SSO (Google / Microsoft) — production only. Redirects to the provider's

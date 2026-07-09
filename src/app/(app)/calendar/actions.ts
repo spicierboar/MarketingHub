@@ -3,13 +3,10 @@
 import { revalidatePath } from "next/cache";
 import {
   activeSchedulesForContent,
-  createScheduledPost,
   getCampaign,
   getCampaignItem,
-  getCompany,
   getContent,
   getScheduledPost,
-  isUnderLegalHold,
   listCampaignItems,
   transitionScheduledPost,
   updateCampaignItem,
@@ -19,14 +16,7 @@ import {
 import { assertCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { addDaysIso } from "@/lib/calendar-utils";
-import { assertAssetsAllowChannel } from "@/lib/assets";
-import {
-  critiqueBlocksScheduling,
-  critiqueForPublish,
-  formatCritiqueError,
-} from "@/lib/ai/critique";
-import { recordAiUsage } from "@/lib/ai/metering";
-import { assertAiBudget } from "@/lib/ai/budget";
+import { scheduleOne } from "@/lib/scheduling";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -36,68 +26,6 @@ function refreshPaths(contentId?: string, campaignId?: string | null) {
   revalidatePath("/calendar");
   if (contentId) revalidatePath(`/content/${contentId}`);
   if (campaignId) revalidatePath(`/campaigns/${campaignId}`);
-}
-
-// Core rule (P6 go-live): ONLY approved content can be scheduled — enforced
-// here at the server boundary, not just in the UI.
-async function scheduleOne(args: {
-  contentId: string;
-  platform: string;
-  date: string;
-  time?: string;
-  userId: string;
-  tenantId: string;
-}) {
-  const content = await getContent(args.contentId);
-  if (!content) throw new Error("Content not found");
-  if (!["approved", "scheduled"].includes(content.status)) {
-    throw new Error("Only approved content can be scheduled.");
-  }
-  // §54 — legal-held content must not be pushed toward publication.
-  if (await isUnderLegalHold("content", content.id, content.companyId)) {
-    throw new Error("This content is under legal hold and cannot be scheduled.");
-  }
-  const company = await getCompany(content.companyId);
-  if (!company) throw new Error("Company not found");
-
-  // Module 3 — pre-publish AI critique before scheduling.
-  await assertAiBudget(args.tenantId, 500);
-  const critique = await critiqueForPublish({ content, company, platform: args.platform });
-  await recordAiUsage({
-    tenantId: args.tenantId,
-    companyId: company.id,
-    userId: args.userId,
-    kind: "content_critique",
-    model: critique.model,
-    promptSummary: `Critique: ${content.title}`.slice(0, 120),
-    sourcesUsed: ["Brand Brain: company profile"],
-    outputChars: JSON.stringify(critique.notes).length,
-    contextChars: content.body.length,
-  });
-  await updateContent(content.id, { aiCritique: critique });
-  if (critiqueBlocksScheduling(critique)) {
-    throw new Error(formatCritiqueError(critique));
-  }
-
-  // §46 — a referenced creative asset must permit this channel (owner/consent/
-  // licence/allowed-channels/expiry). Enforced here at the server boundary.
-  await assertAssetsAllowChannel(content.assetIds, args.platform || "Facebook");
-  if (!args.date) throw new Error("A date is required.");
-
-  const post = await createScheduledPost({
-    contentId: content.id,
-    companyId: content.companyId,
-    platform: args.platform || "Facebook",
-    scheduledDate: args.date,
-    scheduledTime: args.time || undefined,
-    status: "scheduled",
-    createdById: args.userId,
-  });
-  await updateContent(content.id, { status: "scheduled" });
-  if (content.campaignItemId) {
-    await updateCampaignItem(content.campaignItemId, { status: "scheduled" });
-  }
-  return post;
 }
 
 export async function schedulePostAction(formData: FormData) {

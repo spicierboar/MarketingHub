@@ -15,8 +15,8 @@ export function AuthCallbackClient() {
     const code = searchParams.get("code");
     const tokenHash = searchParams.get("token_hash");
     const type = searchParams.get("type");
-    const nextParam = searchParams.get("next") ?? "/dashboard";
-    const next = nextParam.startsWith("/") ? nextParam : "/dashboard";
+    const nextParam = searchParams.get("next") ?? "/auth/complete";
+    const next = nextParam.startsWith("/") ? nextParam : "/auth/complete";
 
     const sb = createBrowserSupabase();
     if (!sb) {

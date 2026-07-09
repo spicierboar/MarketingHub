@@ -53,10 +53,7 @@ export default function LoginPage() {
         <LoginForm />
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          New here?{" "}
-          <a href="/signup" className="text-primary hover:underline">
-            Create a workspace
-          </a>
+          Access is by invitation only. Contact your agency administrator if you need an account.
         </p>
 
         <div className="mt-6 rounded-lg border border-dashed border-border bg-card p-4">

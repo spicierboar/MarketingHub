@@ -23,6 +23,35 @@ import { getCurrentUser } from "@/lib/auth/session";
 import type { ActingUser, User } from "@/lib/types";
 export type { ActingUser } from "@/lib/types";
 
+// Company ids a portal client may access — member role, scoped to the active tenant.
+async function portalCompanyIdsInTenant(user: ActingUser): Promise<string[]> {
+  if (user.tenantRole !== "member") return [];
+  const tenantIds = new Set((await listCompanies(user.tenantId)).map((c) => c.id));
+  return (await accessForUser(user.id))
+    .map((a) => a.companyId)
+    .filter((id) => tenantIds.has(id));
+}
+
+// Portal user = tenant member with exactly one company_access row in the tenant.
+export async function isPortalUser(user: ActingUser): Promise<boolean> {
+  return (await portalCompanyIdsInTenant(user)).length === 1;
+}
+
+export async function portalCompanyId(user: ActingUser): Promise<string | null> {
+  const ids = await portalCompanyIdsInTenant(user);
+  return ids.length === 1 ? ids[0] : null;
+}
+
+// Central post-login redirect: portal → /client, incomplete owner → /onboarding, else /dashboard.
+export async function postLoginRedirectPath(user: ActingUser): Promise<string> {
+  if (await isPortalUser(user)) return "/client";
+  const tenant = await getTenant(user.tenantId);
+  if (tenant && !tenant.onboardingCompletedAt && isTenantOwner(user)) {
+    return "/onboarding";
+  }
+  return "/dashboard";
+}
+
 export function isAdmin(user: User): boolean {
   return user.role === "admin" || user.role === "super_admin";
 }
