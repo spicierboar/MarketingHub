@@ -42,7 +42,7 @@ Last updated: 2026-07-09 (**P0 COMPLETE**)
 
 | Flag | Status |
 |------|--------|
-| `w1_launched` | no |
+| `w1_launched` | yes |
 | `full_complete` | no |
 
 **M00 spawns W1** when `p0_complete=yes` ✅. **Live flags flip W6 only.**
@@ -63,7 +63,7 @@ Phases 1–2 ✅ · Phase 3 Google blocked · Phase 4 parked
 
 - [x] Portal · sales · auto-publish · invite-only
 - [x] 77/77 · 20/20 · build green
-- [ ] Spawn W1 (next orchestrator action)
+- [x] Spawn W1 (M20–M23 launched 2026-07-09)
 
 ### Owner pilot (NOW — ~30 min on live URL)
 
