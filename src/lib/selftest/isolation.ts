@@ -67,6 +67,13 @@ import {
   checkLiveAdsTranslateGoogle,
   checkLiveAdsTranslateMeta,
 } from "@/lib/selftest/live-ads";
+import {
+  checkAnalyticsSimulatedWhenLiveOff,
+  checkFetchLiveMetricsNullWhenOff,
+  checkGooglePlatformRoutedWhenLive,
+  checkPlatformPostIdParse,
+  checkResolvePostMetricsDeterministic,
+} from "@/lib/selftest/live-analytics";
 import { encryptToken } from "@/lib/crypto";
 import { createHmac } from "node:crypto";
 import {
@@ -110,6 +117,13 @@ import {
   checkGbpNapConsistency,
   checkGbpSimulatedWhenLiveOff,
 } from "@/lib/selftest/gbp-audit";
+import {
+  checkReviewAnalyzeNegativeUrgent,
+  checkReviewCampaignSimulated,
+  checkReviewImportDedup,
+  checkReputationScoreInRange,
+  checkReviewsSimulatedWhenLiveOff,
+} from "@/lib/selftest/reviews";
 import {
   checkCampaignBuilderGoalProducesPlan,
   checkCampaignBuilderKpisPresent,
@@ -658,6 +672,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
       };
     });
 
+    await expect("reviews.simulatedWhenLiveOff", async () => checkReviewsSimulatedWhenLiveOff());
+
+    await expect("reviews.analyzeNegativeUrgent", async () => checkReviewAnalyzeNegativeUrgent());
+
+    await expect("reviews.reputationScoreInRange", async () => checkReputationScoreInRange());
+
+    await expect("reviews.importDedup", async () => checkReviewImportDedup());
+
+    await expect("reviews.campaignSimulated", async () => checkReviewCampaignSimulated());
+
     await expect("gbpAudit.napConsistency", () => checkGbpNapConsistency());
 
     await expect("gbpAudit.simulatedWhenLiveOff", () => checkGbpSimulatedWhenLiveOff());
@@ -666,9 +690,19 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("liveAds.simulatedWhenOff", () => checkLiveAdsSimulatedWhenOff());
     await expect("liveAds.dispatchNullWhenOff", () => checkLiveAdsDispatchNullWhenOff());
-    await expect("liveAds.translateMeta", () => checkLiveAdsTranslateMeta());
-    await expect("liveAds.translateGoogle", () => checkLiveAdsTranslateGoogle());
+    await expect("liveAds.translateMeta", async () => checkLiveAdsTranslateMeta());
+    await expect("liveAds.translateGoogle", async () => checkLiveAdsTranslateGoogle());
     await expect("liveAds.resolveFallsBack", () => checkLiveAdsResolveFallsBack());
+
+    await expect("analytics.simulatedWhenLiveOff", () => checkAnalyticsSimulatedWhenLiveOff());
+
+    await expect("analytics.fetchNullWhenLiveOff", () => checkFetchLiveMetricsNullWhenOff());
+
+    await expect("analytics.platformPostIdParse", async () => checkPlatformPostIdParse());
+
+    await expect("analytics.resolveDeterministic", () => checkResolvePostMetricsDeterministic());
+
+    await expect("analytics.googleRoutedWhenLiveOff", () => checkGooglePlatformRoutedWhenLive());
 
     await expect("campaignBuilder.goalProducesPlan", () =>
       checkCampaignBuilderGoalProducesPlan(),

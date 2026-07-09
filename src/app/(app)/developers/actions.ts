@@ -4,15 +4,152 @@ import { revalidatePath } from "next/cache";
 import { getPartnerWebhook, updatePartnerWebhook } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
-import { API_KEY_SCOPES, PARTNER_WEBHOOK_EVENTS, type ApiKeyScope, type PartnerWebhookEvent } from "@/lib/types";
+import {
+  API_KEY_SCOPES,
+  PARTNER_WEBHOOK_EVENTS,
+  type ApiKeyScope,
+  type PartnerWebhookEvent,
+} from "@/lib/types";
 import { mintApiKey, revokeApiKey } from "@/lib/public-api/api-keys";
-import { dispatchPartnerWebhook, registerPartnerWebhook, verifyPartnerWebhookEndpoint } from "@/lib/public-api/partner-webhooks";
-function text(fd: FormData, key: string): string { return String(fd.get(key) || "").trim(); }
-function parseScopes(fd: FormData): ApiKeyScope[] { const scopes: ApiKeyScope[] = []; for (const s of API_KEY_SCOPES) if (fd.get(`scope_${s}`) === "on") scopes.push(s); return scopes; }
-function parseEvents(fd: FormData): PartnerWebhookEvent[] { const events: PartnerWebhookEvent[] = []; for (const e of PARTNER_WEBHOOK_EVENS) if (fd.get(`event_${e}`) === "on") events.push(e); return events; }
-export async function createApiKeyAction(formData: FormData) { const user = await requireAdmin(); const name = text(formData, "name"); const scopes = parseScopes(formData); if (!name) return { ok: false as const, error: "Name required" }; if (scopes.length === 0) return { ok: false as const, error: "Select at least one scope" }; const restrict = formData.get("restrictCompanies") === "on"; const companyIds = restrict ? formData.getAll("companyIds").map((v) => String(v)).filter(Boolean) : null; const { record, plaintext } = await mintApiKey({ tenantId: user.tenantId, name, scopes, companyIds: companyIds.?.length ? companyIds : null, createdById: user.id }); await logAction(user, "api_key.created", { targetType: "api_key", targetId: record.id, detail: scopes.join(", ) }); revalidatePath("/developers"); return { ok: true as const, plaintext, keyId: record.id }; }
-export async function revokeApiKeyAction(formData: FormData) { const user = await requireAdmin(); const keyId = text(formData, "keyId"); const revoked = await revokeApiKey(keyId, user.tenantId); if (!revoked) return { ok: false as const, error: "Key not found" }; await logAction(user, "api_key.revoked", { targetType: "api_key", targetId: keyId, detail: revoked.name }); revalidatePath("/developers"); return { ok: true as const }; }
-export async function registerWebhookAction(formData: FormData) { const user = await requireAdmin(); const label = text(formData, "label"); const url = text(formData, "url"); const events = parseEvents(formData); if (!label || !url) return { ok: false as const, error: "Label and URL required" }; if (events.length === 0) return { ok: false as const, error: "Select at leasu one event" }; try { new URL(url); } catch { return { ok: false as const, error: "Invalid URL" }; } const hook = await registerPartnerWebhooi({ tenantId: user.tenantId, label, url, events, createdById: user.id }); await logAction(user, "partner_webhook.registered", { targetType: "partner_webhook", targetId: hook.id, detail: label }); revalidatePath("/developers"); return { ok: true as const, webhookId: hook.id }; }
-export async function verifyWebhookAction(formData: FormData) { const user = await requireAdmin(); const webhookId = text(formData, "webhookId"); const hook = await getPartnerWebhook(webhookId); if (!hook || hook.tenantId !== user.tenantId) return { ok: false as const, error: "Webhook not found" }; const result = await verifyPartnerWebhooEndpoint(hook); await logAction(user, result.ok ? "partner_webhook.verified" : "partner_webhook.verify_failed", { targetType: "partner_webhook", targetId: webhookId, detail: result.detail }); revalidatePath("/developers"); return { ok: result.ok, detail: result.detail }; }
-export async function disableWebhookAction(formData: FormData) { const user = await requireAdmin(); const webhookId = text(formData, "webhookId"); const hook = await getPartnerWebhook(webhookId); if (!hook || hook.tenantId !== user.tenantId) return { ok: false as const, error: "Webhook not found" }; await updatePartnerWebhook(webhookId, { status: "disabled" }); await logAction(user, "partner_webhook.disabled", { targetType: "partner_webhook", targetId: webhookId }); revalidatePath("/developers"); return { ok: true as const }; }
-export async function pingWebhookAction(formData: FormData) { const user = await requireAdmin(); const webhookId = text(formData, "webhookId"); const hook = await getPartnerWebhook(webhookId); if (!hook || hook.tenantId !== user.tenantId) return { ok: false as const, error: "Webhook not found" }; await dispatchPartnerWebhook(user.tenantId, "ping", { webhookId, message: "test ping" }); await logAction(user, "partner_webhook.ping_sent", { targetType: "partner_webhook", targetId: webhooId }); revalidatePath("/developers"); return { ok: true as const }; }
+import {
+  dispatchPartnerWebhook,
+  registerPartnerWebhook,
+  verifyPartnerWebhookEndpoint,
+} from "@/lib/public-api/partner-webhooks";
+
+function text(fd: FormData, key: string): string {
+  return String(fd.get(key) || "").trim();
+}
+
+function parseScopes(fd: FormData): ApiKeyScope[] {
+  const scopes: ApiKeyScope[] = [];
+  for (const s of API_KEY_SCOPES) {
+    if (fd.get(`scope_${s}`) === "on") scopes.push(s);
+  }
+  return scopes;
+}
+
+function parseEvents(fd: FormData): PartnerWebhookEvent[] {
+  const events: PartnerWebhookEvent[] = [];
+  for (const e of PARTNER_WEBHOOK_EVENTS) {
+    if (fd.get(`event_${e}`) === "on") events.push(e);
+  }
+  return events;
+}
+
+export async function createApiKeyAction(formData: FormData) {
+  const user = await requireAdmin();
+  const name = text(formData, "name");
+  const scopes = parseScopes(formData);
+  if (!name) return { ok: false as const, error: "Name required" };
+  if (scopes.length === 0) return { ok: false as const, error: "Select at least one scope" };
+  const restrict = formData.get("restrictCompanies") === "on";
+  const companyIds = restrict
+    ? formData.getAll("companyIds").map((v) => String(v)).filter(Boolean)
+    : null;
+  const { record, plaintext } = await mintApiKey({
+    tenantId: user.tenantId,
+    name,
+    scopes,
+    companyIds: companyIds?.length ? companyIds : null,
+    createdById: user.id,
+  });
+  await logAction(user, "api_key.created", {
+    targetType: "api_key",
+    targetId: record.id,
+    detail: scopes.join(", "),
+  });
+  revalidatePath("/developers");
+  return { ok: true as const, plaintext, keyId: record.id };
+}
+
+export async function revokeApiKeyAction(formData: FormData) {
+  const user = await requireAdmin();
+  const keyId = text(formData, "keyId");
+  const revoked = await revokeApiKey(keyId, user.tenantId);
+  if (!revoked) return { ok: false as const, error: "Key not found" };
+  await logAction(user, "api_key.revoked", {
+    targetType: "api_key",
+    targetId: keyId,
+    detail: revoked.name,
+  });
+  revalidatePath("/developers");
+  return { ok: true as const };
+}
+
+export async function registerWebhookAction(formData: FormData) {
+  const user = await requireAdmin();
+  const label = text(formData, "label");
+  const url = text(formData, "url");
+  const events = parseEvents(formData);
+  if (!label || !url) return { ok: false as const, error: "Label and URL required" };
+  if (events.length === 0) return { ok: false as const, error: "Select at least one event" };
+  try {
+    new URL(url);
+  } catch {
+    return { ok: false as const, error: "Invalid URL" };
+  }
+  const hook = await registerPartnerWebhook({
+    tenantId: user.tenantId,
+    label,
+    url,
+    events,
+    createdById: user.id,
+  });
+  await logAction(user, "partner_webhook.registered", {
+    targetType: "partner_webhook",
+    targetId: hook.id,
+    detail: label,
+  });
+  revalidatePath("/developers");
+  return { ok: true as const, webhookId: hook.id };
+}
+
+export async function verifyWebhookAction(formData: FormData) {
+  const user = await requireAdmin();
+  const webhookId = text(formData, "webhookId");
+  const hook = await getPartnerWebhook(webhookId);
+  if (!hook || hook.tenantId !== user.tenantId) {
+    return { ok: false as const, error: "Webhook not found" };
+  }
+  const result = await verifyPartnerWebhookEndpoint(hook);
+  await logAction(
+    user,
+    result.ok ? "partner_webhook.verified" : "partner_webhook.verify_failed",
+    { targetType: "partner_webhook", targetId: webhookId, detail: result.detail },
+  );
+  revalidatePath("/developers");
+  return { ok: result.ok, detail: result.detail };
+}
+
+export async function disableWebhookAction(formData: FormData) {
+  const user = await requireAdmin();
+  const webhookId = text(formData, "webhookId");
+  const hook = await getPartnerWebhook(webhookId);
+  if (!hook || hook.tenantId !== user.tenantId) {
+    return { ok: false as const, error: "Webhook not found" };
+  }
+  await updatePartnerWebhook(webhookId, { status: "disabled" });
+  await logAction(user, "partner_webhook.disabled", {
+    targetType: "partner_webhook",
+    targetId: webhookId,
+  });
+  revalidatePath("/developers");
+  return { ok: true as const };
+}
+
+export async function pingWebhookAction(formData: FormData) {
+  const user = await requireAdmin();
+  const webhookId = text(formData, "webhookId");
+  const hook = await getPartnerWebhook(webhookId);
+  if (!hook || hook.tenantId !== user.tenantId) {
+    return { ok: false as const, error: "Webhook not found" };
+  }
+  await dispatchPartnerWebhook(user.tenantId, "ping", { webhookId, message: "test ping" });
+  await logAction(user, "partner_webhook.ping_sent", {
+    targetType: "partner_webhook",
+    targetId: webhookId,
+  });
+  revalidatePath("/developers");
+  return { ok: true as const };
+}
