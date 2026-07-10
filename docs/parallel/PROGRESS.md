@@ -36,7 +36,7 @@ Phase 3 Google Cloud billing · Phase 4 parked · do **not** flip live flags.
 | M52 | Executive dashboard | **DONE** · compute-only · handoff `M52-handoff.md` |
 | M53 | Public API expansion | **DONE** · handoff `M53-handoff.md` · `PUBLIC_API_LIVE` OFF |
 | M54 | Security hardening | **DONE** · handoff `M54-handoff.md` · stubs/audit-only |
-| M55 | Video studio + learning | **DONE** · handoff `M55-handoff.md` · migration `0034_learning.sql` **pending owner paste** |
+| M55 | Video studio + learning | **DONE** · handoff `M55-handoff.md` · migration `0034_learning.sql` **owner-pasted** |
 | M01-FINAL | integrator | optional polish / fixture recount |
 
 | Flag | Status |
@@ -48,11 +48,10 @@ Phase 3 Google Cloud billing · Phase 4 parked · do **not** flip live flags.
 | `m53_handoff` | **yes** |
 | `m54_handoff` | **yes** |
 | `m55_handoff` | **yes** |
-| `w7_complete` | pending M01-FINAL + `0034_learning` paste |
+| `w7_complete` | pending M01-FINAL fixture recount (migrations done) |
 
 **Migration band:** `0034_*`  
-**Pasted:** `0034_bookings.sql`  
-**Pending:** `0034_learning.sql`
+**Pasted:** `0034_bookings.sql` · `0034_learning.sql`
 
 ## Owner ops
 

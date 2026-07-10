@@ -14,10 +14,7 @@
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **Plan:** `docs/FULL-IMPLEMENTATION-PLAN.md` · **Orchestration:** `docs/parallel/FULL-ORCHESTRATION.md`
 >
-> **Owner migrations:** W2–W5 + **`0034_bookings.sql` pasted**. **Pending paste:** learning tables:
-> ```powershell
-> notepad F:\MarketingHub\command-centre\supabase\migrations\0034_learning.sql
-> ```
+> **Owner migrations:** W2–W5 + **`0034_bookings.sql`** + **`0034_learning.sql` pasted (2026-07-10)** — Success, no rows (DDL OK).
 >
 > **Hard locks:** Do **NOT** flip `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` / `BOOKINGS_LIVE` / `LOCAL_SEO_LIVE` / `PUBLIC_API_LIVE` / `VISUALS_LIVE` / `LEARNING_LIVE` until W6 owner GO (or per-module GO). Critique gate untouched. Isolation rule stands.
 >
@@ -34,10 +31,9 @@
 > **W7 surfaces:** `/bookings` · `/book/[id]` · `/executive` · `/companies/[id]/local-seo` · `/api/v1/{campaigns,reservations,reviews}` · `/admin` MFA/impersonation stubs · `/visuals` video studio · `/learning`
 >
 > **NEXT:**
-> 1. Owner paste `0034_learning.sql` (Notepad command above)
-> 2. Optional: M01-FINAL integrator polish + re-run fixtures on 3002
-> 3. When Google billing GO → W6 OWNER-OPS + M45 verify → flip live flags together
->
+> 1. Optional: M01-FINAL integrator polish + re-run fixtures on 3002
+> 2. When Google billing GO → W6 OWNER-OPS + M45 verify → flip live flags together
+> 3. Consider `w7_complete=yes` after fixture recount
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
 > **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** whenever you ship a new `supabase/migrations/*.sql`, give the owner the **complete Notepad open command** (absolute path):

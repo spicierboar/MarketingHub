@@ -42,7 +42,7 @@ Manual UI:
 
 ## Migration notepad
 
-Apply `supabase/migrations/0034_learning.sql` on staging Supabase before relying on persisted learning rows (in-memory works without migration).
+Apply `supabase/migrations/0034_learning.sql` — **owner-pasted 2026-07-10** (Success, no rows). Do not flip `LEARNING_LIVE` / `VISUALS_LIVE` until W6 GO.
 
 Note: `0034_bookings.sql` may already exist from M50 — both are independent; apply both in filename order.
 
