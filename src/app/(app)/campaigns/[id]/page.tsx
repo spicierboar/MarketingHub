@@ -5,7 +5,10 @@ import {
   getCampaign,
   getCompany,
   getOffer,
+  listCampaignBuilderRuns,
+  listCampaignDraftScheduleItems,
   listCampaignItems,
+  listCampaignPlanVersions,
 } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -46,6 +49,13 @@ export default async function CampaignDetailPage({
   const approved = campaign.status === "approved";
   const drafted = items.filter((i) => ["drafted", "approved"].includes(i.status)).length;
   const builderMeta = unpackKeyMessage(campaign.keyMessage);
+  const planVersions = await listCampaignPlanVersions(campaign.id);
+  const builderRuns = (await listCampaignBuilderRuns(campaign.companyId)).filter(
+    (r) => r.campaignId === campaign.id,
+  );
+  const draftSchedule = await listCampaignDraftScheduleItems(campaign.id);
+  const latestPlan = planVersions[planVersions.length - 1];
+  const latestRun = builderRuns[0];
 
   // Group items by week of the plan.
   const weeks = new Map<number, typeof items>();
@@ -261,6 +271,70 @@ export default async function CampaignDetailPage({
               </dl>
             </CardContent>
           </Card>
+
+          {(latestRun || latestPlan) && (
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="mb-3 font-semibold">Builder run</h2>
+                <dl className="space-y-2 text-sm">
+                  {latestPlan && (
+                    <>
+                      <div>
+                        <dt className="text-muted-foreground">Goal</dt>
+                        <dd className="font-medium">{latestPlan.goal}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Plan version</dt>
+                        <dd className="font-medium">v{latestPlan.versionNumber} · {latestPlan.model}</dd>
+                      </div>
+                    </>
+                  )}
+                  {latestRun && (
+                    <>
+                      <div>
+                        <dt className="text-muted-foreground">Mode</dt>
+                        <dd className="font-medium capitalize">{latestRun.mode}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Draft assets spawned</dt>
+                        <dd className="font-medium">{latestRun.spawnedContentCount}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Draft schedule slots</dt>
+                        <dd className="font-medium">{latestRun.draftScheduleCount}</dd>
+                      </div>
+                    </>
+                  )}
+                </dl>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Draft schedule proposals are not live-published until campaign and content approval gates pass.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {draftSchedule.length > 0 && (
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="mb-3 font-semibold">Draft schedule (proposals)</h2>
+                <ul className="space-y-2 text-sm">
+                  {draftSchedule.map((slot) => (
+                    <li key={slot.id} className="rounded-md border border-border p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="neutral">{slot.scheduledDate}</Badge>
+                        {slot.scheduledTime && (
+                          <span className="text-xs text-muted-foreground">{slot.scheduledTime}</span>
+                        )}
+                        <Badge tone="info">{slot.platform}</Badge>
+                        <Badge tone="neutral">draft</Badge>
+                      </div>
+                      <p className="mt-1 font-medium">{slot.title}</p>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
 
           {offer && (
             <Card>
