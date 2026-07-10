@@ -6,16 +6,114 @@ import {
   visibleRequests,
 } from "@/lib/scope";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate, titleCase } from "@/lib/utils";
 import { listCompanies, listAiMosOpportunities } from "@/lib/db";
 import { buildLocalDashboard } from "@/lib/analytics";
 import { buildAgencyOpsBundle } from "@/lib/agency-ops";
-import { AgencyOpsSection } from "@/components/agency-ops-panel";
-import { AiMosDashboardPanel } from "@/components/ai-mos-opportunity-cards";
+import { AgencyAlertsList } from "@/components/agency-ops-panel";
+import { onboardingScore } from "@/lib/types";
+import type { AgencyAlert } from "@/lib/agency-ops";
+import type { AiMosOpportunity, Company } from "@/lib/types";
+
+type AttentionItem = {
+  id: string;
+  title: string;
+  detail: string;
+  href: string;
+  kind: "approval" | "review" | "health" | "ai_mos" | "onboarding";
+};
+
+function verbTitleForAlert(alert: AgencyAlert): string {
+  switch (alert.kind) {
+    case "overdue_approval":
+      return `Approve overdue content — ${alert.companyName}`;
+    case "overdue_client_review":
+      return `Chase client review — ${alert.companyName}`;
+    case "health_attention":
+      return `Fix marketing health — ${alert.companyName}`;
+    default:
+      return alert.title;
+  }
+}
+
+function verbTitleForAiMos(opp: AiMosOpportunity, companyName: string): string {
+  const action = opp.suggestedAction;
+  if (action.kind === "campaign") {
+    return `Draft campaign — ${companyName}`;
+  }
+  if (action.kind === "content_request") {
+    return `Open content request — ${companyName}`;
+  }
+  return `Act on opportunity — ${companyName}`;
+}
+
+function nextSpielStep(company: Company | undefined, admin: boolean): {
+  title: string;
+  detail: string;
+  href: string;
+  cta: string;
+} | null {
+  if (!company) {
+    return admin
+      ? {
+          title: "Add your first company",
+          detail: "You need a client profile before AI can draft a marketing spiel.",
+          href: "/companies",
+          cta: "Open companies",
+        }
+      : null;
+  }
+  const { score, missing } = onboardingScore(company);
+  if (score >= 100) return null;
+  return {
+    title: `Finish ${company.name} profile`,
+    detail: `Still missing: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}. AI drafts stay weak until this is filled.`,
+    href: `/companies/${company.id}`,
+    cta: "Complete profile",
+  };
+}
+
+function buildAttentionItems(input: {
+  alerts: AgencyAlert[];
+  aiMos: AiMosOpportunity[];
+  companyNames: Map<string, string>;
+  limit?: number;
+}): AttentionItem[] {
+  const limit = input.limit ?? 6;
+  const items: AttentionItem[] = [];
+
+  for (const alert of input.alerts) {
+    items.push({
+      id: `alert-${alert.id}`,
+      title: verbTitleForAlert(alert),
+      detail: alert.detail,
+      href: alert.href,
+      kind:
+        alert.kind === "health_attention"
+          ? "health"
+          : alert.kind === "overdue_client_review"
+            ? "review"
+            : "approval",
+    });
+  }
+
+  for (const opp of input.aiMos) {
+    const name = input.companyNames.get(opp.companyId) ?? "Client";
+    items.push({
+      id: `aimos-${opp.id}`,
+      title: verbTitleForAiMos(opp, name),
+      detail: opp.diagnosis.slice(0, 140),
+      href: "/ai-mos",
+      kind: "ai_mos",
+    });
+  }
+
+  // Prefer approvals/reviews, then AI-MOS, then health — already roughly ordered by mergeAgencyAlerts
+  return items.slice(0, limit);
+}
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -25,79 +123,35 @@ export default async function DashboardPage() {
   const content = await visibleContent(user);
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c]));
 
-  const openRequests = requests.filter(
-    (r) => !["completed", "cancelled", "published"].includes(r.status),
-  );
-  const pendingApproval = content.filter((c) => c.status === "pending_approval");
-  const approved = content.filter((c) =>
-    ["approved", "scheduled", "published"].includes(c.status),
-  );
-
-  const stats = [
-    { label: "Companies", value: companies.length, href: admin ? "/companies" : undefined },
-    { label: "Open requests", value: openRequests.length, href: "/requests" },
-    {
-      label: "Awaiting approval",
-      value: pendingApproval.length,
-      href: admin ? "/approvals" : "/content",
-    },
-    { label: "Approved content", value: approved.length, href: "/content" },
-  ];
-
-  // Local Manager Dashboard (§43) for scoped users.
-  const local = admin ? null : await buildLocalDashboard(user.tenantId, await accessibleCompanyIds(user));
+  const local = admin
+    ? null
+    : await buildLocalDashboard(user.tenantId, await accessibleCompanyIds(user));
 
   const agencyOps = admin ? await buildAgencyOpsBundle(user.tenantId) : null;
-
   const aiMosOpen = admin
     ? (await listAiMosOpportunities(user.tenantId, undefined, "open")).slice(0, 4)
     : [];
-  const aiMosCompanyNames = new Map(companies.map((c) => [c.id, c.name]));
+  const companyNames = new Map(companies.map((c) => [c.id, c.name]));
 
   const firstCompany = companies[0];
-  const spielSteps: {
-    n: number;
-    title: string;
-    detail: string;
-    href: string;
-    cta: string;
-  }[] = [
-    {
-      n: 1,
-      title: "Set the business basics",
-      detail: "Business type, service area, brand voice — so AI knows who you are.",
-      href: firstCompany ? `/companies/${firstCompany.id}` : admin ? "/companies" : "/dashboard",
-      cta: firstCompany ? "Open profile" : "Companies",
-    },
-    {
-      n: 2,
-      title: "Add Brand Brain facts",
-      detail: "Menus, offers, FAQs — approved knowledge the AI can cite.",
-      href: firstCompany ? `/companies/${firstCompany.id}/brand-brain` : "/studio",
-      cta: "Brand Brain",
-    },
-    {
-      n: 3,
-      title: "Write the spiel",
-      detail: "Content Studio for a single post, or Campaigns → Build from goal for a full plan.",
-      href: "/studio",
-      cta: "Open Studio",
-    },
-    {
-      n: 4,
-      title: "Review & approve",
-      detail: "AI drafts stay as drafts until a human approves — nothing publishes alone.",
-      href: admin ? "/approvals" : "/content",
-      cta: admin ? "Approvals" : "Content",
-    },
-    {
-      n: 5,
-      title: "Put it on the calendar",
-      detail: "Schedule approved posts; use Scan calendar + ads to align with paid campaigns.",
-      href: "/calendar",
-      cta: "Calendar",
-    },
-  ];
+  const nextUp = nextSpielStep(firstCompany, admin);
+
+  const attention = admin
+    ? buildAttentionItems({
+        alerts: agencyOps?.alerts ?? [],
+        aiMos: aiMosOpen,
+        companyNames,
+      })
+    : (local?.missingOnboarding ?? []).slice(0, 6).map((m) => ({
+        id: `onboard-${m.company}`,
+        title: `Complete onboarding — ${m.company}`,
+        detail: `Missing ${m.missing.length} item(s): ${m.missing.slice(0, 3).join(", ")}`,
+        href: "/dashboard",
+        kind: "onboarding" as const,
+      }));
+
+  const recentRequests = requests.slice(0, 5);
+  const recentContent = content.slice(0, 5);
 
   return (
     <div>
@@ -105,172 +159,122 @@ export default async function DashboardPage() {
         title={`Welcome back, ${user.name.split(" ")[0]}`}
         description={
           admin
-            ? "Workspace overview across all your companies."
-            : "Your assigned companies and marketing requests."
+            ? "Do the next marketing step — then clear anything that needs you."
+            : "Your assigned companies and what needs you next."
         }
       >
         <Link href="/studio" className={buttonClasses()}>
           Create marketing spiel
         </Link>
-        <Link href="/requests/new" className={buttonClasses("outline")}>
+        <Link
+          href="/requests/new"
+          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+        >
           New support request
         </Link>
       </PageHeader>
 
-      <div className="space-y-6 p-6">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {stats.map((s) => {
-            const card = (
-              <Card className="transition-colors hover:border-primary/40">
-                <CardContent className="p-5">
-                  <p className="text-sm text-muted-foreground">{s.label}</p>
-                  <p className="mt-1 text-3xl font-bold tracking-tight">
-                    {s.value}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-            return s.href ? (
-              <Link key={s.label} href={s.href}>
-                {card}
-              </Link>
-            ) : (
-              <div key={s.label}>{card}</div>
-            );
-          })}
-        </div>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="font-semibold">Workflow: add marketing spiel</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  From blank page to scheduled post — follow these steps in order.
-                </p>
-              </div>
-              <Link href="/campaigns/new" className="text-sm text-primary hover:underline">
-                Or build a full campaign from a goal →
-              </Link>
+      <div className="mx-auto max-w-3xl space-y-8 p-6">
+        {nextUp && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/30 bg-accent/40 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                Next up
+              </p>
+              <p className="font-medium">{nextUp.title}</p>
+              <p className="text-sm text-muted-foreground">{nextUp.detail}</p>
             </div>
-            <ol className="space-y-3">
-              {spielSteps.map((step) => (
-                <li
-                  key={step.n}
-                  className="flex flex-wrap items-start gap-3 rounded-md border border-border px-3 py-3 sm:flex-nowrap"
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {step.n}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{step.title}</p>
-                    <p className="text-sm text-muted-foreground">{step.detail}</p>
-                  </div>
+            <Link href={nextUp.href} className={buttonClasses("subtle", "sm")}>
+              {nextUp.cta}
+            </Link>
+          </div>
+        )}
+
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Needs attention</h2>
+              <p className="text-sm text-muted-foreground">
+                Actionable next steps — open one, finish it, come back.
+              </p>
+            </div>
+            {admin && aiMosOpen.length > 0 && (
+              <Link href="/ai-mos" className="text-sm text-primary hover:underline">
+                View AI-MOS
+              </Link>
+            )}
+          </div>
+          {attention.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+              Nothing urgent. Create a marketing spiel when you&apos;re ready.
+            </p>
+          ) : admin ? (
+            <AgencyAlertsList
+              alerts={(agencyOps?.alerts ?? []).slice(0, 6).map((a) => ({
+                ...a,
+                title: verbTitleForAlert(a),
+              }))}
+              extras={aiMosOpen.slice(0, Math.max(0, 6 - (agencyOps?.alerts.length ?? 0))).map((opp) => {
+                const name = companyNames.get(opp.companyId) ?? "Client";
+                return {
+                  id: `aimos-${opp.id}`,
+                  title: verbTitleForAiMos(opp, name),
+                  detail: opp.diagnosis.slice(0, 140),
+                  href: "/ai-mos",
+                  companyName: name,
+                };
+              })}
+            />
+          ) : (
+            <ul className="space-y-2">
+              {attention.map((item) => (
+                <li key={item.id}>
                   <Link
-                    href={step.href}
-                    className="shrink-0 text-sm font-medium text-primary hover:underline"
+                    href={item.href}
+                    className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5 text-sm hover:bg-muted"
                   >
-                    {step.cta}
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.detail}</p>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">open →</span>
                   </Link>
                 </li>
               ))}
-            </ol>
-          </CardContent>
-        </Card>
+            </ul>
+          )}
+        </section>
 
-        {local && (
-          <Card>
-            <CardContent className="p-6">
-              <h2 className="mb-4 font-semibold">Your performance</h2>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                <div><p className="text-xs text-muted-foreground">Requests submitted</p><p className="mt-1 text-2xl font-bold">{local.requestsSubmitted}</p></div>
-                <div><p className="text-xs text-muted-foreground">Approved</p><p className="mt-1 text-2xl font-bold">{local.requestsApproved}</p></div>
-                <div><p className="text-xs text-muted-foreground">Avg turnaround</p><p className="mt-1 text-2xl font-bold">{local.avgTurnaroundHours !== null ? `${local.avgTurnaroundHours.toFixed(0)}h` : "—"}</p></div>
-                <div><p className="text-xs text-muted-foreground">Posts published</p><p className="mt-1 text-2xl font-bold">{local.postsPublished}</p></div>
-                <div><p className="text-xs text-muted-foreground">Engagement</p><p className="mt-1 text-2xl font-bold">{local.engagement.toLocaleString("en-AU")}</p></div>
-                <div><p className="text-xs text-muted-foreground">Leads</p><p className="mt-1 text-2xl font-bold">{local.leads}</p></div>
-              </div>
-
-              {(local.upcoming.length > 0 || local.missingOnboarding.length > 0) && (
-                <div className="mt-5 grid gap-5 border-t border-border pt-5 sm:grid-cols-2">
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Upcoming scheduled posts</p>
-                    {local.upcoming.length ? (
-                      <ul className="space-y-1 text-sm">
-                        {local.upcoming.map((u, i) => (
-                          <li key={i} className="flex justify-between gap-2">
-                            <span className="truncate">{u.title}</span>
-                            <span className="whitespace-nowrap text-muted-foreground">{u.platform} · {u.date}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Nothing scheduled.</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Needs your attention</p>
-                    {local.missingOnboarding.length ? (
-                      <ul className="space-y-1 text-sm">
-                        {local.missingOnboarding.map((m) => (
-                          <li key={m.company}>
-                            <span className="font-medium">{m.company}</span>{" "}
-                            <span className="text-muted-foreground">— missing {m.missing.length} onboarding item(s)</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">All onboarding complete. 🎉</p>
-                    )}
-                    {local.commonEnquiries.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {local.commonEnquiries.map((e) => (
-                          <Badge key={e.intent} tone="info">{titleCase(e.intent)}: {e.count}</Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {!admin && local && (local.upcoming.length > 0 || local.missingOnboarding.length > 0) && (
+          <section>
+            <h2 className="mb-3 font-semibold">Coming up</h2>
+            {local.upcoming.length > 0 ? (
+              <ul className="space-y-1 text-sm">
+                {local.upcoming.slice(0, 5).map((u, i) => (
+                  <li key={i} className="flex justify-between gap-2 border-b border-border py-2">
+                    <span className="truncate">{u.title}</span>
+                    <span className="whitespace-nowrap text-muted-foreground">
+                      {u.platform} · {u.date}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
+            )}
+          </section>
         )}
 
-        {admin && aiMosOpen.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="font-semibold">Recent requests</h2>
+            <Link href="/requests" className="text-sm text-primary hover:underline">
+              View all
+            </Link>
+          </div>
           <Card>
-            <CardContent className="p-6">
-              <h2 className="mb-1 font-semibold">AI-MOS opportunities</h2>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Suggest-only signal monitoring — accept to create draft campaigns or content requests.
-              </p>
-              <AiMosDashboardPanel opps={aiMosOpen} companyById={aiMosCompanyNames} />
-            </CardContent>
-          </Card>
-        )}
-
-        {agencyOps && (
-          <AgencyOpsSection
-            workload={agencyOps.workload}
-            alerts={agencyOps.alerts}
-            templates={agencyOps.templates}
-            needsAttention={agencyOps.needsAttention}
-            companies={companies.map((c) => ({ id: c.id, name: c.name }))}
-          />
-        )}
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h2 className="font-semibold">Recent requests</h2>
-              <Link
-                href="/requests"
-                className="text-sm text-primary hover:underline"
-              >
-                View all
-              </Link>
-            </div>
             <div className="divide-y divide-border">
-              {requests.slice(0, 6).map((r) => (
+              {recentRequests.map((r) => (
                 <Link
                   key={r.id}
                   href={`/requests/${r.id}`}
@@ -286,7 +290,7 @@ export default async function DashboardPage() {
                   <StatusBadge status={r.status} />
                 </Link>
               ))}
-              {requests.length === 0 && (
+              {recentRequests.length === 0 && (
                 <p className="px-5 py-8 text-center text-sm text-muted-foreground">
                   No requests yet.{" "}
                   <Link href="/requests/new" className="text-primary hover:underline">
@@ -297,38 +301,37 @@ export default async function DashboardPage() {
               )}
             </div>
           </Card>
+        </section>
 
-          <Card>
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        {recentContent.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="font-semibold">Recent content</h2>
               <Link href="/content" className="text-sm text-primary hover:underline">
                 View all
               </Link>
             </div>
-            <div className="divide-y divide-border">
-              {content.slice(0, 6).map((c) => (
-                <Link
-                  key={c.id}
-                  href={`/content/${c.id}`}
-                  className="flex items-center justify-between px-5 py-3 hover:bg-muted"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{c.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {companyById.get(c.companyId)?.name} · {formatDate(c.createdAt)}
-                    </p>
-                  </div>
-                  <StatusBadge status={c.status} />
-                </Link>
-              ))}
-              {content.length === 0 && (
-                <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-                  No content drafted yet. Open a request and generate an AI draft.
-                </p>
-              )}
-            </div>
-          </Card>
-        </div>
+            <Card>
+              <div className="divide-y divide-border">
+                {recentContent.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/content/${c.id}`}
+                    className="flex items-center justify-between px-5 py-3 hover:bg-muted"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{c.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {companyById.get(c.companyId)?.name} · {formatDate(c.createdAt)}
+                      </p>
+                    </div>
+                    <StatusBadge status={c.status} />
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          </section>
+        )}
       </div>
     </div>
   );

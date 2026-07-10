@@ -19,7 +19,6 @@ import { AutoOnboardingPanel } from "@/components/auto-onboarding-panel";
 import { ProfileSuggestButton } from "@/components/profile-suggest-button";
 import { PROFILE_FIELD_HELP } from "@/lib/profile-suggestions";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/form";
@@ -63,8 +62,8 @@ export default async function CompanyOnboardingPage({
   const steps: { label: string; done: boolean; href: string; cta: string }[] = [
     { label: "Complete the company profile", done: score === 100, href: `/companies/${company.id}`, cta: "Fill in the profile" },
     { label: "Add social profile links", done: (p.socialLinks?.length ?? 0) > 0, href: `/companies/${company.id}`, cta: "Add profiles" },
-    { label: "Connect a social account (OAuth)", done: integrations.some((i) => i.status === "connected"), href: "/publishing", cta: "Connect or send client link" },
-    { label: "Approve your first content", done: companyContent.some((c) => ["approved", "scheduled", "published"].includes(c.status)), href: "/studio", cta: "Create content" },
+    { label: "Connect a social account (OAuth)", done: integrations.some((i) => i.status === "connected"), href: `/publishing?company=${company.id}`, cta: "Connect or send client link" },
+    { label: "Approve your first content", done: companyContent.some((c) => ["approved", "scheduled", "published"].includes(c.status)), href: `/studio?company=${company.id}`, cta: "Create content" },
     { label: "Mark the company AI-ready", done: company.status === "ai_ready", href: `/companies/${company.id}`, cta: "Review status" },
   ];
   const doneCount = steps.filter((s) => s.done).length;
@@ -72,39 +71,10 @@ export default async function CompanyOnboardingPage({
 
   return (
     <div>
-      <PageHeader title={company.name} description="Company onboarding & profile">
-        <Link
-          href={`/companies/${company.id}/brand-brain`}
-          className="text-sm text-primary hover:underline"
-        >
-          Brand Brain
-        </Link>
-        <Link
-          href={`/companies/${company.id}/services`}
-          className="text-sm text-primary hover:underline"
-        >
-          Services
-        </Link>
-        <Link
-          href={`/companies/${company.id}/offers`}
-          className="text-sm text-primary hover:underline"
-        >
-          Offers
-        </Link>
-        <Link
-          href={`/companies/${company.id}/governance`}
-          className="text-sm text-primary hover:underline"
-        >
-          Governance
-        </Link>
-        <Link
-          href={`/companies/${company.id}/local-seo`}
-          className="text-sm text-primary hover:underline"
-        >
-          Local SEO
-        </Link>
-        <StatusBadge status={company.status} />
-      </PageHeader>
+      <PageHeader
+        title="Overview"
+        description="Onboarding, profile, and getting-started checklist for this company."
+      />
 
       <div className="grid gap-6 p-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">

@@ -1,8 +1,8 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-10, **W7 COMPLETE** · **WAITING ON GOOGLE FOR W6**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **W7 COMPLETE** · **WAITING ON GOOGLE FOR W6**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ M01-FINAL recount · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ `9dabaaa` (M01-FINAL recount) · live flags **OFF** · ahead of origin by 6
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
@@ -17,6 +17,14 @@
 > **Owner migrations:** W2–W5 + `0034_bookings` + `0034_learning` — **all pasted**
 >
 > **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. Isolation · `appEnv()` · OAuth-only · never force-push main.
+>
+> **UX declutter (2026-07-11) — UNCOMMITTED:** dashboard + sidebar shipped in working tree only:
+> - `src/app/(app)/dashboard/page.tsx`
+> - `src/components/agency-ops-panel.tsx`
+> - `src/components/app-shell.tsx`
+> - One primary CTA (**Create marketing spiel**) · **Next up** when profile incomplete · **Needs attention** verb-led · **Today** / **Create** primary nav · **Insights** for Executive/AI-MOS · libraries behind **More**
+> - Prefer: `npx next dev -p 3002` · Demo: `/dev` seed + `admin@wattlegroup.dev`
+> - Do **not** commit unless owner asks · exclude integrator temps (`scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`)
 >
 > **Local demo (while waiting):**
 > ```
@@ -33,7 +41,7 @@
 > 2. M45 verify
 > 3. Flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE` together (then other module flags per cutover)
 >
-> **Until then:** no further wave work required — wait on Google.
+> **Until then:** optional — commit declutter if owner wants; otherwise wait on Google. No further wave work.
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
@@ -45,6 +53,12 @@
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-10, W7 COMPLETE · WAITING ON GOOGLE) — archived
+>
+> W0–W5 + W7 DONE · fixtures 252/252 + 20/20 · `w7_complete=yes` · W6 WAITING on Google · live flags OFF · park code work.
 >
 > ---
 >

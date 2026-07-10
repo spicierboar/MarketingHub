@@ -1,6 +1,6 @@
 ﻿# Orchestrator ledger
 
-Last updated: 2026-07-10 (**W7 COMPLETE** · **WAITING ON GOOGLE FOR W6**)
+Last updated: 2026-07-11 (**W7 COMPLETE** · **WAITING ON GOOGLE FOR W6**)
 
 **Owner lock:** Full SRS → vision · go-live = non-negotiable.  
 **Schedule:** `docs/parallel/FULL-ORCHESTRATION.md`
@@ -36,6 +36,13 @@ Last updated: 2026-07-10 (**W7 COMPLETE** · **WAITING ON GOOGLE FOR W6**)
 
 Phase 3 Google Cloud billing blocked · Phase 4 parked · `https://mangotickle.com.au`  
 When GO → OWNER-OPS + M45 → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE` together.
+
+## UX declutter (2026-07-11) — UNCOMMITTED
+
+Dashboard + sidebar declutter in working tree (not committed):  
+`dashboard/page.tsx` · `agency-ops-panel.tsx` · `app-shell.tsx`  
+Primary CTA · Next up · Needs attention · Today/Create nav · Insights · More.  
+Prefer `npx next dev -p 3002` · demo `/dev` + `admin@wattlegroup.dev`.
 
 ## Owner ops
 

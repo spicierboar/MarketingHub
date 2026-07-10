@@ -21,7 +21,7 @@ export default async function CompaniesPage() {
     <div>
       <PageHeader
         title="Companies"
-        description="Every company has its own profile, Brand Brain and onboarding record."
+        description="Open a company to run campaigns, inbox, CRM, ads, and the rest — tools live in the company workspace, not the global sidebar."
       >
         <Link href="/companies/new" className={buttonClasses()}>
           Add company

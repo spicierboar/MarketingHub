@@ -2,54 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import {
   LayoutDashboard,
-  Inbox,
-  AtSign,
-  Megaphone,
-  Sparkles,
-  FileText,
-  BookOpen,
-  Images,
-  CalendarDays,
   CheckSquare,
   ListTodo,
   Lightbulb,
-  Mail,
-  MessageSquare,
-  Star,
-  Bot,
-  GitBranch,
-  Radar,
-  BarChart3,
-  Target,
-  Smartphone,
-  Clapperboard,
-  Camera,
-  UtensilsCrossed,
-  ShoppingBag,
+  Megaphone,
+  Sparkles,
+  FileText,
+  CalendarDays,
   Building2,
   Users,
   Handshake,
   ScrollText,
-  Send,
   ShieldCheck,
   ShieldAlert,
   CreditCard,
   Palette,
-  ContactRound,
-  Filter,
-  Globe,
-  GraduationCap,
   Landmark,
+  Radar,
   LogOut,
-  Gift,
   ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 import { switchTenantAction } from "@/app/(app)/tenant/actions";
+import { CompanyContextBar } from "@/components/company-context-bar";
 
 interface NavItem {
   href: string;
@@ -59,25 +38,21 @@ interface NavItem {
   ownerOnly?: boolean;
   platformAdminOnly?: boolean;
   salesAccess?: boolean;
+  /** Non-admin members only — admins use the company workspace hub */
+  memberOnly?: boolean;
 }
 
 interface NavGroup {
   id: string;
   label: string;
-  /** Always expanded for primary daily work */
   pinned?: boolean;
-  /** Hide entire group from non-admins (unless sales/owner items apply) */
   adminOnly?: boolean;
   items: NavItem[];
 }
 
 /**
- * Job-based IA — one purpose per group so the sidebar reads as a workflow,
- * not a flat dump of every module shipped in W0–W5.
- *
- * Visibility:
- *   - pinned groups (Today, Create) → everyone who can see their items
- *   - other groups → admin / owner / sales / platform only (see group.adminOnly)
+ * Agency shell — only cross-company queues, portfolio, and workspace.
+ * Company-scoped modules live on `/companies/[id]` (CompanyToolsNav).
  */
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -86,73 +61,31 @@ const NAV_GROUPS: NavGroup[] = [
     pinned: true,
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/executive", label: "Executive", icon: Landmark, adminOnly: true },
       { href: "/tasks", label: "Tasks", icon: ListTodo },
       { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
       { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
-      { href: "/ai-mos", label: "AI-MOS", icon: Radar, adminOnly: true },
     ],
   },
   {
-    id: "create",
-    label: "Create & publish",
+    id: "create-member",
+    label: "Create",
     pinned: true,
     items: [
-      { href: "/campaigns", label: "Campaigns", icon: Megaphone },
-      { href: "/studio", label: "Content Studio", icon: Sparkles },
-      { href: "/content", label: "Content library", icon: FileText },
-      { href: "/calendar", label: "Calendar", icon: CalendarDays },
-      { href: "/assets", label: "Creative assets", icon: Images },
-      { href: "/library", label: "Reuse library", icon: BookOpen },
-      { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
+      { href: "/campaigns", label: "Campaigns", icon: Megaphone, memberOnly: true },
+      { href: "/studio", label: "Content Studio", icon: Sparkles, memberOnly: true },
+      { href: "/calendar", label: "Calendar", icon: CalendarDays, memberOnly: true },
+      { href: "/content", label: "Content library", icon: FileText, memberOnly: true },
     ],
   },
   {
-    id: "engage",
-    label: "Engage",
-    /** Members still need inbox / requests; keep visible for all */
-    items: [
-      { href: "/inbox", label: "Social inbox", icon: AtSign },
-      { href: "/social", label: "Social responses", icon: MessageSquare },
-      { href: "/reviews", label: "Reviews", icon: Star, adminOnly: true },
-      { href: "/requests", label: "Support requests", icon: Inbox },
-    ],
-  },
-  {
-    id: "audience",
-    label: "Audience & channels",
+    id: "portfolio",
+    label: "Portfolio",
+    pinned: true,
     adminOnly: true,
     items: [
-      { href: "/crm", label: "CRM", icon: ContactRound, adminOnly: true },
-      { href: "/email-marketing", label: "Email", icon: Mail, adminOnly: true },
-      { href: "/sms", label: "SMS", icon: Smartphone, adminOnly: true },
-      { href: "/loyalty", label: "Loyalty", icon: Gift, adminOnly: true },
-      { href: "/ads", label: "Paid ads", icon: Target, adminOnly: true },
-    ],
-  },
-  {
-    id: "grow",
-    label: "Website & growth",
-    adminOnly: true,
-    items: [
-      { href: "/cms", label: "Website CMS", icon: Globe, adminOnly: true },
-      { href: "/funnel", label: "Funnels", icon: Filter, adminOnly: true },
-      { href: "/workflows", label: "Workflows", icon: GitBranch, adminOnly: true },
-      { href: "/automations", label: "Automations", icon: Bot, adminOnly: true },
-      { href: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
-      { href: "/learning", label: "Learning", icon: GraduationCap, adminOnly: true },
-    ],
-  },
-  {
-    id: "vertical",
-    label: "Vertical tools",
-    adminOnly: true,
-    items: [
-      { href: "/visuals", label: "AI visuals", icon: Clapperboard, adminOnly: true },
-      { href: "/photographers", label: "Photographers", icon: Camera, adminOnly: true },
-      { href: "/menus", label: "Menus", icon: UtensilsCrossed, adminOnly: true },
-      { href: "/ordering", label: "Order Now", icon: ShoppingBag, adminOnly: true },
-      { href: "/bookings", label: "Bookings", icon: CalendarDays, adminOnly: true },
+      { href: "/companies", label: "Companies", icon: Building2, adminOnly: true },
+      { href: "/executive", label: "Executive", icon: Landmark, adminOnly: true },
+      { href: "/ai-mos", label: "AI-MOS", icon: Radar, adminOnly: true },
     ],
   },
   {
@@ -160,7 +93,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Workspace",
     adminOnly: true,
     items: [
-      { href: "/companies", label: "Companies", icon: Building2, adminOnly: true },
       { href: "/sales/new-client", label: "New client", icon: Handshake, salesAccess: true },
       { href: "/users", label: "Users", icon: Users, adminOnly: true },
       { href: "/branding", label: "Branding", icon: Palette, ownerOnly: true },
@@ -183,6 +115,7 @@ function itemVisible(
     canFieldSales: boolean;
   },
 ) {
+  if (n.memberOnly && opts.isAdmin) return false;
   return (
     (!n.adminOnly || opts.isAdmin) &&
     (!n.ownerOnly || opts.isOwner) &&
@@ -263,6 +196,7 @@ export function AppShell({
   tenantName,
   activeTenantId,
   tenants = [],
+  companies = [],
   isAdmin,
   isOwner = false,
   isPlatformAdmin = false,
@@ -276,6 +210,7 @@ export function AppShell({
   tenantName?: string;
   activeTenantId?: string;
   tenants?: { id: string; name: string }[];
+  companies?: { id: string; name: string }[];
   isAdmin: boolean;
   isOwner?: boolean;
   isPlatformAdmin?: boolean;
@@ -293,8 +228,6 @@ export function AppShell({
     items: g.items.filter((n) => itemVisible(n, visibility)),
   })).filter((g) => {
     if (g.items.length === 0) return false;
-    // Admin-only groups: show if admin/owner/platform, OR if any sales-only
-    // item survived the filter (field sales without admin).
     if (g.adminOnly) {
       return (
         isAdmin ||
@@ -374,6 +307,15 @@ export function AppShell({
               defaultOpen={false}
             />
           ))}
+          {isAdmin && (
+            <p className="mt-3 px-3 text-[11px] leading-relaxed text-muted-foreground">
+              Campaigns, inbox, CRM, ads, and the rest live inside each{" "}
+              <Link href="/companies" className="text-primary hover:underline">
+                company
+              </Link>
+              .
+            </p>
+          )}
         </nav>
         <div className="border-t border-border p-3">
           <div className="mb-2 px-2">
@@ -417,6 +359,11 @@ export function AppShell({
           >
             {banner.text}
           </div>
+        )}
+        {companies.length > 0 && (
+          <Suspense fallback={null}>
+            <CompanyContextBar companies={companies} />
+          </Suspense>
         )}
         <main className="flex-1 overflow-x-hidden">{children}</main>
       </div>
