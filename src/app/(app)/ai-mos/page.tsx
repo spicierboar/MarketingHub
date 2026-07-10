@@ -1,13 +1,18 @@
 import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
 import { listCompanies, listAiMosOpportunities } from "@/lib/db";
-import { listOpenOpportunitiesForTenant } from "@/lib/ai-mos";
+import {
+  aiMosExecutionMode,
+  listOpenOpportunitiesForTenant,
+  listRecentSignalRunsForTenant,
+} from "@/lib/ai-mos";
+import { aiMosConfigured } from "@/lib/ai-mos-connectors";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { titleCase } from "@/lib/utils";
-import type { AiMosOpportunity } from "@/lib/types";
+import { formatDate, titleCase } from "@/lib/utils";
+import type { AiMosOpportunity, AiMosSignalRun } from "@/lib/types";
 import { AiMosOpportunityCard } from "@/components/ai-mos-opportunity-cards";
 import { scanAiMosAction } from "./actions";
 
@@ -18,9 +23,8 @@ export default async function AiMosPage() {
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c.name]));
 
   const open = await listOpenOpportunitiesForTenant(user.tenantId, scope, 50);
-  const history = (await listAiMosOpportunities(user.tenantId, scope)).filter(
-    (o) => o.status !== "open",
-  );
+  const history = (await listAiMosOpportunities(user.tenantId, scope)).filter((o) => o.status !== "open");
+  const signalRuns = await listRecentSignalRunsForTenant(user.tenantId, scope, 30);
 
   const byCompany = new Map<string, AiMosOpportunity[]>();
   for (const opp of open) {
@@ -32,13 +36,17 @@ export default async function AiMosPage() {
     <div>
       <PageHeader
         title="AI-MOS"
-        description="Suggest-only marketing operating system — monitors health scores, calendar gaps, and recommendations, then surfaces opportunity cards. Accept converts to draft campaigns or content requests; nothing publishes or spends without approval."
+        description="Suggest-only marketing operating system — monitors health, calendar, cadence, recommendations, reviews, and loyalty signals."
       >
-        <form action={scanAiMosAction}>
-          <Button type="submit" variant="outline">
-            Scan all companies
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="info">{titleCase(aiMosExecutionMode().replace(/_/g, " "))}</Badge>
+          <Badge tone={aiMosConfigured() ? "success" : "neutral"}>
+            {aiMosConfigured() ? "Live connectors" : "Simulated signals"}
+          </Badge>
+          <form action={scanAiMosAction}>
+            <Button type="submit" variant="outline">Scan all companies</Button>
+          </form>
+        </div>
       </PageHeader>
 
       <div className="space-y-6 p-6">
@@ -57,41 +65,44 @@ export default async function AiMosPage() {
                     </Button>
                   </form>
                 </div>
-
                 {opps.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    {aiReady
-                      ? "No open opportunities — scan to monitor health, calendar, and recommendation signals."
-                      : "Company must be AI-ready before AI-MOS can scan."}
+                    {aiReady ? "No open opportunities — scan to monitor signals." : "Company must be AI-ready before AI-MOS can scan."}
                   </p>
                 ) : (
-                  <div className="space-y-4">
-                    {opps.map((opp) => (
-                      <AiMosOpportunityCard key={opp.id} opp={opp} />
-                    ))}
-                  </div>
+                  <div className="space-y-4">{opps.map((opp) => <AiMosOpportunityCard key={opp.id} opp={opp} />)}</div>
                 )}
               </CardContent>
             </Card>
           );
         })}
 
+        {signalRuns.length > 0 && (
+          <details className="rounded-lg border border-border bg-card p-4" open>
+            <summary className="cursor-pointer text-sm font-medium">Signal log ({signalRuns.length})</summary>
+            <ul className="mt-3 space-y-2 text-sm">
+              {signalRuns.map((run: AiMosSignalRun) => (
+                <li key={run.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+                  <span className="text-muted-foreground">{companyById.get(run.companyId)} — {formatDate(run.createdAt)}</span>
+                  <div className="flex gap-1.5">
+                    <Badge tone="neutral">{titleCase(run.mode)}</Badge>
+                    <Badge tone="info">{run.signalCount} signal(s)</Badge>
+                    <Badge tone="primary">{run.opportunityCount} draft(s)</Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
         {history.length > 0 && (
           <details className="rounded-lg border border-border bg-card p-4">
-            <summary className="cursor-pointer text-sm font-medium">
-              History ({history.length} converted / dismissed)
-            </summary>
+            <summary className="cursor-pointer text-sm font-medium">History ({history.length})</summary>
             <ul className="mt-3 space-y-1 text-sm">
               {history.slice(0, 30).map((o) => (
                 <li key={o.id} className="flex items-center justify-between gap-2">
-                  <span className="truncate text-muted-foreground">
-                    {companyById.get(o.companyId)} — {o.title}
-                    {o.dismissReason ? ` — “${o.dismissReason}”` : ""}
-                  </span>
-                  <Badge tone={o.status === "converted" ? "success" : "neutral"}>
-                    {titleCase(o.status)}
-                    {o.resultType ? ` → ${o.resultType}` : ""}
-                  </Badge>
+                  <span className="truncate text-muted-foreground">{companyById.get(o.companyId)} — {o.title}</span>
+                  <Badge tone={o.status === "converted" ? "success" : "neutral"}>{titleCase(o.status)}</Badge>
                 </li>
               ))}
             </ul>

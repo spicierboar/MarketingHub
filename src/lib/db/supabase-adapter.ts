@@ -35,7 +35,7 @@ import { now } from "@/lib/utils";
 import { randomUUID } from "node:crypto";
 import type {
   AdAccount, AdBudget, AdCampaign, AdPlatform, AddonId, AudienceSegment,
-  AiRun, AiMosOpportunity, CalendarAssistSuggestion, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
+  AiRun, AiMosOpportunity, AiMosSignalRun, CalendarAssistSuggestion, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
   AutomationSettings, BrandTemplate, Campaign, CampaignItem, Company,
   CompanyAccess, CompanyEntitlement, ConsentRecord, ContentComment, ContentItem, EvidenceRecord,
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
@@ -1298,7 +1298,7 @@ export const supabaseRepo = {
     return data ? toDomain<Task>(data) : undefined;
   },
 
-  // ============================ AI-MOS opportunities (profile jsonb) ======
+  // ============================ AI-MOS (dedicated tables) =====================
   async listAiMosOpportunities(
     tenantId: string,
     companyIdsFilter?: string[],
@@ -1307,60 +1307,59 @@ export const supabaseRepo = {
     const sb = await usr(); if (!sb) return [];
     const ids = companyIdsFilter ?? (await companyIds(sb, tenantId));
     if (!ids.length) return [];
-    const { data } = await sb.from("companies").select("id,tenant_id,profile").in("id", ids);
-    const out: AiMosOpportunity[] = [];
-    for (const row of data ?? []) {
-      const company = normaliseCompany(toDomain<Company>(row as Row, COMPANY_ALIAS));
-      for (const opp of company.profile.aiMos?.opportunities ?? []) {
-        if (status && opp.status !== status) continue;
-        out.push({ ...opp, tenantId: company.tenantId, companyId: company.id });
-      }
-    }
-    return out.sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt));
+    let q = sb.from("ai_mos_opportunities").select("*").eq("tenant_id", tenantId).in("company_id", ids);
+    if (status) q = q.eq("status", status);
+    const { data } = await q.order("priority", { ascending: false }).order("created_at", { ascending: false });
+    return many<AiMosOpportunity>(data);
   },
   async getAiMosOpportunity(oppId: string): Promise<AiMosOpportunity | undefined> {
     const sb = await usr(); if (!sb) return undefined;
-    const { data } = await sb.from("companies").select("id,tenant_id,profile");
-    for (const row of data ?? []) {
-      const company = normaliseCompany(toDomain<Company>(row as Row, COMPANY_ALIAS));
-      const hit = company.profile.aiMos?.opportunities?.find((o) => o.id === oppId);
-      if (hit) return { ...hit, tenantId: company.tenantId, companyId: company.id };
-    }
-    return undefined;
+    const { data } = await sb.from("ai_mos_opportunities").select("*").eq("id", oppId).maybeSingle();
+    return data ? toDomain<AiMosOpportunity>(data) : undefined;
   },
   async createAiMosOpportunity(
     input: Omit<AiMosOpportunity, "id" | "createdAt">,
   ): Promise<AiMosOpportunity> {
     const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
-    const company = await this.getCompany(input.companyId);
-    if (!company) throw new Error("createAiMosOpportunity: company not found");
-    const opp: AiMosOpportunity = {
-      ...input,
-      id: randomUUID(),
-      createdAt: now(),
-    };
-    const opportunities = [...(company.profile.aiMos?.opportunities ?? []), opp];
-    await this.updateCompany(company.id, {
-      profile: { ...company.profile, aiMos: { opportunities } },
-    });
-    return opp;
+    const { data, error } = await sb.from("ai_mos_opportunities").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createAiMosOpportunity: " + error.message);
+    return toDomain<AiMosOpportunity>(data);
   },
   async updateAiMosOpportunity(
     oppId: string,
     patch: Partial<AiMosOpportunity>,
   ): Promise<AiMosOpportunity | undefined> {
     const sb = await usr(); if (!sb) return undefined;
-    const existing = await this.getAiMosOpportunity(oppId);
-    if (!existing) return undefined;
-    const company = await this.getCompany(existing.companyId);
-    if (!company) return undefined;
-    const opportunities = (company.profile.aiMos?.opportunities ?? []).map((o) =>
-      o.id === oppId ? { ...o, ...patch, id: o.id } : o,
-    );
-    await this.updateCompany(company.id, {
-      profile: { ...company.profile, aiMos: { opportunities } },
-    });
-    return opportunities.find((o) => o.id === oppId);
+    const { data } = await sb
+      .from("ai_mos_opportunities")
+      .update(toRow(patch))
+      .eq("id", oppId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<AiMosOpportunity>(data) : undefined;
+  },
+  async listAiMosSignalRuns(
+    tenantId: string,
+    companyIdsFilter?: string[],
+  ): Promise<AiMosSignalRun[]> {
+    const sb = await usr(); if (!sb) return [];
+    const ids = companyIdsFilter ?? (await companyIds(sb, tenantId));
+    if (!ids.length) return [];
+    const { data } = await sb
+      .from("ai_mos_signal_runs")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .in("company_id", ids)
+      .order("created_at", { ascending: false });
+    return many<AiMosSignalRun>(data);
+  },
+  async createAiMosSignalRun(
+    input: Omit<AiMosSignalRun, "id" | "createdAt">,
+  ): Promise<AiMosSignalRun> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("ai_mos_signal_runs").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createAiMosSignalRun: " + error.message);
+    return toDomain<AiMosSignalRun>(data);
   },
 
   // ============================ Calendar assist (profile jsonb) ===========
@@ -2056,6 +2055,8 @@ export const supabaseRepo = {
       restaurantOrders: many(await byCompany("restaurant_orders")),
       recommendations: many(await byCompany("recommendations")),
       tasks: many(await byCompany("tasks")),
+      aiMosOpportunities: many(await byTenant("ai_mos_opportunities")),
+      aiMosSignalRuns: many(await byTenant("ai_mos_signal_runs")),
       securitySettings: many(await one("security_settings")),
       legalHolds: many(await byTenant("legal_holds")),
       assets: many(await byCompany("assets")),

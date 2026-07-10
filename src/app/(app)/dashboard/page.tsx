@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate, titleCase } from "@/lib/utils";
 import { listCompanies, listAiMosOpportunities } from "@/lib/db";
+import { listRecentSignalRunsForTenant } from "@/lib/ai-mos";
 import { buildLocalDashboard } from "@/lib/analytics";
 import { buildAgencyOpsBundle } from "@/lib/agency-ops";
 import { AgencyOpsSection } from "@/components/agency-ops-panel";
@@ -52,6 +53,11 @@ export default async function DashboardPage() {
   const aiMosOpen = admin
     ? (await listAiMosOpportunities(user.tenantId, undefined, "open")).slice(0, 4)
     : [];
+  const aiMosSignalCount = admin
+    ? (await listRecentSignalRunsForTenant(user.tenantId, undefined, 50)).length
+    : 0;
+    ? (await listRecentSignalRunsForTenant(user.tenantId, undefined, 50)).length
+    : 0;
   const aiMosCompanyNames = new Map(companies.map((c) => [c.id, c.name]));
 
   return (
@@ -157,7 +163,11 @@ export default async function DashboardPage() {
               <p className="mb-4 text-sm text-muted-foreground">
                 Suggest-only signal monitoring — accept to create draft campaigns or content requests.
               </p>
-              <AiMosDashboardPanel opps={aiMosOpen} companyById={aiMosCompanyNames} />
+              <AiMosDashboardPanel
+                opps={aiMosOpen}
+                companyById={aiMosCompanyNames}
+                latestSignalCount={aiMosSignalCount}
+              />
             </CardContent>
           </Card>
         )}

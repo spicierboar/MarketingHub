@@ -16,6 +16,7 @@ import type {
   AudienceSegment,
   AiRun,
   AiMosOpportunity,
+  AiMosSignalRun,
   CalendarAssistSuggestion,
   ApprovedClaim,
   ApprovedResponse,
@@ -625,6 +626,7 @@ export async function exportTenantData(tenantId: string): Promise<Record<string,
     recommendations: byCompany(s.recommendations),
     tasks: byCompany(s.tasks),
     aiMosOpportunities: byTenant(s.aiMosOpportunities),
+    aiMosSignalRuns: byTenant(s.aiMosSignalRuns),
     calendarAssistSuggestions: byTenant(s.calendarAssistSuggestions),
     securitySettings: s.security.filter((x) => x.tenantId === tenantId),
     legalHolds: byTenant(s.legalHolds),
@@ -717,6 +719,7 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.recommendations = keepCompany(s.recommendations);
   s.tasks = keepCompany(s.tasks);
   s.aiMosOpportunities = keepTenant(s.aiMosOpportunities);
+  s.aiMosSignalRuns = keepTenant(s.aiMosSignalRuns);
   s.calendarAssistSuggestions = keepTenant(s.calendarAssistSuggestions);
   s.assets = keepCompany(s.assets);
   // Tenant-keyed rows (platform-library null rows survive).
@@ -1812,6 +1815,28 @@ export async function updateAiMosOpportunity(
   if (!opp) return undefined;
   Object.assign(opp, patch);
   return opp;
+}
+
+export async function listAiMosSignalRuns(
+  tenantId: string,
+  companyIds?: string[],
+): Promise<AiMosSignalRun[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listAiMosSignalRuns(tenantId, companyIds);
+  let runs = db().aiMosSignalRuns.filter((r) => r.tenantId === tenantId);
+  if (companyIds) {
+    const allowed = new Set(companyIds);
+    runs = runs.filter((r) => allowed.has(r.companyId));
+  }
+  return runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function createAiMosSignalRun(
+  input: Omit<AiMosSignalRun, "id" | "createdAt">,
+): Promise<AiMosSignalRun> {
+  if (isSupabaseConfigured()) return supabaseRepo.createAiMosSignalRun(input);
+  const run: AiMosSignalRun = { ...input, id: id("aimosrun"), createdAt: now() };
+  db().aiMosSignalRuns.push(run);
+  return run;
 }
 
 // ---- W1 M22: Calendar assist suggestions ---------------------------------------
