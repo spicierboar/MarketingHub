@@ -87,6 +87,7 @@ import type {
   PartnerWebhook,
   PublishLog,
   Recommendation,
+  RecommendationDismissRecord,
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
@@ -1738,6 +1739,35 @@ export async function updateRecommendation(
   return rec;
 }
 
+export async function listRecommendationDismissHistory(tenantId: string, companyIds?: string[]): Promise<RecommendationDismissRecord[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listRecommendationDismissHistory(tenantId, companyIds);
+  const tids = tenantCompanyIdSet(tenantId);
+  let rows = (db().recommendationDismissHistory ?? []).filter((r) => tids.has(r.companyId));
+  if (companyIds) rows = rows.filter((r) => companyIds.includes(r.companyId));
+  return rows.sort((a, b) => b.dismissedAt.localeCompare(a.dismissedAt));
+}
+
+export async function createRecommendationDismissRecord(input: Omit<RecommendationDismissRecord, "id">): Promise<RecommendationDismissRecord> {
+  if (isSupabaseConfigured()) return supabaseRepo.createRecommendationDismissRecord(input);
+  const rec: RecommendationDismissRecord = { ...input, id: id("recd") };
+  (db().recommendationDismissHistory ??= []).push(rec);
+  return rec;
+}
+
+export async function resurfaceExpiredSnoozedRecommendations(tenantId: string, companyIds?: string[]): Promise<number> {
+  if (isSupabaseConfigured()) return supabaseRepo.resurfaceExpiredSnoozedRecommendations(tenantId, companyIds);
+  const nowIso = now();
+  let count = 0;
+  for (const rec of await listRecommendations(tenantId, companyIds, "snoozed")) {
+    const until = rec.snoozedUntil ?? rec.action.snooze?.until;
+    if (until && until <= nowIso) {
+      await updateRecommendation(rec.id, { status: "open", snoozedUntil: undefined });
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export async function listTasks(
   tenantId: string,
   companyIds?: string[],
@@ -1822,7 +1852,7 @@ export async function listAiMosSignalRuns(
   companyIds?: string[],
 ): Promise<AiMosSignalRun[]> {
   if (isSupabaseConfigured()) return supabaseRepo.listAiMosSignalRuns(tenantId, companyIds);
-  let runs = db().aiMosSignalRuns.filter((r) => r.tenantId === tenantId);
+  let runs = (db().aiMosSignalRuns ?? []).filter((r) => r.tenantId === tenantId);
   if (companyIds) {
     const allowed = new Set(companyIds);
     runs = runs.filter((r) => allowed.has(r.companyId));
@@ -1835,7 +1865,7 @@ export async function createAiMosSignalRun(
 ): Promise<AiMosSignalRun> {
   if (isSupabaseConfigured()) return supabaseRepo.createAiMosSignalRun(input);
   const run: AiMosSignalRun = { ...input, id: id("aimosrun"), createdAt: now() };
-  db().aiMosSignalRuns.push(run);
+  (db().aiMosSignalRuns ??= []).push(run);
   return run;
 }
 

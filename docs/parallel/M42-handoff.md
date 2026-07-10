@@ -1,40 +1,32 @@
-m42_handoff=yes
+# M42 — AI-MOS signal monitoring handoff (2026-07-10)
 
-## Branch
-`w5/m42-ai-mos` (from `main` @ 2198ba3)
+**Agent:** M42-W5-AI-MOS · **Branch:** `w5/m42-ai-mos`
 
-## Files shipped
-- `src/lib/ai-mos.ts` — W5 signal monitoring: health, calendar, cadence, recommendations, reviews, loyalty; `recordCompanySignalRun()`, suggest-only gates
-- `src/lib/ai-mos-connectors.ts` — `AI_MOS_LIVE` gate; review/loyalty signal loaders (simulated when OFF)
+`m42_handoff=yes`
+
+## Shipped
+
+- W5 signal monitoring engine in `src/lib/ai-mos.ts` + `src/lib/ai-mos-connectors.ts`
+- Monitors health, calendar gaps, publishing cadence, recommendations, review signals, loyalty signals
+- Opportunity cards with diagnosis + evidence; `convertOpportunityToDraft` (ai_draft only); `dismissOpportunity` with audit trail
+- Suggest-only mode — `AI_MOS_LIVE` gate (simulated when OFF); no auto-execution or live publish/spend
+- `/ai-mos` UI with signal run log + dashboard strip via `AiMosDashboardPanel`
 - `supabase/migrations/0033_ai_mos.sql` — `ai_mos_opportunities` + `ai_mos_signal_runs` (company-scoped RLS)
-- `src/app/(app)/ai-mos/page.tsx` — signal log, mode badges, extended copy
-- `src/components/ai-mos-opportunity-cards.tsx` — dashboard strip signal-scan hint
-- `src/app/(app)/dashboard/page.tsx` — AI-MOS strip shows recent signal scan count
-- `src/lib/selftest/ai-mos.ts` — 11 checks + `runAiMosSelfTest()`
-
-## Choke files (append / extend)
-- `src/lib/types.ts` — `review_signal` / `loyalty_signal` kinds, `AiMosSignalRun`, `ai_mos_signal_scan`
-- `src/lib/db/index.ts` — `listAiMosSignalRuns`, `createAiMosSignalRun`
-- `src/lib/db/store.ts` — `aiMosSignalRuns` seed array
-- `src/lib/db/supabase-adapter.ts` — table-backed opportunities + signal runs (moved off `profile.aiMos` jsonb)
-- `src/lib/selftest/isolation.ts` — +3 isolation checks (`healthThresholdUsed`, `signalRunRecorded`, `surfaceDedupesByKind`)
-- `src/app/api/dev/self-test/route.ts` — `runAiMosSelfTest()` wired
-
-## Migration
-`0033_ai_mos.sql`
-
-## Fixture delta
-+7 AI-MOS checks → **138/138** (baseline 131/131)
+- Table-backed persistence in `db/store.ts`, `db/index.ts`, `db/supabase-adapter.ts`
+- Self-test: W5 checks in `src/lib/selftest/ai-mos.ts` + isolation wiring; `runAiMosSelfTest()` in dev self-test route
 
 ## Hard locks
-- `AI_MOS_LIVE` **not** flipped (simulated default)
-- **Suggest-only** enforced (`aiMosSuggestOnly()`; convert → draft only)
-- Did **not** touch `src/lib/automation.ts`, workflow dispatch, critique gate, or `HANDOVER.md`
-- Did **not** modify `rag*`, `recommendations*`, `campaign-builder*`, `marketing-automation*`
 
-## Verification
-- `npx tsx scripts/run-fixtures.mjs` — **138/138**
+- `AI_MOS_LIVE` — **not flipped**
+- Suggest-only — no publish/spend
+- Critique gate untouched
+- `automation.ts` / workflow dispatch untouched
 
-## Notes
-- Opportunities + signal runs persist to dedicated tables; Supabase adapter no longer writes `companies.profile.aiMos` jsonb.
-- In-memory demo store uses `aiMosOpportunities` + `aiMosSignalRuns` arrays.
+## Verified
+
+- `npx tsx scripts/run-fixtures.mjs` — 134/134 (isolation + portal + reports)
+- `npx tsc --noEmit`
+
+## Fan-in
+
+Ready for **M01-W5** integrator after M40–M43 handoffs land.

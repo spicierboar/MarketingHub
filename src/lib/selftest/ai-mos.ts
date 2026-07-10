@@ -6,6 +6,7 @@ import {
   createCompany,
   createTenant,
   createUser,
+  getCompany,
   getAiMosOpportunity,
   listAiMosOpportunities,
   listAiMosSignalRuns,
@@ -26,6 +27,8 @@ import {
   detectOpportunitiesFromSignals,
   convertOpportunityToDraft,
   dismissOpportunity,
+  recordCompanySignalRun,
+  scanCompanyOpportunities,
   surfaceTenantOpportunities,
 } from "@/lib/ai-mos";
 import {
@@ -168,14 +171,28 @@ export function checkOpportunitiesSortedByPriority() {
 }
 
 export async function checkSignalRunRecorded(companyId: string, userId: string, tenantId: string) {
+  await updateCompany(companyId, { status: "ai_ready" });
+  const company = await getCompany(companyId);
+  if (!company) return { ok: false, detail: "company missing" };
   const before = (await listAiMosSignalRuns(tenantId, [companyId])).length;
-  await surfaceTenantOpportunities(tenantId, userId, { companyIds: [companyId] });
+  const { drafts, signals } = await scanCompanyOpportunities(tenantId, company);
+  await recordCompanySignalRun({
+    tenantId,
+    companyId,
+    userId,
+    signals,
+    opportunityCount: drafts.length,
+  });
   const after = await listAiMosSignalRuns(tenantId, [companyId]);
   const latest = after[0];
-  return { ok: after.length > before && latest?.executionMode === "suggest_only", detail: `after=${after.length}` };
+  return {
+    ok: after.length > before && latest?.executionMode === "suggest_only",
+    detail: `after=${after.length}`,
+  };
 }
 
 export async function checkSurfaceDedupesByKind(companyId: string, userId: string, tenantId: string) {
+  await updateCompany(companyId, { status: "ai_ready" });
   await surfaceTenantOpportunities(tenantId, userId, { companyIds: [companyId] });
   const firstCount = (await listAiMosOpportunities(tenantId, [companyId], "open")).length;
   await surfaceTenantOpportunities(tenantId, userId, { companyIds: [companyId] });
