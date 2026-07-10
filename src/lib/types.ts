@@ -2601,3 +2601,60 @@ export interface CmsUpdateRequest {
   createdAt: string;
   updatedAt: string;
 }
+// ---- W5 M43: Campaign builder (plan versions, runs, draft schedule) ----------
+
+export interface CampaignPlanVersion {
+  id: string;
+  campaignId: string;
+  companyId: string;
+  versionNumber: number;
+  goal: string;
+  objective: string;
+  strategy: string;
+  channelPlan: string;
+  kpis: string[];
+  riskWarnings: string[];
+  channels: string[];
+  itemCount: number;
+  model: string;
+  createdById: string;
+  createdAt: string;
+}
+
+export type CampaignBuilderRunStatus = "completed" | "simulated" | "failed";
+export type CampaignBuilderRunMode = "live" | "simulated";
+
+export interface CampaignBuilderRun {
+  id: string;
+  companyId: string;
+  campaignId?: string | null;
+  planVersionId?: string | null;
+  goal: string;
+  status: CampaignBuilderRunStatus;
+  mode: CampaignBuilderRunMode;
+  model: string;
+  spawnedContentCount: number;
+  draftScheduleCount: number;
+  aiRunId?: string | null;
+  createdById: string;
+  createdAt: string;
+}
+
+export type CampaignDraftScheduleStatus = "draft";
+
+export interface CampaignDraftScheduleItem {
+  id: string;
+  campaignId: string;
+  companyId: string;
+  campaignItemId?: string | null;
+  contentId?: string | null;
+  planVersionId?: string | null;
+  scheduledDate: string;
+  scheduledTime?: string | null;
+  platform: string;
+  title: string;
+  status: CampaignDraftScheduleStatus;
+  createdById: string;
+  createdAt: string;
+}
+

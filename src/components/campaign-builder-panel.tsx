@@ -4,6 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { BusinessType } from "@/lib/types";
 import { CAMPAIGN_GOALS } from "@/lib/business-profiles";
 
+const CHANNEL_OPTIONS = [
+  "Facebook",
+  "Instagram",
+  "Google Business Profile",
+  "Email",
+  "Paid ads",
+] as const;
+
 const QUICK_GOALS = [
   "I want more weekday customers",
   "Drive direct bookings",
@@ -96,6 +104,29 @@ export function CampaignBuilderPanel({
       )}
 
       <input type="hidden" name="startDate" value={defaultStart} />
+
+      <div className="mt-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Channels (multi-select)
+        </p>
+        <div className="mt-2 flex flex-wrap gap-3">
+          {CHANNEL_OPTIONS.map((ch) => (
+            <label key={ch} className="flex items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                name="channels"
+                value={ch}
+                defaultChecked={["Facebook", "Instagram", "Google Business Profile"].includes(ch)}
+                className="rounded border-border"
+              />
+              {ch}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Leave defaults for a balanced social + local plan, or pick channels for your goal.
+        </p>
+      </div>
     </div>
   );
 }

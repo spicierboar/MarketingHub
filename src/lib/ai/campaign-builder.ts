@@ -57,6 +57,14 @@ export interface CampaignBuilderResult {
 const M07_META_RE = /<!--m07:([\s\S]*?)-->/;
 const DEFAULT_CHANNELS = ["Facebook", "Instagram", "Google Business Profile"];
 
+export const MULTI_CHANNEL_OPTIONS = [
+  "Facebook",
+  "Instagram",
+  "Google Business Profile",
+  "Email",
+  "Paid ads",
+] as const;
+
 // ---- meta encoding (no migration — packed into campaigns.key_message) --------
 
 export function packKeyMessage(strategy: string, meta: CampaignBuilderMeta): string {
@@ -169,9 +177,9 @@ function parseGoal(company: Company, goal: string): ParsedGoal {
       return {
         objective: goal,
         audience: p.targetCustomers,
-        channels: DEFAULT_CHANNELS,
+        channels: [...DEFAULT_CHANNELS, "Email"],
         strategy: `${goal} — focused campaign for ${company.name} in ${area}, aligned to brand voice and approved claims. CTA: ${cta}.`,
-        channelPlan: `Core cadence on ${DEFAULT_CHANNELS.join(", ")} with optional email mid-campaign.`,
+        channelPlan: `Core cadence on ${DEFAULT_CHANNELS.join(", ")} with email mid-campaign for nurture and reminders.`,
         kpis: [
           suggested[0]
             ? `Progress toward: ${suggested[0]}`

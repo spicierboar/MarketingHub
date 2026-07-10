@@ -26,11 +26,7 @@ import {
 import { assertCompanyAccess, assertAdminCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { generateCampaignPlan } from "@/lib/ai/campaign";
-import {
-  buildCampaignFromGoal,
-  spawnGovernedDraftForItem,
-  unpackKeyMessage,
-} from "@/lib/ai/campaign-builder";
+import { executeCampaignBuilder } from "@/lib/campaign-builder";
 import { draftContent } from "@/lib/ai/draft";
 import { auditClaims, checkCompliance } from "@/lib/ai/compliance";
 import { assertAiBudget } from "@/lib/ai/budget";
@@ -198,8 +194,9 @@ export async function createCampaignAction(formData: FormData) {
   redirect(`/campaigns/${campaign.id}`);
 }
 
-// Goal-driven campaign builder (V1 module 7): plain-language goal → strategy +
-// KPIs + calendar plan + governed ai_draft content. Human approves before schedule.
+// Goal-driven campaign builder (W5 M43): plain-language goal → strategy +
+// KPIs + calendar plan + governed ai_draft content + draft schedule proposals.
+// Human approves before anything is scheduled or published.
 export async function createCampaignFromGoalAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
@@ -229,63 +226,27 @@ export async function createCampaignFromGoalAction(formData: FormData) {
     );
   }
 
-  const result = await buildCampaignFromGoal({
-    company,
-    goal,
+  const channels = formData.getAll("channels").map(String).filter(Boolean);
+  const durationDays = text(formData, "durationDays") === "90" ? 90 : 30;
+
+  const exec = await executeCampaignBuilder({
+    input: {
+      company,
+      goal,
+      audience: text(formData, "audience") || undefined,
+      channels,
+      durationDays,
+      startDate,
+      offer: validOffer,
+    },
+    userId: user.id,
     audience: text(formData, "audience") || undefined,
-    channels: formData.getAll("channels").map(String).filter(Boolean),
-    durationDays: text(formData, "durationDays") === "90" ? 90 : 30,
-    startDate,
+    durationDays,
+    channels,
     offer: validOffer,
   });
 
-  const { strategy } = unpackKeyMessage(result.keyMessage);
-
-  const campaign = await createCampaign({
-    companyId,
-    name: `${goal.slice(0, 56)} (goal plan)`,
-    objective: result.objective,
-    audience: text(formData, "audience") || company.profile.targetCustomers,
-    serviceFocus: result.channelPlan.slice(0, 200),
-    channels:
-      formData.getAll("channels").map(String).filter(Boolean).length > 0
-        ? formData.getAll("channels").map(String).filter(Boolean)
-        : ["Facebook", "Instagram", "Google Business Profile"],
-    durationDays: text(formData, "durationDays") === "90" ? 90 : 30,
-    startDate,
-    offerId: validOffer?.id ?? null,
-    keyMessage: result.keyMessage,
-    status: "draft",
-    requestId: null,
-    createdById: user.id,
-    approvedById: null,
-    approvedAt: null,
-  });
-
-  const spawnedContentIds: string[] = [];
-  for (const item of result.items) {
-    const campaignItem = await createCampaignItem({
-      campaignId: campaign.id,
-      companyId,
-      dayOffset: item.dayOffset,
-      channel: item.channel,
-      contentType: item.contentType,
-      title: item.title,
-      brief: item.brief,
-      contentId: null,
-      status: "planned",
-    });
-
-    const contentId = await spawnGovernedDraftForItem({
-      company,
-      campaignId: campaign.id,
-      campaignRequestId: null,
-      strategy,
-      campaignItem,
-      userId: user.id,
-    });
-    spawnedContentIds.push(contentId);
-  }
+  const { campaign, result, spawnedContentIds } = exec;
 
   await recordAiUsage({
     tenantId: company.tenantId,
@@ -308,7 +269,7 @@ export async function createCampaignFromGoalAction(formData: FormData) {
     targetType: "campaign",
     targetId: campaign.id,
     companyId,
-    detail: `${goal.slice(0, 80)} · ${spawnedContentIds.length} draft(s)`,
+    detail: `${goal.slice(0, 80)} · ${spawnedContentIds.length} draft(s) · ${exec.draftSchedules.length} draft schedule slot(s)`,
   });
   redirect(`/campaigns/${campaign.id}`);
 }

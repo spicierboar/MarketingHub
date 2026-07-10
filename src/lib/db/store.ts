@@ -1773,6 +1773,8 @@ function seed(): DataStore {
         updatedAt: t,
       },
     ],
+    ragKnowledgeSources: [],
+    ragKnowledgeVersions: [],
     cmsUpdateRequests: [
       {
         id: "cmsr_motel_hero",
