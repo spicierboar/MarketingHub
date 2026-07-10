@@ -2941,6 +2941,13 @@ export async function listCmsPageVersions(tenantId: string, pageId: string): Pro
     .sort((a, b) => b.versionNumber - a.versionNumber);
 }
 
+export async function listCmsPageVersionsForPage(pageId: string): Promise<CmsPageVersion[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCmsPageVersionsForPage(pageId);
+  return (db().cmsPageVersions ?? [])
+    .filter((v) => v.pageId === pageId)
+    .sort((a, b) => b.versionNumber - a.versionNumber);
+}
+
 export async function getCmsPageVersion(versionId: string): Promise<CmsPageVersion | undefined> {
   if (isSupabaseConfigured()) return supabaseRepo.getCmsPageVersion(versionId);
   return (db().cmsPageVersions ?? []).find((v) => v.id === versionId);
@@ -3021,23 +3028,19 @@ export async function updateCmsUpdateRequest(
 // ---- Funnel (W4 M35) ---------------------------------------------------------
 
 export async function listFunnelJourneys(tenantId: string, companyId?: string): Promise<FunnelJourney[]> {
-  if (isSupabaseConfigured()) return supabaseRepo.listFunnelJourneys(tenantId, companyId);
   const ids = tenantCompanyIdSet(tenantId);
   return (db().funnelJourneys ?? []).filter((j) => ids.has(j.companyId) && (!companyId || j.companyId === companyId));
 }
 export async function getFunnelJourney(journeyId: string): Promise<FunnelJourney | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.getFunnelJourney(journeyId);
   return (db().funnelJourneys ?? []).find((j) => j.id === journeyId);
 }
 export async function createFunnelJourney(input: Omit<FunnelJourney, "id" | "createdAt" | "updatedAt">): Promise<FunnelJourney> {
-  if (isSupabaseConfigured()) return supabaseRepo.createFunnelJourney(input);
   const time = now();
   const rec: FunnelJourney = { ...input, id: id("fj"), createdAt: time, updatedAt: time };
   (db().funnelJourneys ??= []).push(rec);
   return rec;
 }
 export async function updateFunnelJourney(journeyId: string, patch: Partial<FunnelJourney>): Promise<FunnelJourney | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.updateFunnelJourney(journeyId, patch);
   const rec = await getFunnelJourney(journeyId);
   if (!rec) return undefined;
   Object.assign(rec, patch, { updatedAt: now() });
@@ -3045,23 +3048,19 @@ export async function updateFunnelJourney(journeyId: string, patch: Partial<Funn
 }
 
 export async function listConversionFunnels(tenantId: string, companyId?: string): Promise<ConversionFunnel[]> {
-  if (isSupabaseConfigured()) return supabaseRepo.listConversionFunnels(tenantId, companyId);
   const ids = tenantCompanyIdSet(tenantId);
   return (db().conversionFunnels ?? []).filter((f) => ids.has(f.companyId) && (!companyId || f.companyId === companyId));
 }
 export async function getConversionFunnel(funnelId: string): Promise<ConversionFunnel | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.getConversionFunnel(funnelId);
   return (db().conversionFunnels ?? []).find((f) => f.id === funnelId);
 }
 export async function createConversionFunnel(input: Omit<ConversionFunnel, "id" | "createdAt" | "updatedAt">): Promise<ConversionFunnel> {
-  if (isSupabaseConfigured()) return supabaseRepo.createConversionFunnel(input);
   const time = now();
   const rec: ConversionFunnel = { ...input, id: id("fnl"), createdAt: time, updatedAt: time };
   (db().conversionFunnels ??= []).push(rec);
   return rec;
 }
 export async function updateConversionFunnel(funnelId: string, patch: Partial<ConversionFunnel>): Promise<ConversionFunnel | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.updateConversionFunnel(funnelId, patch);
   const rec = await getConversionFunnel(funnelId);
   if (!rec) return undefined;
   Object.assign(rec, patch, { updatedAt: now() });
@@ -3069,23 +3068,19 @@ export async function updateConversionFunnel(funnelId: string, patch: Partial<Co
 }
 
 export async function listFunnelLandingPages(tenantId: string, companyId?: string): Promise<FunnelLandingPage[]> {
-  if (isSupabaseConfigured()) return supabaseRepo.listFunnelLandingPages(tenantId, companyId);
   const ids = tenantCompanyIdSet(tenantId);
   return (db().funnelLandingPages ?? []).filter((p) => ids.has(p.companyId) && (!companyId || p.companyId === companyId));
 }
 export async function getFunnelLandingPage(pageId: string): Promise<FunnelLandingPage | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.getFunnelLandingPage(pageId);
   return (db().funnelLandingPages ?? []).find((p) => p.id === pageId);
 }
 export async function createFunnelLandingPage(input: Omit<FunnelLandingPage, "id" | "createdAt" | "updatedAt">): Promise<FunnelLandingPage> {
-  if (isSupabaseConfigured()) return supabaseRepo.createFunnelLandingPage(input);
   const time = now();
   const rec: FunnelLandingPage = { ...input, id: id("flp"), createdAt: time, updatedAt: time };
   (db().funnelLandingPages ??= []).push(rec);
   return rec;
 }
 export async function updateFunnelLandingPage(pageId: string, patch: Partial<FunnelLandingPage>): Promise<FunnelLandingPage | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.updateFunnelLandingPage(pageId, patch);
   const rec = await getFunnelLandingPage(pageId);
   if (!rec) return undefined;
   Object.assign(rec, patch, { updatedAt: now() });
@@ -3093,23 +3088,19 @@ export async function updateFunnelLandingPage(pageId: string, patch: Partial<Fun
 }
 
 export async function listFunnelAbExperiments(tenantId: string, companyId?: string): Promise<FunnelAbExperiment[]> {
-  if (isSupabaseConfigured()) return supabaseRepo.listFunnelAbExperiments(tenantId, companyId);
   const ids = tenantCompanyIdSet(tenantId);
   return (db().funnelAbExperiments ?? []).filter((e) => ids.has(e.companyId) && (!companyId || e.companyId === companyId));
 }
 export async function getFunnelAbExperiment(experimentId: string): Promise<FunnelAbExperiment | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.getFunnelAbExperiment(experimentId);
   return (db().funnelAbExperiments ?? []).find((e) => e.id === experimentId);
 }
 export async function createFunnelAbExperiment(input: Omit<FunnelAbExperiment, "id" | "createdAt" | "updatedAt">): Promise<FunnelAbExperiment> {
-  if (isSupabaseConfigured()) return supabaseRepo.createFunnelAbExperiment(input);
   const time = now();
   const rec: FunnelAbExperiment = { ...input, id: id("fab"), createdAt: time, updatedAt: time };
   (db().funnelAbExperiments ??= []).push(rec);
   return rec;
 }
 export async function updateFunnelAbExperiment(experimentId: string, patch: Partial<FunnelAbExperiment>): Promise<FunnelAbExperiment | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.updateFunnelAbExperiment(experimentId, patch);
   const rec = await getFunnelAbExperiment(experimentId);
   if (!rec) return undefined;
   Object.assign(rec, patch, { updatedAt: now() });

@@ -49,6 +49,7 @@ import type {
   SocialMention, SocialResponseDraft, CompanyReview, ReviewRequestCampaign, Task, Tenant, TenantMember,
   TermsVersion, TermsAcceptance, User, UtmLink,
   EmailTemplate, EmailSubscriber, EmailCampaign,
+  CmsPage, CmsPageVersion, CmsSeoMetadata, CmsUpdateRequest,
 } from "@/lib/types";
 
 // Request-scoped RLS client for company-scoped data — EXCEPT inside a trusted
@@ -480,6 +481,115 @@ export const supabaseRepo = {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("review_request_campaigns").update(toRow(patch)).eq("id", campaignId).select("*").maybeSingle();
     return data ? toDomain<ReviewRequestCampaign>(data) : undefined;
+  },
+
+  // ============================ Website CMS (RLS) ============================
+  async listCmsPages(tenantId: string, companyId?: string): Promise<CmsPage[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("cms_pages").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("updated_at", { ascending: false });
+    return many<CmsPage>(data);
+  },
+  async getCmsPage(pageId: string): Promise<CmsPage | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("cms_pages").select("*").eq("id", pageId).maybeSingle();
+    return data ? toDomain<CmsPage>(data) : undefined;
+  },
+  async createCmsPage(input: Omit<CmsPage, "id" | "createdAt" | "updatedAt">): Promise<CmsPage> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("cms_pages").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createCmsPage: " + error.message);
+    return toDomain<CmsPage>(data);
+  },
+  async updateCmsPage(pageId: string, patch: Partial<CmsPage>): Promise<CmsPage | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("cms_pages").update({ ...toRow(patch), updated_at: now() }).eq("id", pageId).select("*").maybeSingle();
+    return data ? toDomain<CmsPage>(data) : undefined;
+  },
+  async listCmsPageVersions(tenantId: string, pageId: string): Promise<CmsPageVersion[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb
+      .from("cms_page_versions")
+      .select("*")
+      .eq("page_id", pageId)
+      .in("company_id", await companyIds(sb, tenantId))
+      .order("version_number", { ascending: false });
+    return many<CmsPageVersion>(data);
+  },
+  async listCmsPageVersionsForPage(pageId: string): Promise<CmsPageVersion[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("cms_page_versions").select("*").eq("page_id", pageId).order("version_number", { ascending: false });
+    return many<CmsPageVersion>(data);
+  },
+  async getCmsPageVersion(versionId: string): Promise<CmsPageVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("cms_page_versions").select("*").eq("id", versionId).maybeSingle();
+    return data ? toDomain<CmsPageVersion>(data) : undefined;
+  },
+  async createCmsPageVersion(input: Omit<CmsPageVersion, "id" | "createdAt">): Promise<CmsPageVersion> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("cms_page_versions").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createCmsPageVersion: " + error.message);
+    return toDomain<CmsPageVersion>(data);
+  },
+  async updateCmsPageVersion(versionId: string, patch: Partial<CmsPageVersion>): Promise<CmsPageVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("cms_page_versions").update(toRow(patch)).eq("id", versionId).select("*").maybeSingle();
+    return data ? toDomain<CmsPageVersion>(data) : undefined;
+  },
+  async getCmsSeoMetadata(pageId: string): Promise<CmsSeoMetadata | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("cms_seo_metadata").select("*").eq("page_id", pageId).maybeSingle();
+    return data ? toDomain<CmsSeoMetadata>(data) : undefined;
+  },
+  async upsertCmsSeoMetadata(
+    pageId: string,
+    companyId: string,
+    input: Omit<CmsSeoMetadata, "id" | "pageId" | "companyId" | "createdAt" | "updatedAt">,
+  ): Promise<CmsSeoMetadata> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const existing = await this.getCmsSeoMetadata(pageId);
+    if (existing) {
+      const { data, error } = await sb
+        .from("cms_seo_metadata")
+        .update({ ...toRow(input), updated_at: now() })
+        .eq("page_id", pageId)
+        .select("*")
+        .single();
+      if (error) throw new Error("upsertCmsSeoMetadata: " + error.message);
+      return toDomain<CmsSeoMetadata>(data);
+    }
+    const { data, error } = await sb
+      .from("cms_seo_metadata")
+      .insert(toRow({ ...input, pageId, companyId }))
+      .select("*")
+      .single();
+    if (error) throw new Error("upsertCmsSeoMetadata: " + error.message);
+    return toDomain<CmsSeoMetadata>(data);
+  },
+  async listCmsUpdateRequests(tenantId: string, companyId?: string): Promise<CmsUpdateRequest[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("cms_update_requests").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("created_at", { ascending: false });
+    return many<CmsUpdateRequest>(data);
+  },
+  async getCmsUpdateRequest(requestId: string): Promise<CmsUpdateRequest | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("cms_update_requests").select("*").eq("id", requestId).maybeSingle();
+    return data ? toDomain<CmsUpdateRequest>(data) : undefined;
+  },
+  async createCmsUpdateRequest(input: Omit<CmsUpdateRequest, "id" | "createdAt" | "updatedAt">): Promise<CmsUpdateRequest> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("cms_update_requests").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createCmsUpdateRequest: " + error.message);
+    return toDomain<CmsUpdateRequest>(data);
+  },
+  async updateCmsUpdateRequest(requestId: string, patch: Partial<CmsUpdateRequest>): Promise<CmsUpdateRequest | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("cms_update_requests").update({ ...toRow(patch), updated_at: now() }).eq("id", requestId).select("*").maybeSingle();
+    return data ? toDomain<CmsUpdateRequest>(data) : undefined;
   },
 
   // ============================ Brand Brain (RLS) ==========================
