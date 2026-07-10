@@ -1,6 +1,6 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-10 (**W3 SHIPPED**)
+Last updated: 2026-07-10 (**W4 IN FLIGHT**)
 
 **Owner lock:** Full SRS · vision · go-live = non-negotiable.  
 **Schedule:** `docs/parallel/FULL-ORCHESTRATION.md`
@@ -73,10 +73,10 @@ Last updated: 2026-07-10 (**W3 SHIPPED**)
 
 | Agent | Branch | Status |
 |-------|--------|--------|
-| M34 | `w4/m34-cms` | spawned |
-| M35 | `w4/m35-funnel` | spawned |
-| M36 | `w4/m36-automation` | spawned |
-| M37 | `w4/m37-loyalty` | spawned |
+| M34 | `w4/m34-cms` | **running** |
+| M35 | `w4/m35-funnel` | **running** |
+| M36 | `w4/m36-automation` | **running** |
+| M37 | `w4/m37-loyalty` | **running** |
 | M01-W4 | main | waiting |
 
 | Flag | Status |
