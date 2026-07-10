@@ -91,7 +91,14 @@ export async function checkSignalsProduceOpportunity(): Promise<{ ok: boolean; d
 
 export function checkReviewSignalProducesOpportunity(): { ok: boolean; detail: string } {
   const company = stubAiMosCompany({ id: "co_aimos_review" });
-  const reviewSignal = simulatedReviewBundle(company);
+  // Explicit actionable bundle — do not rely on hash-seed luck from company id.
+  const reviewSignal = {
+    negativeOpen: 3,
+    averageRating: 3.2,
+    totalReviews: 8,
+    responseRate: 0.25,
+    mode: "simulated" as const,
+  };
   const drafts = detectOpportunitiesFromSignals({
     company,
     health: computeCompanyHealthScore({ company, todayIso: todayIso(), posts: [], content: [], campaigns: [], leads: [] }),
@@ -102,8 +109,14 @@ export function checkReviewSignalProducesOpportunity(): { ok: boolean; detail: s
 }
 
 export function checkLoyaltySignalProducesOpportunity(): { ok: boolean; detail: string } {
-  const company = stubAiMosCompany({ id: "co_aimos_loyalty_seed5" });
-  const loyaltySignal = simulatedLoyaltyBundle(company);
+  const company = stubAiMosCompany({ id: "co_aimos_loyalty" });
+  const loyaltySignal = {
+    memberCount: 10,
+    inactiveCount: 5,
+    referralPending: 3,
+    lowEngagementRate: 0.5,
+    mode: "simulated" as const,
+  };
   const drafts = detectOpportunitiesFromSignals({
     company,
     health: computeCompanyHealthScore({ company, todayIso: todayIso(), posts: [], content: [], campaigns: [], leads: [] }),

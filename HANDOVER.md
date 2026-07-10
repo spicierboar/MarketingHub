@@ -1,24 +1,24 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-10, **W7 CODE COMPLETE** · W6 owner-blocked)
+> ## ▶ NEXT SESSION — START HERE (2026-07-10, **W7 COMPLETE** · **WAITING ON GOOGLE FOR W6**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (W7 M50–M55 code-only · live flags OFF)
->
-> **Waves W0–W5 DONE on main.** Live flags **OFF**. W7 agents M50–M55 **code complete** (integrator polish / fixture recount optional).
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ M01-FINAL recount · live flags **OFF**
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
-> | W0–W5 | DONE | through campaign builder · `w5_complete=yes` |
-> | **W6** | **BLOCKED** | Owner Google Cloud billing → Phase 3–4 cutover + live flag flip |
-> | **W7** | **CODE DONE** | M50–M55 shipped · `w7_complete` pending M01-FINAL polish + owner `0034_learning.sql` |
+> | W0–W5 | DONE | `w5_complete=yes` |
+> | **W7** | **DONE** | M50–M55 + M01-FINAL · fixtures **252/252 + 20/20** · `w7_complete=yes` |
+> | **W6** | **WAITING** | Owner Google Cloud billing — **park code work here** |
 >
-> **Ledger:** `docs/parallel/PROGRESS.md` · **Plan:** `docs/FULL-IMPLEMENTATION-PLAN.md` · **Orchestration:** `docs/parallel/FULL-ORCHESTRATION.md`
+> **Ledger:** `docs/parallel/PROGRESS.md` · **Handoff:** `docs/parallel/M01-FINAL-handoff.md`
 >
-> **Owner migrations:** W2–W5 + **`0034_bookings.sql`** + **`0034_learning.sql` pasted (2026-07-10)** — Success, no rows (DDL OK).
+> **Fixtures (M01-FINAL):** self-test **252/252** · queue-test **20/20** (`npx tsx scripts/run-fixtures.mjs`)
 >
-> **Hard locks:** Do **NOT** flip `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` / `BOOKINGS_LIVE` / `LOCAL_SEO_LIVE` / `PUBLIC_API_LIVE` / `VISUALS_LIVE` / `LEARNING_LIVE` until W6 owner GO (or per-module GO). Critique gate untouched. Isolation rule stands.
+> **Owner migrations:** W2–W5 + `0034_bookings` + `0034_learning` — **all pasted**
 >
-> **Local demo (while Google blocked):**
+> **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. Isolation · `appEnv()` · OAuth-only · never force-push main.
+>
+> **Local demo (while waiting):**
 > ```
 > CC_LOCAL_DEMO=true
 > NEXT_PUBLIC_CC_LOCAL_DEMO=true
@@ -28,29 +28,29 @@
 > npx next dev -p 3002
 > ```
 >
-> **W7 surfaces:** `/bookings` · `/book/[id]` · `/executive` · `/companies/[id]/local-seo` · `/api/v1/{campaigns,reservations,reviews}` · `/admin` MFA/impersonation stubs · `/visuals` video studio · `/learning`
+> **NEXT (only when Google billing is GO):**
+> 1. W6 OWNER-OPS (`docs/parallel/M-OWNER-OPS-prompt.md` / `docs/OWNER-LIVE-CUTOVER.md`)
+> 2. M45 verify
+> 3. Flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE` together (then other module flags per cutover)
 >
-> **NEXT:**
-> 1. Optional: M01-FINAL integrator polish + re-run fixtures on 3002
-> 2. When Google billing GO → W6 OWNER-OPS + M45 verify → flip live flags together
-> 3. Consider `w7_complete=yes` after fixture recount
+> **Until then:** no further wave work required — wait on Google.
+>
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
-> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** whenever you ship a new `supabase/migrations/*.sql`, give the owner the **complete Notepad open command** (absolute path):
+> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path:
 > ```powershell
 > notepad F:\MarketingHub\command-centre\supabase\migrations\NNNN_name.sql
 > ```
-> Owner: (1) notepad → Ctrl+A/C → (2) Supabase SQL editor → paste → Run → (3) matching `node scripts/verify-*-supabase.mjs` if any. **Never** say “paste the migration” without the full `notepad F:\…` command.
 >
-> **▶ STANDING INSTRUCTION — next-session continue command:** after meaningful work, update this START HERE block, then give the owner a copy-paste AI instruction (Path + READ + STATE + NEXT).
+> **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
-> **NON-NEGOTIABLES:** THE ISOLATION RULE (every repo list-fn takes a REQUIRED tenantId; `canAccessCompany` checks `company.tenantId===session tenant` FIRST; actions tenant-pin on the SESSION, never a request-body id; `svc()` only for identity/tenancy/audit/settings/export-purge with session-derived ids). Under Supabase ALWAYS live-verify. **Gate environment behaviour on `appEnv()` (src/lib/env.ts), NEVER `NODE_ENV`**. Auth/T&C/onboarding gate lives in `requireUser()`. `app_users` has NO `role` column (role derives from tenant_members). OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temp scripts from commits.
+> **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
 >
 > ---
 >
-> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-10, W7 started) — archived context
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-10, W7 code complete) — archived
 >
-> M50/M52 + UX committed; `0034_bookings` owner-pasted; then M51/M53–M55 implemented code-only.
+> W7 M50–M55 code done; migrations pasted; then M01-FINAL fixture recount → 252/252 + 20/20.
 >
 > ---
 >
