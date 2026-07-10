@@ -1,19 +1,36 @@
 import Link from "next/link";
-import type { Recommendation } from "@/lib/types";
+import type { AgencyPortfolioAttention, Recommendation } from "@/lib/types";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { dismissReasonOf, recommendationScore } from "@/lib/recommendations";
 import { titleCase } from "@/lib/utils";
 import {
   dismissRecommendationAction,
+  snoozeRecommendationAction,
   toCampaignAction,
   toRequestAction,
   toTaskAction,
 } from "@/app/(app)/recommendations/actions";
 
-function rankLabel(rec: Recommendation, index: number): string {
-  if (rec.score !== undefined) return `#${index + 1}`;
+function rankLabel(_rec: Recommendation, index: number): string {
   return `#${index + 1}`;
+}
+
+function EvidenceTrail({ rec }: { rec: Recommendation }) {
+  const items = rec.evidence ?? [];
+  if (!items.length) return null;
+  return (
+    <ul className="mt-2 space-y-1 rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+      {items.map((e, i) => (
+        <li key={`${e.signal}-${i}`}>
+          <span className="font-medium text-foreground">{titleCase(e.signal.replace(/_/g, " "))}:</span>{" "}
+          {e.observed}
+          {e.inferred ? ` (${e.inferred})` : ""}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function ActionButtons({ rec }: { rec: Recommendation }) {
@@ -44,12 +61,11 @@ function ActionButtons({ rec }: { rec: Recommendation }) {
           </Button>
         </form>
       )}
-      {(rec.action.kind === "repurpose" || rec.action.kind === "review") &&
-        rec.action.reviewHref && (
-          <Link href={rec.action.reviewHref} className={buttonClasses("default", "sm")}>
-            {rec.action.kind === "repurpose" ? "Open to repurpose" : "Review"}
-          </Link>
-        )}
+      {(rec.action.kind === "repurpose" || rec.action.kind === "review") && rec.action.reviewHref && (
+        <Link href={rec.action.reviewHref} className={buttonClasses("default", "sm")}>
+          {rec.action.kind === "repurpose" ? "Open to repurpose" : "Review"}
+        </Link>
+      )}
       {rec.action.kind !== "task" && (
         <form action={toTaskAction}>
           {idField}
@@ -58,6 +74,13 @@ function ActionButtons({ rec }: { rec: Recommendation }) {
           </Button>
         </form>
       )}
+      <form action={snoozeRecommendationAction} className="flex items-center gap-1">
+        {idField}
+        <input type="hidden" name="snoozeDays" value="7" />
+        <Button type="submit" variant="outline" size="sm">
+          Snooze 7d
+        </Button>
+      </form>
       <form action={dismissRecommendationAction} className="flex flex-wrap items-center gap-2">
         {idField}
         <input
@@ -102,8 +125,34 @@ export function RecommendationCard({
       <p className={compact ? "text-xs text-muted-foreground" : "text-sm text-muted-foreground"}>
         {rec.rationale}
       </p>
+      <EvidenceTrail rec={rec} />
       {!compact && <ActionButtons rec={rec} />}
     </div>
+  );
+}
+
+export function AgencyPortfolioStrip({ rows }: { rows: AgencyPortfolioAttention[] }) {
+  const active = rows.filter((r) => r.openCount > 0 || r.snoozedCount > 0);
+  if (!active.length) return null;
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardContent className="p-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Agency portfolio attention
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {active.map((row) => (
+            <div
+              key={row.companyId}
+              className="min-w-[10rem] rounded-md border border-border bg-card px-3 py-2 text-sm"
+            >
+              <p className="font-medium">{row.companyName}</p>
+              <p className="text-xs text-muted-foreground">{row.headline}</p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

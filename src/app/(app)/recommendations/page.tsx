@@ -1,24 +1,29 @@
-import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
+﻿import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
-import { listRecommendations } from "@/lib/db";
+import { listRecommendations, resurfaceExpiredSnoozedRecommendations } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { titleCase } from "@/lib/utils";
-import { dismissReasonOf, recommendationScore } from "@/lib/recommendations";
+import {
+  buildAgencyPortfolioAttention,
+  dismissReasonOf,
+  recommendationScore,
+} from "@/lib/recommendations";
 import type { Recommendation } from "@/lib/types";
-import { RecommendationCard } from "@/components/recommendation-cards";
+import { AgencyPortfolioStrip, RecommendationCard } from "@/components/recommendation-cards";
 import { generateRecommendationsAction } from "./actions";
 
 export default async function RecommendationsPage() {
   const user = await requireUser();
   const companies = (await visibleCompanies(user)).filter((c) => c.status !== "archived");
   const scope = await accessibleCompanyIds(user);
-  const open = await listRecommendations(user.tenantId, scope, "open");
-  const history = (await listRecommendations(user.tenantId, scope)).filter(
-    (r) => r.status !== "open",
-  );
+  await resurfaceExpiredSnoozedRecommendations(user.tenantId, scope);
+  const allRecs = await listRecommendations(user.tenantId, scope);
+  const open = allRecs.filter((r) => r.status === "open");
+  const history = allRecs.filter((r) => r.status !== "open" && r.status !== "snoozed");
+  const portfolio = buildAgencyPortfolioAttention(companies, allRecs, { limit: 8 });
 
   const byCompany = new Map<string, Recommendation[]>();
   for (const r of open) {
@@ -37,10 +42,12 @@ export default async function RecommendationsPage() {
     <div>
       <PageHeader
         title="Recommendations"
-        description="Ranked, data-grounded next steps from analytics, calendar gaps, and publishing cadence. Accept to pre-fill a campaign or content request."
+        description="Ranked, evidence-backed next steps from analytics, calendar gaps, reviews, loyalty, and Brand Brain signals."
       />
 
       <div className="space-y-6 p-6">
+        <AgencyPortfolioStrip rows={portfolio} />
+
         {companies.map((company) => {
           const recs = byCompany.get(company.id) ?? [];
           const aiReady = company.status === "ai_ready" || company.status === "approved";

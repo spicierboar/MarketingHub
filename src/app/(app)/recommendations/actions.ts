@@ -1,50 +1,62 @@
-"use server";
+﻿"use server";
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
   createRecommendation,
+  createRecommendationDismissRecord,
   createTask,
   getCompany,
   getRecommendation,
   getTask,
+  listRecommendationDismissHistory,
   listRecommendations,
+  resurfaceExpiredSnoozedRecommendations,
   updateRecommendation,
   updateTask,
 } from "@/lib/db";
 import { assertCompanyAccess, requireUser } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
-import { generateRankedForCompany, withDismissReason } from "@/lib/recommendations";
+import {
+  dismissedTypesFromHistory,
+  generateRankedForCompany,
+  withDismissReason,
+} from "@/lib/recommendations";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 
-// Generate fresh recommendations for a company, skipping any that duplicate an
-// already-open recommendation (§44: company-specific, from analytics).
+function addDaysIso(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString();
+}
+
 export async function generateRecommendationsAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
-  // Server-side AI-ready gate (mirrors drafting/campaign guards) — the UI
-  // disables the button, but the action is the real boundary.
   if (company.status !== "ai_ready" && company.status !== "approved") {
     throw new Error("Recommendations require an AI-ready company.");
   }
 
-  // Dedupe on type alone: each type is single-per-company, so a regenerate
-  // never stacks a second open rec of the same kind (even if its title's
-  // embedded count changed).
+  await resurfaceExpiredSnoozedRecommendations(user.tenantId, [companyId]);
+
   const openTypes = new Set(
     (await listRecommendations(user.tenantId, [companyId], "open")).map((r) => r.type),
   );
+  const dismissedTypes = dismissedTypesFromHistory(await listRecommendationDismissHistory(companyId));
+
   let created = 0;
   for (const draft of await generateRankedForCompany(company)) {
-    if (openTypes.has(draft.type)) continue;
-    const { score, ...rec } = draft;
+    if (openTypes.has(draft.type) || dismissedTypes.has(draft.type)) continue;
+    const { score, evidence, ...rec } = draft;
     await createRecommendation({
       ...rec,
+      score,
+      evidence,
       action: { ...rec.action, _score: score },
       status: "open",
       createdById: user.id,
@@ -67,7 +79,15 @@ export async function dismissRecommendationAction(formData: FormData) {
   const user = await assertCompanyAccess(rec.companyId);
   await updateRecommendation(recId, {
     status: "dismissed",
+    dismissReason: dismissReason || undefined,
     action: dismissReason ? withDismissReason(rec.action, dismissReason) : rec.action,
+  });
+  await createRecommendationDismissRecord({
+    companyId: rec.companyId,
+    recommendationType: rec.type,
+    title: rec.title,
+    reason: dismissReason || undefined,
+    dismissedById: user.id,
   });
   await logAction(user, "recommendation.dismissed", {
     targetType: "recommendation",
@@ -78,7 +98,24 @@ export async function dismissRecommendationAction(formData: FormData) {
   revalidatePath("/recommendations");
 }
 
-// Turn a recommendation into a content request (prefilled builder).
+export async function snoozeRecommendationAction(formData: FormData) {
+  const recId = text(formData, "recId");
+  const daysRaw = text(formData, "snoozeDays");
+  const days = Math.min(90, Math.max(1, Number.parseInt(daysRaw || "7", 10) || 7));
+  const rec = await getRecommendation(recId);
+  if (!rec) throw new Error("Recommendation not found");
+  const user = await assertCompanyAccess(rec.companyId);
+  const until = addDaysIso(days);
+  await updateRecommendation(recId, { status: "snoozed", snoozedUntil: until });
+  await logAction(user, "recommendation.snoozed", {
+    targetType: "recommendation",
+    targetId: recId,
+    companyId: rec.companyId,
+    detail: `${rec.title} until ${until.slice(0, 10)}`,
+  });
+  revalidatePath("/recommendations");
+}
+
 export async function toRequestAction(formData: FormData) {
   const recId = text(formData, "recId");
   const rec = await getRecommendation(recId);
@@ -101,7 +138,6 @@ export async function toRequestAction(formData: FormData) {
   redirect(`/requests/new?${p.toString()}`);
 }
 
-// Turn a recommendation into a campaign (prefilled builder).
 export async function toCampaignAction(formData: FormData) {
   const recId = text(formData, "recId");
   const rec = await getRecommendation(recId);
@@ -124,7 +160,6 @@ export async function toCampaignAction(formData: FormData) {
   redirect(`/campaigns/new?${p.toString()}`);
 }
 
-// Turn a recommendation into a task.
 export async function toTaskAction(formData: FormData) {
   const recId = text(formData, "recId");
   const rec = await getRecommendation(recId);
@@ -153,7 +188,6 @@ export async function toTaskAction(formData: FormData) {
   revalidatePath("/tasks");
 }
 
-// Ad-hoc + completion for tasks.
 export async function createTaskAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);

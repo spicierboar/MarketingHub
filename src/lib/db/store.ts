@@ -63,6 +63,7 @@ import type {
   PartnerWebhook,
   PublishLog,
   Recommendation,
+  RecommendationDismissRecord,
   ScheduledPost,
   SecuritySettings,
   SmsCampaign,
@@ -199,6 +200,7 @@ export interface DataStore {
   restaurantOrders: RestaurantOrder[];
   // Phase 9: Recommendations + Tasks
   recommendations: Recommendation[];
+  recommendationDismissHistory: RecommendationDismissRecord[];
   tasks: Task[];
   // V1 module 11: AI-MOS opportunities
   aiMosOpportunities: AiMosOpportunity[];
@@ -1936,6 +1938,7 @@ function seed(): DataStore {
       },
     ],
     recommendations: [],
+    recommendationDismissHistory: [],
     tasks: [],
     aiMosOpportunities: [],
     calendarAssistSuggestions: [],
