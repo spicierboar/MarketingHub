@@ -642,6 +642,19 @@ export function detectPublishingCadence(
   };
 }
 
+/** Score boost when a calendar gap signal is active (W5 M41 recommendations). */
+export function recommendationGapUrgencyBoost(gap: CalendarGapSignal | null): number {
+  if (!gap) return 0;
+  return Math.min(15, gap.gapDays * 2 + (gap.scheduledCount === 0 ? 5 : 0));
+}
+
+/** Score boost when publishing cadence is thin (W5 M41 recommendations). */
+export function recommendationCadenceUrgencyBoost(cadence: PublishingCadenceSignal | null): number {
+  if (!cadence) return 0;
+  const deficit = Math.max(0, cadence.minExpected - cadence.publishedCount);
+  return Math.min(12, deficit * 2);
+}
+
 /** Hint if a scheduled post sits outside analytics-informed windows (soft advisory). */
 export function scheduleTimingHint(
   post: Pick<ScheduledPost, "scheduledDate" | "scheduledTime" | "platform" | "companyId">,

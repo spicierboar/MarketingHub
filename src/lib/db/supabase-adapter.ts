@@ -45,7 +45,7 @@ import type {
   ApiKey,
   PartnerWebhook,
   RestaurantOrder,
-  Recommendation, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
+  Recommendation, RecommendationDismissRecord, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
   SocialMention, SocialResponseDraft, CompanyReview, ReviewRequestCampaign, Task, Tenant, TenantMember,
   TermsVersion, TermsAcceptance, User, UtmLink,
   EmailTemplate, EmailSubscriber, EmailCampaign,
@@ -1272,6 +1272,52 @@ export const supabaseRepo = {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("recommendations").update(toRow(patch)).eq("id", recId).select("*").maybeSingle();
     return data ? toDomain<Recommendation>(data) : undefined;
+  },
+  async listRecommendationDismissHistory(companyId: string): Promise<RecommendationDismissRecord[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb
+      .from("recommendation_dismiss_history")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("dismissed_at", { ascending: false });
+    return many<RecommendationDismissRecord>(data);
+  },
+  async createRecommendationDismissRecord(
+    input: Omit<RecommendationDismissRecord, "id" | "dismissedAt">,
+  ): Promise<RecommendationDismissRecord> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb
+      .from("recommendation_dismiss_history")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createRecommendationDismissRecord: " + error.message);
+    return toDomain<RecommendationDismissRecord>(data);
+  },
+  async resurfaceExpiredSnoozedRecommendations(
+    tenantId: string,
+    companyIdsFilter: string[],
+  ): Promise<number> {
+    const sb = await usr(); if (!sb) return 0;
+    const ids = companyIdsFilter.length
+      ? companyIdsFilter
+      : await companyIds(sb, tenantId);
+    const { data } = await sb
+      .from("recommendations")
+      .select("id, snoozed_until")
+      .in("company_id", ids)
+      .eq("status", "snoozed");
+    let count = 0;
+    for (const row of data ?? []) {
+      const until = row.snoozed_until as string | null;
+      if (!until || Date.parse(until) > Date.now()) continue;
+      const { error } = await sb
+        .from("recommendations")
+        .update({ status: "open", snoozed_until: null })
+        .eq("id", row.id);
+      if (!error) count += 1;
+    }
+    return count;
   },
 
   async listTasks(tenantId: string, companyIdsFilter?: string[], status?: Task["status"]): Promise<Task[]> {

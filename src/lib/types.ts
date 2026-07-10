@@ -1307,7 +1307,11 @@ export type RecommendationType =
   | "next_campaign"
   | "stale_content"
   | "calendar_gap"
-  | "publishing_cadence";
+  | "publishing_cadence"
+  | "seo_gap"
+  | "review_gap"
+  | "loyalty_opportunity"
+  | "retention_risk";
 
 // How a recommendation can be actioned (§44: become tasks, campaigns or
 // content requests). Fields are prefill hints for the target builder.
@@ -1326,7 +1330,13 @@ export interface RecommendationAction {
   dismiss?: { reason: string; dismissedAt?: string };
 }
 
-export type RecommendationStatus = "open" | "actioned" | "dismissed";
+export type RecommendationStatus = "open" | "actioned" | "dismissed" | "snoozed";
+
+export interface RecommendationEvidence {
+  signal: string;
+  observed: string;
+  inferred?: string;
+}
 
 export interface Recommendation {
   id: string;
@@ -1344,6 +1354,27 @@ export interface Recommendation {
   resultId?: string;
   /** Optional top-level mirror; prefer action.dismiss.reason when set. */
   dismissReason?: string;
+  evidence?: RecommendationEvidence[];
+  snoozedUntil?: string | null;
+}
+
+export interface RecommendationDismissRecord {
+  id: string;
+  companyId: string;
+  recommendationType: RecommendationType;
+  title: string;
+  reason?: string;
+  dismissedById: string;
+  dismissedAt: string;
+}
+
+export interface AgencyPortfolioAttention {
+  companyId: string;
+  companyName: string;
+  openCount: number;
+  snoozedCount: number;
+  topScore: number;
+  headline: string;
 }
 
 // Lightweight task (§44/§50) — created from a recommendation or ad hoc.

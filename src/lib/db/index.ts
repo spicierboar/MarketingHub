@@ -86,6 +86,7 @@ import type {
   PartnerWebhook,
   PublishLog,
   Recommendation,
+  RecommendationDismissRecord,
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
@@ -715,6 +716,7 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.orderingSettings = keepCompany(s.orderingSettings);
   s.restaurantOrders = keepCompany(s.restaurantOrders);
   s.recommendations = keepCompany(s.recommendations);
+  s.recommendationDismissHistory = keepCompany(s.recommendationDismissHistory);
   s.tasks = keepCompany(s.tasks);
   s.aiMosOpportunities = keepTenant(s.aiMosOpportunities);
   s.calendarAssistSuggestions = keepTenant(s.calendarAssistSuggestions);
@@ -1733,6 +1735,48 @@ export async function updateRecommendation(
   if (!rec) return undefined;
   Object.assign(rec, patch);
   return rec;
+}
+
+export async function listRecommendationDismissHistory(companyId: string): Promise<RecommendationDismissRecord[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listRecommendationDismissHistory(companyId);
+  return db()
+    .recommendationDismissHistory.filter((r) => r.companyId === companyId)
+    .sort((a, b) => b.dismissedAt.localeCompare(a.dismissedAt));
+}
+
+export async function createRecommendationDismissRecord(
+  input: Omit<RecommendationDismissRecord, "id" | "dismissedAt">,
+): Promise<RecommendationDismissRecord> {
+  if (isSupabaseConfigured()) return supabaseRepo.createRecommendationDismissRecord(input);
+  const row: RecommendationDismissRecord = {
+    ...input,
+    id: id("rec_dismiss"),
+    dismissedAt: now(),
+  };
+  db().recommendationDismissHistory.push(row);
+  return row;
+}
+
+export async function resurfaceExpiredSnoozedRecommendations(
+  tenantId: string,
+  companyIdsFilter: string[],
+): Promise<number> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.resurfaceExpiredSnoozedRecommendations(tenantId, companyIdsFilter);
+  }
+  const allowed = new Set(companyIdsFilter);
+  const tids = tenantCompanyIdSet(tenantId);
+  let count = 0;
+  for (const rec of db().recommendations) {
+    if (!tids.has(rec.companyId)) continue;
+    if (companyIdsFilter.length && !allowed.has(rec.companyId)) continue;
+    if (rec.status !== "snoozed" || !rec.snoozedUntil) continue;
+    if (Date.parse(rec.snoozedUntil) > Date.now()) continue;
+    rec.status = "open";
+    rec.snoozedUntil = null;
+    count += 1;
+  }
+  return count;
 }
 
 export async function listTasks(

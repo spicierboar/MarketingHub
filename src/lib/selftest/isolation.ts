@@ -151,9 +151,16 @@ import {
   checkCampaignBuilderSpawnsDraftContentNotScheduled,
 } from "@/lib/selftest/campaign-builder";
 import {
-  checkCalendarGapSignal,
+  checkAgencyPortfolioStrip,
+  checkCadenceUrgencyBoost,
+  checkDismissHistoryDedupesRegenerate,
   checkDismissPersistsReason,
+  checkEvidenceTrailPresent,
+  checkGapUrgencyBoost,
+  checkCalendarGapSignal,
   checkRankedTopFive,
+  checkRecommendationsLiveSimulated,
+  checkSnoozePersistsUntil,
 } from "@/lib/selftest/recommendations";
 import {
   checkApprovedCited,
@@ -767,6 +774,22 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("recommendations.calendarGapSignal", () => checkCalendarGapSignal());
 
     await expect("recommendations.dismissPersistsReason", () => checkDismissPersistsReason());
+
+    await expect("recommendations.gapUrgencyBoost", () => checkGapUrgencyBoost());
+
+    await expect("recommendations.cadenceUrgencyBoost", () => checkCadenceUrgencyBoost());
+
+    await expect("recommendations.snoozePersistsUntil", () => checkSnoozePersistsUntil());
+
+    await expect("recommendations.dismissHistoryDedupesRegenerate", () =>
+      checkDismissHistoryDedupesRegenerate(),
+    );
+
+    await expect("recommendations.evidenceTrailPresent", () => checkEvidenceTrailPresent());
+
+    await expect("recommendations.agencyPortfolioStrip", () => checkAgencyPortfolioStrip());
+
+    await expect("recommendations.liveSimulated", () => checkRecommendationsLiveSimulated());
 
     await expect("brandBrainRag.uploadCreatesDraftVersion", () =>
       checkUploadCreatesDraftVersion(companyA.id, ownerAUser.id),
