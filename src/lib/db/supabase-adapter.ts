@@ -36,7 +36,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AdAccount, AdBudget, AdCampaign, AdPlatform, AddonId, AudienceSegment,
   AiRun, AiMosOpportunity, CalendarAssistSuggestion, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
-  AutomationSettings, BrandTemplate, Campaign, CampaignItem, Company,
+  AutomationSettings, BrandTemplate, Campaign, CampaignBuilderRun, CampaignDraftScheduleItem, CampaignItem, CampaignPlanVersion, Company,
   CompanyAccess, CompanyEntitlement, ConsentRecord, ContentComment, ContentItem, EvidenceRecord,
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
   MenuDesign,
@@ -45,11 +45,12 @@ import type {
   ApiKey,
   PartnerWebhook,
   RestaurantOrder,
-  Recommendation, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
+  Recommendation, RecommendationDismissRecord, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
   SocialMention, SocialResponseDraft, CompanyReview, ReviewRequestCampaign, Task, Tenant, TenantMember,
   TermsVersion, TermsAcceptance, User, UtmLink,
   EmailTemplate, EmailSubscriber, EmailCampaign,
   CmsPage, CmsPageVersion, CmsSeoMetadata, CmsUpdateRequest,
+  RagKnowledgeSource, RagKnowledgeVersion,
   ConversionFunnel, FunnelAbExperiment, FunnelJourney, FunnelLandingPage,
 } from "@/lib/types";
 
@@ -694,6 +695,9 @@ export const supabaseRepo = {
       q = q.eq("status", "approved");
     } else if (!includeArchived && includeDrafts) {
       q = q.in("status", ["draft", "approved"]);
+    } else if (includeArchived && includeDrafts) {
+    } else if (includeArchived) {
+      q = q.not("status", "in", '("draft")');
     }
     const { data } = await q.order("updated_at", { ascending: false });
     return many<KnowledgeDocument>(data);
@@ -1272,6 +1276,49 @@ export const supabaseRepo = {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("recommendations").update(toRow(patch)).eq("id", recId).select("*").maybeSingle();
     return data ? toDomain<Recommendation>(data) : undefined;
+  },
+  async listRecommendationDismissHistory(companyId: string): Promise<RecommendationDismissRecord[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb
+      .from("recommendation_dismiss_history")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("dismissed_at", { ascending: false });
+    return many<RecommendationDismissRecord>(data);
+  },
+  async createRecommendationDismissRecord(
+    input: Omit<RecommendationDismissRecord, "id" | "dismissedAt">,
+  ): Promise<RecommendationDismissRecord> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb
+      .from("recommendation_dismiss_history")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createRecommendationDismissRecord: " + error.message);
+    return toDomain<RecommendationDismissRecord>(data);
+  },
+  async resurfaceExpiredSnoozedRecommendations(tenantId: string, companyIdsFilter: string[]): Promise<number> {
+    const sb = await usr(); if (!sb) return 0;
+    const ids = companyIdsFilter.length ? companyIdsFilter : await companyIds(sb, tenantId);
+    const { data } = await sb
+      .from("recommendations")
+      .select("id, snoozed_until")
+      .in("company_id", ids)
+      .eq("status", "snoozed");
+    const expired = (data ?? []).filter(
+      (r: { snoozed_until?: string | null }) =>
+        r.snoozed_until && Date.parse(r.snoozed_until) <= Date.now(),
+    );
+    if (!expired.length) return 0;
+    await sb
+      .from("recommendations")
+      .update({ status: "open", snoozed_until: null })
+      .in(
+        "id",
+        expired.map((r: { id: string }) => r.id),
+      );
+    return expired.length;
   },
 
   async listTasks(tenantId: string, companyIdsFilter?: string[], status?: Task["status"]): Promise<Task[]> {
@@ -2066,6 +2113,50 @@ export const supabaseRepo = {
       termsAcceptances: many(await byTenant("terms_acceptances")),
       auditLog: many(await one("audit_logs")),
     };
+  },
+  async listRagKnowledgeSources(companyId: string, includeInactive = false): Promise<RagKnowledgeSource[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("rag_knowledge_sources").select("*").eq("company_id", companyId);
+    if (!includeInactive) q = q.eq("status", "approved");
+    const { data } = await q.order("updated_at", { ascending: false });
+    return many<RagKnowledgeSource>(data);
+  },
+  async getRagKnowledgeSource(sourceId: string): Promise<RagKnowledgeSource | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_sources").select("*").eq("id", sourceId).maybeSingle();
+    return data ? toDomain<RagKnowledgeSource>(data) : undefined;
+  },
+  async createRagKnowledgeSource(input: Omit<RagKnowledgeSource, "id" | "createdAt" | "updatedAt">): Promise<RagKnowledgeSource> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("rag_knowledge_sources").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createRagKnowledgeSource: " + error.message);
+    return toDomain<RagKnowledgeSource>(data);
+  },
+  async updateRagKnowledgeSource(sourceId: string, patch: Partial<RagKnowledgeSource>): Promise<RagKnowledgeSource | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_sources").update({ ...toRow(patch), updated_at: now() }).eq("id", sourceId).select("*").maybeSingle();
+    return data ? toDomain<RagKnowledgeSource>(data) : undefined;
+  },
+  async listRagKnowledgeVersionsForSource(sourceId: string): Promise<RagKnowledgeVersion[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("rag_knowledge_versions").select("*").eq("source_id", sourceId).order("version_number", { ascending: false });
+    return many<RagKnowledgeVersion>(data);
+  },
+  async getRagKnowledgeVersion(versionId: string): Promise<RagKnowledgeVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_versions").select("*").eq("id", versionId).maybeSingle();
+    return data ? toDomain<RagKnowledgeVersion>(data) : undefined;
+  },
+  async createRagKnowledgeVersion(input: Omit<RagKnowledgeVersion, "id" | "createdAt">): Promise<RagKnowledgeVersion> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("rag_knowledge_versions").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createRagKnowledgeVersion: " + error.message);
+    return toDomain<RagKnowledgeVersion>(data);
+  },
+  async updateRagKnowledgeVersion(versionId: string, patch: Partial<RagKnowledgeVersion>): Promise<RagKnowledgeVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_versions").update(toRow(patch)).eq("id", versionId).select("*").maybeSingle();
+    return data ? toDomain<RagKnowledgeVersion>(data) : undefined;
   },
   async purgeTenant(tenantId: string): Promise<void> {
     const sb = svc(); if (!sb) return;

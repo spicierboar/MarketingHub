@@ -149,11 +149,27 @@ import {
   checkCampaignBuilderGoalProducesPlan,
   checkCampaignBuilderKpisPresent,
   checkCampaignBuilderSpawnsDraftContentNotScheduled,
+  checkCampaignBuilderSimulatedWhenLiveOff,
+  checkCampaignBuilderMultiChannelOptions,
+  checkCampaignBuilderGeneralGoalIncludesEmail,
+  checkCampaignBuilderMultiChannelPlan,
+  checkCampaignBuilderRiskWarningsPresent,
+  checkCampaignBuilderDraftScheduleNotLive,
+  checkCampaignBuilderPlanVersionPersisted,
+  checkCampaignBuilderRunRecorded,
+  checkCampaignBuilderExecuteOrchestration,
 } from "@/lib/selftest/campaign-builder";
 import {
+  checkAgencyPortfolioStrip,
   checkCalendarGapSignal,
+  checkDismissDedupeOnRegenerate,
+  checkDismissHistoryPersists,
   checkDismissPersistsReason,
+  checkEvidenceTrailPresent,
   checkRankedTopFive,
+  checkRecommendationsLiveOffSimulated,
+  checkReviewLoyaltySignalsRanked,
+  checkSnoozeUntilBlocksResurface,
 } from "@/lib/selftest/recommendations";
 import {
   checkApprovedCited,
@@ -762,11 +778,68 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
       ),
     );
 
+    await expect("campaignBuilder.simulatedWhenLiveOff", () =>
+      checkCampaignBuilderSimulatedWhenLiveOff(),
+    );
+
+    await expect("campaignBuilder.multiChannelOptions", () =>
+      checkCampaignBuilderMultiChannelOptions(),
+    );
+
+    await expect("campaignBuilder.generalGoalIncludesEmail", () =>
+      checkCampaignBuilderGeneralGoalIncludesEmail(),
+    );
+
+    await expect("campaignBuilder.multiChannelPlan", () =>
+      checkCampaignBuilderMultiChannelPlan(),
+    );
+
+    await expect("campaignBuilder.riskWarningsPresent", () =>
+      checkCampaignBuilderRiskWarningsPresent(),
+    );
+
+    await expect("campaignBuilder.draftScheduleNotLive", () =>
+      checkCampaignBuilderDraftScheduleNotLive(
+        companyA.id,
+        ownerAUser.id,
+        tenantAId!,
+      ),
+    );
+
+    await expect("campaignBuilder.planVersionPersisted", () =>
+      checkCampaignBuilderPlanVersionPersisted(
+        companyA.id,
+        ownerAUser.id,
+        tenantAId!,
+      ),
+    );
+
+    await expect("campaignBuilder.runRecorded", () =>
+      checkCampaignBuilderRunRecorded(
+        companyA.id,
+        ownerAUser.id,
+        tenantAId!,
+      ),
+    );
+
+    await expect("campaignBuilder.executeOrchestration", () =>
+      checkCampaignBuilderExecuteOrchestration(
+        companyA.id,
+        ownerAUser.id,
+        tenantAId!,
+      ),
+    );
+
     await expect("recommendations.rankedTopFive", () => checkRankedTopFive());
-
     await expect("recommendations.calendarGapSignal", () => checkCalendarGapSignal());
-
     await expect("recommendations.dismissPersistsReason", () => checkDismissPersistsReason());
+    await expect("recommendations.liveOffSimulated", () => checkRecommendationsLiveOffSimulated());
+    await expect("recommendations.snoozeBlocksResurface", () => checkSnoozeUntilBlocksResurface());
+    await expect("recommendations.dismissDedupeOnRegenerate", () => checkDismissDedupeOnRegenerate());
+    await expect("recommendations.evidenceTrailPresent", () => checkEvidenceTrailPresent());
+    await expect("recommendations.reviewLoyaltySignalsRanked", () => checkReviewLoyaltySignalsRanked());
+    await expect("recommendations.agencyPortfolioStrip", () => checkAgencyPortfolioStrip());
+    await expect("recommendations.dismissHistoryPersists", () => checkDismissHistoryPersists());
 
     await expect("brandBrainRag.uploadCreatesDraftVersion", () =>
       checkUploadCreatesDraftVersion(companyA.id, ownerAUser.id),

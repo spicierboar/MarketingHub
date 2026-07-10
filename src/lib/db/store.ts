@@ -92,6 +92,8 @@ import type {
   CmsPageVersion,
   CmsSeoMetadata,
   CmsUpdateRequest,
+  RagKnowledgeSource,
+  RagKnowledgeVersion,
   CompanyReview,
   ReviewRequestCampaign,
   Task,
@@ -173,6 +175,8 @@ export interface DataStore {
   cmsPageVersions: CmsPageVersion[];
   cmsSeoMetadata: CmsSeoMetadata[];
   cmsUpdateRequests: CmsUpdateRequest[];
+  ragKnowledgeSources: RagKnowledgeSource[];
+  ragKnowledgeVersions: RagKnowledgeVersion[];
   loyaltyPrograms: LoyaltyProgram[];
   loyaltyTiers: LoyaltyTier[];
   loyaltyMembers: LoyaltyMember[];
@@ -1765,6 +1769,8 @@ function seed(): DataStore {
         updatedAt: t,
       },
     ],
+    ragKnowledgeSources: [],
+    ragKnowledgeVersions: [],
     cmsUpdateRequests: [
       {
         id: "cmsr_motel_hero",

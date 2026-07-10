@@ -746,7 +746,7 @@ export type KnowledgeSourceType =
   | "brand_guide"
   | "other";
 
-export type KnowledgeDocStatus = "draft" | "approved" | "archived";
+export type KnowledgeDocStatus = "draft" | "approved" | "archived" | "outdated" | "prohibited";
 
 // A piece of approved company knowledge the AI grounds its drafts in.
 // Content is plain text (pasted or extracted); edits bump the version and
@@ -2321,6 +2321,38 @@ export interface LoyaltyRedemption {
   redeemedAt: string;
 }
 
+// ---- W5 M40: Full RAG (versioned knowledge sources) --------------------------
+
+export interface RagKnowledgeSource {
+  id: string;
+  companyId: string;
+  title: string;
+  sourceType: KnowledgeSourceType;
+  status: KnowledgeDocStatus;
+  currentVersionId?: string | null;
+  approvedVersionId?: string | null;
+  addedById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RagKnowledgeVersion {
+  id: string;
+  sourceId: string;
+  companyId: string;
+  versionNumber: number;
+  title: string;
+  content: string;
+  status: KnowledgeDocStatus;
+  fileName?: string;
+  contentType?: string;
+  supersededById?: string | null;
+  createdById: string;
+  createdAt: string;
+  approvedById?: string | null;
+  approvedAt?: string | null;
+}
+
 // ---- Phase 12: Enterprise Automation (§61 Phase 12) --------------------------------
 
 // Admin-controlled automation switches. ONE record PER TENANT since T1.
@@ -2502,3 +2534,60 @@ export interface CmsUpdateRequest {
   createdAt: string;
   updatedAt: string;
 }
+// ---- W5 M43: Campaign builder (plan versions, runs, draft schedule) ----------
+
+export interface CampaignPlanVersion {
+  id: string;
+  campaignId: string;
+  companyId: string;
+  versionNumber: number;
+  goal: string;
+  objective: string;
+  strategy: string;
+  channelPlan: string;
+  kpis: string[];
+  riskWarnings: string[];
+  channels: string[];
+  itemCount: number;
+  model: string;
+  createdById: string;
+  createdAt: string;
+}
+
+export type CampaignBuilderRunStatus = "completed" | "simulated" | "failed";
+export type CampaignBuilderRunMode = "live" | "simulated";
+
+export interface CampaignBuilderRun {
+  id: string;
+  companyId: string;
+  campaignId?: string | null;
+  planVersionId?: string | null;
+  goal: string;
+  status: CampaignBuilderRunStatus;
+  mode: CampaignBuilderRunMode;
+  model: string;
+  spawnedContentCount: number;
+  draftScheduleCount: number;
+  aiRunId?: string | null;
+  createdById: string;
+  createdAt: string;
+}
+
+export type CampaignDraftScheduleStatus = "draft";
+
+export interface CampaignDraftScheduleItem {
+  id: string;
+  campaignId: string;
+  companyId: string;
+  campaignItemId?: string | null;
+  contentId?: string | null;
+  planVersionId?: string | null;
+  scheduledDate: string;
+  scheduledTime?: string | null;
+  platform: string;
+  title: string;
+  status: CampaignDraftScheduleStatus;
+  createdById: string;
+  createdAt: string;
+}
+
