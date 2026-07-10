@@ -25,7 +25,10 @@ import type {
   AutomationSettings,
   BrandTemplate,
   Campaign,
+  CampaignBuilderRun,
+  CampaignDraftScheduleItem,
   CampaignItem,
+  CampaignPlanVersion,
   Company,
   CompanyAccess,
   CompanyEntitlement,
@@ -701,6 +704,9 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.cmsUpdateRequests = keepCompany(s.cmsUpdateRequests ?? []);
   s.ragKnowledgeSources = keepCompany(s.ragKnowledgeSources ?? []);
   s.ragKnowledgeVersions = keepCompany(s.ragKnowledgeVersions ?? []);
+  s.campaignPlanVersions = keepCompany(s.campaignPlanVersions ?? []);
+  s.campaignBuilderRuns = keepCompany(s.campaignBuilderRuns ?? []);
+  s.campaignDraftScheduleItems = keepCompany(s.campaignDraftScheduleItems ?? []);
   s.loyaltyPrograms = keepCompany(s.loyaltyPrograms ?? []);
   s.loyaltyTiers = keepCompany(s.loyaltyTiers ?? []);
   s.loyaltyMembers = keepCompany(s.loyaltyMembers ?? []);
@@ -3327,3 +3333,54 @@ export async function updateRagKnowledgeVersion(
   Object.assign(rec, patch);
   return rec;
 }
+
+// ---- W5 M43: Campaign builder persistence -----------------------------------
+
+export async function listCampaignPlanVersions(campaignId: string): Promise<CampaignPlanVersion[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCampaignPlanVersions(campaignId);
+  return (db().campaignPlanVersions ?? [])
+    .filter((v) => v.campaignId === campaignId)
+    .sort((a, b) => b.versionNumber - a.versionNumber);
+}
+
+export async function createCampaignPlanVersion(
+  input: Omit<CampaignPlanVersion, "id" | "createdAt">,
+): Promise<CampaignPlanVersion> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCampaignPlanVersion(input);
+  const rec: CampaignPlanVersion = { ...input, id: id("cpv"), createdAt: now() };
+  (db().campaignPlanVersions ??= []).push(rec);
+  return rec;
+}
+
+export async function listCampaignBuilderRuns(companyId: string): Promise<CampaignBuilderRun[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCampaignBuilderRuns(companyId);
+  return (db().campaignBuilderRuns ?? [])
+    .filter((r) => r.companyId === companyId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function createCampaignBuilderRun(
+  input: Omit<CampaignBuilderRun, "id" | "createdAt">,
+): Promise<CampaignBuilderRun> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCampaignBuilderRun(input);
+  const rec: CampaignBuilderRun = { ...input, id: id("cbr"), createdAt: now() };
+  (db().campaignBuilderRuns ??= []).push(rec);
+  return rec;
+}
+
+export async function listCampaignDraftScheduleItems(campaignId: string): Promise<CampaignDraftScheduleItem[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCampaignDraftScheduleItems(campaignId);
+  return (db().campaignDraftScheduleItems ?? [])
+    .filter((s) => s.campaignId === campaignId)
+    .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+}
+
+export async function createCampaignDraftScheduleItem(
+  input: Omit<CampaignDraftScheduleItem, "id" | "createdAt">,
+): Promise<CampaignDraftScheduleItem> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCampaignDraftScheduleItem(input);
+  const rec: CampaignDraftScheduleItem = { ...input, id: id("cds"), createdAt: now() };
+  (db().campaignDraftScheduleItems ??= []).push(rec);
+  return rec;
+}
+

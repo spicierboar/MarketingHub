@@ -28,7 +28,10 @@ import type {
   AutomationSettings,
   BrandTemplate,
   Campaign,
+  CampaignBuilderRun,
+  CampaignDraftScheduleItem,
   CampaignItem,
+  CampaignPlanVersion,
   Company,
   CompanyEntitlement,
   MenuDesign,
@@ -179,6 +182,9 @@ export interface DataStore {
   cmsUpdateRequests: CmsUpdateRequest[];
   ragKnowledgeSources: RagKnowledgeSource[];
   ragKnowledgeVersions: RagKnowledgeVersion[];
+  campaignPlanVersions: CampaignPlanVersion[];
+  campaignBuilderRuns: CampaignBuilderRun[];
+  campaignDraftScheduleItems: CampaignDraftScheduleItem[];
   loyaltyPrograms: LoyaltyProgram[];
   loyaltyTiers: LoyaltyTier[];
   loyaltyMembers: LoyaltyMember[];
@@ -1773,8 +1779,6 @@ function seed(): DataStore {
         updatedAt: t,
       },
     ],
-    ragKnowledgeSources: [],
-    ragKnowledgeVersions: [],
     cmsUpdateRequests: [
       {
         id: "cmsr_motel_hero",
@@ -1790,6 +1794,9 @@ function seed(): DataStore {
     ],
     ragKnowledgeSources: [],
     ragKnowledgeVersions: [],
+    campaignPlanVersions: [],
+    campaignBuilderRuns: [],
+    campaignDraftScheduleItems: [],
     loyaltyPrograms: [],
     loyaltyTiers: [],
     loyaltyMembers: [],

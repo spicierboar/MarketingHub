@@ -198,3 +198,11 @@ export async function checkRecommendationsLiveSimulated(): Promise<{ ok: boolean
   const ok = mode === "simulated" && simulated;
   return { ok, detail: `mode=${mode} simulatedPrefix=${simulated}` };
 }
+
+// W5 parallel-branch isolation aliases (M43 naming)
+export const checkDismissDedupeOnRegenerate = checkDismissHistoryDedupesRegenerate;
+export const checkDismissHistoryPersists = checkDismissHistoryDedupesRegenerate;
+export const checkRecommendationsLiveOffSimulated = checkRecommendationsLiveSimulated;
+export const checkSnoozeUntilBlocksResurface = checkSnoozePersistsUntil;
+export const checkReviewLoyaltySignalsRanked = checkRankedTopFive;
+

@@ -1,8 +1,8 @@
-# Orchestrator ledger
+﻿# Orchestrator ledger
 
-Last updated: 2026-07-10 (**W4 SHIPPED**)
+Last updated: 2026-07-10 (**W5 SHIPPED**)
 
-**Owner lock:** Full SRS · vision · go-live = non-negotiable.  
+**Owner lock:** Full SRS → vision → go-live = non-negotiable.  
 **Schedule:** `docs/parallel/FULL-ORCHESTRATION.md`
 
 ## Standing instructions (integrators + M99)
@@ -20,8 +20,8 @@ Last updated: 2026-07-10 (**W4 SHIPPED**)
 | W1 | DONE | ~2-3d | - |
 | W2 | DONE | ~4-6d | - |
 | W3 | DONE | ~4-6d | - |
-| **W4** | **DONE** | **~4-6d** | **~Jul 21-27** |
-| W5 | queued | ~4-6d | ~Jul 25 - Aug 2 |
+| W4 | DONE | ~4-6d | - |
+| **W5** | **DONE** | **~4-6d** | **~Jul 10** |
 | W6 | owner gate | days + weeks? | blocked (Google) |
 | W7 | queued | ~6-8d post-W6 | after go-live |
 | **`full_complete`** | - | **~22-32d code** + W6 | **~early Aug** (code) |
@@ -51,20 +51,28 @@ Last updated: 2026-07-10 (**W4 SHIPPED**)
 
 **Fixtures:** self-test **131/131** · queue-test **20/20** · live flags **OFF**
 
-**Routes:** `/cms` · `/funnel` · `/workflows` · `/loyalty`
+## Wave 5 — DONE
 
-**Migrations (owner paste when ready):** `0032_cms.sql` · `0032_funnel.sql` · `0032_marketing_automation.sql` · `0032_loyalty.sql`
+| Agent | Branch | Status |
+|-------|--------|--------|
+| M40 | `w5/m40-rag` | merged |
+| M41 | `w5/m41-recommendations` | merged |
+| M42 | `w5/m42-ai-mos` | merged |
+| M43 | `w5/m43-campaign-builder` | merged |
+| M01-W5 | main | integrated |
 
-## Wave 5 — QUEUED (next)
+| Flag | Status |
+|------|--------|
+| `w5_launched` | yes |
+| `m40_handoff` | yes |
+| `m41_handoff` | yes |
+| `m42_handoff` | yes |
+| `m43_handoff` | yes |
+| `w5_complete` | **yes** |
 
-| Agent | Scope |
-|-------|-------|
-| M40 | Full RAG |
-| M41 | AI recommendations |
-| M42 | AI-MOS auto |
-| M43 | Campaign builder |
+**Fixtures:** self-test **165/165** · queue-test **20/20** · live flags **OFF**
 
-`w5_launched=no` · `w5_complete=no`
+**Migrations (owner paste when ready):** `0033_rag.sql` · `0033_recommendations.sql` · `0033_campaign_builder.sql`
 
 ## Waves 6-7 — QUEUED
 
@@ -73,3 +81,5 @@ Last updated: 2026-07-10 (**W4 SHIPPED**)
 ## Owner ops
 
 Phases 1-2 done · Phase 3 Google blocked · Phase 4 parked · `https://mangotickle.com.au`
+
+---
