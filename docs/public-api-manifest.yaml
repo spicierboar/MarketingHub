@@ -2,20 +2,49 @@ openapi: 3.0.3
 info:
   title: Command Centre Public API
   version: v1
+  description: |
+    v1 expanded W7 (M53) with read-only campaigns, reservations, and reviews.
+    Breaking changes will ship as v2. PUBLIC_API_VERSION remains v1.
 paths:
   /api/v1:
     get:
-      summary: API catalog
+      summary: API catalog, versioning notes, and rate-limit buckets
   /api/v1/companies:
     get:
       summary: List companies (scope companies:read)
+  /api/v1/companies/{id}:
+    get:
+      summary: Get company (scope companies:read)
   /api/v1/content:
     get:
       summary: List content (scope content:read)
     post:
       summary: Create content (scope content:write)
+  /api/v1/content/{id}:
+    get:
+      summary: Get content (scope content:read)
+    patch:
+      summary: Update content (scope content:write)
   /api/v1/leads:
     get:
       summary: List leads (scope leads:read)
     post:
       summary: Record lead (scope leads:write)
+  /api/v1/campaigns:
+    get:
+      summary: List campaign plans (scope campaigns:read)
+  /api/v1/campaigns/{id}:
+    get:
+      summary: Get campaign plan (scope campaigns:read)
+  /api/v1/reservations:
+    get:
+      summary: List table/room reservations (scope reservations:read)
+  /api/v1/reservations/{id}:
+    get:
+      summary: Get reservation (scope reservations:read)
+  /api/v1/reviews:
+    get:
+      summary: List company reviews (scope reviews:read)
+  /api/v1/reviews/{id}:
+    get:
+      summary: Get company review (scope reviews:read)

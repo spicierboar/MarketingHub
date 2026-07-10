@@ -9,7 +9,10 @@ import {
   listContent,
 } from "@/lib/db";
 import { buildGbpAuditForCompany, gbpAuditLive } from "@/lib/gbp-audit";
+import { buildLocalSeoForCompany } from "@/lib/local-seo";
+import { localSeoLive } from "@/lib/local-seo-connectors";
 import { GbpAuditPanel } from "@/components/gbp-audit-panel";
+import { LocalSeoPanel } from "@/components/local-seo-panel";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,11 +50,16 @@ export default async function LocalSeoPage({
     faqItemCount: faqCount,
   });
 
+  const report = await buildLocalSeoForCompany(company, {
+    localProfile,
+    gbpAudit: audit,
+  });
+
   return (
     <div>
       <PageHeader
         title={`${company.name} — Local SEO`}
-        description="Google Business Profile audit: NAP, hours, categories, photos and FAQ checklist."
+        description="Suburb landing briefs, schema markup, factual Q&A drafts and Google Business Profile audit."
       >
         <Link href={`/companies/${company.id}`} className="text-sm text-primary hover:underline">
           ← Company profile
@@ -59,22 +67,29 @@ export default async function LocalSeoPage({
         <Badge tone={audit.gbpConnected ? "success" : "warning"}>
           {audit.gbpConnected ? "GBP connected" : "GBP not connected"}
         </Badge>
+        <Badge tone={localSeoLive() ? "primary" : "neutral"}>
+          {localSeoLive() ? "Local SEO live" : "Local SEO simulated"}
+        </Badge>
         <Badge tone={gbpAuditLive() ? "primary" : "neutral"}>
-          {gbpAuditLive() ? "Live API" : "Simulated"}
+          {gbpAuditLive() ? "GBP live API" : "GBP simulated"}
         </Badge>
       </PageHeader>
 
       <div className="space-y-4 p-6">
-        {!gbpAuditLive() && (
+        {(!localSeoLive() || !gbpAuditLive()) && (
           <Card className="border-dashed">
             <CardContent className="p-4 text-sm text-muted-foreground">
-              Audit runs in <strong className="font-medium text-foreground">simulated</strong> mode
-              until <code className="text-xs">PUBLISHING_LIVE=true</code> and Google OAuth creds are
-              set. Fixes are based on your company profile, local intelligence and a deterministic
-              GBP listing preview.
+              Local SEO enrichment runs in{" "}
+              <strong className="font-medium text-foreground">simulated</strong> mode until{" "}
+              <code className="text-xs">LOCAL_SEO_LIVE=true</code> (non-staging). GBP audit uses{" "}
+              <code className="text-xs">PUBLISHING_LIVE=true</code> plus Google OAuth for live
+              listing reads. Recommendations are computed from company profile and local
+              intelligence.
             </CardContent>
           </Card>
         )}
+
+        <LocalSeoPanel report={report} audit={audit} companyId={company.id} />
 
         <GbpAuditPanel audit={audit} />
       </div>

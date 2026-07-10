@@ -12,6 +12,7 @@ import {
   listIntegrations,
   listLegalHolds,
   listScheduledPosts,
+  listUsers,
 } from "@/lib/db";
 import { listAudit } from "@/lib/audit";
 import { PageHeader } from "@/components/page-header";
@@ -24,9 +25,25 @@ import {
   saveSecuritySettingsAction,
   toggleCrisisAction,
   toggleSandboxAction,
+  beginMfaEnrollmentAction,
+  completeMfaEnrollmentAction,
+  startImpersonationAction,
+  stopImpersonationAction,
 } from "./actions";
-import { buildIntegrationHealthBundle } from "@/lib/security-slice";
-import { SecurityHealthPanel } from "@/components/security-health-panel";
+import {
+  buildIntegrationHealthAlerts,
+  buildIntegrationHealthBundle,
+  getActiveImpersonation,
+  getMfaEnrollment,
+  listImpersonationAudit,
+  mfaIdpConfigured,
+} from "@/lib/security-slice";
+import {
+  SecurityHealthPanel,
+  IntegrationHealthAlertsPanel,
+  MfaEnrollmentPanel,
+  ImpersonationAuditPanel,
+} from "@/components/security-health-panel";
 
 const money = (x: number) => `$${x.toFixed(2)}`;
 
@@ -38,6 +55,11 @@ export default async function AdminPage() {
   const integrations = await listIntegrations(user.tenantId);
   const holds = await listLegalHolds(user.tenantId, true);
   const integrationHealth = buildIntegrationHealthBundle(user.tenantId);
+  const integrationAlerts = buildIntegrationHealthAlerts(integrationHealth);
+  const mfaEnrollment = getMfaEnrollment(user.tenantId, user.id);
+  const impersonationAudit = listImpersonationAudit(user.tenantId);
+  const activeImpersonation = getActiveImpersonation(user.id);
+  const tenantUsers = await listUsers(user.tenantId);
   const today = now().slice(0, 10);
 
   // System health (Support Admin Console, §55).
@@ -187,6 +209,24 @@ export default async function AdminPage() {
         </div>
 
         <SecurityHealthPanel bundle={integrationHealth} />
+
+        <IntegrationHealthAlertsPanel alertBundle={integrationAlerts} />
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <MfaEnrollmentPanel
+            enrollment={mfaEnrollment}
+            idpConfigured={mfaIdpConfigured()}
+            beginAction={beginMfaEnrollmentAction}
+            completeAction={completeMfaEnrollmentAction}
+          />
+          <ImpersonationAuditPanel
+            audit={impersonationAudit}
+            tenantUsers={tenantUsers.filter((u) => u.id !== user.id)}
+            activeTargetUserId={activeImpersonation?.targetUserId ?? null}
+            startAction={startImpersonationAction}
+            stopAction={stopImpersonationAction}
+          />
+        </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Login activity */}

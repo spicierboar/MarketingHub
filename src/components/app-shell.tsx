@@ -41,6 +41,7 @@ import {
   ContactRound,
   Filter,
   Globe,
+  GraduationCap,
   Landmark,
   LogOut,
   Gift,
@@ -139,6 +140,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/workflows", label: "Workflows", icon: GitBranch, adminOnly: true },
       { href: "/automations", label: "Automations", icon: Bot, adminOnly: true },
       { href: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
+      { href: "/learning", label: "Learning", icon: GraduationCap, adminOnly: true },
     ],
   },
   {

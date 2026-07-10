@@ -17,10 +17,19 @@ import { formatDate } from "@/lib/utils";
 import type { Company, PhotoShoot } from "@/lib/types";
 import {
   advancePhotoShootAction,
+  draftVideoStudioScriptAction,
   generateAiImageAction,
   generateAiVideoAction,
+  generateVideoStudioVariantsAction,
   requestPhotoShootAction,
 } from "./actions";
+import {
+  ALL_VIDEO_CHANNELS,
+  buildScriptFromPack,
+  listScriptPacks,
+  listVideoTemplates,
+  VIDEO_STUDIO_CHANNELS,
+} from "@/lib/video-studio";
 
 export default async function VisualsPage({
   searchParams,
@@ -44,6 +53,15 @@ export default async function VisualsPage({
     (c) => c.companyId === companyId && !["archived", "rejected"].includes(c.status),
   );
   const videoScripts = companyContent.filter((c) => c.type === "video_script");
+
+  const templates = listVideoTemplates();
+  const defaultTemplateId = templates[0]?.id ?? "service_spotlight";
+  const defaultPacks = listScriptPacks(defaultTemplateId);
+  const defaultPack = defaultPacks[0];
+  const prefilledScript =
+    company && defaultPack
+      ? buildScriptFromPack(company, defaultPack, "Your topic")
+      : "";
 
   const live = visualsLive();
   const storage = storageConfigured();
@@ -201,6 +219,128 @@ export default async function VisualsPage({
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {company && (
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="mb-1 font-semibold">🎬 Video studio</h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Pick a template and script pack, draft an{" "}
+              <span className="font-medium">ai_draft</span> script, then generate vertical
+              channel variants (assets land as{" "}
+              <span className="font-medium">pending_approval</span>). Simulated MP4 until
+              VISUALS_LIVE.
+            </p>
+            {!addons?.video ? (
+              <p className="text-sm text-amber-700">Enable the AI video add-on on Billing first.</p>
+            ) : (
+              <div className="space-y-6">
+                <form action={draftVideoStudioScriptAction} className="space-y-3 border-b pb-6">
+                  <input type="hidden" name="companyId" value={company.id} />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Template" htmlFor="vs-template">
+                      <Select id="vs-template" name="templateId" defaultValue={defaultTemplateId}>
+                        {templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Script pack" htmlFor="vs-pack">
+                      <Select id="vs-pack" name="scriptPackId" defaultValue={defaultPack?.id}>
+                        {templates.flatMap((t) =>
+                          listScriptPacks(t.id).map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {t.label}: {p.label}
+                            </option>
+                          )),
+                        )}
+                      </Select>
+                    </Field>
+                  </div>
+                  <Field label="Topic" htmlFor="vs-topic">
+                    <Input id="vs-topic" name="topic" required placeholder="Winter warmers promo" />
+                  </Field>
+                  <Field label="Script (optional — auto-filled from pack if blank)" htmlFor="vs-script-draft">
+                    <Textarea
+                      id="vs-script-draft"
+                      name="script"
+                      className="min-h-28 font-mono text-xs"
+                      placeholder={prefilledScript.slice(0, 200)}
+                    />
+                  </Field>
+                  <Button type="submit" variant="secondary">
+                    Draft script (ai_draft)
+                  </Button>
+                </form>
+
+                <form action={generateVideoStudioVariantsAction} className="space-y-3">
+                  <input type="hidden" name="companyId" value={company.id} />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Template" htmlFor="vs-template-v">
+                      <Select id="vs-template-v" name="templateId" defaultValue={defaultTemplateId}>
+                        {templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Script pack" htmlFor="vs-pack-v">
+                      <Select id="vs-pack-v" name="scriptPackId" defaultValue={defaultPack?.id}>
+                        {templates.flatMap((t) =>
+                          listScriptPacks(t.id).map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {t.label}: {p.label}
+                            </option>
+                          )),
+                        )}
+                      </Select>
+                    </Field>
+                  </div>
+                  <Field label="Topic" htmlFor="vs-topic-v">
+                    <Input id="vs-topic-v" name="topic" required />
+                  </Field>
+                  <Field label="Script" htmlFor="vs-script-v">
+                    <Textarea
+                      id="vs-script-v"
+                      name="script"
+                      required
+                      className="min-h-28 font-mono text-xs"
+                      defaultValue={videoScripts[0]?.body?.slice(0, 2000) || prefilledScript}
+                    />
+                  </Field>
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium">Channel variants</legend>
+                    <div className="flex flex-wrap gap-4">
+                      {ALL_VIDEO_CHANNELS.map((ch) => (
+                        <label key={ch} className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" name={`channel_${ch}`} defaultChecked />
+                          {VIDEO_STUDIO_CHANNELS[ch].label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <Field label="Auto-attach after approval (optional)" htmlFor="vs-content">
+                    <Select id="vs-content" name="contentId">
+                      <option value="">— none —</option>
+                      {companyContent.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.title}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Button type="submit" className="w-full sm:w-auto">
+                    Generate vertical variants
+                  </Button>
+                </form>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {company && (

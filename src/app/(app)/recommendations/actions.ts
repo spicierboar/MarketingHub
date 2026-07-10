@@ -22,6 +22,7 @@ import {
   generateRankedForCompany,
   withDismissReason,
 } from "@/lib/recommendations";
+import { recordDismissLesson } from "@/lib/learning";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -83,6 +84,14 @@ export async function dismissRecommendationAction(formData: FormData) {
     action: dismissReason ? withDismissReason(rec.action, dismissReason) : rec.action,
   });
   await createRecommendationDismissRecord({
+    companyId: rec.companyId,
+    recommendationType: rec.type,
+    title: rec.title,
+    reason: dismissReason || undefined,
+    dismissedById: user.id,
+  });
+  await recordDismissLesson({
+    tenantId: user.tenantId,
     companyId: rec.companyId,
     recommendationType: rec.type,
     title: rec.title,

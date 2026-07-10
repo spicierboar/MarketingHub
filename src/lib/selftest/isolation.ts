@@ -221,6 +221,9 @@ import {
 } from "@/lib/selftest/auto-onboarding";
 import {
   checkInjectionPatternsStripped,
+  checkImpersonationFailClosed,
+  checkIntegrationHealthAlertsThreshold,
+  checkMfaStubWhenIdpOff,
   checkProviderFailureRecorded,
   checkTenantContextFence,
 } from "@/lib/selftest/security-slice";
@@ -961,6 +964,12 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("securitySlice.tenantContextFence", () => checkTenantContextFence());
 
     await expect("securitySlice.providerFailureRecorded", () => checkProviderFailureRecorded());
+
+    await expect("securitySlice.mfaStubWhenIdpOff", () => checkMfaStubWhenIdpOff());
+
+    await expect("securitySlice.impersonationFailClosed", () => checkImpersonationFailClosed());
+
+    await expect("securitySlice.integrationHealthAlerts", () => checkIntegrationHealthAlertsThreshold());
 
     await expect("publishingConnectors.simWhenLiveOff", () => checkPublishingSimWhenLiveOff());
 

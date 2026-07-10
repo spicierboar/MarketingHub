@@ -96,6 +96,8 @@ import type {
   PublishLog,
   Recommendation,
   RecommendationDismissRecord,
+  LearningHypothesis,
+  LearningLesson,
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
@@ -3495,5 +3497,70 @@ export async function createCampaignDraftScheduleItem(
   const rec: CampaignDraftScheduleItem = { ...input, id: id("cds"), createdAt: now() };
   (db().campaignDraftScheduleItems ??= []).push(rec);
   return rec;
+}
+
+// ---- W7 M55: Continuous learning ---------------------------------------------------
+
+export async function listLearningHypotheses(
+  tenantId: string,
+  companyIds?: string[],
+): Promise<LearningHypothesis[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listLearningHypotheses(tenantId, companyIds);
+  let rows = (db().learningHypotheses ?? []).filter((h) => h.tenantId === tenantId);
+  if (companyIds?.length) {
+    const allowed = new Set(companyIds);
+    rows = rows.filter((h) => allowed.has(h.companyId));
+  }
+  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getLearningHypothesis(
+  hypothesisId: string,
+): Promise<LearningHypothesis | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getLearningHypothesis(hypothesisId);
+  return (db().learningHypotheses ?? []).find((h) => h.id === hypothesisId);
+}
+
+export async function createLearningHypothesis(
+  input: Omit<LearningHypothesis, "id" | "createdAt" | "updatedAt">,
+): Promise<LearningHypothesis> {
+  if (isSupabaseConfigured()) return supabaseRepo.createLearningHypothesis(input);
+  const t = now();
+  const row: LearningHypothesis = { ...input, id: id("lhyp"), createdAt: t, updatedAt: t };
+  (db().learningHypotheses ??= []).push(row);
+  return row;
+}
+
+export async function updateLearningHypothesis(
+  hypothesisId: string,
+  patch: Partial<LearningHypothesis>,
+): Promise<LearningHypothesis | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateLearningHypothesis(hypothesisId, patch);
+  const row = await getLearningHypothesis(hypothesisId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listLearningLessons(
+  tenantId: string,
+  companyIds?: string[],
+): Promise<LearningLesson[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listLearningLessons(tenantId, companyIds);
+  let rows = (db().learningLessons ?? []).filter((l) => l.tenantId === tenantId);
+  if (companyIds?.length) {
+    const allowed = new Set(companyIds);
+    rows = rows.filter((l) => allowed.has(l.companyId));
+  }
+  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function createLearningLesson(
+  input: Omit<LearningLesson, "id" | "createdAt">,
+): Promise<LearningLesson> {
+  if (isSupabaseConfigured()) return supabaseRepo.createLearningLesson(input);
+  const row: LearningLesson = { ...input, id: id("lles"), createdAt: now() };
+  (db().learningLessons ??= []).push(row);
+  return row;
 }
 

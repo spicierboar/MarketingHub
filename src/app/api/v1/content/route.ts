@@ -8,6 +8,7 @@ import {
   companyAllowed,
   resolveApiKey,
   requireScope,
+  checkPublicApiRouteRate,
 } from "@/lib/public-api/auth";
 import { dispatchPartnerWebhook } from "@/lib/public-api/partner-webhooks";
 import { serializeContent } from "@/lib/public-api/serializers";
@@ -15,6 +16,8 @@ import { serializeContent } from "@/lib/public-api/serializers";
 export async function GET(req: NextRequest) {
   const auth = await resolveApiKey(req);
   if (auth instanceof NextResponse) return auth;
+  const rateErr = checkPublicApiRouteRate(auth, "read");
+  if (rateErr) return rateErr;
   const denied = requireScope(auth, "content:read");
   if (denied) return denied;
   const companyId = req.nextUrl.searchParams.get("companyId");
@@ -31,6 +34,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await resolveApiKey(req);
   if (auth instanceof NextResponse) return auth;
+  const rateErr = checkPublicApiRouteRate(auth, "write");
+  if (rateErr) return rateErr;
   const denied = requireScope(auth, "content:write");
   if (denied) return denied;
   let body: Record<string, unknown>;

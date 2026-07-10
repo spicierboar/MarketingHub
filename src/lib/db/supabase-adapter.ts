@@ -46,7 +46,7 @@ import type {
   ApiKey,
   PartnerWebhook,
   RestaurantOrder,
-  Recommendation, RecommendationDismissRecord, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
+  Recommendation, RecommendationDismissRecord, LearningHypothesis, LearningLesson, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
   SocialMention, SocialResponseDraft, CompanyReview, ReviewRequestCampaign, Task, Tenant, TenantMember,
   TermsVersion, TermsAcceptance, User, UtmLink,
   EmailTemplate, EmailSubscriber, EmailCampaign,
@@ -2288,6 +2288,62 @@ export const supabaseRepo = {
     const { data, error } = await sb.from("campaign_draft_schedule_items").insert(toRow(input)).select("*").single();
     if (error) throw new Error("createCampaignDraftScheduleItem: " + error.message);
     return toDomain<CampaignDraftScheduleItem>(data);
+  },
+
+  // ---- W7 M55: Continuous learning -----------------------------------------------
+  async listLearningHypotheses(tenantId: string, filterCompanyIds?: string[]): Promise<LearningHypothesis[]> {
+    const sb = await usr(); if (!sb) return [];
+    const ids = filterCompanyIds?.length ? filterCompanyIds : await companyIds(sb, tenantId);
+    if (!ids.length) return [];
+    const { data } = await sb
+      .from("learning_hypotheses")
+      .select("*")
+      .in("company_id", ids)
+      .order("created_at", { ascending: false });
+    return many<LearningHypothesis>(data);
+  },
+  async getLearningHypothesis(hypothesisId: string): Promise<LearningHypothesis | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("learning_hypotheses").select("*").eq("id", hypothesisId).maybeSingle();
+    return data ? toDomain<LearningHypothesis>(data) : undefined;
+  },
+  async createLearningHypothesis(
+    input: Omit<LearningHypothesis, "id" | "createdAt" | "updatedAt">,
+  ): Promise<LearningHypothesis> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("learning_hypotheses").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createLearningHypothesis: " + error.message);
+    return toDomain<LearningHypothesis>(data);
+  },
+  async updateLearningHypothesis(
+    hypothesisId: string,
+    patch: Partial<LearningHypothesis>,
+  ): Promise<LearningHypothesis | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("learning_hypotheses")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", hypothesisId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<LearningHypothesis>(data) : undefined;
+  },
+  async listLearningLessons(tenantId: string, filterCompanyIds?: string[]): Promise<LearningLesson[]> {
+    const sb = await usr(); if (!sb) return [];
+    const ids = filterCompanyIds?.length ? filterCompanyIds : await companyIds(sb, tenantId);
+    if (!ids.length) return [];
+    const { data } = await sb
+      .from("learning_lessons")
+      .select("*")
+      .in("company_id", ids)
+      .order("created_at", { ascending: false });
+    return many<LearningLesson>(data);
+  },
+  async createLearningLesson(input: Omit<LearningLesson, "id" | "createdAt">): Promise<LearningLesson> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("learning_lessons").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createLearningLesson: " + error.message);
+    return toDomain<LearningLesson>(data);
   },
 };
 

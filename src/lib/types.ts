@@ -1095,6 +1095,9 @@ export const API_KEY_SCOPES = [
   "content:write",
   "leads:read",
   "leads:write",
+  "campaigns:read",
+  "reservations:read",
+  "reviews:read",
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
@@ -2709,6 +2712,96 @@ export interface CampaignDraftScheduleItem {
   platform: string;
   title: string;
   status: CampaignDraftScheduleStatus;
+  createdById: string;
+  createdAt: string;
+}
+
+// ---- W7 M55: Video studio + continuous learning --------------------------------
+
+export type VideoStudioChannel = "facebook" | "instagram" | "tiktok" | "gbp";
+
+export type VideoStudioTemplateId =
+  | "service_spotlight"
+  | "offer_promo"
+  | "testimonial_hook"
+  | "how_to_tip"
+  | "seasonal";
+
+export type LearningHypothesisStatus =
+  | "open"
+  | "running"
+  | "validated"
+  | "invalidated"
+  | "archived";
+
+export type LearningLessonSource =
+  | "recommendation_dismiss"
+  | "experiment_outcome"
+  | "manual";
+
+export type LearningExperimentOutcome =
+  | "positive"
+  | "negative"
+  | "inconclusive"
+  | "pending";
+
+export interface VideoStudioTemplate {
+  id: VideoStudioTemplateId;
+  label: string;
+  description: string;
+  defaultDurationSec: number;
+  hookStyle: string;
+}
+
+export interface VideoScriptPack {
+  id: string;
+  templateId: VideoStudioTemplateId;
+  label: string;
+  beats: string[];
+}
+
+export interface VideoStudioDraftSpec {
+  templateId: VideoStudioTemplateId;
+  scriptPackId: string;
+  channel: VideoStudioChannel;
+  topic: string;
+  script: string;
+  topicLabel: string;
+  channelLabel: string;
+  durationSec: number;
+  onScreenBeats: string[];
+  cta: string;
+  /** placeholder when VISUALS_LIVE off */
+  renderMode: "placeholder" | "live";
+}
+
+export interface LearningHypothesis {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  title: string;
+  statement: string;
+  metric?: string;
+  status: LearningHypothesisStatus;
+  experimentOutcome?: LearningExperimentOutcome;
+  outcomeNotes?: string;
+  sourceRecommendationType?: RecommendationType;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string | null;
+}
+
+export interface LearningLesson {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  source: LearningLessonSource;
+  title: string;
+  lesson: string;
+  recommendationType?: RecommendationType;
+  dismissReason?: string;
+  hypothesisId?: string | null;
   createdById: string;
   createdAt: string;
 }

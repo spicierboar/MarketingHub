@@ -1,14 +1,21 @@
 // Self-test helpers for V1 security slice (Module 15).
 
 import {
+  buildIntegrationHealthAlerts,
   buildIntegrationHealthBundle,
+  clearImpersonationForTest,
+  clearMfaEnrollmentForTest,
   clearProviderFailuresForTest,
   getLastProviderFailure,
+  mfaIdpConfigured,
   recordProviderFailure,
   sanitizeAiUserInput,
+  startImpersonation,
+  beginMfaEnrollment,
   tenantFencePresent,
   tenantScopedSystemPrompt,
 } from "@/lib/security-slice";
+import type { ActingUser } from "@/lib/types";
 
 export async function checkInjectionPatternsStripped(): Promise<{ ok: boolean; detail: string }> {
   const raw =
@@ -59,5 +66,60 @@ export async function checkProviderFailureRecorded(): Promise<{ ok: boolean; det
   return {
     ok,
     detail: `recorded=${!!last} ai=${aiRow?.status} pub=${publishingRow?.status}`,
+  };
+}
+
+export async function checkMfaStubWhenIdpOff(): Promise<{ ok: boolean; detail: string }> {
+  clearMfaEnrollmentForTest();
+  const tenantId = "tn_mfa_stub";
+  const userId = "usr_mfa_stub";
+  const result = beginMfaEnrollment(tenantId, userId);
+  const ok =
+    !mfaIdpConfigured() &&
+    result.stub === true &&
+    !result.ok &&
+    result.record.status === "not_enrolled" &&
+    !!result.record.stubReason;
+  clearMfaEnrollmentForTest();
+  return {
+    ok,
+    detail: `idp=${mfaIdpConfigured()} stub=${result.stub} status=${result.record.status}`,
+  };
+}
+
+export async function checkImpersonationFailClosed(): Promise<{ ok: boolean; detail: string }> {
+  clearImpersonationForTest();
+  const member: ActingUser = {
+    id: "usr_member",
+    email: "member@example.dev",
+    name: "Member",
+    role: "user",
+    active: true,
+    tenantId: "tn_imp",
+    tenantRole: "member",
+    createdAt: new Date().toISOString(),
+  };
+  const result = startImpersonation(member, {
+    id: "usr_target",
+    email: "target@example.dev",
+    tenantId: "tn_imp",
+  });
+  const ok = !result.ok && result.error?.includes("admin") === true;
+  clearImpersonationForTest();
+  return { ok, detail: `blocked=${!result.ok} err=${result.error ?? "none"}` };
+}
+
+export async function checkIntegrationHealthAlertsThreshold(): Promise<{ ok: boolean; detail: string }> {
+  clearProviderFailuresForTest();
+  const tenantId = "tn_alert_test";
+  recordProviderFailure("publishing", "Self-test publish outage");
+  const bundle = buildIntegrationHealthBundle(tenantId);
+  const alerts = buildIntegrationHealthAlerts(bundle, { degradedThreshold: 1 });
+  const publishingAlert = alerts.alerts.find((a) => a.kind === "publishing");
+  const ok = alerts.alerts.length > 0 && !!publishingAlert && publishingAlert.severity === "info";
+  clearProviderFailuresForTest();
+  return {
+    ok,
+    detail: `alerts=${alerts.alerts.length} pub=${publishingAlert?.severity ?? "none"}`,
   };
 }

@@ -8,6 +8,10 @@ import { now } from "@/lib/utils";
 import { hashApiKey } from "@/lib/public-api/api-keys";
 import { publicApiLive } from "@/lib/public-api/gate";
 
+const PUBLIC_API_AUTH_LIMIT = { bucket: "public_api_auth", limit: 60, windowSeconds: 60 };
+const PUBLIC_API_READ_LIMIT = { bucket: "public_api_read", limit: 90, windowSeconds: 60 };
+const PUBLIC_API_WRITE_LIMIT = { bucket: "public_api_write", limit: 40, windowSeconds: 60 };
+
 export interface ApiAuthContext {
   apiKey: ApiKey;
   tenantId: string;
@@ -32,12 +36,29 @@ export async function resolveApiKey(req: NextRequest): Promise<ApiAuthContext | 
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return NextResponse.json({ error: "invalid API key" }, { status: 401 });
   }
-  const rate = checkRate("public_api", record.id, 120, 60);
+  const rate = checkRate(
+    PUBLIC_API_AUTH_LIMIT.bucket,
+    record.id,
+    PUBLIC_API_AUTH_LIMIT.limit,
+    PUBLIC_API_AUTH_LIMIT.windowSeconds,
+  );
   if (!rate.allowed) {
     return NextResponse.json({ error: "rate limit exceeded", retryAfterSeconds: rate.retryAfterSeconds }, { status: 429 });
   }
   await updateApiKey(record.id, { lastUsedAt: now() });
   return { apiKey: record, tenantId: record.tenantId, scopes: new Set(record.scopes) };
+}
+
+export function checkPublicApiRouteRate(
+  ctx: ApiAuthContext,
+  kind: "read" | "write",
+): NextResponse | null {
+  const cfg = kind === "read" ? PUBLIC_API_READ_LIMIT : PUBLIC_API_WRITE_LIMIT;
+  const rate = checkRate(cfg.bucket, ctx.apiKey.id, cfg.limit, cfg.windowSeconds);
+  if (!rate.allowed) {
+    return NextResponse.json({ error: "rate limit exceeded", retryAfterSeconds: rate.retryAfterSeconds }, { status: 429 });
+  }
+  return null;
 }
 
 export function requireScope(ctx: ApiAuthContext, scope: ApiKeyScope): NextResponse | null {

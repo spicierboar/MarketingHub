@@ -1,8 +1,8 @@
 import { requireAdmin } from "@/lib/auth/rbac";
 import { listAiRuns, listCompanies } from "@/lib/db";
 import { aiConfigured, AI_MODEL } from "@/lib/ai/claude";
-import { buildIntegrationHealthBundle } from "@/lib/security-slice";
-import { SecurityHealthPanel } from "@/components/security-health-panel";
+import { buildIntegrationHealthAlerts, buildIntegrationHealthBundle } from "@/lib/security-slice";
+import { SecurityHealthPanel, IntegrationHealthAlertsPanel } from "@/components/security-health-panel";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +29,7 @@ export default async function AiControlPage() {
   const runs = await listAiRuns(user.tenantId);
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c]));
   const integrationHealth = buildIntegrationHealthBundle(user.tenantId);
+  const integrationAlerts = buildIntegrationHealthAlerts(integrationHealth);
   const totalCost = runs.reduce((s, r) => s + r.estCostUsd, 0);
   const byKind = runs.reduce<Record<string, number>>((acc, r) => {
     acc[r.kind] = (acc[r.kind] ?? 0) + 1;
@@ -80,6 +81,8 @@ export default async function AiControlPage() {
           title="AI & integration health"
           description="Anthropic provider status plus platform live gates. Failures are recorded when live calls fail; simulated hints show when gates are off."
         />
+
+        <IntegrationHealthAlertsPanel alertBundle={integrationAlerts} />
 
         <Card>
           <CardContent className="p-6">

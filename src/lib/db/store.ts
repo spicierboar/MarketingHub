@@ -71,6 +71,8 @@ import type {
   PublishLog,
   Recommendation,
   RecommendationDismissRecord,
+  LearningHypothesis,
+  LearningLesson,
   ScheduledPost,
   SecuritySettings,
   SmsCampaign,
@@ -215,6 +217,9 @@ export interface DataStore {
   // Phase 9: Recommendations + Tasks
   recommendations: Recommendation[];
   recommendationDismissHistory: RecommendationDismissRecord[];
+  // W7 M55: Continuous learning
+  learningHypotheses: LearningHypothesis[];
+  learningLessons: LearningLesson[];
   tasks: Task[];
   // V1 module 11: AI-MOS opportunities
   aiMosOpportunities: AiMosOpportunity[];
@@ -2000,6 +2005,8 @@ function seed(): DataStore {
     ],
     recommendations: [],
     recommendationDismissHistory: [],
+    learningHypotheses: [],
+    learningLessons: [],
     tasks: [],
     aiMosOpportunities: [],
     aiMosSignalRuns: [],

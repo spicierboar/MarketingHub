@@ -4,12 +4,20 @@ import { revalidatePath } from "next/cache";
 import {
   createLegalHold,
   getLegalHold,
+  getMembership,
+  getUser,
   releaseLegalHold,
   updateSecuritySettings,
   getSecuritySettings,
 } from "@/lib/db";
 import { assertAdminCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
+import {
+  beginMfaEnrollment,
+  completeMfaEnrollment,
+  startImpersonation,
+  stopImpersonation,
+} from "@/lib/security-slice";
 import type { LegalHoldScope } from "@/lib/types";
 
 function text(fd: FormData, key: string): string {
@@ -95,4 +103,55 @@ export async function releaseLegalHoldAction(formData: FormData) {
     detail: hold.reason,
   });
   revalidatePath("/admin/legal-hold");
+}
+
+export async function beginMfaEnrollmentAction() {
+  const user = await requireAdmin();
+  const result = beginMfaEnrollment(user.tenantId, user.id);
+  await logAction(user, result.ok ? "mfa.enrollment_started" : "mfa.enrollment_stub", {
+    detail: result.message ?? result.record.status,
+  });
+  revalidatePath("/admin");
+}
+
+export async function completeMfaEnrollmentAction() {
+  const user = await requireAdmin();
+  const result = completeMfaEnrollment(user.tenantId, user.id);
+  if (!result.ok) throw new Error(result.message ?? "MFA completion failed");
+  await logAction(user, "mfa.enrollment_completed", { detail: "OAuth MFA enabled" });
+  revalidatePath("/admin");
+}
+
+export async function startImpersonationAction(formData: FormData) {
+  const user = await requireAdmin();
+  const targetUserId = text(formData, "targetUserId");
+  if (!targetUserId) throw new Error("Target user required");
+  const target = await getUser(targetUserId);
+  if (!target) throw new Error("User not found");
+  const membership = await getMembership(user.tenantId, targetUserId);
+  if (!membership) throw new Error("User is not a member of this tenant");
+  const result = startImpersonation(user, {
+    id: target.id,
+    email: target.email,
+    tenantId: user.tenantId,
+  });
+  if (!result.ok) throw new Error(result.error ?? "Impersonation blocked");
+  await logAction(user, "impersonation.started", {
+    targetType: "user",
+    targetId: target.id,
+    detail: result.audit?.detail,
+  });
+  revalidatePath("/admin");
+}
+
+export async function stopImpersonationAction() {
+  const user = await requireAdmin();
+  const result = stopImpersonation(user);
+  if (!result.ok) throw new Error(result.error ?? "No active impersonation");
+  await logAction(user, "impersonation.stopped", {
+    targetType: "user",
+    targetId: result.audit?.targetUserId,
+    detail: result.audit?.detail,
+  });
+  revalidatePath("/admin");
 }

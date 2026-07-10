@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
+  createContent,
   createPhotoShoot,
   getCompany,
   getContent,
@@ -17,7 +18,17 @@ import { assertAiRateLimit } from "@/lib/ratelimit";
 import { assertCompanyAddon } from "@/lib/entitlements";
 import { generateImage } from "@/lib/ai/imagegen";
 import { generateVideo } from "@/lib/ai/videogen";
+import { auditClaims, checkCompliance } from "@/lib/ai/compliance";
+import { routeContent } from "@/lib/routing";
 import { persistGeneratedAsset } from "@/lib/visuals";
+import {
+  ALL_VIDEO_CHANNELS,
+  buildChannelVariants,
+  buildScriptFromPack,
+  getScriptPack,
+  getVideoTemplate,
+} from "@/lib/video-studio";
+import type { VideoStudioChannel, VideoStudioTemplateId } from "@/lib/types";
 import {
   assertPhotoShootTransition,
   photoShootStatusLabel,
@@ -236,6 +247,163 @@ export async function advancePhotoShootAction(formData: FormData) {
     detail: `${photoShootStatusLabel(shoot.status)} → ${photoShootStatusLabel(to)}`,
   });
   revalidatePath("/visuals");
+}
+
+function parseChannels(formData: FormData): VideoStudioChannel[] {
+  const selected = ALL_VIDEO_CHANNELS.filter((ch) => formData.get(`channel_${ch}`) === "on");
+  return selected.length ? selected : ALL_VIDEO_CHANNELS;
+}
+
+export async function draftVideoStudioScriptAction(formData: FormData) {
+  const companyId = text(formData, "companyId");
+  const user = await assertCompanyAccess(companyId);
+  await assertCompanyAddon(companyId, "video");
+  const company = await assertAiReadyCompany(companyId);
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId);
+
+  const templateId = text(formData, "templateId") as VideoStudioTemplateId;
+  const scriptPackId = text(formData, "scriptPackId");
+  const topic = text(formData, "topic");
+  if (!templateId || !scriptPackId || !topic) {
+    throw new Error("Template, script pack, and topic are required.");
+  }
+  const template = getVideoTemplate(templateId);
+  const pack = getScriptPack(scriptPackId);
+  if (!template || !pack) throw new Error("Invalid template or script pack.");
+  const scriptOverride = text(formData, "script");
+  const body =
+    scriptOverride || buildScriptFromPack(company, pack, topic);
+
+  const compliance = await checkCompliance(body, company);
+  const claimAudit = await auditClaims(body, company);
+  const routedTo = routeContent({ type: "video_script", compliance, claimAudit });
+
+  const content = await createContent({
+    companyId,
+    requestId: null,
+    type: "video_script",
+    title: `Video studio — ${topic}`.slice(0, 120),
+    body,
+    status: "ai_draft",
+    createdById: user.id,
+    compliance,
+    claimAudit,
+    routedTo,
+    groundingLabel: "suggested_by_ai",
+    brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
+    aiModel: "video-studio-template",
+    aiPrompt: `${template.label} · ${pack.label} · ${topic}`,
+    sourcesUsed: ["Video studio: script pack", "Brand Brain: company profile"],
+  });
+
+  await recordAiUsage({
+    tenantId: user.tenantId,
+    companyId,
+    userId: user.id,
+    kind: "content_draft",
+    model: "video-studio-template",
+    promptSummary: `${templateId}:${scriptPackId}`.slice(0, 120),
+    outputChars: body.length,
+    sourcesUsed: ["Video studio: script pack"],
+    contextChars: body.length,
+  });
+
+  await logAction(user, "visuals.video_studio_script_drafted", {
+    targetType: "content",
+    targetId: content.id,
+    companyId,
+    detail: topic,
+  });
+  redirect(`/content/${content.id}`);
+}
+
+export async function generateVideoStudioVariantsAction(formData: FormData) {
+  const companyId = text(formData, "companyId");
+  const user = await assertCompanyAccess(companyId);
+  await assertCompanyAddon(companyId, "video");
+  const company = await assertAiReadyCompany(companyId);
+
+  const templateId = text(formData, "templateId") as VideoStudioTemplateId;
+  const scriptPackId = text(formData, "scriptPackId");
+  const topic = text(formData, "topic");
+  const script = text(formData, "script");
+  if (!templateId || !scriptPackId || !topic || !script) {
+    throw new Error("Template, script pack, topic, and script are required.");
+  }
+  const channels = parseChannels(formData);
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId, channels.length * 2);
+
+  const specs = buildChannelVariants({
+    company,
+    templateId,
+    scriptPackId,
+    topic,
+    script,
+    channels,
+  });
+
+  const targetContentId = text(formData, "contentId") || undefined;
+  if (targetContentId) {
+    const content = await getContent(targetContentId);
+    if (!content || content.companyId !== companyId) {
+      throw new Error("Linked content not found for this company.");
+    }
+  }
+
+  let lastAssetId: string | undefined;
+  for (const spec of specs) {
+    const result = await generateVideo({
+      company,
+      topic: `${topic} (${spec.channelLabel})`,
+      script: spec.script,
+      channel: spec.channel,
+    });
+
+    const aiRun = await recordAiUsage({
+      tenantId: user.tenantId,
+      companyId,
+      userId: user.id,
+      kind: "video_gen",
+      model: result.model,
+      promptSummary: result.prompt.slice(0, 120),
+      outputChars: result.bytes.length,
+      sourcesUsed: ["Video studio: channel variant", "Brand Brain: company profile"],
+      contextChars: result.prompt.length,
+    });
+
+    const asset = await persistGeneratedAsset({
+      tenantId: user.tenantId,
+      companyId,
+      userId: user.id,
+      name: `Studio ${spec.channelLabel} — ${topic}`.slice(0, 120),
+      description: [
+        result.description,
+        `Template: ${spec.templateId} · Pack: ${spec.scriptPackId}.`,
+        `Render: ${spec.renderMode}.`,
+      ].join(" "),
+      assetType: "video",
+      mimeType: result.mimeType,
+      bytes: result.bytes,
+      channels: [spec.channel],
+      targetContentId,
+      aiModel: result.model,
+      aiPrompt: result.prompt,
+      aiRunId: aiRun.id,
+      estCostUsd: aiRun.estCostUsd,
+      sourcesUsed: ["Video studio: channel variant"],
+    });
+    lastAssetId = asset.id;
+  }
+
+  await logAction(user, "visuals.video_studio_variants_generated", {
+    targetType: "asset",
+    targetId: lastAssetId,
+    companyId,
+    detail: `${specs.length} variant(s) for ${topic}`,
+  });
+  redirect(lastAssetId ? `/assets/${lastAssetId}` : "/visuals");
 }
 
 export async function linkShootAssetAction(formData: FormData) {
