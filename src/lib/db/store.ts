@@ -42,6 +42,9 @@ import type {
   TenantMember,
   CompanyAccess,
   ConsentRecord,
+  EmailCampaign,
+  EmailSubscriber,
+  EmailTemplate,
   Lead,
   ContentComment,
   ContentItem,
@@ -62,10 +65,18 @@ import type {
   Recommendation,
   ScheduledPost,
   SecuritySettings,
+  SmsCampaign,
+  SmsCompanySettings,
+  SmsSubscriber,
   ServiceRecord,
   Session,
   SocialMention,
   SocialResponseDraft,
+  CrmContact,
+  CrmInteraction,
+  CrmSegment,
+  CompanyReview,
+  ReviewRequestCampaign,
   Task,
   TermsVersion,
   TermsAcceptance,
@@ -86,8 +97,10 @@ export interface DataStore {
   requests: MarketingRequest[];
   content: ContentItem[];
   socialResponses: SocialResponseDraft[];
-  socialMentions: SocialMention[]; // unified social inbox (ingested mentions)
-  contentComments: ContentComment[]; // collaborative comment threads on drafts
+  socialMentions: SocialMention[];
+  companyReviews: CompanyReview[];
+  reviewRequestCampaigns: ReviewRequestCampaign[];
+  contentComments: ContentComment[];
   audit: AuditLog[];
   // Phase 2: Brand Brain
   knowledgeDocs: KnowledgeDocument[];
@@ -123,6 +136,15 @@ export interface DataStore {
   adCampaigns: AdCampaign[];
   audienceSegments: AudienceSegment[]; // reusable ad targeting audiences
   leads: Lead[];
+  emailTemplates: EmailTemplate[];
+  emailSubscribers: EmailSubscriber[];
+  emailCampaigns: EmailCampaign[];
+  crmContacts: CrmContact[];
+  crmSegments: CrmSegment[];
+  crmInteractions: CrmInteraction[];
+  smsSubscribers: SmsSubscriber[];
+  smsCampaigns: SmsCampaign[];
+  smsCompanySettings: SmsCompanySettings[];
   // Module 3: per-company add-on entitlements (video/photo/menus/order-button)
   companyEntitlements: CompanyEntitlement[];
   // Module 2: managed photo shoots (Phase 4)
@@ -1415,6 +1437,8 @@ function seed(): DataStore {
         createdAt: "2026-07-05T03:05:00.000Z",
       },
     ],
+    companyReviews: [],
+    reviewRequestCampaigns: [],
     contentComments: [],
     knowledgeDocs,
     services,
@@ -1615,7 +1639,49 @@ function seed(): DataStore {
         capturedAt: t,
       },
     ],
-    // Module 3 demo: the café (restaurant wedge) has the menus + Order-Now + video
+    emailTemplates: [
+      {
+        id: "etpl_motel_news",
+        companyId: "c_motel",
+        name: "Midweek escape newsletter",
+        kind: "newsletter",
+        subject: "Midweek rates from {{company}}",
+        htmlBody: "<p>Hi {{name}} — midweek at <strong>{{company}}</strong>. <a href=\"{{unsubscribeUrl}}\">Unsubscribe</a></p>",
+        active: true,
+        createdById: "u_deb",
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+    emailSubscribers: [
+      { id: "esub_motel_ok", companyId: "c_motel", email: "guest.return@example.com", name: "Sam Lee", tags: ["newsletter"], marketingConsent: true, createdAt: t, updatedAt: t },
+      { id: "esub_motel_no_consent", companyId: "c_motel", email: "walkin@example.com", tags: ["newsletter"], marketingConsent: false, createdAt: t, updatedAt: t },
+      { id: "esub_motel_unsub", companyId: "c_motel", email: "optout@example.com", tags: ["newsletter"], marketingConsent: true, unsubscribedAt: "2026-06-20T00:00:00.000Z", createdAt: t, updatedAt: t },
+    ],
+    emailCampaigns: [
+      {
+        id: "ecmp_motel_draft",
+        companyId: "c_motel",
+        templateId: "etpl_motel_news",
+        name: "July midweek push",
+        subject: "Midweek rates from Golden Wattle Motel",
+        status: "draft",
+        segmentTag: "newsletter",
+        stats: { recipients: 0, sent: 0, failed: 0, opens: 0, clicks: 0, unsubscribes: 0, bounces: 0 },
+        createdById: "u_deb",
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+
+    crmContacts: [],
+    crmSegments: [],
+    crmInteractions: [],
+    smsSubscribers: [],
+    smsCampaigns: [],
+    smsCompanySettings: [],
+
+    // Module 3 demo:
     // add-ons enabled, proving per-company entitlements. Other companies have none
     // (so the matrix shows a mix). Demo mode → enabled directly (no Stripe sub).
     companyEntitlements: [

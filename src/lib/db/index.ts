@@ -43,6 +43,17 @@ import type {
   ConsentRecord,
   ContentComment,
   ContentItem,
+  EmailCampaign,
+  EmailSubscriber,
+  EmailTemplate,
+  CrmContact,
+  CrmInteraction,
+  CrmSegment,
+  CompanyReview,
+  ReviewRequestCampaign,
+  SmsCampaign,
+  SmsCompanySettings,
+  SmsSubscriber,
   EvidenceRecord,
   KnowledgeDocument,
   KnowledgeGap,
@@ -577,6 +588,9 @@ export async function exportTenantData(tenantId: string): Promise<Record<string,
     adCampaigns: byCompany(s.adCampaigns),
     audienceSegments: byCompany(s.audienceSegments),
     leads: byCompany(s.leads),
+    emailTemplates: byCompany(s.emailTemplates ?? []),
+    emailSubscribers: byCompany(s.emailSubscribers ?? []),
+    emailCampaigns: byCompany(s.emailCampaigns ?? []),
     companyEntitlements: byCompany(s.companyEntitlements),
     photoShoots: byCompany(s.photoShoots),
     photographerProfiles: s.photographerProfiles.filter(
@@ -643,6 +657,9 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.adCampaigns = keepCompany(s.adCampaigns);
   s.audienceSegments = keepCompany(s.audienceSegments);
   s.leads = keepCompany(s.leads);
+  s.emailTemplates = keepCompany(s.emailTemplates ?? []);
+  s.emailSubscribers = keepCompany(s.emailSubscribers ?? []);
+  s.emailCampaigns = keepCompany(s.emailCampaigns ?? []);
   s.companyEntitlements = keepCompany(s.companyEntitlements);
   s.photoShoots = keepCompany(s.photoShoots);
   s.photoMarketplaceBookings = keepCompany(s.photoMarketplaceBookings);
@@ -2538,4 +2555,218 @@ export async function listAiRuns(
     runs = runs.filter((r) => !r.companyId || allowed.has(r.companyId));
   }
   return runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// ---- Email marketing (W3 M31) ------------------------------------------------
+
+export async function listEmailTemplates(tenantId: string, companyId?: string): Promise<EmailTemplate[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listEmailTemplates(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().emailTemplates ?? []).filter((t) => ids.has(t.companyId) && (!companyId || t.companyId === companyId)).sort((a, b) => a.name.localeCompare(b.name));
+}
+export async function getEmailTemplate(templateId: string): Promise<EmailTemplate | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getEmailTemplate(templateId);
+  return (db().emailTemplates ?? []).find((t) => t.id === templateId);
+}
+export async function createEmailTemplate(input: Omit<EmailTemplate, "id" | "createdAt" | "updatedAt">): Promise<EmailTemplate> {
+  if (isSupabaseConfigured()) return supabaseRepo.createEmailTemplate(input);
+  const time = now();
+  const rec: EmailTemplate = { ...input, id: id("etpl"), createdAt: time, updatedAt: time };
+  (db().emailTemplates ??= []).push(rec);
+  return rec;
+}
+export async function updateEmailTemplate(templateId: string, patch: Partial<EmailTemplate>): Promise<EmailTemplate | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateEmailTemplate(templateId, patch);
+  const rec = await getEmailTemplate(templateId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function listEmailSubscribers(companyId: string): Promise<EmailSubscriber[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listEmailSubscribers(companyId);
+  return (db().emailSubscribers ?? []).filter((s) => s.companyId === companyId).sort((a, b) => a.email.localeCompare(b.email));
+}
+export async function getEmailSubscriber(subscriberId: string): Promise<EmailSubscriber | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getEmailSubscriber(subscriberId);
+  return (db().emailSubscribers ?? []).find((s) => s.id === subscriberId);
+}
+export async function createEmailSubscriber(input: Omit<EmailSubscriber, "id" | "createdAt" | "updatedAt">): Promise<EmailSubscriber> {
+  if (isSupabaseConfigured()) return supabaseRepo.createEmailSubscriber(input);
+  const time = now();
+  const rec: EmailSubscriber = { ...input, id: id("esub"), createdAt: time, updatedAt: time };
+  (db().emailSubscribers ??= []).push(rec);
+  return rec;
+}
+export async function updateEmailSubscriber(subscriberId: string, patch: Partial<EmailSubscriber>): Promise<EmailSubscriber | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateEmailSubscriber(subscriberId, patch);
+  const rec = await getEmailSubscriber(subscriberId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function listEmailCampaigns(tenantId: string, companyId?: string): Promise<EmailCampaign[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listEmailCampaigns(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().emailCampaigns ?? []).filter((c) => ids.has(c.companyId) && (!companyId || c.companyId === companyId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+export async function getEmailCampaign(campaignId: string): Promise<EmailCampaign | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getEmailCampaign(campaignId);
+  return (db().emailCampaigns ?? []).find((c) => c.id === campaignId);
+}
+export async function createEmailCampaign(input: Omit<EmailCampaign, "id" | "createdAt" | "updatedAt">): Promise<EmailCampaign> {
+  if (isSupabaseConfigured()) return supabaseRepo.createEmailCampaign(input);
+  const time = now();
+  const rec: EmailCampaign = { ...input, id: id("ecmp"), createdAt: time, updatedAt: time };
+  (db().emailCampaigns ??= []).push(rec);
+  return rec;
+}
+export async function updateEmailCampaign(campaignId: string, patch: Partial<EmailCampaign>): Promise<EmailCampaign | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateEmailCampaign(campaignId, patch);
+  const rec = await getEmailCampaign(campaignId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+// ---- Reviews (W3 M33) --------------------------------------------------------
+
+export async function listCompanyReviews(tenantId: string, companyIdsFilter?: string[], status?: CompanyReview["status"]): Promise<CompanyReview[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCompanyReviews(tenantId, companyIdsFilter, status);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().companyReviews ?? []).filter((r) => ids.has(r.companyId) && (!companyIdsFilter?.length || companyIdsFilter.includes(r.companyId)) && (!status || r.status === status));
+}
+export async function getCompanyReview(reviewId: string): Promise<CompanyReview | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCompanyReview(reviewId);
+  return (db().companyReviews ?? []).find((r) => r.id === reviewId);
+}
+export async function createCompanyReview(input: Omit<CompanyReview, "id">): Promise<CompanyReview> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCompanyReview(input);
+  const rec: CompanyReview = { ...input, id: id("rev") };
+  (db().companyReviews ??= []).push(rec);
+  return rec;
+}
+export async function updateCompanyReview(reviewId: string, patch: Partial<CompanyReview>): Promise<CompanyReview | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateCompanyReview(reviewId, patch);
+  const rec = await getCompanyReview(reviewId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch);
+  return rec;
+}
+export async function listReviewRequestCampaigns(tenantId: string, companyIdsFilter?: string[]): Promise<ReviewRequestCampaign[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listReviewRequestCampaigns(tenantId, companyIdsFilter);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().reviewRequestCampaigns ?? []).filter((c) => ids.has(c.companyId) && (!companyIdsFilter?.length || companyIdsFilter.includes(c.companyId)));
+}
+export async function getReviewRequestCampaign(campaignId: string): Promise<ReviewRequestCampaign | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getReviewRequestCampaign(campaignId);
+  return (db().reviewRequestCampaigns ?? []).find((c) => c.id === campaignId);
+}
+export async function createReviewRequestCampaign(input: Omit<ReviewRequestCampaign, "id" | "createdAt" | "updatedAt">): Promise<ReviewRequestCampaign> {
+  if (isSupabaseConfigured()) return supabaseRepo.createReviewRequestCampaign(input);
+  const time = now();
+  const rec: ReviewRequestCampaign = { ...input, id: id("rrc"), createdAt: time, updatedAt: time };
+  (db().reviewRequestCampaigns ??= []).push(rec);
+  return rec;
+}
+export async function updateReviewRequestCampaign(campaignId: string, patch: Partial<ReviewRequestCampaign>): Promise<ReviewRequestCampaign | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateReviewRequestCampaign(campaignId, patch);
+  const rec = await getReviewRequestCampaign(campaignId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+// ---- CRM (W3 M30) ------------------------------------------------------------
+
+export async function listCrmContacts(tenantId: string, companyId?: string): Promise<CrmContact[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().crmContacts ?? []).filter((c) => ids.has(c.companyId) && (!companyId || c.companyId === companyId));
+}
+export async function getCrmContact(contactId: string): Promise<CrmContact | undefined> {
+  return (db().crmContacts ?? []).find((c) => c.id === contactId);
+}
+export async function createCrmContact(input: Omit<CrmContact, "id" | "createdAt" | "updatedAt">): Promise<CrmContact> {
+  const time = now();
+  const rec: CrmContact = { ...input, id: id("crm"), createdAt: time, updatedAt: time };
+  (db().crmContacts ??= []).push(rec);
+  return rec;
+}
+export async function updateCrmContact(contactId: string, patch: Partial<CrmContact>): Promise<CrmContact | undefined> {
+  const rec = await getCrmContact(contactId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function listCrmSegments(tenantId: string, companyId?: string): Promise<CrmSegment[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().crmSegments ?? []).filter((s) => ids.has(s.companyId) && (!companyId || s.companyId === companyId));
+}
+export async function createCrmSegment(input: Omit<CrmSegment, "id" | "createdAt" | "updatedAt">): Promise<CrmSegment> {
+  const time = now();
+  const rec: CrmSegment = { ...input, id: id("seg"), createdAt: time, updatedAt: time };
+  (db().crmSegments ??= []).push(rec);
+  return rec;
+}
+export async function listCrmInteractions(tenantId: string, companyId?: string): Promise<CrmInteraction[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().crmInteractions ?? []).filter((ix) => ids.has(ix.companyId) && (!companyId || ix.companyId === companyId));
+}
+export async function createCrmInteraction(input: Omit<CrmInteraction, "id">): Promise<CrmInteraction> {
+  const rec: CrmInteraction = { ...input, id: id("ix") };
+  (db().crmInteractions ??= []).push(rec);
+  return rec;
+}
+
+// ---- SMS (W3 M32) ------------------------------------------------------------
+
+export async function listSmsSubscribers(companyId: string): Promise<SmsSubscriber[]> {
+  return (db().smsSubscribers ?? []).filter((s) => s.companyId === companyId);
+}
+export async function getSmsSubscriber(subscriberId: string): Promise<SmsSubscriber | undefined> {
+  return (db().smsSubscribers ?? []).find((s) => s.id === subscriberId);
+}
+export async function createSmsSubscriber(input: Omit<SmsSubscriber, "id" | "createdAt" | "updatedAt">): Promise<SmsSubscriber> {
+  const time = now();
+  const rec: SmsSubscriber = { ...input, id: id("ssub"), createdAt: time, updatedAt: time };
+  (db().smsSubscribers ??= []).push(rec);
+  return rec;
+}
+export async function updateSmsSubscriber(subscriberId: string, patch: Partial<SmsSubscriber>): Promise<SmsSubscriber | undefined> {
+  const rec = await getSmsSubscriber(subscriberId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function listSmsCampaigns(tenantId: string, companyId?: string): Promise<SmsCampaign[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().smsCampaigns ?? []).filter((c) => ids.has(c.companyId) && (!companyId || c.companyId === companyId));
+}
+export async function getSmsCampaign(campaignId: string): Promise<SmsCampaign | undefined> {
+  return (db().smsCampaigns ?? []).find((c) => c.id === campaignId);
+}
+export async function createSmsCampaign(input: Omit<SmsCampaign, "id" | "createdAt" | "updatedAt">): Promise<SmsCampaign> {
+  const time = now();
+  const rec: SmsCampaign = { ...input, id: id("scmp"), createdAt: time, updatedAt: time };
+  (db().smsCampaigns ??= []).push(rec);
+  return rec;
+}
+export async function updateSmsCampaign(campaignId: string, patch: Partial<SmsCampaign>): Promise<SmsCampaign | undefined> {
+  const rec = await getSmsCampaign(campaignId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function getSmsCompanySettings(companyId: string): Promise<SmsCompanySettings | undefined> {
+  return (db().smsCompanySettings ?? []).find((s) => s.companyId === companyId);
+}
+export async function upsertSmsCompanySettings(input: SmsCompanySettings): Promise<SmsCompanySettings> {
+  const list = db().smsCompanySettings ??= [];
+  const idx = list.findIndex((s) => s.companyId === input.companyId);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...input, updatedAt: now() };
+    return list[idx]!;
+  }
+  const rec = { ...input, updatedAt: input.updatedAt ?? now() };
+  list.push(rec);
+  return rec;
 }

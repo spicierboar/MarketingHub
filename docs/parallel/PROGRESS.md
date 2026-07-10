@@ -1,6 +1,6 @@
 # Orchestrator ledger
 
-Last updated: 2026-07-09 (**W2 SHIPPED**)
+Last updated: 2026-07-10 (**W3 SHIPPED**)
 
 **Owner lock:** Full SRS · vision · go-live = non-negotiable.  
 **Schedule:** `docs/parallel/FULL-ORCHESTRATION.md`
@@ -18,8 +18,8 @@ Last updated: 2026-07-09 (**W2 SHIPPED**)
 |------|--------|-----------------|----------------|
 | W0 P0 | DONE | ~4-6d | - |
 | W1 | DONE | ~2-3d | - |
-| **W2** | **DONE** | **~4-6d** | **~Jul 13-15** |
-| **W3** | **in flight** | **~4-6d** | **~Jul 17-21** |
+| W2 | DONE | ~4-6d | - |
+| **W3** | **DONE** | **~4-6d** | **~Jul 17-21** |
 | W4 | queued | ~4-6d | ~Jul 21-27 |
 | W5 | queued | ~4-6d | ~Jul 25 - Aug 2 |
 | W6 | owner gate | days + weeks? | blocked (Google) |
@@ -34,7 +34,7 @@ Last updated: 2026-07-09 (**W2 SHIPPED**)
 
 ## Wave 1 — DONE · `w1_complete=yes` · 90/90 · **0028 applied**
 
-## Wave 2 — DONE
+## Wave 2 — DONE · `w2_complete=yes` · 103/103
 
 | Agent | Branch | Status |
 |-------|--------|--------|
@@ -44,41 +44,43 @@ Last updated: 2026-07-09 (**W2 SHIPPED**)
 | M27 | `w2/m27-public-api` | merged |
 | M01-W2 | main | integrated |
 
-| Flag | Status |
-|------|--------|
-| `w2_launched` | yes |
-| `m24_handoff` | yes |
-| `m25_handoff` | yes |
-| `m26_handoff` | yes |
-| `m27_handoff` | yes |
-| `w2_complete` | **yes** |
-
-**Fixtures:** self-test **103/103** · queue-test **20/20** · live flags **OFF**
-
 **Migrations (owner paste when ready):** `0029_public_api.sql` · `0030_ad_campaign_external_id.sql`
 
-## Wave 3 — IN FLIGHT
+## Wave 3 — DONE
 
 | Agent | Branch | Status |
 |-------|--------|--------|
-| M30 | `w3/m30-crm` | spawned |
-| M31 | `w3/m31-email` | spawned |
-| M32 | `w3/m32-sms` | spawned |
-| M33 | `w3/m33-reviews` | spawned |
-| M01-W3 | main | waiting |
+| M30 | `w3/m30-crm` | merged |
+| M31 | `w3/m31-email` | merged |
+| M32 | `w3/m32-sms` | merged |
+| M33 | `w3/m33-reviews` | merged |
+| M01-W3 | main | integrated |
 
 | Flag | Status |
 |------|--------|
-| `w3_launched` | **yes** |
-| `m30_handoff` | no |
-| `m31_handoff` | no |
-| `m32_handoff` | no |
-| `m33_handoff` | no |
-| `w3_complete` | no |
+| `w3_launched` | yes |
+| `m30_handoff` | yes |
+| `m31_handoff` | yes |
+| `m32_handoff` | yes |
+| `m33_handoff` | yes |
+| `w3_complete` | **yes** |
 
-**Target:** ~110/110 fixtures · live flags **OFF**
+**Fixtures:** self-test **110/110** · queue-test **20/20** · live flags **OFF**
 
-## Waves 4-7 — QUEUED
+**Migrations (owner paste when ready):** `0031_crm.sql` · `0031_email_marketing.sql` · `0031_sms_marketing.sql` · `0031_reviews.sql`
+
+## Wave 4 — QUEUED (next)
+
+| Agent | Scope |
+|-------|-------|
+| M34 | CMS |
+| M35 | Funnel |
+| M36 | Automation |
+| M37 | Loyalty |
+
+`w4_launched=no` · `w4_complete=no`
+
+## Waves 5-7 — QUEUED
 
 `full_complete=no` · W6 Phase 3 **blocked**
 

@@ -46,8 +46,9 @@ import type {
   PartnerWebhook,
   RestaurantOrder,
   Recommendation, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
-  SocialMention, SocialResponseDraft, Task, Tenant, TenantMember,
+  SocialMention, SocialResponseDraft, CompanyReview, ReviewRequestCampaign, Task, Tenant, TenantMember,
   TermsVersion, TermsAcceptance, User, UtmLink,
+  EmailTemplate, EmailSubscriber, EmailCampaign,
 } from "@/lib/types";
 
 // Request-scoped RLS client for company-scoped data — EXCEPT inside a trusted
@@ -433,6 +434,52 @@ export const supabaseRepo = {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("social_mentions").update(toRow(patch)).eq("id", mentionId).select("*").maybeSingle();
     return data ? toDomain<SocialMention>(data) : undefined;
+  },
+
+  async listCompanyReviews(tenantId: string, companyIdsFilter?: string[], status?: CompanyReview["status"]): Promise<CompanyReview[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("company_reviews").select("*").in("company_id", companyIdsFilter ?? await companyIds(sb, tenantId));
+    if (status) q = q.eq("status", status);
+    const { data } = await q.order("reviewed_at", { ascending: false });
+    return many<CompanyReview>(data);
+  },
+  async getCompanyReview(reviewId: string): Promise<CompanyReview | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("company_reviews").select("*").eq("id", reviewId).maybeSingle();
+    return data ? toDomain<CompanyReview>(data) : undefined;
+  },
+  async createCompanyReview(input: Omit<CompanyReview, "id">): Promise<CompanyReview> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("company_reviews").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createCompanyReview: " + error.message);
+    return toDomain<CompanyReview>(data);
+  },
+  async updateCompanyReview(reviewId: string, patch: Partial<CompanyReview>): Promise<CompanyReview | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("company_reviews").update(toRow(patch)).eq("id", reviewId).select("*").maybeSingle();
+    return data ? toDomain<CompanyReview>(data) : undefined;
+  },
+  async listReviewRequestCampaigns(tenantId: string, companyIdsFilter?: string[]): Promise<ReviewRequestCampaign[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("review_request_campaigns").select("*")
+      .in("company_id", companyIdsFilter ?? await companyIds(sb, tenantId)).order("created_at", { ascending: false });
+    return many<ReviewRequestCampaign>(data);
+  },
+  async getReviewRequestCampaign(campaignId: string): Promise<ReviewRequestCampaign | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("review_request_campaigns").select("*").eq("id", campaignId).maybeSingle();
+    return data ? toDomain<ReviewRequestCampaign>(data) : undefined;
+  },
+  async createReviewRequestCampaign(input: Omit<ReviewRequestCampaign, "id" | "createdAt" | "updatedAt">): Promise<ReviewRequestCampaign> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("review_request_campaigns").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createReviewRequestCampaign: " + error.message);
+    return toDomain<ReviewRequestCampaign>(data);
+  },
+  async updateReviewRequestCampaign(campaignId: string, patch: Partial<ReviewRequestCampaign>): Promise<ReviewRequestCampaign | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("review_request_campaigns").update(toRow(patch)).eq("id", campaignId).select("*").maybeSingle();
+    return data ? toDomain<ReviewRequestCampaign>(data) : undefined;
   },
 
   // ============================ Brand Brain (RLS) ==========================
@@ -1316,6 +1363,75 @@ export const supabaseRepo = {
     return data ? toDomain<Lead>(data) : undefined;
   },
 
+  // ============================ Email marketing (RLS) ======================
+  async listEmailTemplates(tenantId: string, companyId?: string): Promise<EmailTemplate[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("email_templates").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("name");
+    return many<EmailTemplate>(data);
+  },
+  async getEmailTemplate(templateId: string): Promise<EmailTemplate | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("email_templates").select("*").eq("id", templateId).maybeSingle();
+    return data ? toDomain<EmailTemplate>(data) : undefined;
+  },
+  async createEmailTemplate(input: Omit<EmailTemplate, "id" | "createdAt" | "updatedAt">): Promise<EmailTemplate> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("email_templates").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createEmailTemplate: " + error.message);
+    return toDomain<EmailTemplate>(data);
+  },
+  async updateEmailTemplate(templateId: string, patch: Partial<EmailTemplate>): Promise<EmailTemplate | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("email_templates").update(toRow({ ...patch, updatedAt: now() })).eq("id", templateId).select("*").maybeSingle();
+    return data ? toDomain<EmailTemplate>(data) : undefined;
+  },
+  async listEmailSubscribers(companyId: string): Promise<EmailSubscriber[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("email_subscribers").select("*").eq("company_id", companyId).order("email");
+    return many<EmailSubscriber>(data);
+  },
+  async getEmailSubscriber(subscriberId: string): Promise<EmailSubscriber | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("email_subscribers").select("*").eq("id", subscriberId).maybeSingle();
+    return data ? toDomain<EmailSubscriber>(data) : undefined;
+  },
+  async createEmailSubscriber(input: Omit<EmailSubscriber, "id" | "createdAt" | "updatedAt">): Promise<EmailSubscriber> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("email_subscribers").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createEmailSubscriber: " + error.message);
+    return toDomain<EmailSubscriber>(data);
+  },
+  async updateEmailSubscriber(subscriberId: string, patch: Partial<EmailSubscriber>): Promise<EmailSubscriber | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("email_subscribers").update(toRow({ ...patch, updatedAt: now() })).eq("id", subscriberId).select("*").maybeSingle();
+    return data ? toDomain<EmailSubscriber>(data) : undefined;
+  },
+  async listEmailCampaigns(tenantId: string, companyId?: string): Promise<EmailCampaign[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("email_campaigns").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("created_at", { ascending: false });
+    return many<EmailCampaign>(data);
+  },
+  async getEmailCampaign(campaignId: string): Promise<EmailCampaign | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("email_campaigns").select("*").eq("id", campaignId).maybeSingle();
+    return data ? toDomain<EmailCampaign>(data) : undefined;
+  },
+  async createEmailCampaign(input: Omit<EmailCampaign, "id" | "createdAt" | "updatedAt">): Promise<EmailCampaign> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("email_campaigns").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createEmailCampaign: " + error.message);
+    return toDomain<EmailCampaign>(data);
+  },
+  async updateEmailCampaign(campaignId: string, patch: Partial<EmailCampaign>): Promise<EmailCampaign | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("email_campaigns").update(toRow({ ...patch, updatedAt: now() })).eq("id", campaignId).select("*").maybeSingle();
+    return data ? toDomain<EmailCampaign>(data) : undefined;
+  },
+
   // ============================ Add-on entitlements (RLS) ==================
   async listCompanyEntitlements(tenantId: string, companyId?: string): Promise<CompanyEntitlement[]> {
     const sb = await usr(); if (!sb) return [];
@@ -1690,6 +1806,8 @@ export const supabaseRepo = {
       contentComments: many(await byCompany("content_comments")),
       socialResponses: many(await byCompany("social_responses")),
       socialMentions: many(await byCompany("social_mentions")),
+      companyReviews: many(await byCompany("company_reviews")),
+      reviewRequestCampaigns: many(await byCompany("review_request_campaigns")),
       knowledgeDocs: many(await byCompany("knowledge_documents")),
       services: many(await byCompany("services")),
       localProfiles: many(await byCompany("local_area_profiles")),
@@ -1713,6 +1831,9 @@ export const supabaseRepo = {
       adCampaigns: many(await byCompany("ad_campaigns")),
       audienceSegments: many(await byCompany("audience_segments")),
       leads: many(await byCompany("leads")),
+      emailTemplates: many(await byCompany("email_templates")),
+      emailSubscribers: many(await byCompany("email_subscribers")),
+      emailCampaigns: many(await byCompany("email_campaigns")),
       companyEntitlements: many(await byCompany("company_entitlements")),
       photoShoots: many(await byCompany("photo_shoots")),
       photographerProfiles: many(

@@ -11,6 +11,8 @@ const STATUS_TONE: Record<string, Tone> = {
   approved: "success",
   ai_ready: "success",
   needs_update: "warning",
+  responded: "success",
+  // reviews (M33)
   archived: "neutral",
   // requests
   submitted: "info",
@@ -62,6 +64,11 @@ const STATUS_TONE: Record<string, Tone> = {
   ready: "success",
   in_design: "info",
   client_review: "warning",
+  opted_in: "success",
+  opted_out: "danger",
+  pending: "warning",
+  sending: "info",
+  sent: "success",
 };
 
 export function StatusBadge({ status }: { status: string }) {

@@ -18,6 +18,7 @@ import { runIsolationSelfTest } from "@/lib/selftest/isolation";
 import { runPortalSelfTest } from "@/lib/selftest/portal";
 import { runClientReportsSelfTest } from "@/lib/selftest/client-reports";
 import { runPublicApiSelfTest } from "@/lib/selftest/public-api";
+import { runCrmSelfTest } from "@/lib/selftest/crm";
 import { devToolsOpen } from "@/lib/env";
 
 function constantTimeEquals(a: string, b: string): boolean {
@@ -48,20 +49,21 @@ function authorize(req: NextRequest): { ok: true } | { ok: false; status: number
 async function handle(req: NextRequest) {
   const auth = authorize(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const [iso, portal, reports, publicApi] = await Promise.all([
+  const [iso, portal, reports, publicApi, crm] = await Promise.all([
     runIsolationSelfTest(),
     runPortalSelfTest(),
     runClientReportsSelfTest(),
     runPublicApiSelfTest(),
+    runCrmSelfTest(),
   ]);
-  const checks = [...iso.checks, ...portal.checks, ...reports.checks, ...publicApi.checks];
+  const checks = [...iso.checks, ...portal.checks, ...reports.checks, ...publicApi.checks, ...crm.checks];
   const failed = checks.filter((c) => !c.ok).length;
   const report = {
-    ok: iso.ok && portal.ok && reports.ok && publicApi.ok,
+    ok: iso.ok && portal.ok && reports.ok && publicApi.ok && crm.ok,
     passed: checks.length - failed,
     failed,
-    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed, ...reports.purgeFailed, ...publicApi.purgeFailed],
-    durationMs: iso.durationMs + portal.durationMs + reports.durationMs + publicApi.durationMs,
+    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed, ...reports.purgeFailed, ...publicApi.purgeFailed, ...crm.purgeFailed],
+    durationMs: iso.durationMs + portal.durationMs + reports.durationMs + publicApi.durationMs + crm.durationMs,
     checks,
   };
   return NextResponse.json(report, { status: report.ok ? 200 : 500 });

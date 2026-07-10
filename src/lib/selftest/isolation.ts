@@ -68,6 +68,15 @@ import {
   checkLiveAdsTranslateMeta,
 } from "@/lib/selftest/live-ads";
 import {
+  checkEmailConsentBlocksSend,
+  checkEmailRenderTokens,
+  checkEmailSegmentFilter,
+  checkEmailSendEnvGated,
+  checkEmailSimulatedWhenOff,
+  checkEmailSubscriberEligible,
+  checkEmailUnsubscribeExcluded,
+} from "@/lib/selftest/email-marketing";
+import {
   checkAnalyticsSimulatedWhenLiveOff,
   checkFetchLiveMetricsNullWhenOff,
   checkGooglePlatformRoutedWhenLive,
@@ -676,6 +685,14 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("liveAds.translateMeta", async () => checkLiveAdsTranslateMeta());
     await expect("liveAds.translateGoogle", async () => checkLiveAdsTranslateGoogle());
     await expect("liveAds.resolveFallsBack", () => checkLiveAdsResolveFallsBack());
+
+    await expect("emailMarketing.consentBlocksSend", () => checkEmailConsentBlocksSend());
+    await expect("emailMarketing.simulatedWhenOff", () => checkEmailSimulatedWhenOff());
+    await expect("emailMarketing.renderTokens", () => checkEmailRenderTokens());
+    await expect("emailMarketing.unsubscribeExcluded", () => checkEmailUnsubscribeExcluded());
+    await expect("emailMarketing.subscriberEligible", () => checkEmailSubscriberEligible());
+    await expect("emailMarketing.segmentFilter", () => checkEmailSegmentFilter());
+    await expect("emailMarketing.sendEnvGated", () => checkEmailSendEnvGated());
 
     await expect("analytics.simulatedWhenLiveOff", () => checkAnalyticsSimulatedWhenLiveOff());
 

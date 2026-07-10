@@ -668,6 +668,54 @@ export interface SocialMention {
   createdAt: string;
 }
 
+// ---- W3 M33: Review management (Module 7 / Phase 6) -------------------------
+
+export type ReviewPlatform = "google" | "facebook" | "yelp" | "tripadvisor";
+export type ReviewSentiment = "positive" | "neutral" | "negative";
+export type ReviewUrgency = "low" | "medium" | "high" | "critical";
+export type ReviewStatus = "new" | "drafted" | "responded" | "archived";
+
+export interface CompanyReview {
+  id: string;
+  companyId: string;
+  platform: ReviewPlatform;
+  externalId?: string;
+  authorName: string;
+  rating: number;
+  body: string;
+  reviewedAt: string;
+  sentiment: ReviewSentiment;
+  topics: string[];
+  urgency: ReviewUrgency;
+  escalationRequired: boolean;
+  status: ReviewStatus;
+  draftResponse?: string;
+  publishedResponse?: string;
+  importedAt: string;
+  respondedAt?: string | null;
+  createdById?: string;
+}
+
+export type ReviewRequestChannel = "email" | "sms" | "qr" | "receipt" | "post_stay";
+export type ReviewRequestCampaignStatus = "draft" | "active" | "paused" | "completed";
+
+export interface ReviewRequestCampaign {
+  id: string;
+  companyId: string;
+  name: string;
+  channel: ReviewRequestChannel;
+  status: ReviewRequestCampaignStatus;
+  messageTemplate: string;
+  targetSegment?: string;
+  sentCount: number;
+  clickCount: number;
+  reviewCount: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  activatedAt?: string | null;
+}
+
 // ---- Audit log --------------------------------------------------------------
 
 export interface AuditLog {
@@ -861,6 +909,7 @@ export interface AiRun {
     | "campaign_ideas"
     | "campaign_plan"
     | "social_response"
+    | "review_response"
     | "management_summary"
     | "image_brief"
     | "image_gen"
@@ -1496,6 +1545,27 @@ export interface Lead {
   capturedAt: string;
 }
 
+
+// ---- CRM program management (Module 7 / W3 M30) -------------------------------
+export type CrmConsentStatus = "subscribed" | "unsubscribed" | "pending";
+export type CrmContactSource = "manual" | "ad_lead" | "form" | "import" | "order";
+export interface CrmContact {
+  id: string; companyId: string; email?: string; phone?: string; firstName: string; lastName?: string;
+  tags: string[]; consentStatus: CrmConsentStatus; source: CrmContactSource; leadId?: string | null;
+  notes?: string; createdById: string; createdAt: string; updatedAt: string;
+}
+export type CrmSegmentRuleType = "manual" | "tag" | "consent";
+export interface CrmSegmentRuleConfig { contactIds?: string[]; tags?: string[]; consentStatus?: CrmConsentStatus; }
+export interface CrmSegment {
+  id: string; companyId: string; name: string; description?: string; ruleType: CrmSegmentRuleType;
+  ruleConfig: CrmSegmentRuleConfig; createdById: string; createdAt: string; updatedAt: string;
+}
+export type CrmInteractionChannel = "email" | "sms" | "call" | "form" | "ad_lead" | "order" | "social" | "note";
+export type CrmInteractionDirection = "inbound" | "outbound";
+export interface CrmInteraction {
+  id: string; companyId: string; contactId: string; channel: CrmInteractionChannel; direction: CrmInteractionDirection;
+  summary: string; detail?: string; occurredAt: string; createdById?: string; metadata?: Record<string, unknown>;
+}
 export type OfferStatus = "draft" | "approved" | "archived";
 
 // Offer & Promotion Manager (§30). The AI may only promote live approved offers.
@@ -1819,6 +1889,138 @@ export interface RestaurantOrder {
   notes?: string;
   paymentStatus: OrderPaymentStatus;
   stripeCheckoutSessionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---- Email marketing (W3 M31) -------------------------------------------------
+
+export type EmailTemplateKind =
+  | "newsletter"
+  | "promotion"
+  | "event"
+  | "review_request"
+  | "win_back"
+  | "custom";
+
+export type EmailCampaignStatus = "draft" | "scheduled" | "sent" | "cancelled";
+
+export interface EmailTemplate {
+  id: string;
+  companyId: string;
+  name: string;
+  kind: EmailTemplateKind;
+  subject: string;
+  previewText?: string;
+  htmlBody: string;
+  accentColor?: string;
+  active: boolean;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailSubscriber {
+  id: string;
+  companyId: string;
+  email: string;
+  name?: string;
+  tags: string[];
+  marketingConsent: boolean;
+  unsubscribedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailCampaignStats {
+  recipients: number;
+  sent: number;
+  failed: number;
+  opens: number;
+  clicks: number;
+  unsubscribes: number;
+  bounces: number;
+}
+
+export interface EmailCampaign {
+  id: string;
+  companyId: string;
+  templateId: string;
+  name: string;
+  subject: string;
+  status: EmailCampaignStatus;
+  scheduledAt?: string;
+  sentAt?: string;
+  segmentTag?: string | null;
+  stats: EmailCampaignStats;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
+// ---- SMS marketing (W3 M32) ---------------------------------------------------
+//
+// Consent-based promotional + transactional SMS. Sends are env-gated
+// (SMS_LIVE + Twilio creds); without keys the module records intent and uses
+// deterministic simulated delivery.
+
+export type SmsCampaignKind = "promotional" | "transactional";
+export type SmsCampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled" | "failed";
+export type SmsConsentStatus = "opted_in" | "opted_out" | "pending";
+export type SmsSubscriberSource = "manual" | "import" | "crm" | "keyword";
+
+export interface SmsCompanySettings {
+  companyId: string;
+  countryCode: string;
+  senderId: string;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  monthlySpendCapUsd?: number;
+  updatedById?: string;
+  updatedAt: string;
+}
+
+export interface SmsSubscriber {
+  id: string;
+  companyId: string;
+  phoneE164: string;
+  name?: string;
+  tags: string[];
+  consentStatus: SmsConsentStatus;
+  consentedAt?: string;
+  optedOutAt?: string;
+  source: SmsSubscriberSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmsCampaignStats {
+  recipients: number;
+  segments: number;
+  estimatedCostUsd: number;
+  actualCostUsd: number;
+  delivered: number;
+  failed: number;
+  blockedOptOut: number;
+  blockedNoConsent: number;
+  blockedQuietHours: number;
+}
+
+export interface SmsCampaign {
+  id: string;
+  companyId: string;
+  name: string;
+  body: string;
+  kind: SmsCampaignKind;
+  status: SmsCampaignStatus;
+  scheduledAt?: string;
+  sentAt?: string;
+  segmentTag?: string | null;
+  shortLink?: string;
+  utmCampaign?: string;
+  stats: SmsCampaignStats;
+  createdById: string;
   createdAt: string;
   updatedAt: string;
 }

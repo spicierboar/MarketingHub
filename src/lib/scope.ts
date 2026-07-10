@@ -4,15 +4,19 @@
 
 import {
   listCompanies,
+  listCompanyReviews,
   listContent,
   listRequests,
+  listReviewRequestCampaigns,
   listSocial,
 } from "@/lib/db";
 import { accessibleCompanyIds, isAdmin, type ActingUser } from "@/lib/auth/rbac";
 import type {
   Company,
+  CompanyReview,
   ContentItem,
   MarketingRequest,
+  ReviewRequestCampaign,
   SocialResponseDraft,
 } from "@/lib/types";
 
@@ -42,4 +46,18 @@ export async function visibleSocial(user: ActingUser): Promise<SocialResponseDra
   if (isAdmin(user)) return social;
   const ids = new Set(await accessibleCompanyIds(user));
   return social.filter((s) => ids.has(s.companyId));
+}
+
+export async function visibleReviews(user: ActingUser): Promise<CompanyReview[]> {
+  const reviews = await listCompanyReviews(user.tenantId);
+  if (isAdmin(user)) return reviews;
+  const ids = new Set(await accessibleCompanyIds(user));
+  return reviews.filter((r) => ids.has(r.companyId));
+}
+
+export async function visibleReviewCampaigns(user: ActingUser): Promise<ReviewRequestCampaign[]> {
+  const campaigns = await listReviewRequestCampaigns(user.tenantId);
+  if (isAdmin(user)) return campaigns;
+  const ids = new Set(await accessibleCompanyIds(user));
+  return campaigns.filter((c) => ids.has(c.companyId));
 }
