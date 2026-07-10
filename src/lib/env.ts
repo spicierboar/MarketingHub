@@ -49,8 +49,21 @@ export function devToolsOpen(): boolean {
   return appEnv() !== "production";
 }
 
+// Local demo bypass — in-memory seed + cookie auth even when Supabase env vars
+// are present. NEVER honour this in production. Set both:
+//   CC_LOCAL_DEMO=true
+//   NEXT_PUBLIC_CC_LOCAL_DEMO=true  (so the login form skips magic-link OTP)
+export function localDemoEnabled(): boolean {
+  if (appEnv() === "production") return false;
+  const server = (process.env.CC_LOCAL_DEMO || "").trim().toLowerCase();
+  const pub = (process.env.NEXT_PUBLIC_CC_LOCAL_DEMO || "").trim().toLowerCase();
+  return server === "true" || server === "1" || pub === "true" || pub === "1";
+}
+
 // Label for the non-production environment ribbon (null in production).
 export function envRibbonLabel(): string | null {
   const e = appEnv();
-  return e === "production" ? null : e.toUpperCase();
+  if (e === "production") return null;
+  if (localDemoEnabled()) return `${e.toUpperCase()} · LOCAL DEMO`;
+  return e.toUpperCase();
 }

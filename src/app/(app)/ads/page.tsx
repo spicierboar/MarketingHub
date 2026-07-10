@@ -36,6 +36,7 @@ import {
   suggestAudienceAction,
   updateAdCampaignStatusAction,
 } from "./actions";
+import { scanCalendarAssistAction } from "@/app/(app)/calendar/actions";
 
 const money = (x: number) => `$${Math.round(x).toLocaleString("en-AU")}`;
 const money2 = (x: number | null) => (x === null ? "—" : `$${x.toFixed(2)}`);
@@ -163,6 +164,24 @@ export default async function AdsPage({
           <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Return on spend</p><p className="mt-1 text-2xl font-bold">{roasFmt(bandTotals.roas)}</p></CardContent></Card>
           <Card className="border-primary/40"><CardContent className="p-5"><p className="text-sm text-muted-foreground">Our fee (revenue)</p><p className="mt-1 text-2xl font-bold text-primary">{money(feeTotal)}</p></CardContent></Card>
         </div>
+
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="font-medium">Align organic calendar with ads</p>
+              <p className="text-sm text-muted-foreground">
+                Suggest flanking social posts for active / upcoming paid campaigns (ai_draft only —
+                no spend, no auto-schedule).
+              </p>
+            </div>
+            <form action={scanCalendarAssistAction} className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="companyId" value={selected?.id ?? ""} />
+              <Button type="submit" size="sm" variant="secondary" disabled={!selected}>
+                Suggest calendar posts
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
         {/* Company selector */}
         <Card>

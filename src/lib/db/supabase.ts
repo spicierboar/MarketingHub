@@ -8,8 +8,11 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { localDemoEnabled } from "@/lib/env";
 
 export function isSupabaseConfigured(): boolean {
+  // Local demo bypass: force in-memory store + cookie auth despite Supabase env.
+  if (localDemoEnabled()) return false;
   return (
     !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
     !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

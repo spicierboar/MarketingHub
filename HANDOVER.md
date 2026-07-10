@@ -1,97 +1,74 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-09, **W2 SHIPPED** — Wave 2 complete)
+> ## ▶ NEXT SESSION — START HERE (2026-07-10, **W5 SHIPPED** · UX polish in-flight · W6 owner-blocked)
 >
-> **W2 merged to `main`:** live publish adapters (M24) · live ads execution (M25) · live analytics import (M26) · public REST API + partner webhooks (M27). Handoffs: `docs/parallel/M{24,25,26,27}-handoff.md`.
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ `3668e35` (+ **uncommitted UX/dev-tools** — see below)
 >
-> **Build state:** tsc clean · clean build (**68 routes**) · fixtures **self-test 103/103 + queue-test 20/20**. Runner: `npx tsx scripts/run-fixtures.mjs`.
+> **Waves W0–W5 DONE on main.** Fixtures at W5 merge: **self-test 165/165 · queue-test 20/20**. Live flags **OFF**.
 >
-> **Hard locks (unchanged):** `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` still **OFF** · no live flag flips until Wave 6.
+> | Wave | Status | Notes |
+> |------|--------|-------|
+> | W0–W4 | DONE | CRM/email/SMS/reviews · CMS/funnel/workflows/loyalty |
+> | **W5** | **DONE** | Full RAG · recommendations · AI-MOS · campaign builder · `w5_complete=yes` |
+> | **W6** | **BLOCKED** | Owner Google Cloud billing → then Phase 3–4 cutover + live flag flip |
+> | W7 | queued | Bookings · local SEO · exec dash · API · security · video · learning — post-W6 |
 >
-> **Owner migrations (paste when ready):**
+> **Ledger:** `docs/parallel/PROGRESS.md` · **Plan:** `docs/FULL-IMPLEMENTATION-PLAN.md` · **Orchestration:** `docs/parallel/FULL-ORCHESTRATION.md`
+>
+> **Owner migrations:** W2–W5 SQL **pasted to Supabase** (2026-07-10), including RAG actor-column FK fix + campaign-builder RLS finish. Source fixes in `0033_rag.sql` / `0033_recommendations.sql` / `0033_campaign_builder.sql` (may still be uncommitted on disk).
+>
+> **Hard locks:** Do **NOT** flip `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` (or other `*_LIVE`) until W6 owner GO. Critique gate untouched. Isolation rule stands.
+>
+> **Local demo (while Google blocked):**
+> ```
+> CC_LOCAL_DEMO=true
+> NEXT_PUBLIC_CC_LOCAL_DEMO=true
+> ```
+> → in-memory seed + cookie auth (bypass magic link). Dev tools: **http://localhost:3002/dev** (prefer port **3002**; leave 3000/3001 free).
 > ```powershell
-> notepad F:\MarketingHub\command-centre\supabase\migrations\0029_public_api.sql
-> notepad F:\MarketingHub\command-centre\supabase\migrations\0030_ad_campaign_external_id.sql
+> cd F:\MarketingHub\command-centre
+> npx next dev -p 3002
 > ```
 >
-> **Owner session (unchanged):** migrations **0001–0015 + 0027 + 0028 APPLIED** on Supabase. Meta business verification DONE. Google Cloud **billing blocked** · `GOOGLE_OAUTH_*` missing. Park Meta App Review + Google live work **together**.
+> **Uncommitted session work (commit if owner asks):**
+> - Grouped + role-based sidebar (`app-shell.tsx`)
+> - `/dev` seed/clear/quick-login + `CC_LOCAL_DEMO` bypass
+> - Company profile field help + **Suggest empty fields** (`profile-suggestions.ts`)
+> - Task title dropdown (`add-task-form.tsx`)
+> - Calendar **ad alignment** suggestions (`calendar-assist.ts` kind `ad_alignment`) + Ads “Suggest calendar posts”
+> - Dashboard **Workflow: add marketing spiel**
 >
-> **Domains:** primary **`mangotickle.com.au`** · global **`mangotickle.com`** → redirect to `.com.au`.
+> **NEXT (no Google required):**
+> 1. Commit UX/dev-tools if owner wants them on `main`
+> 2. Continue UX clarity (more field help / AI suggest) OR start **W7 docs/prompts** (code OK while W6 blocked — confirm with owner)
+> 3. When Google billing GO → W6 OWNER-OPS + M45 verify → flip live flags together
 >
-> **NEXT (orchestration):** W3 agents (M30–M33) auto-chain per `docs/parallel/FULL-ORCHESTRATION.md`. **`w3_launched=yes`** — spawn 4 parallel Tasks (CRM · email · SMS · reviews).
+> **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 single cutover on `https://mangotickle.com.au`
 >
-> **V1 builder track (prior):** modules 1–15 DONE (67/67 baseline). See history below.
+> **V1 modules 1–15:** DONE (tracker below). Full-wave track supersedes solo V1 module queue.
 >
-> **OWNER WAITING (parked cutover):** Meta App Review + lead webhook on `https://mangotickle.com.au/api/ads/leads/webhook` · Google Cloud billing → `GOOGLE_OAUTH_*` + GBP API · then flip `PUBLISHING_LIVE` / `ADS_LIVE` together.
->
-> **BATCHED EXTERNAL FILINGS (unchanged, file early):** Google Ads API + Meta Marketing API (paid-ads, longest lead) → Meta App Review + Google Business Profile + TikTok Content Posting (organic publishing). Keys: RESEND (login + T&C emails), ANTHROPIC, STRIPE_*, shared OAuth + PUBLISHING_LIVE/ADS_LIVE/ANALYTICS_LIVE, CRON_SECRET, CC_TZ_OFFSET_MINUTES (600), SUPABASE_MEDIA_BUCKET, `META_LEAD_WEBHOOK_VERIFY_TOKEN`, `GOOGLE_ADS_LEAD_WEBHOOK_SECRET`.
->
-> **▶ RUN IT (exact commands).**
-> ```bash
-> cd F:/MarketingHub/command-centre
-> # DEMO mode (in-memory, zero accounts, no TLS/SMTP, seeded Wattle+BrightSpark; resets on restart):
-> #   rename/remove .env.local so isSupabaseConfigured() is false, then:
-> npm run dev            # http://localhost:3000  (preview config `command-centre` = 5590)
-> # SUPABASE mode (real DB hrwkshspqeulgrmpqtpx). TWO env requirements (not code):
-> rm -rf .next && npm run build
-> #   (1) TLS: corporate proxy → Node must use the OS trust store, else UNABLE_TO_VERIFY_LEAF_SIGNATURE:
-> #       npm run start:supabase    (or npm run dev:supabase — sets --use-system-ca for corporate TLS proxy)
-> #       Preview launch config `command-centre-supabase` = 5593 also works.
-> #   (2) Login needs SMTP: magic-link won't DELIVER until RESEND_API_KEY is set + Resend is Supabase's SMTP
-> #       (Auth → SMTP). generateLink's implicit flow is NOT compatible with the app's PKCE /auth/callback —
-> #       there is no no-SMTP browser login. For Supabase-mode checks prefer Node scripts + curl, not the browser.
-> ```
-> **VERIFY A PHASE (the discipline that's held all session):** `npx tsc --noEmit` → floating-promise sweep (recreate the node script that flags `if(<async-bool>)` truthy conditions + statement-position `assert*()` — see the sweep entries below) → `rm -rf .next && npm run build` → in-memory browser verify → `npx tsx scripts/run-fixtures.mjs` or `GET /api/dev/self-test` (**67/67**) + `GET /api/dev/queue-test` (**20/20**) → **under Supabase run the in-tree `scripts/verify-*-supabase.mjs`** (they read `.env.local`, reach Supabase via the system CA; the Next server needs `--use-system-ca`) → `Workflow` adversarial review (3–5 dims → 2-vote refute; fix confirmed) → rebuild → update HANDOVER + `docs/BUSINESS-ROADMAP.md` + `docs/SAAS-CONVERSION.md` + memory.
->
-> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** whenever you ship a new `supabase/migrations/*.sql`, you **MUST** give the owner the **complete Notepad open command** (absolute path) so they can copy the SQL into the Supabase SQL editor. Template — replace `NNNN_name.sql` with the real file:
+> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** whenever you ship a new `supabase/migrations/*.sql`, give the owner the **complete Notepad open command** (absolute path):
 > ```powershell
 > notepad F:\MarketingHub\command-centre\supabase\migrations\NNNN_name.sql
 > ```
-> Steps for the owner: (1) run the `notepad` command → (2) Ctrl+A, Ctrl+C → (3) Supabase dashboard → SQL editor → paste → Run → (4) run the matching `node scripts/verify-*-supabase.mjs` if one exists. **Never** say “paste the migration” without the full `notepad F:\…` command.
+> Owner: (1) notepad → Ctrl+A/C → (2) Supabase SQL editor → paste → Run → (3) matching `node scripts/verify-*-supabase.mjs` if any. **Never** say “paste the migration” without the full `notepad F:\…` command.
 >
-> **▶ STANDING INSTRUCTION — module completion summary:** whenever a **V1 module** (or a named slice within module 1) finishes, end your handover message with a **quick summary** in this form:
-> ```
-> V1 module X of Y completed — <module name>
-> • <1–3 bullets: what shipped, migration if any, fixture counts>
-> • Next: module X+1 — <name> (or “waiting on owner: …”)
-> ```
-> Use the **V1 module tracker** below for X/Y and names. If only part of module 1 (scale foundation) landed, say `V1 module 1 of 15 (partial) — <slice name>` and list what remains in module 1. **Y = 15** (locked list — do not invent ad-hoc module counts).
+> **▶ STANDING INSTRUCTION — next-session continue command:** after meaningful work, update this START HERE block, then give the owner a copy-paste AI instruction (Path + READ + STATE + NEXT).
 >
-> **▶ STANDING INSTRUCTION — next-session continue command:** after every module (in the same pre-handover message), also provide a **copy-paste block** the owner can drop into the **next** chat to resume. Update `HANDOVER.md` “▶ NEXT SESSION — START HERE” first, then output:
-> ```
-> Path: F:/MarketingHub/command-centre
->
-> READ: HANDOVER.md "▶ NEXT SESSION — START HERE" only + docs/BUSINESS-ROADMAP.md if building.
->
-> STATE:
-> - <3–6 bullets: build health, migrations, owner blockers, V1 progress X/15>
->
-> NEXT BUILD: V1 module <N> of 15 — <name>
->
-> Continue building V1 modules one by one. Update HANDOVER. Wait after each module completes.
-> ```
-> Tailor `STATE` and `NEXT BUILD` to what actually landed + what’s next. If owner blockers prevent the next module, say so in `STATE` and set `NEXT BUILD` to the first **no-keys** item from the tracker.
->
-> **▶ V1 MODULE TRACKER (15 pending net-new modules — see `docs/BUSINESS-ROADMAP.md` crosswalk):**
+> **▶ V1 MODULE TRACKER (15/15 DONE — historical; waves W0–W5 supersede):**
 > | # | Module | Status |
 > |---|--------|--------|
-> | 1 | Scale foundation (timezones · bulk connect · Resend · live keys · AI cost cap · publish idempotency) | **DONE (builder 2026-07-08)** — timezones ✅ 0013 · bulk connect ✅ 0014 · AI cost cap → M03 ✅ · publish idempotency ✅ M01b · **owner-only:** Resend + live keys (parked) |
-> | 2 | Business profiles — retail + hotel context | **DONE (2026-07-08)** — jsonb profile slices, no migration |
-> | 3 | AI assistant hardening | **DONE (2026-07-08)** — migration 0015 |
-> | 4 | Calendar intelligence | **DONE (2026-07-08)** — compute-only, no migration |
-> | 5 | Content repurposing (v1 platforms) | **DONE (2026-07-08)** — existing schema columns, no migration |
-> | 6 | GBP local audit slice | **DONE (2026-07-08)** — profile jsonb + integrations, no migration |
-> | 7 | AI campaign builder (v1) | **DONE (2026-07-08)** — goal → draft plan; no migration |
-> | 8 | Brand Brain RAG (v1) | **DONE (2026-07-08)** — draft/approved/archived + citations; no migration |
-> | 9 | Recommendations (v1) | **DONE (2026-07-08)** — ranked actions + dismiss reason; no migration |
-> | 10 | Health scores (v1) | **DONE (2026-07-08)** — compute-only; no migration |
-> | 11 | AI-MOS suggest-only (v1) | **DONE (2026-07-08)** — draft-only convert; no migration |
-> | 12 | Agency ops slice | **DONE (2026-07-08)** — alerts + templates; no migration |
-> | 13 | Auto-onboarding (site/social scrape) | **DONE (2026-07-08)** — consent scrape + profile jsonb; no migration |
-> | 14 | Photographer marketplace | **DONE (2026-07-08)** — migration 0027 ✅ applied |
-> | 15 | Security slice (v1) | **DONE (2026-07-08)** — injection guard + health panel; no migration |
+> | 1–15 | Scale foundation → security slice | **ALL DONE (2026-07-08)** — see module history sections below |
 >
-> **NON-NEGOTIABLES:** THE ISOLATION RULE (every repo list-fn takes a REQUIRED tenantId; `canAccessCompany` checks `company.tenantId===session tenant` FIRST; actions tenant-pin on the SESSION, never a request-body id; `svc()` only for identity/tenancy/audit/settings/export-purge with session-derived ids). Under Supabase ALWAYS live-verify (RLS + a real round-trip — the code review can't catch uuid/FK/runtime issues). **Gate environment behaviour on `appEnv()` (src/lib/env.ts), NEVER `NODE_ENV`** (a Vercel preview build is NODE_ENV=production). The auth/T&C/onboarding gate lives in `requireUser()` — keep it there so server actions + API routes stay covered. `app_users` has NO `role` column (role derives from tenant_members).
+> **NON-NEGOTIABLES:** THE ISOLATION RULE (every repo list-fn takes a REQUIRED tenantId; `canAccessCompany` checks `company.tenantId===session tenant` FIRST; actions tenant-pin on the SESSION, never a request-body id; `svc()` only for identity/tenancy/audit/settings/export-purge with session-derived ids). Under Supabase ALWAYS live-verify. **Gate environment behaviour on `appEnv()` (src/lib/env.ts), NEVER `NODE_ENV`**. Auth/T&C/onboarding gate lives in `requireUser()`. `app_users` has NO `role` column (role derives from tenant_members). OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temp scripts from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-09, W2) — archived context
+>
+> **W2 merged to `main`:** live publish adapters (M24) · live ads execution (M25) · live analytics import (M26) · public REST API + partner webhooks (M27).
+>
+> **Build state (then):** tsc clean · fixtures **103/103 + 20/20**. Live flags OFF.
 >
 > ---
 >

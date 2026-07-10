@@ -12,7 +12,7 @@ create table if not exists recommendation_dismiss_history (
   recommendation_type text not null,
   title text not null default '',
   reason text,
-  dismissed_by text references app_users (id),
+  dismissed_by text, -- opaque actor; no FK — see 0003
   dismissed_at timestamptz not null default now()
 );
 

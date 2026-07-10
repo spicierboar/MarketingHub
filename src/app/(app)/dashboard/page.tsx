@@ -54,6 +54,51 @@ export default async function DashboardPage() {
     : [];
   const aiMosCompanyNames = new Map(companies.map((c) => [c.id, c.name]));
 
+  const firstCompany = companies[0];
+  const spielSteps: {
+    n: number;
+    title: string;
+    detail: string;
+    href: string;
+    cta: string;
+  }[] = [
+    {
+      n: 1,
+      title: "Set the business basics",
+      detail: "Business type, service area, brand voice — so AI knows who you are.",
+      href: firstCompany ? `/companies/${firstCompany.id}` : admin ? "/companies" : "/dashboard",
+      cta: firstCompany ? "Open profile" : "Companies",
+    },
+    {
+      n: 2,
+      title: "Add Brand Brain facts",
+      detail: "Menus, offers, FAQs — approved knowledge the AI can cite.",
+      href: firstCompany ? `/companies/${firstCompany.id}/brand-brain` : "/studio",
+      cta: "Brand Brain",
+    },
+    {
+      n: 3,
+      title: "Write the spiel",
+      detail: "Content Studio for a single post, or Campaigns → Build from goal for a full plan.",
+      href: "/studio",
+      cta: "Open Studio",
+    },
+    {
+      n: 4,
+      title: "Review & approve",
+      detail: "AI drafts stay as drafts until a human approves — nothing publishes alone.",
+      href: admin ? "/approvals" : "/content",
+      cta: admin ? "Approvals" : "Content",
+    },
+    {
+      n: 5,
+      title: "Put it on the calendar",
+      detail: "Schedule approved posts; use Scan calendar + ads to align with paid campaigns.",
+      href: "/calendar",
+      cta: "Calendar",
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -64,7 +109,10 @@ export default async function DashboardPage() {
             : "Your assigned companies and marketing requests."
         }
       >
-        <Link href="/requests/new" className={buttonClasses()}>
+        <Link href="/studio" className={buttonClasses()}>
+          Create marketing spiel
+        </Link>
+        <Link href="/requests/new" className={buttonClasses("outline")}>
           New support request
         </Link>
       </PageHeader>
@@ -91,6 +139,44 @@ export default async function DashboardPage() {
             );
           })}
         </div>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Workflow: add marketing spiel</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  From blank page to scheduled post — follow these steps in order.
+                </p>
+              </div>
+              <Link href="/campaigns/new" className="text-sm text-primary hover:underline">
+                Or build a full campaign from a goal →
+              </Link>
+            </div>
+            <ol className="space-y-3">
+              {spielSteps.map((step) => (
+                <li
+                  key={step.n}
+                  className="flex flex-wrap items-start gap-3 rounded-md border border-border px-3 py-3 sm:flex-nowrap"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {step.n}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{step.title}</p>
+                    <p className="text-sm text-muted-foreground">{step.detail}</p>
+                  </div>
+                  <Link
+                    href={step.href}
+                    className="shrink-0 text-sm font-medium text-primary hover:underline"
+                  >
+                    {step.cta}
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
 
         {local && (
           <Card>

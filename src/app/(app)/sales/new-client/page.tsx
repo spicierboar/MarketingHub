@@ -81,8 +81,12 @@ export default async function NewClientPage({
               <Field label="Company name" htmlFor="name"><Input id="name" name="name" required /></Field>
               <BusinessTypeSection initialType="other" />
               <Field label="Nature of business" htmlFor="natureOfBusiness"><Textarea id="natureOfBusiness" name="natureOfBusiness" rows={2} /></Field>
-              <Field label="Target customers" htmlFor="targetCustomers"><Textarea id="targetCustomers" name="targetCustomers" rows={2} /></Field>
-              <Field label="Brand voice" htmlFor="brandVoice"><Textarea id="brandVoice" name="brandVoice" rows={2} /></Field>
+              <Field label="Target customers" htmlFor="targetCustomers" hint="Who you want to attract — e.g. local families within 10 minutes">
+                <Textarea id="targetCustomers" name="targetCustomers" rows={2} placeholder="Local families and weekday workers" />
+              </Field>
+              <Field label="Brand voice" htmlFor="brandVoice" hint="How posts should sound — e.g. Warm and neighbourly, never pushy">
+                <Textarea id="brandVoice" name="brandVoice" rows={2} placeholder="Warm and neighbourly — never pushy" />
+              </Field>
               <Button type="submit">Continue</Button>
             </form>
           )}

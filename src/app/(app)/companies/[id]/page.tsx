@@ -16,6 +16,8 @@ import { BusinessTypeSection } from "../business-profile-fields";
 import { LocalIntelPanel } from "../local-intel-panel";
 import { RecommendationStrip } from "@/components/recommendation-cards";
 import { AutoOnboardingPanel } from "@/components/auto-onboarding-panel";
+import { ProfileSuggestButton } from "@/components/profile-suggest-button";
+import { PROFILE_FIELD_HELP } from "@/lib/profile-suggestions";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -118,7 +120,7 @@ export default async function CompanyOnboardingPage({
             }}
           />
 
-          <form action={saveOnboardingAction} className="space-y-6">
+          <form id="company-profile-form" action={saveOnboardingAction} className="space-y-6">
             <input type="hidden" name="companyId" value={company.id} />
 
             <Card>
@@ -134,7 +136,11 @@ export default async function CompanyOnboardingPage({
                   <Field label="Trading names" htmlFor="tradingNames">
                     <Input id="tradingNames" name="tradingNames" defaultValue={p.tradingNames} />
                   </Field>
-                  <Field label="Industry" htmlFor="industry">
+                  <Field
+                    label="Industry"
+                    htmlFor="industry"
+                    hint="Short label, e.g. Café, Motel, Dental clinic"
+                  >
                     <Input id="industry" name="industry" defaultValue={p.industry} />
                   </Field>
                   <div className="sm:col-span-2">
@@ -157,23 +163,71 @@ export default async function CompanyOnboardingPage({
 
             <Card>
               <CardContent className="space-y-5 p-6">
-                <h2 className="font-semibold">Business & market</h2>
-                <Field label="Nature of business" htmlFor="natureOfBusiness">
-                  <Textarea id="natureOfBusiness" name="natureOfBusiness" defaultValue={p.natureOfBusiness} />
+                <div className="space-y-2">
+                  <h2 className="font-semibold">Business & market</h2>
+                  <p className="text-sm text-muted-foreground">
+                    These fields steer AI drafts. If they feel unclear, fill business type + service
+                    areas first, then use Suggest.
+                  </p>
+                  <ProfileSuggestButton companyName={company.name} industry={p.industry} />
+                </div>
+                <Field
+                  label="Nature of business"
+                  htmlFor="natureOfBusiness"
+                  hint={PROFILE_FIELD_HELP.natureOfBusiness}
+                >
+                  <Textarea
+                    id="natureOfBusiness"
+                    name="natureOfBusiness"
+                    defaultValue={p.natureOfBusiness}
+                    placeholder="e.g. A family café in Bondi serving breakfast and lunch."
+                  />
                 </Field>
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Service areas" htmlFor="serviceAreas" hint="One per line">
-                    <Textarea id="serviceAreas" name="serviceAreas" defaultValue={p.serviceAreas.join("\n")} />
+                  <Field
+                    label="Service areas"
+                    htmlFor="serviceAreas"
+                    hint={PROFILE_FIELD_HELP.serviceAreas}
+                  >
+                    <Textarea
+                      id="serviceAreas"
+                      name="serviceAreas"
+                      defaultValue={p.serviceAreas.join("\n")}
+                      placeholder={"Bondi\nBronte\n2026"}
+                    />
                   </Field>
-                  <Field label="Services" htmlFor="services" hint="One per line">
-                    <Textarea id="services" name="services" defaultValue={p.services.join("\n")} />
+                  <Field label="Services" htmlFor="services" hint="What you offer — one per line">
+                    <Textarea
+                      id="services"
+                      name="services"
+                      defaultValue={p.services.join("\n")}
+                      placeholder={"Dine-in\nTakeaway"}
+                    />
                   </Field>
                 </div>
-                <Field label="Target customers" htmlFor="targetCustomers">
-                  <Textarea id="targetCustomers" name="targetCustomers" defaultValue={p.targetCustomers} />
+                <Field
+                  label="Target customers"
+                  htmlFor="targetCustomers"
+                  hint={PROFILE_FIELD_HELP.targetCustomers}
+                >
+                  <Textarea
+                    id="targetCustomers"
+                    name="targetCustomers"
+                    defaultValue={p.targetCustomers}
+                    placeholder="e.g. Local families and weekday office workers within 10 minutes."
+                  />
                 </Field>
-                <Field label="Local market notes" htmlFor="localMarketNotes">
-                  <Textarea id="localMarketNotes" name="localMarketNotes" defaultValue={p.localMarketNotes} />
+                <Field
+                  label="Local market notes"
+                  htmlFor="localMarketNotes"
+                  hint={PROFILE_FIELD_HELP.localMarketNotes}
+                >
+                  <Textarea
+                    id="localMarketNotes"
+                    name="localMarketNotes"
+                    defaultValue={p.localMarketNotes}
+                    placeholder="e.g. Quiet midweek; busy weekends; near the beach."
+                  />
                 </Field>
               </CardContent>
             </Card>
@@ -183,17 +237,35 @@ export default async function CompanyOnboardingPage({
             <Card>
               <CardContent className="space-y-5 p-6">
                 <h2 className="font-semibold">Brand & compliance</h2>
-                <Field label="Brand voice" htmlFor="brandVoice">
-                  <Textarea id="brandVoice" name="brandVoice" defaultValue={p.brandVoice} />
+                <Field
+                  label="Brand voice"
+                  htmlFor="brandVoice"
+                  hint={PROFILE_FIELD_HELP.brandVoice}
+                >
+                  <Textarea
+                    id="brandVoice"
+                    name="brandVoice"
+                    defaultValue={p.brandVoice}
+                    placeholder="e.g. Warm and neighbourly — never pushy or full of jargon."
+                  />
                 </Field>
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Calls to action" htmlFor="callsToAction" hint="One per line">
-                    <Textarea id="callsToAction" name="callsToAction" defaultValue={p.callsToAction.join("\n")} />
+                  <Field
+                    label="Calls to action"
+                    htmlFor="callsToAction"
+                    hint={PROFILE_FIELD_HELP.callsToAction}
+                  >
+                    <Textarea
+                      id="callsToAction"
+                      name="callsToAction"
+                      defaultValue={p.callsToAction.join("\n")}
+                      placeholder={"Book a table\nOrder online"}
+                    />
                   </Field>
                   <Field label="Current offers" htmlFor="currentOffers">
                     <Textarea id="currentOffers" name="currentOffers" defaultValue={p.currentOffers} />
                   </Field>
-                  <Field label="Approved claims" htmlFor="approvedClaims" hint="One per line">
+                  <Field label="Approved claims" htmlFor="approvedClaims" hint="One per line — facts AI may state">
                     <Textarea id="approvedClaims" name="approvedClaims" defaultValue={p.approvedClaims.join("\n")} />
                   </Field>
                   <Field label="Prohibited claims" htmlFor="prohibitedClaims" hint="One per line — the AI will never use these">

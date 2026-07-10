@@ -183,6 +183,7 @@ export async function scanCalendarAssistAction(formData: FormData) {
   });
 
   revalidatePath("/calendar");
+  revalidatePath("/ads");
 }
 
 export async function acceptCalendarAssistSuggestionAction(formData: FormData) {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Inbox,
@@ -43,6 +44,7 @@ import {
   Landmark,
   LogOut,
   Gift,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -53,53 +55,204 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
-  ownerOnly?: boolean; // tenant owner only (billing / commercial)
-  platformAdminOnly?: boolean; // platform operator only (cross-tenant surface)
+  ownerOnly?: boolean;
+  platformAdminOnly?: boolean;
   salesAccess?: boolean;
 }
 
-const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/requests", label: "Support Requests", icon: Inbox },
-  { href: "/campaigns", label: "Campaigns", icon: Megaphone },
-  { href: "/studio", label: "Content Studio", icon: Sparkles },
-  { href: "/visuals", label: "AI Visuals", icon: Clapperboard, adminOnly: true },
-  { href: "/photographers", label: "Photographers", icon: Camera, adminOnly: true },
-  { href: "/menus", label: "Menus", icon: UtensilsCrossed, adminOnly: true },
-  { href: "/ordering", label: "Order Now", icon: ShoppingBag, adminOnly: true },
-  { href: "/content", label: "Content", icon: FileText },
-  { href: "/assets", label: "Creative Assets", icon: Images },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/library", label: "Reuse Library", icon: BookOpen },
-  { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
-  { href: "/inbox", label: "Social Inbox", icon: AtSign },
-  { href: "/social", label: "Social Responses", icon: MessageSquare },
-  { href: "/reviews", label: "Reviews", icon: Star, adminOnly: true },
-  { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
-  { href: "/ai-mos", label: "AI-MOS", icon: Radar, adminOnly: true },
-  { href: "/tasks", label: "Tasks", icon: ListTodo },
-  { href: "/automations", label: "Automations", icon: Bot, adminOnly: true },
-  { href: "/workflows", label: "Workflows", icon: GitBranch, adminOnly: true },
-  { href: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
-  { href: "/email-marketing", label: "Email Marketing", icon: Mail, adminOnly: true },
-  { href: "/ads", label: "Paid Advertising", icon: Target, adminOnly: true },
-  { href: "/sms", label: "SMS Marketing", icon: Smartphone, adminOnly: true },
-  { href: "/crm", label: "CRM", icon: ContactRound, adminOnly: true },
-  { href: "/cms", label: "Website CMS", icon: Globe, adminOnly: true },
-  { href: "/funnel", label: "Funnels", icon: Filter, adminOnly: true },
-  { href: "/loyalty", label: "Loyalty", icon: Gift, adminOnly: true },
-  { href: "/companies", label: "Companies", icon: Building2, adminOnly: true },
-  { href: "/sales/new-client", label: "New client", icon: Handshake, salesAccess: true },
-  { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
-  { href: "/users", label: "Users", icon: Users, adminOnly: true },
-  { href: "/branding", label: "Branding", icon: Palette, ownerOnly: true },
-  { href: "/billing", label: "Billing & Plan", icon: CreditCard, ownerOnly: true },
-  { href: "/admin", label: "Admin & Security", icon: ShieldAlert, adminOnly: true },
-  { href: "/developers", label: "Developers & API", icon: Handshake, adminOnly: true },
-  { href: "/ai-control", label: "AI Control", icon: ShieldCheck, adminOnly: true },
-  { href: "/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
-  { href: "/platform-admin", label: "Platform Admin", icon: Landmark, platformAdminOnly: true },
+interface NavGroup {
+  id: string;
+  label: string;
+  /** Always expanded for primary daily work */
+  pinned?: boolean;
+  /** Hide entire group from non-admins (unless sales/owner items apply) */
+  adminOnly?: boolean;
+  items: NavItem[];
+}
+
+/**
+ * Job-based IA — one purpose per group so the sidebar reads as a workflow,
+ * not a flat dump of every module shipped in W0–W5.
+ *
+ * Visibility:
+ *   - pinned groups (Today, Create) → everyone who can see their items
+ *   - other groups → admin / owner / sales / platform only (see group.adminOnly)
+ */
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "today",
+    label: "Today",
+    pinned: true,
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/tasks", label: "Tasks", icon: ListTodo },
+      { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
+      { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
+      { href: "/ai-mos", label: "AI-MOS", icon: Radar, adminOnly: true },
+    ],
+  },
+  {
+    id: "create",
+    label: "Create & publish",
+    pinned: true,
+    items: [
+      { href: "/campaigns", label: "Campaigns", icon: Megaphone },
+      { href: "/studio", label: "Content Studio", icon: Sparkles },
+      { href: "/content", label: "Content library", icon: FileText },
+      { href: "/calendar", label: "Calendar", icon: CalendarDays },
+      { href: "/assets", label: "Creative assets", icon: Images },
+      { href: "/library", label: "Reuse library", icon: BookOpen },
+      { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
+    ],
+  },
+  {
+    id: "engage",
+    label: "Engage",
+    /** Members still need inbox / requests; keep visible for all */
+    items: [
+      { href: "/inbox", label: "Social inbox", icon: AtSign },
+      { href: "/social", label: "Social responses", icon: MessageSquare },
+      { href: "/reviews", label: "Reviews", icon: Star, adminOnly: true },
+      { href: "/requests", label: "Support requests", icon: Inbox },
+    ],
+  },
+  {
+    id: "audience",
+    label: "Audience & channels",
+    adminOnly: true,
+    items: [
+      { href: "/crm", label: "CRM", icon: ContactRound, adminOnly: true },
+      { href: "/email-marketing", label: "Email", icon: Mail, adminOnly: true },
+      { href: "/sms", label: "SMS", icon: Smartphone, adminOnly: true },
+      { href: "/loyalty", label: "Loyalty", icon: Gift, adminOnly: true },
+      { href: "/ads", label: "Paid ads", icon: Target, adminOnly: true },
+    ],
+  },
+  {
+    id: "grow",
+    label: "Website & growth",
+    adminOnly: true,
+    items: [
+      { href: "/cms", label: "Website CMS", icon: Globe, adminOnly: true },
+      { href: "/funnel", label: "Funnels", icon: Filter, adminOnly: true },
+      { href: "/workflows", label: "Workflows", icon: GitBranch, adminOnly: true },
+      { href: "/automations", label: "Automations", icon: Bot, adminOnly: true },
+      { href: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
+    ],
+  },
+  {
+    id: "vertical",
+    label: "Vertical tools",
+    adminOnly: true,
+    items: [
+      { href: "/visuals", label: "AI visuals", icon: Clapperboard, adminOnly: true },
+      { href: "/photographers", label: "Photographers", icon: Camera, adminOnly: true },
+      { href: "/menus", label: "Menus", icon: UtensilsCrossed, adminOnly: true },
+      { href: "/ordering", label: "Order Now", icon: ShoppingBag, adminOnly: true },
+    ],
+  },
+  {
+    id: "workspace",
+    label: "Workspace",
+    adminOnly: true,
+    items: [
+      { href: "/companies", label: "Companies", icon: Building2, adminOnly: true },
+      { href: "/sales/new-client", label: "New client", icon: Handshake, salesAccess: true },
+      { href: "/users", label: "Users", icon: Users, adminOnly: true },
+      { href: "/branding", label: "Branding", icon: Palette, ownerOnly: true },
+      { href: "/billing", label: "Billing & plan", icon: CreditCard, ownerOnly: true },
+      { href: "/admin", label: "Admin & security", icon: ShieldAlert, adminOnly: true },
+      { href: "/ai-control", label: "AI control", icon: ShieldCheck, adminOnly: true },
+      { href: "/developers", label: "Developers & API", icon: Handshake, adminOnly: true },
+      { href: "/audit", label: "Audit log", icon: ScrollText, adminOnly: true },
+      { href: "/platform-admin", label: "Platform admin", icon: Landmark, platformAdminOnly: true },
+    ],
+  },
 ];
+
+function itemVisible(
+  n: NavItem,
+  opts: {
+    isAdmin: boolean;
+    isOwner: boolean;
+    isPlatformAdmin: boolean;
+    canFieldSales: boolean;
+  },
+) {
+  return (
+    (!n.adminOnly || opts.isAdmin) &&
+    (!n.ownerOnly || opts.isOwner) &&
+    (!n.platformAdminOnly || opts.isPlatformAdmin) &&
+    (!n.salesAccess || opts.canFieldSales)
+  );
+}
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+        active
+          ? "bg-accent text-primary"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
+}
+
+function NavSection({
+  group,
+  pathname,
+  defaultOpen,
+}: {
+  group: NavGroup;
+  pathname: string;
+  defaultOpen: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const hasActive = group.items.some(
+    (item) => pathname === item.href || pathname.startsWith(item.href + "/"),
+  );
+  const expanded = group.pinned || open || hasActive;
+
+  if (group.items.length === 0) return null;
+
+  return (
+    <div className="mb-2">
+      {group.pinned ? (
+        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+          {group.label}
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground"
+          aria-expanded={expanded}
+        >
+          {group.label}
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")}
+          />
+        </button>
+      )}
+      {expanded && (
+        <div className="space-y-0.5">
+          {group.items.map((item) => {
+            const active =
+              pathname === item.href || pathname.startsWith(item.href + "/");
+            return <NavLink key={item.href} item={item} active={active} />;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AppShell({
   user,
@@ -125,18 +278,30 @@ export function AppShell({
   canFieldSales?: boolean;
   branding?: { accentColor?: string; logoUrl?: string } | null;
   banner?: { tone: "danger" | "warning"; text: string } | null;
-  envLabel?: string | null; // "STAGING"/"DEVELOPMENT" ribbon; null in production
+  envLabel?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const items = NAV.filter(
-    (n) =>
-      (!n.adminOnly || isAdmin) &&
-      (!n.ownerOnly || isOwner) &&
-      (!n.platformAdminOnly || isPlatformAdmin) &&
-      (!n.salesAccess || canFieldSales),
-  );
-  // T6 white-label: override the theme accent for this tenant.
+  const visibility = { isAdmin, isOwner, isPlatformAdmin, canFieldSales };
+
+  const groups = NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((n) => itemVisible(n, visibility)),
+  })).filter((g) => {
+    if (g.items.length === 0) return false;
+    // Admin-only groups: show if admin/owner/platform, OR if any sales-only
+    // item survived the filter (field sales without admin).
+    if (g.adminOnly) {
+      return (
+        isAdmin ||
+        isOwner ||
+        isPlatformAdmin ||
+        g.items.some((i) => i.salesAccess)
+      );
+    }
+    return true;
+  });
+
   const brandStyle = branding?.accentColor
     ? ({ ["--primary"]: branding.accentColor } as React.CSSProperties)
     : undefined;
@@ -196,27 +361,15 @@ export function AppShell({
             </form>
           </div>
         )}
-        <nav className="flex-1 space-y-1 p-3">
-          {items.map((item) => {
-            const active =
-              pathname === item.href || pathname.startsWith(item.href + "/");
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-accent text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto p-3">
+          {groups.map((group) => (
+            <NavSection
+              key={group.id}
+              group={group}
+              pathname={pathname}
+              defaultOpen={false}
+            />
+          ))}
         </nav>
         <div className="border-t border-border p-3">
           <div className="mb-2 px-2">
@@ -236,13 +389,11 @@ export function AppShell({
       </aside>
 
       <div className="flex flex-1 flex-col">
-        {/* Non-production environment ribbon (STAGING/DEVELOPMENT). */}
         {envLabel && (
           <div className="bg-fuchsia-700 px-4 py-1 text-center text-xs font-semibold uppercase tracking-wider text-white">
             {envLabel} — test environment, not live
           </div>
         )}
-        {/* Mobile top bar */}
         <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4 md:hidden">
           <span className="font-semibold">Command Centre</span>
           <form action={signOut}>

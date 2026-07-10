@@ -53,8 +53,9 @@ export function CalendarAssistPanel({
         <div>
           <CardTitle>AI calendar assist (30 days)</CardTitle>
           <CardDescription>
-            Governed suggestions from calendar intelligence — accept creates ai_draft only; schedule separately after
-            approval.
+            Suggestions from seasonal prompts, calendar gaps, and{" "}
+            <strong>active paid ads</strong> (organic posts that flank the same theme). Accept →
+            ai_draft only — never auto-schedules or spends.
           </CardDescription>
         </div>
         <form action={scanCalendarAssistAction} className="flex flex-wrap items-end gap-2">
@@ -70,7 +71,7 @@ export function CalendarAssistPanel({
             </Select>
           </div>
           <Button type="submit" size="sm">
-            Scan calendar
+            Scan calendar + ads
           </Button>
         </form>
       </CardHeader>

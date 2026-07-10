@@ -5,9 +5,9 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/form";
 import { formatDate } from "@/lib/utils";
 import { createTaskAction, toggleTaskAction } from "../recommendations/actions";
+import { AddTaskForm } from "@/components/add-task-form";
 
 export default async function TasksPage() {
   const user = await requireUser();
@@ -99,22 +99,10 @@ export default async function TasksPage() {
             {companies.length === 0 ? (
               <p className="text-sm text-muted-foreground">No companies assigned.</p>
             ) : (
-              <form action={createTaskAction} className="space-y-4">
-                <Field label="Company" htmlFor="companyId">
-                  <Select id="companyId" name="companyId" required>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Task" htmlFor="title">
-                  <Input id="title" name="title" required />
-                </Field>
-                <Field label="Detail" htmlFor="detail">
-                  <Input id="detail" name="detail" />
-                </Field>
-                <Button type="submit">Add task</Button>
-              </form>
+              <AddTaskForm
+                companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+                action={createTaskAction}
+              />
             )}
           </CardContent>
         </Card>

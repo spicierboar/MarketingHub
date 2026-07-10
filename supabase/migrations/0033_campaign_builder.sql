@@ -55,16 +55,19 @@ create index if not exists campaign_builder_runs_company_idx on campaign_builder
 create index if not exists campaign_draft_schedule_campaign_idx on campaign_draft_schedule_items (campaign_id);
 
 alter table campaign_plan_versions enable row level security;
+drop policy if exists campaign_plan_versions_rw on campaign_plan_versions;
 create policy campaign_plan_versions_rw on campaign_plan_versions for all
   using (has_company_access(company_id))
   with check (has_company_access(company_id));
 
 alter table campaign_builder_runs enable row level security;
+drop policy if exists campaign_builder_runs_rw on campaign_builder_runs;
 create policy campaign_builder_runs_rw on campaign_builder_runs for all
   using (has_company_access(company_id))
   with check (has_company_access(company_id));
 
 alter table campaign_draft_schedule_items enable row level security;
+drop policy if exists campaign_draft_schedule_items_rw on campaign_draft_schedule_items;
 create policy campaign_draft_schedule_items_rw on campaign_draft_schedule_items for all
   using (has_company_access(company_id))
   with check (has_company_access(company_id));

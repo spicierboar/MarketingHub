@@ -72,14 +72,18 @@ Last updated: 2026-07-10 (**W5 SHIPPED**)
 
 **Fixtures:** self-test **165/165** · queue-test **20/20** · live flags **OFF**
 
-**Migrations (owner paste when ready):** `0033_rag.sql` · `0033_recommendations.sql` · `0033_campaign_builder.sql`
+**Migrations:** W2–W5 owner-pasted to Supabase (2026-07-10) — RAG actor FK fix + campaign-builder RLS finish included. Source: `0033_rag.sql` · `0033_recommendations.sql` · `0033_campaign_builder.sql` (+ AI-MOS).
+
+**Post-W5 local WIP (uncommitted on main):** `CC_LOCAL_DEMO` + `/dev` · grouped nav · profile AI suggest · task title dropdown · calendar↔ads `ad_alignment` · dashboard “marketing spiel” workflow. Prefer `npx next dev -p 3002`. See `HANDOVER.md` START HERE.
 
 ## Waves 6-7 — QUEUED
 
-`full_complete=no` · W6 Phase 3 **blocked**
+`full_complete=no` · W6 Phase 3 **blocked** (Google Cloud billing) · W7 code-only optional while waiting (confirm with owner)
 
 ## Owner ops
 
 Phases 1-2 done · Phase 3 Google blocked · Phase 4 parked · `https://mangotickle.com.au`
+
+**Migrations pasted (2026-07-10):** W2 `0029`–`0030` · W3 `0031_*` · W4 `0032_*` · W5 `0033_*` (RAG FK fix + campaign-builder RLS finish) — **done**
 
 ---

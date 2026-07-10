@@ -7,6 +7,7 @@ import {
   createCalendarAssistSuggestion,
   createContent,
   getCompany,
+  listAdCampaigns,
   listCalendarAssistSuggestions,
   listCompanies,
   listScheduledPosts,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/calendar-intelligence";
 import { addDaysIso } from "@/lib/calendar-utils";
 import type {
+  AdCampaign,
   CalendarAssistSuggestion,
   Company,
   GroundingLabel,
@@ -65,16 +67,128 @@ function dayOfWeekFromIso(iso: string): string {
   return DOW[new Date(iso + "T12:00:00Z").getUTCDay()];
 }
 
+/** Map paid platform → organic channel for flanking posts. */
+function organicPlatformForAd(campaign: AdCampaign, windows: OptimalPostWindow[]): string {
+  if (campaign.platform === "google_ads") {
+    return (
+      windows.find((w) => /google|gbp/i.test(w.platform))?.platform ??
+      "Google Business Profile"
+    );
+  }
+  return (
+    windows.find((w) => /facebook|instagram|meta/i.test(w.platform))?.platform ?? "Facebook"
+  );
+}
+
+function objectiveCue(objective: AdCampaign["objective"]): string {
+  switch (objective) {
+    case "leads":
+      return "Drive enquiries — clear CTA, same offer as the ad";
+    case "traffic":
+      return "Send people to the same landing / offer as the ad";
+    case "sales":
+      return "Push the same product or offer the ad is selling";
+    case "awareness":
+    default:
+      return "Echo the ad theme so organic and paid feel like one campaign";
+  }
+}
+
+/**
+ * Suggest organic posts that flank active (or soon-active) paid campaigns.
+ * Suggest-only — never schedules or spends. Works with simulated ads while ADS_LIVE is off.
+ */
+export function buildAdAlignmentDrafts(args: {
+  company: Company;
+  ads: AdCampaign[];
+  todayIso: string;
+  windows: OptimalPostWindow[];
+  usedDates?: Set<string>;
+}): CalendarAssistSuggestionDraft[] {
+  const { company, ads, todayIso, windows } = args;
+  const usedDates = args.usedDates ?? new Set<string>();
+  const horizon = addDays(todayIso, SCAN_LOOKAHEAD_DAYS);
+  const drafts: CalendarAssistSuggestionDraft[] = [];
+
+  const relevant = ads.filter((c) => {
+    if (c.companyId !== company.id) return false;
+    if (c.status === "ended" || c.status === "paused") return false;
+    // active now, or draft/active starting within the scan window
+    if (c.status === "active") return true;
+    if (c.status === "draft" && c.startDate >= todayIso && c.startDate <= horizon) return true;
+    return false;
+  });
+
+  for (const ad of relevant) {
+    const platform = organicPlatformForAd(ad, windows);
+    const start = ad.startDate < todayIso ? todayIso : ad.startDate;
+    const end = ad.endDate && ad.endDate <= horizon ? ad.endDate : addDays(start, 14);
+
+    // Flanking slots: day before launch (or today if already live), mid-flight, near end
+    const slots: { date: string; role: string; priority: number }[] = [];
+    const dayBefore = addDays(ad.startDate, -1);
+    if (dayBefore >= todayIso && dayBefore <= horizon) {
+      slots.push({ date: dayBefore, role: "teaser before ad launch", priority: 95 });
+    }
+    if (start >= todayIso && start <= horizon) {
+      slots.push({ date: start, role: "launch-day organic support", priority: 92 });
+    }
+    const mid = addDays(start, 5);
+    if (mid >= todayIso && mid <= horizon && mid <= end) {
+      slots.push({ date: mid, role: "mid-flight reinforcement", priority: 88 });
+    }
+    if (ad.endDate) {
+      const wrap = addDays(ad.endDate, -1);
+      if (wrap >= todayIso && wrap <= horizon && wrap > start) {
+        slots.push({ date: wrap, role: "last-chance organic push", priority: 86 });
+      }
+    }
+
+    for (const slot of slots) {
+      if (usedDates.has(slot.date)) continue;
+      if (drafts.length >= 4) break; // cap ad-alignment per company per scan
+      drafts.push({
+        kind: "ad_alignment",
+        title: `Support ad: ${ad.name}`,
+        brief: `${slot.role} for paid “${ad.name}” (${ad.platform.replace(/_/g, " ")}, ${ad.objective}). ${objectiveCue(ad.objective)}. Match the ad theme and CTA; do not invent claims. Suggest-only — approve before scheduling.`,
+        proposedDate: slot.date,
+        proposedTime: pickTime(windows, platform, dayOfWeekFromIso(slot.date)),
+        platform,
+        requestType: "social_post",
+        evidence: [
+          {
+            signal: "ad_alignment",
+            observed: `${ad.status} ${ad.platform} “${ad.name}” ${ad.startDate}${ad.endDate ? `→${ad.endDate}` : ""} · ${slot.role}`,
+          },
+        ],
+        priority: slot.priority,
+      });
+      usedDates.add(slot.date);
+    }
+  }
+
+  return drafts;
+}
+
 export function buildCalendarAssistDrafts(args: {
   company: Company;
   todayIso: string;
   posts: Pick<ScheduledPost, "scheduledDate" | "status" | "companyId">[];
   windows: OptimalPostWindow[];
+  ads?: AdCampaign[];
 }): CalendarAssistSuggestionDraft[] {
-  const { company, todayIso, posts, windows } = args;
+  const { company, todayIso, posts, windows, ads = [] } = args;
   const industries = company.profile.industry ? [company.profile.industry] : [];
   const drafts: CalendarAssistSuggestionDraft[] = [];
   const usedDates = new Set<string>();
+
+  // Paid alignment first — highest commercial priority when ads are running
+  for (const d of buildAdAlignmentDrafts({ company, ads, todayIso, windows, usedDates })) {
+    drafts.push(d);
+    if (drafts.length >= MAX_SUGGESTIONS_PER_SCAN) {
+      return drafts.sort((a, b) => b.priority - a.priority || a.proposedDate.localeCompare(b.proposedDate));
+    }
+  }
 
   for (const monthKey of monthKeysInRange(todayIso, SCAN_LOOKAHEAD_DAYS)) {
     for (const p of seasonalPromptsForMonth(monthKey, industries)) {
@@ -151,13 +265,20 @@ export async function surfaceCalendarAssistSuggestions(
   );
   const todayIso = opts?.todayIso ?? new Date().toISOString().slice(0, 10);
   const allPosts = await listScheduledPosts(tenantId);
+  const allAds = await listAdCampaigns(tenantId);
   let created = 0;
 
   for (const company of companies) {
     const existing = await listCalendarAssistSuggestions(tenantId, [company.id], "open");
     const existingKeys = new Set(existing.map((s) => `${s.kind}|${s.proposedDate}|${s.title.toLowerCase()}`));
     const windows = await optimalPostWindows(tenantId, { companyIds: [company.id], limit: 4 });
-    const drafts = buildCalendarAssistDrafts({ company, todayIso, posts: allPosts.filter((p) => p.companyId === company.id), windows });
+    const drafts = buildCalendarAssistDrafts({
+      company,
+      todayIso,
+      posts: allPosts.filter((p) => p.companyId === company.id),
+      windows,
+      ads: allAds.filter((a) => a.companyId === company.id),
+    });
 
     for (const draft of drafts) {
       const key = `${draft.kind}|${draft.proposedDate}|${draft.title.toLowerCase()}`;

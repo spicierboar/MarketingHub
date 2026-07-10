@@ -210,6 +210,7 @@ import {
 } from "@/lib/selftest/ai-mos";
 import {
   checkAcceptCreatesDraftOnly as checkCalendarAssistAcceptDraftOnly,
+  checkBuildAdAlignmentDrafts,
   checkBuildCalendarAssistDrafts,
   checkDismissAudited as checkCalendarAssistDismissAudited,
 } from "@/lib/selftest/calendar-assist";
@@ -930,6 +931,8 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
 
     await expect("calendarAssist.buildDrafts", () => checkBuildCalendarAssistDrafts());
+
+    await expect("calendarAssist.adAlignment", () => checkBuildAdAlignmentDrafts());
 
     await expect("calendarAssist.acceptDraftOnly", () =>
       checkCalendarAssistAcceptDraftOnly(companyA.id, ownerAUser.id, tenantAId!),

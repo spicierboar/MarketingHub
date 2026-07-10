@@ -11,11 +11,12 @@ import { listAudit } from "@/lib/audit";
 import {
   acceptCalendarAssistSuggestion,
   assistAcceptedContentNotScheduled,
+  buildAdAlignmentDrafts,
   buildCalendarAssistDrafts,
   dismissCalendarAssistSuggestion,
 } from "@/lib/ai/calendar-assist";
 import { seasonalPromptsForMonth } from "@/lib/calendar-intelligence";
-import type { Company, User } from "@/lib/types";
+import type { AdCampaign, Company, User } from "@/lib/types";
 
 export function stubCalendarAssistCompany(overrides: Partial<Company> = {}): Company {
   return {
@@ -58,6 +59,35 @@ export async function checkBuildCalendarAssistDrafts(): Promise<{ ok: boolean; d
   });
   const ok = drafts.length >= 1 && drafts.every((d) => d.brief.length > 10 && d.platform.length > 0);
   return { ok, detail: `drafts=${drafts.length} kinds=${drafts.map((d) => d.kind).join(",")}` };
+}
+
+export function checkBuildAdAlignmentDrafts(): { ok: boolean; detail: string } {
+  const company = stubCalendarAssistCompany({ id: "co_ad_align" });
+  const today = todayIso();
+  const ad: AdCampaign = {
+    id: "adc_test",
+    companyId: company.id,
+    adAccountId: "ad_test",
+    platform: "meta_ads",
+    name: "Weekend Brunch Push",
+    objective: "leads",
+    dailyBudgetUsd: 25,
+    status: "active",
+    startDate: today,
+    createdById: "u_stub",
+    createdAt: today,
+    updatedAt: today,
+  };
+  const drafts = buildAdAlignmentDrafts({
+    company,
+    ads: [ad],
+    todayIso: today,
+    windows: [],
+  });
+  const ok =
+    drafts.length >= 1 &&
+    drafts.every((d) => d.kind === "ad_alignment" && /Weekend Brunch/i.test(d.title));
+  return { ok, detail: `adAlignment=${drafts.length} titles=${drafts.map((d) => d.title).join(" | ")}` };
 }
 
 export async function checkAcceptCreatesDraftOnly(

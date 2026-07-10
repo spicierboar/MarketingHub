@@ -1297,7 +1297,8 @@ export type CalendarAssistSuggestionKind =
   | "seasonal_prompt"
   | "calendar_gap"
   | "cadence_fill"
-  | "optimal_window";
+  | "optimal_window"
+  | "ad_alignment";
 
 export type CalendarAssistSuggestionStatus = "open" | "accepted" | "dismissed";
 

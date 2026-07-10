@@ -11,6 +11,9 @@ export function createBrowserSupabase() {
 }
 
 export function isSupabaseConfiguredClient(): boolean {
+  // Mirror server local-demo bypass so the login form uses cookie auth.
+  const demo = (process.env.NEXT_PUBLIC_CC_LOCAL_DEMO || "").trim().toLowerCase();
+  if (demo === "true" || demo === "1") return false;
   return (
     !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
     !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

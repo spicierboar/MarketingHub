@@ -56,6 +56,13 @@ export default function LoginPage() {
           Access is by invitation only. Contact your agency administrator if you need an account.
         </p>
 
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Local testing?{" "}
+          <a href="/dev" className="text-primary underline">
+            Dev tools — seed / clear / quick login
+          </a>
+        </p>
+
         <div className="mt-6 rounded-lg border border-dashed border-border bg-card p-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Demo accounts (isolated tenants)
