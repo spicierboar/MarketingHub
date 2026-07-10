@@ -2224,6 +2224,13 @@ export interface WorkflowRunStats {
   simulated: number;
 }
 
+export interface WorkflowRunResult {
+  ok: boolean;
+  stats: WorkflowRunStats;
+  logs: WorkflowDispatchLog[];
+  blockedReason?: string;
+}
+
 // ---- Loyalty, Offers & Referrals (W4 M37) ---------------------------------------
 
 export type LoyaltyRewardMode = "points" | "stamps";

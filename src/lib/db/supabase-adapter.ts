@@ -50,6 +50,7 @@ import type {
   TermsVersion, TermsAcceptance, User, UtmLink,
   EmailTemplate, EmailSubscriber, EmailCampaign,
   CmsPage, CmsPageVersion, CmsSeoMetadata, CmsUpdateRequest,
+  ConversionFunnel, FunnelAbExperiment, FunnelJourney, FunnelLandingPage,
 } from "@/lib/types";
 
 // Request-scoped RLS client for company-scoped data — EXCEPT inside a trusted
@@ -590,6 +591,99 @@ export const supabaseRepo = {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("cms_update_requests").update({ ...toRow(patch), updated_at: now() }).eq("id", requestId).select("*").maybeSingle();
     return data ? toDomain<CmsUpdateRequest>(data) : undefined;
+  },
+
+  async listFunnelJourneys(tenantId: string, companyId?: string): Promise<FunnelJourney[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("funnel_journeys").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("updated_at", { ascending: false });
+    return many<FunnelJourney>(data);
+  },
+  async getFunnelJourney(journeyId: string): Promise<FunnelJourney | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("funnel_journeys").select("*").eq("id", journeyId).maybeSingle();
+    return data ? toDomain<FunnelJourney>(data) : undefined;
+  },
+  async createFunnelJourney(input: Omit<FunnelJourney, "id" | "createdAt" | "updatedAt">): Promise<FunnelJourney> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("funnel_journeys").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createFunnelJourney: " + error.message);
+    return toDomain<FunnelJourney>(data);
+  },
+  async updateFunnelJourney(journeyId: string, patch: Partial<FunnelJourney>): Promise<FunnelJourney | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("funnel_journeys").update(toRow({ ...patch, updatedAt: now() })).eq("id", journeyId).select("*").maybeSingle();
+    return data ? toDomain<FunnelJourney>(data) : undefined;
+  },
+  async listConversionFunnels(tenantId: string, companyId?: string): Promise<ConversionFunnel[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("conversion_funnels").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("updated_at", { ascending: false });
+    return many<ConversionFunnel>(data);
+  },
+  async getConversionFunnel(funnelId: string): Promise<ConversionFunnel | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("conversion_funnels").select("*").eq("id", funnelId).maybeSingle();
+    return data ? toDomain<ConversionFunnel>(data) : undefined;
+  },
+  async createConversionFunnel(input: Omit<ConversionFunnel, "id" | "createdAt" | "updatedAt">): Promise<ConversionFunnel> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("conversion_funnels").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createConversionFunnel: " + error.message);
+    return toDomain<ConversionFunnel>(data);
+  },
+  async updateConversionFunnel(funnelId: string, patch: Partial<ConversionFunnel>): Promise<ConversionFunnel | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("conversion_funnels").update(toRow({ ...patch, updatedAt: now() })).eq("id", funnelId).select("*").maybeSingle();
+    return data ? toDomain<ConversionFunnel>(data) : undefined;
+  },
+  async listFunnelLandingPages(tenantId: string, companyId?: string): Promise<FunnelLandingPage[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("funnel_landing_pages").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("updated_at", { ascending: false });
+    return many<FunnelLandingPage>(data);
+  },
+  async getFunnelLandingPage(pageId: string): Promise<FunnelLandingPage | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("funnel_landing_pages").select("*").eq("id", pageId).maybeSingle();
+    return data ? toDomain<FunnelLandingPage>(data) : undefined;
+  },
+  async createFunnelLandingPage(input: Omit<FunnelLandingPage, "id" | "createdAt" | "updatedAt">): Promise<FunnelLandingPage> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("funnel_landing_pages").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createFunnelLandingPage: " + error.message);
+    return toDomain<FunnelLandingPage>(data);
+  },
+  async updateFunnelLandingPage(pageId: string, patch: Partial<FunnelLandingPage>): Promise<FunnelLandingPage | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("funnel_landing_pages").update(toRow({ ...patch, updatedAt: now() })).eq("id", pageId).select("*").maybeSingle();
+    return data ? toDomain<FunnelLandingPage>(data) : undefined;
+  },
+  async listFunnelAbExperiments(tenantId: string, companyId?: string): Promise<FunnelAbExperiment[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("funnel_ab_experiments").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("updated_at", { ascending: false });
+    return many<FunnelAbExperiment>(data);
+  },
+  async getFunnelAbExperiment(experimentId: string): Promise<FunnelAbExperiment | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("funnel_ab_experiments").select("*").eq("id", experimentId).maybeSingle();
+    return data ? toDomain<FunnelAbExperiment>(data) : undefined;
+  },
+  async createFunnelAbExperiment(input: Omit<FunnelAbExperiment, "id" | "createdAt" | "updatedAt">): Promise<FunnelAbExperiment> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("funnel_ab_experiments").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createFunnelAbExperiment: " + error.message);
+    return toDomain<FunnelAbExperiment>(data);
+  },
+  async updateFunnelAbExperiment(experimentId: string, patch: Partial<FunnelAbExperiment>): Promise<FunnelAbExperiment | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("funnel_ab_experiments").update(toRow({ ...patch, updatedAt: now() })).eq("id", experimentId).select("*").maybeSingle();
+    return data ? toDomain<FunnelAbExperiment>(data) : undefined;
   },
 
   // ============================ Brand Brain (RLS) ==========================

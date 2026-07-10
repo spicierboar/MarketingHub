@@ -6,6 +6,10 @@ import {
   listCompanies,
   listCompanyReviews,
   listContent,
+  listConversionFunnels,
+  listFunnelAbExperiments,
+  listFunnelJourneys,
+  listFunnelLandingPages,
   listRequests,
   listReviewRequestCampaigns,
   listSocial,
@@ -15,6 +19,10 @@ import type {
   Company,
   CompanyReview,
   ContentItem,
+  ConversionFunnel,
+  FunnelAbExperiment,
+  FunnelJourney,
+  FunnelLandingPage,
   MarketingRequest,
   ReviewRequestCampaign,
   SocialResponseDraft,
@@ -60,4 +68,32 @@ export async function visibleReviewCampaigns(user: ActingUser): Promise<ReviewRe
   if (isAdmin(user)) return campaigns;
   const ids = new Set(await accessibleCompanyIds(user));
   return campaigns.filter((c) => ids.has(c.companyId));
+}
+
+export async function visibleFunnelJourneys(user: ActingUser, companyId: string): Promise<FunnelJourney[]> {
+  const journeys = await listFunnelJourneys(user.tenantId, companyId);
+  if (isAdmin(user)) return journeys;
+  const ids = new Set(await accessibleCompanyIds(user));
+  return journeys.filter((j) => ids.has(j.companyId));
+}
+
+export async function visibleConversionFunnels(user: ActingUser, companyId: string): Promise<ConversionFunnel[]> {
+  const funnels = await listConversionFunnels(user.tenantId, companyId);
+  if (isAdmin(user)) return funnels;
+  const ids = new Set(await accessibleCompanyIds(user));
+  return funnels.filter((f) => ids.has(f.companyId));
+}
+
+export async function visibleFunnelLandingPages(user: ActingUser, companyId: string): Promise<FunnelLandingPage[]> {
+  const pages = await listFunnelLandingPages(user.tenantId, companyId);
+  if (isAdmin(user)) return pages;
+  const ids = new Set(await accessibleCompanyIds(user));
+  return pages.filter((p) => ids.has(p.companyId));
+}
+
+export async function visibleFunnelAbExperiments(user: ActingUser, companyId: string): Promise<FunnelAbExperiment[]> {
+  const experiments = await listFunnelAbExperiments(user.tenantId, companyId);
+  if (isAdmin(user)) return experiments;
+  const ids = new Set(await accessibleCompanyIds(user));
+  return experiments.filter((e) => ids.has(e.companyId));
 }
