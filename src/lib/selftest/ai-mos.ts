@@ -176,7 +176,7 @@ export async function checkSignalRunRecorded(companyId: string, userId: string, 
   if (!company) return { ok: false, detail: "company missing" };
   const before = (await listAiMosSignalRuns(tenantId, [companyId])).length;
   const { drafts, signals } = await scanCompanyOpportunities(tenantId, company);
-  await recordCompanySignalRun({
+  const run = await recordCompanySignalRun({
     tenantId,
     companyId,
     userId,
@@ -184,10 +184,13 @@ export async function checkSignalRunRecorded(companyId: string, userId: string, 
     opportunityCount: drafts.length,
   });
   const after = await listAiMosSignalRuns(tenantId, [companyId]);
-  const latest = after[0];
+  const listed = after.some((r) => r.id === run.id);
   return {
-    ok: after.length > before && latest?.executionMode === "suggest_only",
-    detail: `after=${after.length}`,
+    ok:
+      run.executionMode === "suggest_only" &&
+      run.signalCount === signals.length &&
+      (after.length > before || listed),
+    detail: `run=${run.id} after=${after.length}`,
   };
 }
 

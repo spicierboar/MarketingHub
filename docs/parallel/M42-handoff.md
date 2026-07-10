@@ -24,7 +24,7 @@
 
 ## Verified
 
-- `npx tsx scripts/run-fixtures.mjs` — 134/134 (isolation + portal + reports)
+- `npx tsx scripts/run-fixtures.mjs` — 134/134 (isolation + portal + reports; verified on clean branch)
 - `npx tsc --noEmit`
 
 ## Fan-in
