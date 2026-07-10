@@ -1566,6 +1566,97 @@ export interface CrmInteraction {
   id: string; companyId: string; contactId: string; channel: CrmInteractionChannel; direction: CrmInteractionDirection;
   summary: string; detail?: string; occurredAt: string; createdById?: string; metadata?: Record<string, unknown>;
 }
+
+// ---- Digital journey & conversion funnel (W4 M35) ---------------------------
+export type FunnelJourneyStatus = "draft" | "active" | "archived";
+export interface FunnelTouchpoint {
+  id: string;
+  label: string;
+  channel: string;
+  order: number;
+}
+export interface FunnelJourney {
+  id: string;
+  companyId: string;
+  name: string;
+  description?: string;
+  touchpoints: FunnelTouchpoint[];
+  status: FunnelJourneyStatus;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ConversionFunnelStatus = "draft" | "active" | "archived";
+export type FunnelCtaKind = "button" | "form" | "booking";
+export interface FunnelStage {
+  id: string;
+  name: string;
+  order: number;
+  ctaKind?: FunnelCtaKind;
+}
+export interface ConversionFunnel {
+  id: string;
+  companyId: string;
+  journeyId?: string | null;
+  name: string;
+  stages: FunnelStage[];
+  status: ConversionFunnelStatus;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FunnelLandingPage {
+  id: string;
+  companyId: string;
+  funnelId?: string | null;
+  slug: string;
+  title: string;
+  url?: string;
+  viewCount: number;
+  uniqueVisitors: number;
+  ctaClicks: number;
+  formSubmissions: number;
+  bounceRatePct: number;
+  avgTimeOnPageSec: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FunnelAbStatus = "draft" | "running" | "completed";
+export interface FunnelAbVariant {
+  id: string;
+  label: string;
+  headline: string;
+  ctaText: string;
+  weight: number;
+}
+export interface FunnelAbExperiment {
+  id: string;
+  companyId: string;
+  funnelId?: string | null;
+  landingPageId?: string | null;
+  name: string;
+  status: FunnelAbStatus;
+  variants: FunnelAbVariant[];
+  winnerVariantId?: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FunnelStageMetric {
+  stageId: string;
+  stageName: string;
+  order: number;
+  entrants: number;
+  dropOff: number;
+  dropOffPct: number;
+  conversionRatePct: number;
+  ctaKind?: FunnelCtaKind;
+}
+
 export type OfferStatus = "draft" | "approved" | "archived";
 
 // Offer & Promotion Manager (§30). The AI may only promote live approved offers.
@@ -2025,6 +2116,204 @@ export interface SmsCampaign {
   updatedAt: string;
 }
 
+// ---- Marketing automation workflows (W4 M36) -----------------------------------
+//
+// Trigger → condition → delay → action sequences. Distinct from Enterprise
+// Automation cron at /automations. Simulated dispatch when WORKFLOW_LIVE is off.
+
+export type WorkflowTriggerKind =
+  | "customer_created"
+  | "booking_made"
+  | "review_received"
+  | "birthday"
+  | "cart_abandoned"
+  | "tag_added"
+  | "manual";
+
+export type WorkflowStepKind = "condition" | "delay" | "action";
+
+export type WorkflowActionKind = "send_email" | "send_sms" | "add_tag" | "create_task";
+
+export type WorkflowStatus = "draft" | "active" | "paused" | "archived";
+
+export type WorkflowTemplateKind =
+  | "welcome"
+  | "win_back"
+  | "review_request"
+  | "post_stay"
+  | "birthday_offer";
+
+export type WorkflowDispatchStatus =
+  | "simulated"
+  | "sent"
+  | "blocked_consent"
+  | "blocked_quiet_hours"
+  | "blocked_frequency"
+  | "failed";
+
+export interface WorkflowStepCondition {
+  field: string;
+  operator: "eq" | "neq" | "contains" | "gt" | "lt";
+  value: string;
+}
+
+export interface WorkflowStepDelay {
+  amount: number;
+  unit: "minutes" | "hours" | "days";
+}
+
+export interface WorkflowStepAction {
+  kind: WorkflowActionKind;
+  subject?: string;
+  body?: string;
+  tag?: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  kind: WorkflowStepKind;
+  condition?: WorkflowStepCondition;
+  delay?: WorkflowStepDelay;
+  action?: WorkflowStepAction;
+}
+
+export interface MarketingWorkflowSettings {
+  companyId: string;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  frequencyCapPerWeek: number;
+  updatedById?: string;
+  updatedAt: string;
+}
+
+export interface MarketingWorkflow {
+  id: string;
+  tenantId: string;
+  companyId: string | null;
+  name: string;
+  description?: string;
+  triggerKind: WorkflowTriggerKind;
+  templateKind?: WorkflowTemplateKind | null;
+  status: WorkflowStatus;
+  steps: WorkflowStep[];
+  isAgencyTemplate: boolean;
+  deployedFromTemplateId?: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowDispatchLog {
+  id: string;
+  workflowId: string;
+  companyId: string;
+  contactId?: string | null;
+  channel: "email" | "sms" | "internal";
+  stepId: string;
+  status: WorkflowDispatchStatus;
+  detail: string;
+  createdAt: string;
+}
+
+export interface WorkflowRunStats {
+  triggered: number;
+  dispatched: number;
+  blockedConsent: number;
+  blockedQuietHours: number;
+  blockedFrequency: number;
+  simulated: number;
+}
+
+// ---- Loyalty, Offers & Referrals (W4 M37) ---------------------------------------
+
+export type LoyaltyRewardMode = "points" | "stamps";
+export type LoyaltyMemberStatus = "active" | "suspended";
+
+export interface LoyaltyProgram {
+  companyId: string;
+  rewardMode: LoyaltyRewardMode;
+  pointsPerDollar: number;
+  stampsPerReward: number;
+  referralBonusPoints: number;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export interface LoyaltyTier {
+  id: string;
+  companyId: string;
+  name: string;
+  thresholdPoints: number;
+  benefits: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoyaltyMember {
+  id: string;
+  companyId: string;
+  contactId?: string | null;
+  email?: string;
+  displayName: string;
+  pointsBalance: number;
+  stampsBalance: number;
+  tierId?: string | null;
+  referralCode: string;
+  referredByCode?: string | null;
+  status: LoyaltyMemberStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LoyaltyCouponKind = "percent_off" | "fixed_off" | "bonus_points";
+export type LoyaltyCouponStatus = "draft" | "active" | "expired" | "archived";
+
+export interface LoyaltyCoupon {
+  id: string;
+  companyId: string;
+  code: string;
+  name: string;
+  kind: LoyaltyCouponKind;
+  value: number;
+  segmentTag?: string | null;
+  maxRedemptions?: number | null;
+  perMemberLimit: number;
+  minSpend?: number | null;
+  expiresAt?: string | null;
+  channels: string[];
+  status: LoyaltyCouponStatus;
+  redemptionCount: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LoyaltyReferralStatus = "pending" | "completed" | "void";
+
+export interface LoyaltyReferral {
+  id: string;
+  companyId: string;
+  referrerMemberId: string;
+  refereeEmail: string;
+  status: LoyaltyReferralStatus;
+  bonusAwarded: number;
+  createdAt: string;
+  completedAt?: string | null;
+}
+
+export interface LoyaltyRedemption {
+  id: string;
+  companyId: string;
+  memberId: string;
+  couponId: string;
+  amountOff: number;
+  mode: "simulated" | "live";
+  abuseFlagged: boolean;
+  abuseReason?: string | null;
+  redeemedAt: string;
+}
+
 // ---- Phase 12: Enterprise Automation (§61 Phase 12) --------------------------------
 
 // Admin-controlled automation switches. ONE record PER TENANT since T1.
@@ -2140,4 +2429,69 @@ export function onboardingScore(c: Company): {
     else missing.push(f.label);
   }
   return { score: Math.round((have / total) * 100), missing };
+}
+
+// ---- Website CMS (W4 M34) -----------------------------------------------------
+
+export type CmsPageKind = "page" | "landing";
+export type CmsPageStatus = "draft" | "pending_review" | "approved" | "published" | "archived";
+export type CmsUpdateRequestStatus = "open" | "in_progress" | "completed" | "cancelled";
+
+export interface CmsPage {
+  id: string;
+  companyId: string;
+  slug: string;
+  title: string;
+  kind: CmsPageKind;
+  status: CmsPageStatus;
+  currentVersionId?: string | null;
+  publishedVersionId?: string | null;
+  liveUrl?: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CmsPageVersion {
+  id: string;
+  pageId: string;
+  companyId: string;
+  versionNumber: number;
+  title: string;
+  bodyHtml: string;
+  changeSummary?: string;
+  status: CmsPageStatus;
+  createdById: string;
+  createdAt: string;
+  approvedById?: string | null;
+  approvedAt?: string | null;
+}
+
+export interface CmsSeoMetadata {
+  id: string;
+  pageId: string;
+  companyId: string;
+  metaTitle: string;
+  metaDescription: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageUrl?: string;
+  canonicalUrl?: string;
+  noIndex: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CmsUpdateRequest {
+  id: string;
+  companyId: string;
+  pageId?: string | null;
+  title: string;
+  description: string;
+  status: CmsUpdateRequestStatus;
+  requestedById: string;
+  assignedToId?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

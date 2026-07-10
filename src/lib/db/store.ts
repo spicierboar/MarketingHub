@@ -68,6 +68,12 @@ import type {
   SmsCampaign,
   SmsCompanySettings,
   SmsSubscriber,
+  LoyaltyProgram,
+  LoyaltyTier,
+  LoyaltyMember,
+  LoyaltyCoupon,
+  LoyaltyReferral,
+  LoyaltyRedemption,
   ServiceRecord,
   Session,
   SocialMention,
@@ -75,6 +81,17 @@ import type {
   CrmContact,
   CrmInteraction,
   CrmSegment,
+  ConversionFunnel,
+  FunnelAbExperiment,
+  FunnelJourney,
+  FunnelLandingPage,
+  MarketingWorkflow,
+  MarketingWorkflowSettings,
+  WorkflowDispatchLog,
+  CmsPage,
+  CmsPageVersion,
+  CmsSeoMetadata,
+  CmsUpdateRequest,
   CompanyReview,
   ReviewRequestCampaign,
   Task,
@@ -142,9 +159,26 @@ export interface DataStore {
   crmContacts: CrmContact[];
   crmSegments: CrmSegment[];
   crmInteractions: CrmInteraction[];
+  funnelJourneys: FunnelJourney[];
+  conversionFunnels: ConversionFunnel[];
+  funnelLandingPages: FunnelLandingPage[];
+  funnelAbExperiments: FunnelAbExperiment[];
   smsSubscribers: SmsSubscriber[];
   smsCampaigns: SmsCampaign[];
   smsCompanySettings: SmsCompanySettings[];
+  marketingWorkflows: MarketingWorkflow[];
+  marketingWorkflowSettings: MarketingWorkflowSettings[];
+  workflowDispatchLogs: WorkflowDispatchLog[];
+  cmsPages: CmsPage[];
+  cmsPageVersions: CmsPageVersion[];
+  cmsSeoMetadata: CmsSeoMetadata[];
+  cmsUpdateRequests: CmsUpdateRequest[];
+  loyaltyPrograms: LoyaltyProgram[];
+  loyaltyTiers: LoyaltyTier[];
+  loyaltyMembers: LoyaltyMember[];
+  loyaltyCoupons: LoyaltyCoupon[];
+  loyaltyReferrals: LoyaltyReferral[];
+  loyaltyRedemptions: LoyaltyRedemption[];
   // Module 3: per-company add-on entitlements (video/photo/menus/order-button)
   companyEntitlements: CompanyEntitlement[];
   // Module 2: managed photo shoots (Phase 4)
@@ -1677,9 +1711,79 @@ function seed(): DataStore {
     crmContacts: [],
     crmSegments: [],
     crmInteractions: [],
+    funnelJourneys: [],
+    conversionFunnels: [],
+    funnelLandingPages: [],
+    funnelAbExperiments: [],
     smsSubscribers: [],
     smsCampaigns: [],
     smsCompanySettings: [],
+    marketingWorkflows: [],
+    marketingWorkflowSettings: [],
+    workflowDispatchLogs: [],
+    cmsPages: [
+      {
+        id: "cmsp_motel_home",
+        companyId: "c_motel",
+        slug: "book-direct",
+        title: "Book direct & save",
+        kind: "landing",
+        status: "approved",
+        currentVersionId: "cmsv_motel_home_1",
+        createdById: "u_deb",
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+    cmsPageVersions: [
+      {
+        id: "cmsv_motel_home_1",
+        pageId: "cmsp_motel_home",
+        companyId: "c_motel",
+        versionNumber: 1,
+        title: "Book direct & save",
+        bodyHtml: "<h1>Book direct</h1><p>Best rate guaranteed at Golden Wattle Motel.</p>",
+        changeSummary: "Initial landing page",
+        status: "approved",
+        createdById: "u_deb",
+        createdAt: t,
+        approvedById: "u_admin",
+        approvedAt: t,
+      },
+    ],
+    cmsSeoMetadata: [
+      {
+        id: "cmss_motel_home",
+        pageId: "cmsp_motel_home",
+        companyId: "c_motel",
+        metaTitle: "Book direct & save | Golden Wattle Motel",
+        metaDescription: "Reserve your stay at Golden Wattle Motel with our best online rate.",
+        ogTitle: "Book direct & save",
+        ogDescription: "Golden Wattle Motel — book direct for the best rate.",
+        noIndex: false,
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+    cmsUpdateRequests: [
+      {
+        id: "cmsr_motel_hero",
+        companyId: "c_motel",
+        pageId: "cmsp_motel_home",
+        title: "Refresh winter hero",
+        description: "Update hero image and headline for winter campaign.",
+        status: "open",
+        requestedById: "u_deb",
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+    loyaltyPrograms: [],
+    loyaltyTiers: [],
+    loyaltyMembers: [],
+    loyaltyCoupons: [],
+    loyaltyReferrals: [],
+    loyaltyRedemptions: [],
 
     // Module 3 demo:
     // add-ons enabled, proving per-company entitlements. Other companies have none

@@ -49,11 +49,28 @@ import type {
   CrmContact,
   CrmInteraction,
   CrmSegment,
+  CmsPage,
+  CmsPageVersion,
+  CmsSeoMetadata,
+  CmsUpdateRequest,
+  ConversionFunnel,
+  FunnelAbExperiment,
+  FunnelJourney,
+  FunnelLandingPage,
   CompanyReview,
   ReviewRequestCampaign,
   SmsCampaign,
   SmsCompanySettings,
   SmsSubscriber,
+  LoyaltyProgram,
+  LoyaltyTier,
+  LoyaltyMember,
+  LoyaltyCoupon,
+  LoyaltyReferral,
+  LoyaltyRedemption,
+  MarketingWorkflow,
+  MarketingWorkflowSettings,
+  WorkflowDispatchLog,
   EvidenceRecord,
   KnowledgeDocument,
   KnowledgeGap,
@@ -660,6 +677,29 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.emailTemplates = keepCompany(s.emailTemplates ?? []);
   s.emailSubscribers = keepCompany(s.emailSubscribers ?? []);
   s.emailCampaigns = keepCompany(s.emailCampaigns ?? []);
+  s.crmContacts = keepCompany(s.crmContacts ?? []);
+  s.crmSegments = keepCompany(s.crmSegments ?? []);
+  s.crmInteractions = keepCompany(s.crmInteractions ?? []);
+  s.funnelJourneys = keepCompany(s.funnelJourneys ?? []);
+  s.conversionFunnels = keepCompany(s.conversionFunnels ?? []);
+  s.funnelLandingPages = keepCompany(s.funnelLandingPages ?? []);
+  s.funnelAbExperiments = keepCompany(s.funnelAbExperiments ?? []);
+  s.smsSubscribers = keepCompany(s.smsSubscribers ?? []);
+  s.smsCampaigns = keepCompany(s.smsCampaigns ?? []);
+  s.smsCompanySettings = keepCompany(s.smsCompanySettings ?? []);
+  s.marketingWorkflows = keepTenant(s.marketingWorkflows ?? []);
+  s.workflowDispatchLogs = keepCompany(s.workflowDispatchLogs ?? []);
+  s.marketingWorkflowSettings = keepCompany(s.marketingWorkflowSettings ?? []);
+  s.cmsPages = keepCompany(s.cmsPages ?? []);
+  s.cmsPageVersions = keepCompany(s.cmsPageVersions ?? []);
+  s.cmsSeoMetadata = keepCompany(s.cmsSeoMetadata ?? []);
+  s.cmsUpdateRequests = keepCompany(s.cmsUpdateRequests ?? []);
+  s.loyaltyPrograms = keepCompany(s.loyaltyPrograms ?? []);
+  s.loyaltyTiers = keepCompany(s.loyaltyTiers ?? []);
+  s.loyaltyMembers = keepCompany(s.loyaltyMembers ?? []);
+  s.loyaltyCoupons = keepCompany(s.loyaltyCoupons ?? []);
+  s.loyaltyReferrals = keepCompany(s.loyaltyReferrals ?? []);
+  s.loyaltyRedemptions = keepCompany(s.loyaltyRedemptions ?? []);
   s.companyEntitlements = keepCompany(s.companyEntitlements);
   s.photoShoots = keepCompany(s.photoShoots);
   s.photoMarketplaceBookings = keepCompany(s.photoMarketplaceBookings);
@@ -2768,5 +2808,388 @@ export async function upsertSmsCompanySettings(input: SmsCompanySettings): Promi
   }
   const rec = { ...input, updatedAt: input.updatedAt ?? now() };
   list.push(rec);
+  return rec;
+}
+
+// ---- Loyalty (W4 M37) --------------------------------------------------------
+
+export async function getLoyaltyProgram(companyId: string): Promise<LoyaltyProgram | undefined> {
+  return (db().loyaltyPrograms ?? []).find((p) => p.companyId === companyId);
+}
+export async function upsertLoyaltyProgram(input: LoyaltyProgram): Promise<LoyaltyProgram> {
+  const list = db().loyaltyPrograms ??= [];
+  const idx = list.findIndex((p) => p.companyId === input.companyId);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...input, updatedAt: now() };
+    return list[idx]!;
+  }
+  const rec = { ...input, updatedAt: input.updatedAt ?? now() };
+  list.push(rec);
+  return rec;
+}
+export async function listLoyaltyTiers(tenantId: string, companyId?: string): Promise<LoyaltyTier[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().loyaltyTiers ?? [])
+    .filter((t) => ids.has(t.companyId) && (!companyId || t.companyId === companyId))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.thresholdPoints - b.thresholdPoints);
+}
+export async function createLoyaltyTier(input: Omit<LoyaltyTier, "id" | "createdAt" | "updatedAt">): Promise<LoyaltyTier> {
+  const time = now();
+  const rec: LoyaltyTier = { ...input, id: id("ltier"), createdAt: time, updatedAt: time };
+  (db().loyaltyTiers ??= []).push(rec);
+  return rec;
+}
+export async function listLoyaltyMembers(tenantId: string, companyId?: string): Promise<LoyaltyMember[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().loyaltyMembers ?? []).filter((m) => ids.has(m.companyId) && (!companyId || m.companyId === companyId));
+}
+export async function getLoyaltyMember(memberId: string): Promise<LoyaltyMember | undefined> {
+  return (db().loyaltyMembers ?? []).find((m) => m.id === memberId);
+}
+export async function createLoyaltyMember(input: Omit<LoyaltyMember, "id" | "createdAt" | "updatedAt">): Promise<LoyaltyMember> {
+  const time = now();
+  const rec: LoyaltyMember = { ...input, id: id("lmem"), createdAt: time, updatedAt: time };
+  (db().loyaltyMembers ??= []).push(rec);
+  return rec;
+}
+export async function updateLoyaltyMember(memberId: string, patch: Partial<LoyaltyMember>): Promise<LoyaltyMember | undefined> {
+  const rec = await getLoyaltyMember(memberId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function listLoyaltyCoupons(tenantId: string, companyId?: string): Promise<LoyaltyCoupon[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().loyaltyCoupons ?? []).filter((c) => ids.has(c.companyId) && (!companyId || c.companyId === companyId));
+}
+export async function getLoyaltyCoupon(couponId: string): Promise<LoyaltyCoupon | undefined> {
+  return (db().loyaltyCoupons ?? []).find((c) => c.id === couponId);
+}
+export async function createLoyaltyCoupon(input: Omit<LoyaltyCoupon, "id" | "createdAt" | "updatedAt" | "redemptionCount">): Promise<LoyaltyCoupon> {
+  const time = now();
+  const rec: LoyaltyCoupon = { ...input, id: id("lcoup"), redemptionCount: 0, createdAt: time, updatedAt: time };
+  (db().loyaltyCoupons ??= []).push(rec);
+  return rec;
+}
+export async function updateLoyaltyCoupon(couponId: string, patch: Partial<LoyaltyCoupon>): Promise<LoyaltyCoupon | undefined> {
+  const rec = await getLoyaltyCoupon(couponId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+export async function listLoyaltyReferrals(tenantId: string, companyId?: string): Promise<LoyaltyReferral[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().loyaltyReferrals ?? []).filter((r) => ids.has(r.companyId) && (!companyId || r.companyId === companyId));
+}
+export async function createLoyaltyReferral(input: Omit<LoyaltyReferral, "id">): Promise<LoyaltyReferral> {
+  const rec: LoyaltyReferral = { ...input, id: id("lref") };
+  (db().loyaltyReferrals ??= []).push(rec);
+  return rec;
+}
+export async function updateLoyaltyReferral(referralId: string, patch: Partial<LoyaltyReferral>): Promise<LoyaltyReferral | undefined> {
+  const rec = (db().loyaltyReferrals ?? []).find((r) => r.id === referralId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch);
+  return rec;
+}
+export async function listLoyaltyRedemptions(tenantId: string, companyId?: string): Promise<LoyaltyRedemption[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().loyaltyRedemptions ?? []).filter((r) => ids.has(r.companyId) && (!companyId || r.companyId === companyId));
+}
+export async function createLoyaltyRedemption(input: Omit<LoyaltyRedemption, "id">): Promise<LoyaltyRedemption> {
+  const rec: LoyaltyRedemption = { ...input, id: id("lred") };
+  (db().loyaltyRedemptions ??= []).push(rec);
+  return rec;
+}
+
+// ---- Website CMS (W4 M34) ----------------------------------------------------
+
+export async function listCmsPages(tenantId: string, companyId?: string): Promise<CmsPage[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCmsPages(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().cmsPages ?? [])
+    .filter((p) => ids.has(p.companyId) && (!companyId || p.companyId === companyId))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function getCmsPage(pageId: string): Promise<CmsPage | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCmsPage(pageId);
+  return (db().cmsPages ?? []).find((p) => p.id === pageId);
+}
+
+export async function createCmsPage(input: Omit<CmsPage, "id" | "createdAt" | "updatedAt">): Promise<CmsPage> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCmsPage(input);
+  const time = now();
+  const rec: CmsPage = { ...input, id: id("cmsp"), createdAt: time, updatedAt: time };
+  (db().cmsPages ??= []).push(rec);
+  return rec;
+}
+
+export async function updateCmsPage(pageId: string, patch: Partial<CmsPage>): Promise<CmsPage | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateCmsPage(pageId, patch);
+  const rec = await getCmsPage(pageId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+export async function listCmsPageVersions(tenantId: string, pageId: string): Promise<CmsPageVersion[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCmsPageVersions(tenantId, pageId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().cmsPageVersions ?? [])
+    .filter((v) => v.pageId === pageId && ids.has(v.companyId))
+    .sort((a, b) => b.versionNumber - a.versionNumber);
+}
+
+export async function getCmsPageVersion(versionId: string): Promise<CmsPageVersion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCmsPageVersion(versionId);
+  return (db().cmsPageVersions ?? []).find((v) => v.id === versionId);
+}
+
+export async function createCmsPageVersion(input: Omit<CmsPageVersion, "id" | "createdAt">): Promise<CmsPageVersion> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCmsPageVersion(input);
+  const rec: CmsPageVersion = { ...input, id: id("cmsv"), createdAt: now() };
+  (db().cmsPageVersions ??= []).push(rec);
+  return rec;
+}
+
+export async function updateCmsPageVersion(versionId: string, patch: Partial<CmsPageVersion>): Promise<CmsPageVersion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateCmsPageVersion(versionId, patch);
+  const rec = await getCmsPageVersion(versionId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch);
+  return rec;
+}
+
+export async function getCmsSeoMetadata(pageId: string): Promise<CmsSeoMetadata | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCmsSeoMetadata(pageId);
+  return (db().cmsSeoMetadata ?? []).find((s) => s.pageId === pageId);
+}
+
+export async function upsertCmsSeoMetadata(
+  pageId: string,
+  companyId: string,
+  input: Omit<CmsSeoMetadata, "id" | "pageId" | "companyId" | "createdAt" | "updatedAt">,
+): Promise<CmsSeoMetadata> {
+  if (isSupabaseConfigured()) return supabaseRepo.upsertCmsSeoMetadata(pageId, companyId, input);
+  const list = db().cmsSeoMetadata ??= [];
+  const idx = list.findIndex((s) => s.pageId === pageId);
+  const time = now();
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...input, updatedAt: time };
+    return list[idx]!;
+  }
+  const rec: CmsSeoMetadata = { ...input, id: id("cmss"), pageId, companyId, createdAt: time, updatedAt: time };
+  list.push(rec);
+  return rec;
+}
+
+export async function listCmsUpdateRequests(tenantId: string, companyId?: string): Promise<CmsUpdateRequest[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCmsUpdateRequests(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().cmsUpdateRequests ?? [])
+    .filter((r) => ids.has(r.companyId) && (!companyId || r.companyId === companyId))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getCmsUpdateRequest(requestId: string): Promise<CmsUpdateRequest | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCmsUpdateRequest(requestId);
+  return (db().cmsUpdateRequests ?? []).find((r) => r.id === requestId);
+}
+
+export async function createCmsUpdateRequest(
+  input: Omit<CmsUpdateRequest, "id" | "createdAt" | "updatedAt">,
+): Promise<CmsUpdateRequest> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCmsUpdateRequest(input);
+  const time = now();
+  const rec: CmsUpdateRequest = { ...input, id: id("cmsr"), createdAt: time, updatedAt: time };
+  (db().cmsUpdateRequests ??= []).push(rec);
+  return rec;
+}
+
+export async function updateCmsUpdateRequest(
+  requestId: string,
+  patch: Partial<CmsUpdateRequest>,
+): Promise<CmsUpdateRequest | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateCmsUpdateRequest(requestId, patch);
+  const rec = await getCmsUpdateRequest(requestId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: patch.updatedAt ?? now() });
+  return rec;
+}
+
+// ---- Funnel (W4 M35) ---------------------------------------------------------
+
+export async function listFunnelJourneys(tenantId: string, companyId?: string): Promise<FunnelJourney[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listFunnelJourneys(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().funnelJourneys ?? []).filter((j) => ids.has(j.companyId) && (!companyId || j.companyId === companyId));
+}
+export async function getFunnelJourney(journeyId: string): Promise<FunnelJourney | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getFunnelJourney(journeyId);
+  return (db().funnelJourneys ?? []).find((j) => j.id === journeyId);
+}
+export async function createFunnelJourney(input: Omit<FunnelJourney, "id" | "createdAt" | "updatedAt">): Promise<FunnelJourney> {
+  if (isSupabaseConfigured()) return supabaseRepo.createFunnelJourney(input);
+  const time = now();
+  const rec: FunnelJourney = { ...input, id: id("fj"), createdAt: time, updatedAt: time };
+  (db().funnelJourneys ??= []).push(rec);
+  return rec;
+}
+export async function updateFunnelJourney(journeyId: string, patch: Partial<FunnelJourney>): Promise<FunnelJourney | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateFunnelJourney(journeyId, patch);
+  const rec = await getFunnelJourney(journeyId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+export async function listConversionFunnels(tenantId: string, companyId?: string): Promise<ConversionFunnel[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listConversionFunnels(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().conversionFunnels ?? []).filter((f) => ids.has(f.companyId) && (!companyId || f.companyId === companyId));
+}
+export async function getConversionFunnel(funnelId: string): Promise<ConversionFunnel | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getConversionFunnel(funnelId);
+  return (db().conversionFunnels ?? []).find((f) => f.id === funnelId);
+}
+export async function createConversionFunnel(input: Omit<ConversionFunnel, "id" | "createdAt" | "updatedAt">): Promise<ConversionFunnel> {
+  if (isSupabaseConfigured()) return supabaseRepo.createConversionFunnel(input);
+  const time = now();
+  const rec: ConversionFunnel = { ...input, id: id("fnl"), createdAt: time, updatedAt: time };
+  (db().conversionFunnels ??= []).push(rec);
+  return rec;
+}
+export async function updateConversionFunnel(funnelId: string, patch: Partial<ConversionFunnel>): Promise<ConversionFunnel | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateConversionFunnel(funnelId, patch);
+  const rec = await getConversionFunnel(funnelId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+export async function listFunnelLandingPages(tenantId: string, companyId?: string): Promise<FunnelLandingPage[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listFunnelLandingPages(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().funnelLandingPages ?? []).filter((p) => ids.has(p.companyId) && (!companyId || p.companyId === companyId));
+}
+export async function getFunnelLandingPage(pageId: string): Promise<FunnelLandingPage | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getFunnelLandingPage(pageId);
+  return (db().funnelLandingPages ?? []).find((p) => p.id === pageId);
+}
+export async function createFunnelLandingPage(input: Omit<FunnelLandingPage, "id" | "createdAt" | "updatedAt">): Promise<FunnelLandingPage> {
+  if (isSupabaseConfigured()) return supabaseRepo.createFunnelLandingPage(input);
+  const time = now();
+  const rec: FunnelLandingPage = { ...input, id: id("flp"), createdAt: time, updatedAt: time };
+  (db().funnelLandingPages ??= []).push(rec);
+  return rec;
+}
+export async function updateFunnelLandingPage(pageId: string, patch: Partial<FunnelLandingPage>): Promise<FunnelLandingPage | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateFunnelLandingPage(pageId, patch);
+  const rec = await getFunnelLandingPage(pageId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+export async function listFunnelAbExperiments(tenantId: string, companyId?: string): Promise<FunnelAbExperiment[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listFunnelAbExperiments(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().funnelAbExperiments ?? []).filter((e) => ids.has(e.companyId) && (!companyId || e.companyId === companyId));
+}
+export async function getFunnelAbExperiment(experimentId: string): Promise<FunnelAbExperiment | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getFunnelAbExperiment(experimentId);
+  return (db().funnelAbExperiments ?? []).find((e) => e.id === experimentId);
+}
+export async function createFunnelAbExperiment(input: Omit<FunnelAbExperiment, "id" | "createdAt" | "updatedAt">): Promise<FunnelAbExperiment> {
+  if (isSupabaseConfigured()) return supabaseRepo.createFunnelAbExperiment(input);
+  const time = now();
+  const rec: FunnelAbExperiment = { ...input, id: id("fab"), createdAt: time, updatedAt: time };
+  (db().funnelAbExperiments ??= []).push(rec);
+  return rec;
+}
+export async function updateFunnelAbExperiment(experimentId: string, patch: Partial<FunnelAbExperiment>): Promise<FunnelAbExperiment | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateFunnelAbExperiment(experimentId, patch);
+  const rec = await getFunnelAbExperiment(experimentId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+// ---- Marketing automation workflows (W4 M36) ---------------------------------
+
+export async function listMarketingWorkflows(
+  tenantId: string,
+  opts?: { companyId?: string; agencyTemplatesOnly?: boolean },
+): Promise<MarketingWorkflow[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().marketingWorkflows ?? [])
+    .filter((w) => {
+      if (w.tenantId !== tenantId) return false;
+      if (opts?.agencyTemplatesOnly) return w.isAgencyTemplate;
+      if (opts?.companyId) return w.companyId === opts.companyId;
+      return w.isAgencyTemplate || (w.companyId != null && ids.has(w.companyId));
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function getMarketingWorkflow(workflowId: string): Promise<MarketingWorkflow | undefined> {
+  return (db().marketingWorkflows ?? []).find((w) => w.id === workflowId);
+}
+
+export async function createMarketingWorkflow(
+  input: Omit<MarketingWorkflow, "id" | "createdAt" | "updatedAt">,
+): Promise<MarketingWorkflow> {
+  const time = now();
+  const rec: MarketingWorkflow = { ...input, id: id("wf"), createdAt: time, updatedAt: time };
+  (db().marketingWorkflows ??= []).push(rec);
+  return rec;
+}
+
+export async function updateMarketingWorkflow(
+  workflowId: string,
+  patch: Partial<MarketingWorkflow>,
+): Promise<MarketingWorkflow | undefined> {
+  const rec = await getMarketingWorkflow(workflowId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+export async function getMarketingWorkflowSettings(
+  companyId: string,
+): Promise<MarketingWorkflowSettings | undefined> {
+  return (db().marketingWorkflowSettings ?? []).find((s) => s.companyId === companyId);
+}
+
+export async function upsertMarketingWorkflowSettings(
+  input: MarketingWorkflowSettings,
+): Promise<MarketingWorkflowSettings> {
+  const list = db().marketingWorkflowSettings ??= [];
+  const idx = list.findIndex((s) => s.companyId === input.companyId);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...input, updatedAt: now() };
+    return list[idx]!;
+  }
+  const rec = { ...input, updatedAt: input.updatedAt ?? now() };
+  list.push(rec);
+  return rec;
+}
+
+export async function listWorkflowDispatchLogs(
+  tenantId: string,
+  companyId?: string,
+): Promise<WorkflowDispatchLog[]> {
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().workflowDispatchLogs ?? [])
+    .filter((l) => ids.has(l.companyId) && (!companyId || l.companyId === companyId))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function createWorkflowDispatchLog(
+  input: Omit<WorkflowDispatchLog, "id" | "createdAt">,
+): Promise<WorkflowDispatchLog> {
+  const rec: WorkflowDispatchLog = { ...input, id: id("wfd"), createdAt: now() };
+  (db().workflowDispatchLogs ??= []).push(rec);
   return rec;
 }

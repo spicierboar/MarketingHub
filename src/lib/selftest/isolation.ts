@@ -77,6 +77,25 @@ import {
   checkEmailUnsubscribeExcluded,
 } from "@/lib/selftest/email-marketing";
 import {
+  checkWorkflowConsentBlocks,
+  checkWorkflowDeployAgencyTemplate,
+  checkWorkflowFrequencyCap,
+  checkWorkflowQuietHours,
+  checkWorkflowRunSimulated,
+  checkWorkflowSimulatedWhenLiveOff,
+  checkWorkflowTemplateSequences,
+  checkWorkflowTriggerLibrary,
+} from "@/lib/selftest/marketing-automation";
+import {
+  checkCmsApprovalGate,
+  checkCmsDuplicateSlugFindsMatch,
+  checkCmsImportSimulated,
+  checkCmsSeoDefaults,
+  checkCmsSimulatedWhenLiveOff,
+  checkCmsSlugNormalised,
+  checkCmsVersionIncrements,
+} from "@/lib/selftest/cms";
+import {
   checkAnalyticsSimulatedWhenLiveOff,
   checkFetchLiveMetricsNullWhenOff,
   checkGooglePlatformRoutedWhenLive,
@@ -185,6 +204,14 @@ import {
   checkRetrySkipsWhenAlreadyPublished,
   checkStaleClaimSafeRecovery,
 } from "@/lib/selftest/publish-idempotency";
+import {
+  checkFunnelAbTestDeterministicWinner,
+  checkFunnelCtaConversionMetrics,
+  checkFunnelDropOffDeterministic,
+  checkFunnelFetchNullWhenLiveOff,
+  checkFunnelLandingAnalyticsSimulated,
+  checkFunnelSimulatedWhenLiveOff,
+} from "@/lib/selftest/funnel";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 import type { ActingUser, TenantRole, User } from "@/lib/types";
 
@@ -234,7 +261,7 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
   const checks: IsoCheck[] = [];
   const expect = async (
     name: string,
-    fn: () => Promise<{ ok: boolean; detail: string }>,
+    fn: () => Promise<{ ok: boolean; detail: string }> | { ok: boolean; detail: string },
   ): Promise<void> => {
     try {
       const r = await fn();
@@ -694,6 +721,23 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("emailMarketing.segmentFilter", () => checkEmailSegmentFilter());
     await expect("emailMarketing.sendEnvGated", () => checkEmailSendEnvGated());
 
+    await expect("marketingAutomation.simulatedWhenLiveOff", () => checkWorkflowSimulatedWhenLiveOff());
+    await expect("marketingAutomation.triggerLibrary", () => checkWorkflowTriggerLibrary());
+    await expect("marketingAutomation.quietHours", () => checkWorkflowQuietHours());
+    await expect("marketingAutomation.frequencyCap", () => checkWorkflowFrequencyCap());
+    await expect("marketingAutomation.consentBlocks", () => checkWorkflowConsentBlocks());
+    await expect("marketingAutomation.templateSequences", () => checkWorkflowTemplateSequences());
+    await expect("marketingAutomation.deployAgencyTemplate", () => checkWorkflowDeployAgencyTemplate());
+    await expect("marketingAutomation.runSimulated", () => checkWorkflowRunSimulated());
+
+    await expect("cms.simulatedWhenLiveOff", () => checkCmsSimulatedWhenLiveOff());
+    await expect("cms.slugNormalised", () => checkCmsSlugNormalised());
+    await expect("cms.duplicateSlug", () => checkCmsDuplicateSlugFindsMatch());
+    await expect("cms.versionIncrements", () => checkCmsVersionIncrements());
+    await expect("cms.seoDefaults", () => checkCmsSeoDefaults());
+    await expect("cms.approvalGate", () => checkCmsApprovalGate());
+    await expect("cms.importSimulated", () => checkCmsImportSimulated());
+
     await expect("analytics.simulatedWhenLiveOff", () => checkAnalyticsSimulatedWhenLiveOff());
 
     await expect("analytics.fetchNullWhenLiveOff", () => checkFetchLiveMetricsNullWhenOff());
@@ -807,6 +851,13 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("publishIdempotency.logRecordsDedupeKey", () =>
       checkLogRecordsDedupeKey(),
     );
+
+    await expect("funnel.simulatedWhenLiveOff", async () => checkFunnelSimulatedWhenLiveOff());
+    await expect("funnel.dropOffDeterministic", async () => checkFunnelDropOffDeterministic());
+    await expect("funnel.landingAnalyticsSimulated", async () => checkFunnelLandingAnalyticsSimulated());
+    await expect("funnel.ctaConversionMetrics", async () => checkFunnelCtaConversionMetrics());
+    await expect("funnel.abTestDeterministicWinner", async () => checkFunnelAbTestDeterministicWinner());
+    await expect("funnel.fetchNullWhenLiveOff", async () => checkFunnelFetchNullWhenLiveOff());
 
     await expect("businessProfiles.retailAiContext", async () => {
       const company = await getCompany(companyA.id);
