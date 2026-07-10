@@ -643,6 +643,7 @@ function seed(): DataStore {
       status: "approved",
       profile: {
         industry: "Retail Florist",
+        businessType: "retail",
         approvalContact: "Josie Park (Owner)",
         serviceAreas: ["Harbourside", "Bayview"],
         natureOfBusiness: "Boutique florist: bouquets, weddings and event styling, same-day local delivery.",

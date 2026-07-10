@@ -112,7 +112,9 @@ export function resolveBusinessType(company: Company): BusinessType {
     return "hotel";
   }
   if (
-    /retail|supermarket|grocery|shop|store|convenience|boutique/.test(industry)
+    /retail|supermarket|grocery|shop|store|convenience|boutique|florist|flowers/.test(
+      industry,
+    )
   ) {
     return "retail";
   }
