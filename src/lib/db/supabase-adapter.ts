@@ -41,7 +41,7 @@ import type {
   CompanyAccess, CompanyEntitlement, ConsentRecord, ContentComment, ContentItem, EvidenceRecord,
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
   MenuDesign,
-  Offer, OrderMenuItem, OrderingSettings, PhotoShoot, PhotographerProfile, PhotographerPackage, PhotoMarketplaceBooking, PromptTemplate, PublishingControls, PublishingIntegration, PublishLog,
+  Offer, OrderMenuItem, OrderingSettings, BookingSettings, ServicePeriod, Reservation, PhotoShoot, PhotographerProfile, PhotographerPackage, PhotoMarketplaceBooking, PromptTemplate, PublishingControls, PublishingIntegration, PublishLog,
   ConnectInvite,
   ApiKey,
   PartnerWebhook,
@@ -1940,6 +1940,81 @@ export const supabaseRepo = {
     return data ? toDomain<RestaurantOrder>(data) : undefined;
   },
 
+  // ============================ Bookings (RLS) ==================================
+  async listServicePeriods(tenantId: string, companyId?: string): Promise<ServicePeriod[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("booking_service_periods").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("day_of_week").order("start_time");
+    return many<ServicePeriod>(data);
+  },
+  async listServicePeriodsByCompany(companyId: string): Promise<ServicePeriod[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("booking_service_periods").select("*").eq("company_id", companyId).eq("active", true).order("day_of_week").order("start_time");
+    return many<ServicePeriod>(data);
+  },
+  async getServicePeriod(periodId: string): Promise<ServicePeriod | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("booking_service_periods").select("*").eq("id", periodId).maybeSingle();
+    return data ? toDomain<ServicePeriod>(data) : undefined;
+  },
+  async createServicePeriod(input: Omit<ServicePeriod, "id" | "createdAt" | "updatedAt">): Promise<ServicePeriod> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const row = toRow({ ...input, updatedAt: now() });
+    const { data, error } = await sb.from("booking_service_periods").insert(row).select("*").single();
+    if (error) throw new Error("createServicePeriod: " + error.message);
+    return toDomain<ServicePeriod>(data);
+  },
+  async updateServicePeriod(periodId: string, patch: Partial<ServicePeriod>): Promise<ServicePeriod | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const row = toRow({ ...patch, updatedAt: now() });
+    const { data, error } = await sb.from("booking_service_periods").update(row).eq("id", periodId).select("*").maybeSingle();
+    if (error) throw new Error("updateServicePeriod: " + error.message);
+    return data ? toDomain<ServicePeriod>(data) : undefined;
+  },
+  async deleteServicePeriod(periodId: string): Promise<void> {
+    const sb = await usr(); if (!sb) return;
+    await sb.from("booking_service_periods").delete().eq("id", periodId);
+  },
+  async getBookingSettings(companyId: string): Promise<BookingSettings | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("booking_settings").select("*").eq("company_id", companyId).maybeSingle();
+    return data ? toDomain<BookingSettings>(data) : undefined;
+  },
+  async upsertBookingSettings(input: BookingSettings): Promise<BookingSettings> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const row = toRow({ ...input, updatedAt: now() });
+    const { data, error } = await sb.from("booking_settings").upsert(row, { onConflict: "company_id" }).select("*").single();
+    if (error) throw new Error("upsertBookingSettings: " + error.message);
+    return toDomain<BookingSettings>(data);
+  },
+  async listReservations(tenantId: string, companyId?: string): Promise<Reservation[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("reservations").select("*").in("company_id", await companyIds(sb, tenantId));
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("scheduled_at", { ascending: true });
+    return many<Reservation>(data);
+  },
+  async getReservation(reservationId: string): Promise<Reservation | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("reservations").select("*").eq("id", reservationId).maybeSingle();
+    return data ? toDomain<Reservation>(data) : undefined;
+  },
+  async createReservation(input: Omit<Reservation, "id" | "createdAt" | "updatedAt">): Promise<Reservation> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const row = toRow({ ...input, updatedAt: now() });
+    const { data, error } = await sb.from("reservations").insert(row).select("*").single();
+    if (error) throw new Error("createReservation: " + error.message);
+    return toDomain<Reservation>(data);
+  },
+  async updateReservation(reservationId: string, patch: Partial<Reservation>): Promise<Reservation | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const row = toRow({ ...patch, updatedAt: now() });
+    const { data, error } = await sb.from("reservations").update(row).eq("id", reservationId).select("*").maybeSingle();
+    if (error) throw new Error("updateReservation: " + error.message);
+    return data ? toDomain<Reservation>(data) : undefined;
+  },
+
   // ============================ Prompt templates (RLS, platform lib) =======
   async listPromptTemplates(tenantId: string, companyId?: string): Promise<PromptTemplate[]> {
     const sb = await usr(); if (!sb) return [];
@@ -2103,6 +2178,9 @@ export const supabaseRepo = {
       orderMenuItems: many(await byCompany("order_menu_items")),
       orderingSettings: many(await byCompany("ordering_settings")),
       restaurantOrders: many(await byCompany("restaurant_orders")),
+      bookingServicePeriods: many(await byCompany("booking_service_periods")),
+      bookingSettings: many(await byCompany("booking_settings")),
+      reservations: many(await byCompany("reservations")),
       recommendations: many(await byCompany("recommendations")),
       tasks: many(await byCompany("tasks")),
       aiMosOpportunities: many(await byTenant("ai_mos_opportunities")),

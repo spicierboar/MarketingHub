@@ -25,7 +25,7 @@ export type PlanId = "starter" | "agency" | "scale";
 // (pure data, Stripe-price-backed); entitlement checks live in
 // src/lib/entitlements.ts and gate the deliverable modules (visuals / menus /
 // Order-Now) at their entry points.
-export type AddonId = "video" | "photo" | "menus" | "order_button";
+export type AddonId = "video" | "photo" | "menus" | "order_button" | "bookings";
 
 // A per-company add-on entitlement. At most ONE row per (companyId, addonId):
 // enabling upserts status "active"; disabling flips it to "cancelled" (kept for
@@ -2048,6 +2048,60 @@ export interface RestaurantOrder {
   notes?: string;
   paymentStatus: OrderPaymentStatus;
   stripeCheckoutSessionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---- W7 M50: Bookings & reservations (restaurant tables / hotel rooms) ---------
+
+export type BookingVenueKind = "restaurant" | "hotel";
+
+export type BookingStatus =
+  | "requested"
+  | "confirmed"
+  | "seated"
+  | "checked_in"
+  | "completed"
+  | "cancelled"
+  | "no_show";
+
+export interface ServicePeriod {
+  id: string;
+  companyId: string;
+  name: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+  slotMinutes: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookingSettings {
+  companyId: string;
+  venueKind: BookingVenueKind;
+  enabled: boolean;
+  buttonLabel: string;
+  leadTimeHours: number;
+  maxPartySize: number;
+  notes?: string;
+  updatedAt: string;
+}
+
+export interface Reservation {
+  id: string;
+  companyId: string;
+  servicePeriodId: string;
+  status: BookingStatus;
+  guestName: string;
+  guestEmail: string;
+  guestPhone?: string;
+  partySize: number;
+  scheduledAt: string;
+  notes?: string;
+  confirmationMode: "simulated" | "live";
   createdAt: string;
   updatedAt: string;
 }

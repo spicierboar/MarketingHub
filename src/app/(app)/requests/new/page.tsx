@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { createRequestAction } from "../actions";
+import { MARKETING_FIELD_HELP } from "@/lib/profile-suggestions";
 
 const REQUEST_TYPES = [
   ["social_post", "Social media post"],
@@ -85,35 +86,52 @@ export default async function NewRequestPage({
                   </Field>
                 </div>
 
-                <Field label="Topic / key message" htmlFor="topic">
+                <Field
+                  label="Topic / key message"
+                  htmlFor="topic"
+                  hint={MARKETING_FIELD_HELP.topic}
+                >
                   <Input
                     id="topic"
                     name="topic"
                     required
                     defaultValue={pf.topic}
-                    placeholder="e.g. Winter blocked-drain check-up offer"
+                    placeholder="e.g. Winter lunch special for locals"
                   />
                 </Field>
 
-                <Field label="Marketing objective" htmlFor="objective">
+                <Field
+                  label="Marketing objective"
+                  htmlFor="objective"
+                  hint={MARKETING_FIELD_HELP.objective}
+                >
                   <Textarea
                     id="objective"
                     name="objective"
                     required
                     defaultValue={pf.objective}
-                    placeholder="What should this achieve?"
+                    placeholder="e.g. Fill weekday lunch tables"
                   />
                 </Field>
 
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Target audience" htmlFor="targetAudience">
+                  <Field
+                    label="Target audience"
+                    htmlFor="targetAudience"
+                    hint={MARKETING_FIELD_HELP.targetAudience}
+                  >
                     <Input
                       id="targetAudience"
                       name="targetAudience"
                       defaultValue={pfAudience}
+                      placeholder="Office workers within 10 minutes"
                     />
                   </Field>
-                  <Field label="Platform" htmlFor="platform">
+                  <Field
+                    label="Platform"
+                    htmlFor="platform"
+                    hint={MARKETING_FIELD_HELP.platform}
+                  >
                     <Input
                       id="platform"
                       name="platform"
@@ -121,11 +139,19 @@ export default async function NewRequestPage({
                       defaultValue={pfPlatform}
                     />
                   </Field>
-                  <Field label="Offer / promotion" htmlFor="offer">
-                    <Input id="offer" name="offer" />
+                  <Field
+                    label="Offer / promotion"
+                    htmlFor="offer"
+                    hint={MARKETING_FIELD_HELP.offer}
+                  >
+                    <Input id="offer" name="offer" placeholder="Optional" />
                   </Field>
-                  <Field label="Call to action" htmlFor="callToAction">
-                    <Input id="callToAction" name="callToAction" />
+                  <Field
+                    label="Call to action"
+                    htmlFor="callToAction"
+                    hint={MARKETING_FIELD_HELP.callToAction}
+                  >
+                    <Input id="callToAction" name="callToAction" placeholder="Book a table" />
                   </Field>
                 </div>
 

@@ -85,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
     pinned: true,
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/executive", label: "Executive", icon: Landmark, adminOnly: true },
       { href: "/tasks", label: "Tasks", icon: ListTodo },
       { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
       { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
@@ -149,6 +150,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/photographers", label: "Photographers", icon: Camera, adminOnly: true },
       { href: "/menus", label: "Menus", icon: UtensilsCrossed, adminOnly: true },
       { href: "/ordering", label: "Order Now", icon: ShoppingBag, adminOnly: true },
+      { href: "/bookings", label: "Bookings", icon: CalendarDays, adminOnly: true },
     ],
   },
   {

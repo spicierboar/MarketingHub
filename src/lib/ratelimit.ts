@@ -203,6 +203,7 @@ export const PUBLIC_LIMITS: Record<string, { limit: number; windowSeconds: numbe
   client_approval: { limit: 20, windowSeconds: 60, label: "requests" },
   // Guest checkout submissions per IP per minute on /order/[companyId].
   guest_order: { limit: 8, windowSeconds: 60, label: "order submissions" },
+  guest_booking: { limit: 8, windowSeconds: 60, label: "booking submissions" },
 };
 
 export async function assertPublicRate(

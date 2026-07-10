@@ -54,6 +54,10 @@ const STATUS_TONE: Record<string, Tone> = {
   lost: "danger",
   // Phase 4 photo shoots
   requested: "info",
+  confirmed: "success",
+  seated: "primary",
+  checked_in: "primary",
+  no_show: "danger",
   in_progress: "info",
   delivered: "warning",
   // Module 5 orders

@@ -10,6 +10,7 @@ import { createCampaignAction, createCampaignFromGoalAction } from "../actions";
 import { resolveBusinessType } from "@/lib/business-profiles";
 import { CampaignObjectiveHints } from "../campaign-objective-hints";
 import { CampaignBuilderPanel } from "@/components/campaign-builder-panel";
+import { MARKETING_FIELD_HELP } from "@/lib/profile-suggestions";
 
 const CHANNELS = [
   "Facebook",
@@ -83,7 +84,7 @@ export default async function NewCampaignPage({
                   <Field
                     label="Your goal"
                     htmlFor="goal"
-                    hint="Plain language — e.g. more weekday customers, direct bookings, more reviews"
+                    hint={MARKETING_FIELD_HELP.campaignGoal}
                   >
                     <Textarea
                       id="goal"
@@ -162,13 +163,17 @@ export default async function NewCampaignPage({
                   </Field>
                 </div>
 
-                <Field label="Objective" htmlFor="objective">
+                <Field
+                  label="Objective"
+                  htmlFor="objective"
+                  hint={MARKETING_FIELD_HELP.objective}
+                >
                   <Textarea
                     id="objective"
                     name="objective"
                     required
                     defaultValue={pf.objective}
-                    placeholder="What should this campaign achieve?"
+                    placeholder="e.g. Fill weekday lunch tables"
                   />
                 </Field>
 
@@ -182,8 +187,17 @@ export default async function NewCampaignPage({
                 />
 
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Audience" htmlFor="audience">
-                    <Input id="audience" name="audience" defaultValue={pf.audience} />
+                  <Field
+                    label="Audience"
+                    htmlFor="audience"
+                    hint={MARKETING_FIELD_HELP.targetAudience}
+                  >
+                    <Input
+                      id="audience"
+                      name="audience"
+                      defaultValue={pf.audience}
+                      placeholder="Local families within 10 minutes"
+                    />
                   </Field>
                   <Field label="Service / product focus" htmlFor="serviceFocus" hint="A service from the catalogue works best">
                     <Input id="serviceFocus" name="serviceFocus" defaultValue={pf.serviceFocus} />

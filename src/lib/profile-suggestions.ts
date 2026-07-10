@@ -114,3 +114,23 @@ export const PROFILE_FIELD_HELP = {
   callsToAction:
     "Approved buttons/links for posts — one per line. Example: “Book a table”.",
 } as const;
+
+/** Shared help for request / campaign forms — plain English, not jargon. */
+export const MARKETING_FIELD_HELP = {
+  topic:
+    "The one thing this piece is about — offer, event, or message. Example: “Winter lunch special for locals.”",
+  objective:
+    "What success looks like in one sentence. Example: “Fill weekday lunch tables” or “Get more Google reviews.”",
+  targetAudience:
+    "Who should see this — be specific. Example: “Office workers within 10 minutes at lunch.”",
+  platform:
+    "Where it will run (Facebook, Instagram, GBP, Email…). Leave blank if unsure — we’ll recommend.",
+  offer:
+    "Any discount or promo to mention. Leave blank if none — don’t invent one.",
+  callToAction:
+    "The button or next step. Example: “Book a table” or “Order online.”",
+  campaignGoal:
+    "Plain language goal — the AI turns this into a channel plan. Example: “More weekday customers.”",
+  keyMessage:
+    "The single idea every post should reinforce. Example: “Fresh local produce, no fuss.”",
+} as const;

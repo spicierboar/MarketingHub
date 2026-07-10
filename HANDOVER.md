@@ -1,8 +1,8 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-10, **W5 SHIPPED** · UX polish in-flight · W6 owner-blocked)
+> ## ▶ NEXT SESSION — START HERE (2026-07-10, **W5 SHIPPED** · UX committed · W7 started · W6 owner-blocked)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ `3668e35` (+ **uncommitted UX/dev-tools** — see below)
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (W7 M50/M52 + UX clarity committed — see below)
 >
 > **Waves W0–W5 DONE on main.** Fixtures at W5 merge: **self-test 165/165 · queue-test 20/20**. Live flags **OFF**.
 >
@@ -11,11 +11,14 @@
 > | W0–W4 | DONE | CRM/email/SMS/reviews · CMS/funnel/workflows/loyalty |
 > | **W5** | **DONE** | Full RAG · recommendations · AI-MOS · campaign builder · `w5_complete=yes` |
 > | **W6** | **BLOCKED** | Owner Google Cloud billing → then Phase 3–4 cutover + live flag flip |
-> | W7 | queued | Bookings · local SEO · exec dash · API · security · video · learning — post-W6 |
+> | **W7** | **IN PROGRESS (code-only)** | M50 Bookings + M52 Exec dash shipped on disk; M51/M53–M55 prompts ready |
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **Plan:** `docs/FULL-IMPLEMENTATION-PLAN.md` · **Orchestration:** `docs/parallel/FULL-ORCHESTRATION.md`
 >
-> **Owner migrations:** W2–W5 SQL **pasted to Supabase** (2026-07-10), including RAG actor-column FK fix + campaign-builder RLS finish. Source fixes in `0033_rag.sql` / `0033_recommendations.sql` / `0033_campaign_builder.sql` (may still be uncommitted on disk).
+> **Owner migrations:** W2–W5 SQL **pasted to Supabase** (2026-07-10). **New (not pasted):** `0034_bookings.sql` — Bookings add-on.
+> ```powershell
+> notepad F:\MarketingHub\command-centre\supabase\migrations\0034_bookings.sql
+> ```
 >
 > **Hard locks:** Do **NOT** flip `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` (or other `*_LIVE`) until W6 owner GO. Critique gate untouched. Isolation rule stands.
 >
@@ -24,28 +27,24 @@
 > CC_LOCAL_DEMO=true
 > NEXT_PUBLIC_CC_LOCAL_DEMO=true
 > ```
-> → in-memory seed + cookie auth (bypass magic link). Dev tools: **http://localhost:3002/dev** (prefer port **3002**; leave 3000/3001 free).
+> → in-memory seed + cookie auth (bypass magic link). Dev tools: **http://localhost:3002/dev** (prefer port **3002**).
 > ```powershell
 > cd F:\MarketingHub\command-centre
 > npx next dev -p 3002
 > ```
 >
-> **Uncommitted session work (commit if owner asks):**
-> - Grouped + role-based sidebar (`app-shell.tsx`)
-> - `/dev` seed/clear/quick-login + `CC_LOCAL_DEMO` bypass
-> - Company profile field help + **Suggest empty fields** (`profile-suggestions.ts`)
-> - Task title dropdown (`add-task-form.tsx`)
-> - Calendar **ad alignment** suggestions (`calendar-assist.ts` kind `ad_alignment`) + Ads “Suggest calendar posts”
-> - Dashboard **Workflow: add marketing spiel**
+> **Committed (2026-07-10):**
+> - `d0e3b3c` — local-demo UX polish + W5 migration source fixes
+> - W7 M50 Bookings + M52 Exec dash + UX clarity + W7 prompts (this commit)
 >
-> **NEXT (no Google required):**
-> 1. Commit UX/dev-tools if owner wants them on `main`
-> 2. Continue UX clarity (more field help / AI suggest) OR start **W7 docs/prompts** (code OK while W6 blocked — confirm with owner)
+> **Still untracked (do not commit):** `scripts/*integrator*`, `_owner_paste_*`, `temp-route-ours.ts`
+>
+> **NEXT:**
+> 1. Continue W7: M51 local SEO · M53 API · M54 security · M55 video+learning (prompts ready)
+> 2. Owner paste `0034_bookings.sql` when ready (Notepad command above)
 > 3. When Google billing GO → W6 OWNER-OPS + M45 verify → flip live flags together
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 single cutover on `https://mangotickle.com.au`
->
-> **V1 modules 1–15:** DONE (tracker below). Full-wave track supersedes solo V1 module queue.
 >
 > **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** whenever you ship a new `supabase/migrations/*.sql`, give the owner the **complete Notepad open command** (absolute path):
 > ```powershell
@@ -55,12 +54,13 @@
 >
 > **▶ STANDING INSTRUCTION — next-session continue command:** after meaningful work, update this START HERE block, then give the owner a copy-paste AI instruction (Path + READ + STATE + NEXT).
 >
-> **▶ V1 MODULE TRACKER (15/15 DONE — historical; waves W0–W5 supersede):**
-> | # | Module | Status |
-> |---|--------|--------|
-> | 1–15 | Scale foundation → security slice | **ALL DONE (2026-07-08)** — see module history sections below |
->
 > **NON-NEGOTIABLES:** THE ISOLATION RULE (every repo list-fn takes a REQUIRED tenantId; `canAccessCompany` checks `company.tenantId===session tenant` FIRST; actions tenant-pin on the SESSION, never a request-body id; `svc()` only for identity/tenancy/audit/settings/export-purge with session-derived ids). Under Supabase ALWAYS live-verify. **Gate environment behaviour on `appEnv()` (src/lib/env.ts), NEVER `NODE_ENV`**. Auth/T&C/onboarding gate lives in `requireUser()`. `app_users` has NO `role` column (role derives from tenant_members). OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temp scripts from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-10, W5 SHIPPED) — archived context
+>
+> **W0–W5 DONE** @ `3668e35`. UX polish was uncommitted; then committed as `d0e3b3c`. W6 Google-blocked. Live flags OFF.
 >
 > ---
 >

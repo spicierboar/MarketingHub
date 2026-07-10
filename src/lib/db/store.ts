@@ -37,6 +37,9 @@ import type {
   MenuDesign,
   OrderMenuItem,
   OrderingSettings,
+  BookingSettings,
+  ServicePeriod,
+  Reservation,
   PhotoShoot,
   PhotographerProfile,
   PhotographerPackage,
@@ -205,6 +208,10 @@ export interface DataStore {
   orderMenuItems: OrderMenuItem[];
   orderingSettings: OrderingSettings[];
   restaurantOrders: RestaurantOrder[];
+  // W7 M50: Bookings & reservations
+  bookingServicePeriods: ServicePeriod[];
+  bookingSettings: BookingSettings[];
+  reservations: Reservation[];
   // Phase 9: Recommendations + Tasks
   recommendations: Recommendation[];
   recommendationDismissHistory: RecommendationDismissRecord[];
@@ -1810,6 +1817,7 @@ function seed(): DataStore {
     companyEntitlements: [
       { id: "ent_cafe_menus", companyId: "c_cafe", addonId: "menus", status: "active", enabledById: "u_priya", enabledAt: t, updatedAt: t },
       { id: "ent_cafe_order", companyId: "c_cafe", addonId: "order_button", status: "active", enabledById: "u_priya", enabledAt: t, updatedAt: t },
+      { id: "ent_cafe_bookings", companyId: "c_cafe", addonId: "bookings", status: "active", enabledById: "u_priya", enabledAt: t, updatedAt: t },
       { id: "ent_cafe_video", companyId: "c_cafe", addonId: "video", status: "active", enabledById: "u_priya", enabledAt: t, updatedAt: t },
       { id: "ent_cafe_photo", companyId: "c_cafe", addonId: "photo", status: "active", enabledById: "u_priya", enabledAt: t, updatedAt: t },
     ],
@@ -1944,6 +1952,48 @@ function seed(): DataStore {
         subtotalCents: 2300,
         totalCents: 2300,
         paymentStatus: "simulated",
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+    bookingServicePeriods: [
+      {
+        id: "sp_cafe_lunch",
+        companyId: "c_cafe",
+        name: "Weekday lunch",
+        dayOfWeek: 1,
+        startTime: "11:30",
+        endTime: "14:00",
+        capacity: 24,
+        slotMinutes: 30,
+        active: true,
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+    bookingSettings: [
+      {
+        companyId: "c_cafe",
+        venueKind: "restaurant",
+        enabled: true,
+        buttonLabel: "Book a table",
+        leadTimeHours: 1,
+        maxPartySize: 8,
+        updatedAt: t,
+      },
+    ],
+    reservations: [
+      {
+        id: "res_cafe_1",
+        companyId: "c_cafe",
+        servicePeriodId: "sp_cafe_lunch",
+        status: "confirmed",
+        guestName: "Jordan Kim",
+        guestEmail: "jordan@example.com",
+        guestPhone: "0400 111 222",
+        partySize: 4,
+        scheduledAt: new Date(Date.now() + 86400000).toISOString().slice(0, 11) + "12:00:00.000Z",
+        confirmationMode: "simulated",
         createdAt: t,
         updatedAt: t,
       },

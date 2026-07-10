@@ -234,6 +234,7 @@ export function stripeAddonPriceId(addonId: AddonId): string | undefined {
     photo: process.env.STRIPE_PRICE_ADDON_PHOTO,
     menus: process.env.STRIPE_PRICE_ADDON_MENUS,
     order_button: process.env.STRIPE_PRICE_ADDON_ORDER_BUTTON,
+    bookings: process.env.STRIPE_PRICE_ADDON_BOOKINGS,
   }[addonId];
 }
 

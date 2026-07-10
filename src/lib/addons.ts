@@ -59,9 +59,18 @@ export const ADDONS: Record<AddonId, AddonDef> = {
     blurb: "Embeddable direct-ordering button (menu → cart → Stripe checkout paid to the restaurant), bypassing third-party commissions.",
     icon: "🛒",
   },
+  bookings: {
+    id: "bookings",
+    name: "Bookings",
+    priceAudMonthly: 79,
+    segment: "restaurant",
+    includedNote: "Table and room reservations — direct bookings without OTA commissions.",
+    blurb: "Guest reservation requests for restaurant tables or hotel rooms with service periods, capacity limits, and a host queue.",
+    icon: "📅",
+  },
 };
 
-export const ADDON_ORDER: AddonId[] = ["video", "photo", "menus", "order_button"];
+export const ADDON_ORDER: AddonId[] = ["video", "photo", "menus", "order_button", "bookings"];
 
 // Total-safe lookup: an unknown/legacy add-on id returns undefined so callers
 // fail closed (an entitlement for a retired add-on grants nothing).

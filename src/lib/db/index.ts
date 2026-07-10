@@ -41,6 +41,9 @@ import type {
   PhotographerPackage,
   PhotoMarketplaceBooking,
   RestaurantOrder,
+  BookingSettings,
+  ServicePeriod,
+  Reservation,
   Lead,
   Tenant,
   TenantMember,
@@ -629,6 +632,9 @@ export async function exportTenantData(tenantId: string): Promise<Record<string,
     orderMenuItems: byCompany(s.orderMenuItems),
     orderingSettings: byCompany(s.orderingSettings),
     restaurantOrders: byCompany(s.restaurantOrders),
+    bookingServicePeriods: byCompany(s.bookingServicePeriods ?? []),
+    bookingSettings: byCompany(s.bookingSettings ?? []),
+    reservations: byCompany(s.reservations ?? []),
     recommendations: byCompany(s.recommendations),
     tasks: byCompany(s.tasks),
     aiMosOpportunities: byTenant(s.aiMosOpportunities),
@@ -727,6 +733,9 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.orderMenuItems = keepCompany(s.orderMenuItems);
   s.orderingSettings = keepCompany(s.orderingSettings);
   s.restaurantOrders = keepCompany(s.restaurantOrders);
+  s.bookingServicePeriods = keepCompany(s.bookingServicePeriods ?? []);
+  s.bookingSettings = keepCompany(s.bookingSettings ?? []);
+  s.reservations = keepCompany(s.reservations ?? []);
   s.recommendations = keepCompany(s.recommendations);
   s.recommendationDismissHistory = keepCompany(s.recommendationDismissHistory);
   s.tasks = keepCompany(s.tasks);
@@ -2413,6 +2422,110 @@ export async function updateRestaurantOrder(
   if (!o) return undefined;
   Object.assign(o, patch, { updatedAt: now() });
   return o;
+}
+
+// ---- W7 M50: Bookings & reservations ------------------------------------------------
+
+export async function listServicePeriods(
+  tenantId: string,
+  companyId?: string,
+): Promise<ServicePeriod[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listServicePeriods(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return db()
+    .bookingServicePeriods.filter((p) => ids.has(p.companyId) && (!companyId || p.companyId === companyId))
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+}
+
+export async function listServicePeriodsByCompany(companyId: string): Promise<ServicePeriod[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listServicePeriodsByCompany(companyId);
+  return db()
+    .bookingServicePeriods.filter((p) => p.companyId === companyId && p.active)
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+}
+
+export async function getServicePeriod(periodId: string): Promise<ServicePeriod | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getServicePeriod(periodId);
+  return db().bookingServicePeriods.find((p) => p.id === periodId);
+}
+
+export async function createServicePeriod(
+  input: Omit<ServicePeriod, "id" | "createdAt" | "updatedAt">,
+): Promise<ServicePeriod> {
+  if (isSupabaseConfigured()) return supabaseRepo.createServicePeriod(input);
+  const t = now();
+  const rec: ServicePeriod = { ...input, id: id("sp"), createdAt: t, updatedAt: t };
+  db().bookingServicePeriods.push(rec);
+  return rec;
+}
+
+export async function updateServicePeriod(
+  periodId: string,
+  patch: Partial<ServicePeriod>,
+): Promise<ServicePeriod | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateServicePeriod(periodId, patch);
+  const p = await getServicePeriod(periodId);
+  if (!p) return undefined;
+  Object.assign(p, patch, { updatedAt: now() });
+  return p;
+}
+
+export async function deleteServicePeriod(periodId: string): Promise<void> {
+  if (isSupabaseConfigured()) return supabaseRepo.deleteServicePeriod(periodId);
+  const s = db();
+  s.bookingServicePeriods = s.bookingServicePeriods.filter((p) => p.id !== periodId);
+}
+
+export async function getBookingSettings(companyId: string): Promise<BookingSettings | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getBookingSettings(companyId);
+  return db().bookingSettings.find((s) => s.companyId === companyId);
+}
+
+export async function upsertBookingSettings(input: BookingSettings): Promise<BookingSettings> {
+  if (isSupabaseConfigured()) return supabaseRepo.upsertBookingSettings(input);
+  const s = db();
+  const i = s.bookingSettings.findIndex((x) => x.companyId === input.companyId);
+  const rec = { ...input, updatedAt: now() };
+  if (i >= 0) s.bookingSettings[i] = rec;
+  else s.bookingSettings.push(rec);
+  return rec;
+}
+
+export async function listReservations(
+  tenantId: string,
+  companyId?: string,
+): Promise<Reservation[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listReservations(tenantId, companyId);
+  const ids = tenantCompanyIdSet(tenantId);
+  return db()
+    .reservations.filter((r) => ids.has(r.companyId) && (!companyId || r.companyId === companyId))
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+}
+
+export async function getReservation(reservationId: string): Promise<Reservation | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getReservation(reservationId);
+  return db().reservations.find((r) => r.id === reservationId);
+}
+
+export async function createReservation(
+  input: Omit<Reservation, "id" | "createdAt" | "updatedAt">,
+): Promise<Reservation> {
+  if (isSupabaseConfigured()) return supabaseRepo.createReservation(input);
+  const t = now();
+  const rec: Reservation = { ...input, id: id("res"), createdAt: t, updatedAt: t };
+  db().reservations.push(rec);
+  return rec;
+}
+
+export async function updateReservation(
+  reservationId: string,
+  patch: Partial<Reservation>,
+): Promise<Reservation | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateReservation(reservationId, patch);
+  const r = await getReservation(reservationId);
+  if (!r) return undefined;
+  Object.assign(r, patch, { updatedAt: now() });
+  return r;
 }
 
 // ---- V1 module 14: Photographer marketplace -----------------------------------------

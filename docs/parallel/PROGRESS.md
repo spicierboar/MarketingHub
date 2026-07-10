@@ -1,6 +1,6 @@
 ﻿# Orchestrator ledger
 
-Last updated: 2026-07-10 (**W5 SHIPPED**)
+Last updated: 2026-07-10 (**W5 SHIPPED** · **W7 started code-only**)
 
 **Owner lock:** Full SRS → vision → go-live = non-negotiable.  
 **Schedule:** `docs/parallel/FULL-ORCHESTRATION.md`
@@ -23,67 +23,57 @@ Last updated: 2026-07-10 (**W5 SHIPPED**)
 | W4 | DONE | ~4-6d | - |
 | **W5** | **DONE** | **~4-6d** | **~Jul 10** |
 | W6 | owner gate | days + weeks? | blocked (Google) |
-| W7 | queued | ~6-8d post-W6 | after go-live |
+| **W7** | **IN PROGRESS** | ~6-8d | code-only while W6 blocked |
 | **`full_complete`** | - | **~22-32d code** + W6 | **~early Aug** (code) |
 
 ---
 
-## Wave 3 — DONE · `w3_complete=yes` · 110/110
-
-## Wave 4 — DONE
-
-| Agent | Branch | Status |
-|-------|--------|--------|
-| M34 | `w4/m34-cms` | merged |
-| M35 | `w4/m35-funnel` | merged |
-| M36 | `w4/m36-automation` | merged |
-| M37 | `w4/m37-loyalty` | merged |
-| M01-W4 | main | integrated |
-
-| Flag | Status |
-|------|--------|
-| `w4_launched` | yes |
-| `m34_handoff` | yes |
-| `m35_handoff` | yes |
-| `m36_handoff` | yes |
-| `m37_handoff` | yes |
-| `w4_complete` | **yes** |
-
-**Fixtures:** self-test **131/131** · queue-test **20/20** · live flags **OFF**
-
 ## Wave 5 — DONE
 
-| Agent | Branch | Status |
-|-------|--------|--------|
-| M40 | `w5/m40-rag` | merged |
-| M41 | `w5/m41-recommendations` | merged |
-| M42 | `w5/m42-ai-mos` | merged |
-| M43 | `w5/m43-campaign-builder` | merged |
-| M01-W5 | main | integrated |
-
 | Flag | Status |
 |------|--------|
-| `w5_launched` | yes |
-| `m40_handoff` | yes |
-| `m41_handoff` | yes |
-| `m42_handoff` | yes |
-| `m43_handoff` | yes |
 | `w5_complete` | **yes** |
 
 **Fixtures:** self-test **165/165** · queue-test **20/20** · live flags **OFF**
 
-**Migrations:** W2–W5 owner-pasted to Supabase (2026-07-10) — RAG actor FK fix + campaign-builder RLS finish included. Source: `0033_rag.sql` · `0033_recommendations.sql` · `0033_campaign_builder.sql` (+ AI-MOS).
+**Migrations:** W2–W5 owner-pasted to Supabase (2026-07-10).
 
-**Post-W5 local WIP (uncommitted on main):** `CC_LOCAL_DEMO` + `/dev` · grouped nav · profile AI suggest · task title dropdown · calendar↔ads `ad_alignment` · dashboard “marketing spiel” workflow. Prefer `npx next dev -p 3002`. See `HANDOVER.md` START HERE.
+**UX polish committed:** `d0e3b3c` (local demo, grouped nav, profile suggest, ad↔calendar, marketing-spiel).
 
-## Waves 6-7 — QUEUED
+## Wave 6 — BLOCKED
 
-`full_complete=no` · W6 Phase 3 **blocked** (Google Cloud billing) · W7 code-only optional while waiting (confirm with owner)
+Phase 3 Google Cloud billing · Phase 4 parked · do **not** flip live flags.
+
+## Wave 7 — IN PROGRESS (code-only · live flags OFF)
+
+| Agent | Module | Status |
+|-------|--------|--------|
+| M50 | Bookings & reservations | **code on disk** · handoff `M50-handoff.md` · migration `0034_bookings.sql` (owner paste pending) |
+| M51 | Local SEO (full) | prompt ready · not started |
+| M52 | Executive dashboard | **code on disk** · handoff `M52-handoff.md` · compute-only |
+| M53 | Public API expansion | prompt ready · not started |
+| M54 | Security hardening | prompt ready · not started |
+| M55 | Video studio + learning | prompt ready · not started |
+| M01-FINAL | integrator | queued |
+
+| Flag | Status |
+|------|--------|
+| `w7_launched` | yes (owner confirmed code-only) |
+| `m50_handoff` | **yes** (committed) |
+| `m51_handoff` | no |
+| `m52_handoff` | **yes** (committed) |
+| `m53_handoff` | no |
+| `m54_handoff` | no |
+| `m55_handoff` | no |
+| `w7_complete` | no |
+
+**Prompts:** `docs/parallel/M50-W7-bookings-prompt.md` … `M55-W7-video-learning-prompt.md`
+
+**Migration band:** `0034_*`
 
 ## Owner ops
 
 Phases 1-2 done · Phase 3 Google blocked · Phase 4 parked · `https://mangotickle.com.au`
 
-**Migrations pasted (2026-07-10):** W2 `0029`–`0030` · W3 `0031_*` · W4 `0032_*` · W5 `0033_*` (RAG FK fix + campaign-builder RLS finish) — **done**
-
----
+**Migrations pasted (2026-07-10):** W2–W5 — **done**  
+**Pending paste:** `0034_bookings.sql`
