@@ -18,6 +18,7 @@ import type {
   AudienceSegment,
   AiRun,
   AiMosOpportunity,
+  AiMosSignalRun,
   CalendarAssistSuggestion,
   ApprovedClaim,
   ApprovedResponse,
@@ -204,6 +205,7 @@ export interface DataStore {
   tasks: Task[];
   // V1 module 11: AI-MOS opportunities
   aiMosOpportunities: AiMosOpportunity[];
+  aiMosSignalRuns: AiMosSignalRun[];
   // W1 M22: Calendar assist suggestions
   calendarAssistSuggestions: CalendarAssistSuggestion[];
   // Phase 10: Advanced Admin & Security
@@ -1941,6 +1943,7 @@ function seed(): DataStore {
     recommendationDismissHistory: [],
     tasks: [],
     aiMosOpportunities: [],
+    aiMosSignalRuns: [],
     calendarAssistSuggestions: [],
     security: tenants.map((tn) => ({
       tenantId: tn.id,

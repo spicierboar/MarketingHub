@@ -916,6 +916,7 @@ export interface AiRun {
     | "video_gen"
     | "content_critique"
     | "ai_mos_scan"
+    | "ai_mos_signal_scan"
     | "ai_mos_convert"
     | "ai_mos_dismiss"
     | "calendar_assist_scan"
@@ -1215,7 +1216,9 @@ export type AiMosOpportunityKind =
   | "calendar_gap"
   | "publishing_cadence"
   | "recommendation_signal"
-  | "approval_bottleneck";
+  | "approval_bottleneck"
+  | "review_signal"
+  | "loyalty_signal";
 
 export type AiMosOpportunityStatus = "open" | "converted" | "dismissed";
 
@@ -1253,6 +1256,39 @@ export interface AiMosOpportunity {
   dismissReason?: string | null;
   resultType?: "campaign" | "content" | "request" | null;
   resultId?: string | null;
+}
+
+export type AiMosSignalKind =
+  | "health"
+  | "calendar_gap"
+  | "publishing_cadence"
+  | "recommendation"
+  | "approval_backlog"
+  | "review"
+  | "loyalty";
+
+export interface AiMosSignalSnapshot {
+  kind: AiMosSignalKind;
+  signal: string;
+  observed: string;
+  strength: number;
+  mode: "simulated" | "live";
+}
+
+export type AiMosExecutionMode = "suggest_only";
+
+export interface AiMosSignalRun {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  userId: string;
+  mode: "suggest_only" | "simulated" | "live";
+  executionMode: AiMosExecutionMode;
+  signalCount: number;
+  opportunityCount: number;
+  signals: AiMosSignalSnapshot[];
+  aiRunId?: string | null;
+  createdAt: string;
 }
 
 // ---- W1 M22: Calendar assist (30-day governed suggestions) -------------------

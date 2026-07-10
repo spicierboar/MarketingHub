@@ -189,7 +189,10 @@ import {
 import {
   checkConvertCreatesDraftOnly,
   checkDismissAudited,
+  checkHealthThresholdUsed,
+  checkSignalRunRecorded,
   checkSignalsProduceOpportunity,
+  checkSurfaceDedupesByKind,
 } from "@/lib/selftest/ai-mos";
 import {
   checkAcceptCreatesDraftOnly as checkCalendarAssistAcceptDraftOnly,
@@ -840,6 +843,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("agencyOps.templateApplyPrefill", () => checkTemplateApplyPrefill());
 
     await expect("aiMos.signalsProduceOpportunity", () => checkSignalsProduceOpportunity());
+
+    await expect("aiMos.healthThresholdUsed", () => checkHealthThresholdUsed());
+
+    await expect("aiMos.signalRunRecorded", () =>
+      checkSignalRunRecorded(companyA.id, ownerAUser.id, tenantAId!),
+    );
+
+    await expect("aiMos.surfaceDedupesByKind", () =>
+      checkSurfaceDedupesByKind(companyA.id, ownerAUser.id, tenantAId!),
+    );
 
     await expect("aiMos.convertCreatesDraftOnly", () =>
       checkConvertCreatesDraftOnly(companyA.id, ownerAUser.id, tenantAId!),

@@ -129,20 +129,30 @@ export function AiMosOpportunityStrip({
 export function AiMosDashboardPanel({
   opps,
   companyById,
+  latestSignalCount = 0,
 }: {
   opps: AiMosOpportunity[];
   companyById: Map<string, string>;
+  latestSignalCount?: number;
 }) {
   if (!opps.length) {
     return (
       <p className="text-sm text-muted-foreground">
         No open opportunities — scan signals to surface diagnosis cards.
+        {latestSignalCount > 0
+          ? ` ${latestSignalCount} recent signal scan${latestSignalCount === 1 ? "" : "s"} logged.`
+          : ""}
       </p>
     );
   }
 
   return (
     <div className="space-y-3">
+      {latestSignalCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {latestSignalCount} recent signal scan{latestSignalCount === 1 ? "" : "s"} — suggest-only mode
+        </p>
+      )}
       {opps.map((opp) => (
         <AiMosOpportunityCard
           key={opp.id}
