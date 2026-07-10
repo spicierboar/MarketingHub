@@ -69,16 +69,26 @@ Last updated: 2026-07-10 (**W3 SHIPPED**)
 
 **Migrations (owner paste when ready):** `0031_crm.sql` · `0031_email_marketing.sql` · `0031_sms_marketing.sql` · `0031_reviews.sql`
 
-## Wave 4 — QUEUED (next)
+## Wave 4 — IN FLIGHT
 
-| Agent | Scope |
-|-------|-------|
-| M34 | CMS |
-| M35 | Funnel |
-| M36 | Automation |
-| M37 | Loyalty |
+| Agent | Branch | Status |
+|-------|--------|--------|
+| M34 | `w4/m34-cms` | spawned |
+| M35 | `w4/m35-funnel` | spawned |
+| M36 | `w4/m36-automation` | spawned |
+| M37 | `w4/m37-loyalty` | spawned |
+| M01-W4 | main | waiting |
 
-`w4_launched=no` · `w4_complete=no`
+| Flag | Status |
+|------|--------|
+| `w4_launched` | **yes** |
+| `m34_handoff` | no |
+| `m35_handoff` | no |
+| `m36_handoff` | no |
+| `m37_handoff` | no |
+| `w4_complete` | no |
+
+**Target:** ~117/117 fixtures · live flags **OFF**
 
 ## Waves 5-7 — QUEUED
 
