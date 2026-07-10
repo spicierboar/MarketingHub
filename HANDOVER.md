@@ -15,11 +15,7 @@
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **Plan:** `docs/FULL-IMPLEMENTATION-PLAN.md` · **Orchestration:** `docs/parallel/FULL-ORCHESTRATION.md`
 >
-> **Owner migrations:** W2–W5 SQL **pasted to Supabase** (2026-07-10). **New (not pasted):** `0034_bookings.sql` — Bookings add-on.
-> ```powershell
-> notepad F:\MarketingHub\command-centre\supabase\migrations\0034_bookings.sql
-> ```
->
+> **Owner migrations:** W2–W5 SQL **pasted to Supabase** (2026-07-10). **`0034_bookings.sql` pasted (2026-07-10)** — Success, no rows (DDL OK).
 > **Hard locks:** Do **NOT** flip `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` (or other `*_LIVE`) until W6 owner GO. Critique gate untouched. Isolation rule stands.
 >
 > **Local demo (while Google blocked):**
@@ -41,8 +37,7 @@
 >
 > **NEXT:**
 > 1. Continue W7: M51 local SEO · M53 API · M54 security · M55 video+learning (prompts ready)
-> 2. Owner paste `0034_bookings.sql` when ready (Notepad command above)
-> 3. When Google billing GO → W6 OWNER-OPS + M45 verify → flip live flags together
+> 2. When Google billing GO → W6 OWNER-OPS + M45 verify → flip live flags together
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 single cutover on `https://mangotickle.com.au`
 >

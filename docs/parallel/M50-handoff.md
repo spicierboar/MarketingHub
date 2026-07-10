@@ -28,4 +28,4 @@ curl http://localhost:3000/api/dev/self-test
 
 ## Next
 
-Owner applies migration `0034_bookings.sql` to Supabase when ready. Do not flip `BOOKINGS_LIVE` until live provider is configured.
+Owner applied migration `0034_bookings.sql` to Supabase (2026-07-10) — Success, no rows. Do not flip `BOOKINGS_LIVE` until live provider is configured.

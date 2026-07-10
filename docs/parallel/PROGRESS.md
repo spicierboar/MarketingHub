@@ -48,7 +48,7 @@ Phase 3 Google Cloud billing · Phase 4 parked · do **not** flip live flags.
 
 | Agent | Module | Status |
 |-------|--------|--------|
-| M50 | Bookings & reservations | **code on disk** · handoff `M50-handoff.md` · migration `0034_bookings.sql` (owner paste pending) |
+| M50 | Bookings & reservations | **DONE on main** · handoff `M50-handoff.md` · migration `0034_bookings.sql` **owner-pasted** |
 | M51 | Local SEO (full) | prompt ready · not started |
 | M52 | Executive dashboard | **code on disk** · handoff `M52-handoff.md` · compute-only |
 | M53 | Public API expansion | prompt ready · not started |
@@ -75,5 +75,4 @@ Phase 3 Google Cloud billing · Phase 4 parked · do **not** flip live flags.
 
 Phases 1-2 done · Phase 3 Google blocked · Phase 4 parked · `https://mangotickle.com.au`
 
-**Migrations pasted (2026-07-10):** W2–W5 — **done**  
-**Pending paste:** `0034_bookings.sql`
+**Migrations pasted (2026-07-10):** W2–W5 — **done** · **`0034_bookings.sql` — done**
