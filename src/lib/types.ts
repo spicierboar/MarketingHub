@@ -746,7 +746,7 @@ export type KnowledgeSourceType =
   | "brand_guide"
   | "other";
 
-export type KnowledgeDocStatus = "draft" | "approved" | "archived";
+export type KnowledgeDocStatus = "draft" | "approved" | "archived" | "outdated" | "prohibited";
 
 // A piece of approved company knowledge the AI grounds its drafts in.
 // Content is plain text (pasted or extracted); edits bump the version and
@@ -2319,6 +2319,38 @@ export interface LoyaltyRedemption {
   abuseFlagged: boolean;
   abuseReason?: string | null;
   redeemedAt: string;
+}
+
+// ---- W5 M40: Full RAG (versioned knowledge sources) --------------------------
+
+export interface RagKnowledgeSource {
+  id: string;
+  companyId: string;
+  title: string;
+  sourceType: KnowledgeSourceType;
+  status: KnowledgeDocStatus;
+  currentVersionId?: string | null;
+  approvedVersionId?: string | null;
+  addedById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RagKnowledgeVersion {
+  id: string;
+  sourceId: string;
+  companyId: string;
+  versionNumber: number;
+  title: string;
+  content: string;
+  status: KnowledgeDocStatus;
+  fileName?: string;
+  contentType?: string;
+  supersededById?: string | null;
+  createdById: string;
+  createdAt: string;
+  approvedById?: string | null;
+  approvedAt?: string | null;
 }
 
 // ---- Phase 12: Enterprise Automation (§61 Phase 12) --------------------------------

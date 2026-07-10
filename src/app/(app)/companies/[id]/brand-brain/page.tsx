@@ -5,10 +5,11 @@ import { getCompany, getLocalProfile } from "@/lib/db";
 import {
   displayContent,
   listRagDocuments,
+  listRagVersionHistory,
   previewCitation,
   uploadMetaOf,
   statusTone,
-} from "@/lib/brand-brain-rag";
+} from "@/lib/rag";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,6 +54,12 @@ export default async function BrandBrainPage({
   const approved = docs.filter((d) => d.status === "approved").length;
   const drafts = docs.filter((d) => d.status === "draft").length;
   const archived = docs.filter((d) => d.status === "archived").length;
+  const outdated = docs.filter((d) => d.status === "outdated").length;
+  const prohibited = docs.filter((d) => d.status === "prohibited").length;
+  const versionHistories = await Promise.all(
+    docs.map(async (doc) => ({ docId: doc.id, versions: await listRagVersionHistory(doc.id) })),
+  );
+  const versionsByDoc = new Map(versionHistories.map((v) => [v.docId, v.versions]));
 
   return (
     <div>
@@ -71,7 +78,7 @@ export default async function BrandBrainPage({
             <CardContent className="p-6">
               <h2 className="mb-1 font-semibold">Knowledge documents</h2>
               <p className="mb-4 text-sm text-muted-foreground">
-                {approved} approved · {drafts} draft · {archived} archived
+                {approved} approved · {drafts} draft · {archived} archived · {outdated} outdated · {prohibited} prohibited
               </p>
               <div className="space-y-4">
                 {docs.map((doc) => {
@@ -80,6 +87,7 @@ export default async function BrandBrainPage({
                   const citePreview = previewCitation(
                     { sourceId: doc.id, title: doc.title, snippet: body.slice(0, 120) },
                   );
+                  const versions = versionsByDoc.get(doc.id) ?? [];
                   return (
                     <details
                       key={doc.id}
@@ -106,6 +114,21 @@ export default async function BrandBrainPage({
                           Cite preview: {citePreview}
                         </p>
                       )}
+                      {versions.length > 1 && (
+                        <div className="mt-3 rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground">
+                          <p className="mb-1 font-medium text-foreground">Version history</p>
+                          <ul className="space-y-1">
+                            {versions.map((v) => (
+                              <li key={v.id}>
+                                v{v.versionNumber} · {titleCase(v.status)}
+                                {v.fileName ? ` · ${v.fileName}` : ""}
+                                {" · "}
+                                {formatDate(v.createdAt)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       <form action={reviseKnowledgeDocAction} className="mt-3 space-y-3">
                         <input type="hidden" name="docId" value={doc.id} />
                         <Input name="title" defaultValue={doc.title} />
@@ -130,6 +153,24 @@ export default async function BrandBrainPage({
                               Approve for AI
                             </Button>
                           </form>
+                        )}
+                        {doc.status === "approved" && (
+                          <>
+                            <form action={setKnowledgeDocStatusAction}>
+                              <input type="hidden" name="docId" value={doc.id} />
+                              <input type="hidden" name="status" value="outdated" />
+                              <Button type="submit" variant="ghost" size="sm">
+                                Mark outdated
+                              </Button>
+                            </form>
+                            <form action={setKnowledgeDocStatusAction}>
+                              <input type="hidden" name="docId" value={doc.id} />
+                              <input type="hidden" name="status" value="prohibited" />
+                              <Button type="submit" variant="ghost" size="sm">
+                                Mark prohibited
+                              </Button>
+                            </form>
+                          </>
                         )}
                         {doc.status !== "archived" && (
                           <form action={setKnowledgeDocStatusAction}>

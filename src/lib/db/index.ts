@@ -53,6 +53,8 @@ import type {
   CmsPageVersion,
   CmsSeoMetadata,
   CmsUpdateRequest,
+  RagKnowledgeSource,
+  RagKnowledgeVersion,
   ConversionFunnel,
   FunnelAbExperiment,
   FunnelJourney,
@@ -694,6 +696,8 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.cmsPageVersions = keepCompany(s.cmsPageVersions ?? []);
   s.cmsSeoMetadata = keepCompany(s.cmsSeoMetadata ?? []);
   s.cmsUpdateRequests = keepCompany(s.cmsUpdateRequests ?? []);
+  s.ragKnowledgeSources = keepCompany(s.ragKnowledgeSources ?? []);
+  s.ragKnowledgeVersions = keepCompany(s.ragKnowledgeVersions ?? []);
   s.loyaltyPrograms = keepCompany(s.loyaltyPrograms ?? []);
   s.loyaltyTiers = keepCompany(s.loyaltyTiers ?? []);
   s.loyaltyMembers = keepCompany(s.loyaltyMembers ?? []);
@@ -3182,5 +3186,75 @@ export async function createWorkflowDispatchLog(
 ): Promise<WorkflowDispatchLog> {
   const rec: WorkflowDispatchLog = { ...input, id: id("wfd"), createdAt: now() };
   (db().workflowDispatchLogs ??= []).push(rec);
+  return rec;
+}
+
+export async function listRagKnowledgeSources(
+  companyId: string,
+  includeInactive = false,
+): Promise<RagKnowledgeSource[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listRagKnowledgeSources(companyId, includeInactive);
+  return (db().ragKnowledgeSources ?? [])
+    .filter((s) => s.companyId === companyId && (includeInactive || s.status === "approved"))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function getRagKnowledgeSource(sourceId: string): Promise<RagKnowledgeSource | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getRagKnowledgeSource(sourceId);
+  return (db().ragKnowledgeSources ?? []).find((s) => s.id === sourceId);
+}
+
+export async function createRagKnowledgeSource(
+  input: Omit<RagKnowledgeSource, "id" | "createdAt" | "updatedAt">,
+): Promise<RagKnowledgeSource> {
+  if (isSupabaseConfigured()) return supabaseRepo.createRagKnowledgeSource(input);
+  const time = now();
+  const rec: RagKnowledgeSource = { ...input, id: id("rks"), createdAt: time, updatedAt: time };
+  (db().ragKnowledgeSources ??= []).push(rec);
+  return rec;
+}
+
+export async function updateRagKnowledgeSource(
+  sourceId: string,
+  patch: Partial<RagKnowledgeSource>,
+): Promise<RagKnowledgeSource | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateRagKnowledgeSource(sourceId, patch);
+  const rec = await getRagKnowledgeSource(sourceId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch, { updatedAt: now() });
+  return rec;
+}
+
+export async function listRagKnowledgeVersionsForSource(
+  sourceId: string,
+): Promise<RagKnowledgeVersion[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listRagKnowledgeVersionsForSource(sourceId);
+  return (db().ragKnowledgeVersions ?? [])
+    .filter((v) => v.sourceId === sourceId)
+    .sort((a, b) => b.versionNumber - a.versionNumber);
+}
+
+export async function getRagKnowledgeVersion(versionId: string): Promise<RagKnowledgeVersion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getRagKnowledgeVersion(versionId);
+  return (db().ragKnowledgeVersions ?? []).find((v) => v.id === versionId);
+}
+
+export async function createRagKnowledgeVersion(
+  input: Omit<RagKnowledgeVersion, "id" | "createdAt">,
+): Promise<RagKnowledgeVersion> {
+  if (isSupabaseConfigured()) return supabaseRepo.createRagKnowledgeVersion(input);
+  const rec: RagKnowledgeVersion = { ...input, id: id("rkv"), createdAt: now() };
+  (db().ragKnowledgeVersions ??= []).push(rec);
+  return rec;
+}
+
+export async function updateRagKnowledgeVersion(
+  versionId: string,
+  patch: Partial<RagKnowledgeVersion>,
+): Promise<RagKnowledgeVersion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateRagKnowledgeVersion(versionId, patch);
+  const rec = await getRagKnowledgeVersion(versionId);
+  if (!rec) return undefined;
+  Object.assign(rec, patch);
   return rec;
 }

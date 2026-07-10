@@ -50,6 +50,7 @@ import type {
   TermsVersion, TermsAcceptance, User, UtmLink,
   EmailTemplate, EmailSubscriber, EmailCampaign,
   CmsPage, CmsPageVersion, CmsSeoMetadata, CmsUpdateRequest,
+  RagKnowledgeSource, RagKnowledgeVersion,
   ConversionFunnel, FunnelAbExperiment, FunnelJourney, FunnelLandingPage,
 } from "@/lib/types";
 
@@ -2081,6 +2082,51 @@ export const supabaseRepo = {
       const { data: still } = await sb.from("tenant_members").select("tenant_id").eq("user_id", uid).limit(1);
       if (!still || still.length === 0) await sb.auth.admin.deleteUser(uid).catch(() => {});
     }
+  },
+
+  async listRagKnowledgeSources(companyId: string, includeInactive = false): Promise<RagKnowledgeSource[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("rag_knowledge_sources").select("*").eq("company_id", companyId);
+    if (!includeInactive) q = q.eq("status", "approved");
+    const { data } = await q.order("updated_at", { ascending: false });
+    return many<RagKnowledgeSource>(data);
+  },
+  async getRagKnowledgeSource(sourceId: string): Promise<RagKnowledgeSource | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_sources").select("*").eq("id", sourceId).maybeSingle();
+    return data ? toDomain<RagKnowledgeSource>(data) : undefined;
+  },
+  async createRagKnowledgeSource(input: Omit<RagKnowledgeSource, "id" | "createdAt" | "updatedAt">): Promise<RagKnowledgeSource> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("rag_knowledge_sources").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createRagKnowledgeSource: " + error.message);
+    return toDomain<RagKnowledgeSource>(data);
+  },
+  async updateRagKnowledgeSource(sourceId: string, patch: Partial<RagKnowledgeSource>): Promise<RagKnowledgeSource | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_sources").update({ ...toRow(patch), updated_at: now() }).eq("id", sourceId).select("*").maybeSingle();
+    return data ? toDomain<RagKnowledgeSource>(data) : undefined;
+  },
+  async listRagKnowledgeVersionsForSource(sourceId: string): Promise<RagKnowledgeVersion[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb.from("rag_knowledge_versions").select("*").eq("source_id", sourceId).order("version_number", { ascending: false });
+    return many<RagKnowledgeVersion>(data);
+  },
+  async getRagKnowledgeVersion(versionId: string): Promise<RagKnowledgeVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_versions").select("*").eq("id", versionId).maybeSingle();
+    return data ? toDomain<RagKnowledgeVersion>(data) : undefined;
+  },
+  async createRagKnowledgeVersion(input: Omit<RagKnowledgeVersion, "id" | "createdAt">): Promise<RagKnowledgeVersion> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("rag_knowledge_versions").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createRagKnowledgeVersion: " + error.message);
+    return toDomain<RagKnowledgeVersion>(data);
+  },
+  async updateRagKnowledgeVersion(versionId: string, patch: Partial<RagKnowledgeVersion>): Promise<RagKnowledgeVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("rag_knowledge_versions").update(toRow(patch)).eq("id", versionId).select("*").maybeSingle();
+    return data ? toDomain<RagKnowledgeVersion>(data) : undefined;
   },
 };
 

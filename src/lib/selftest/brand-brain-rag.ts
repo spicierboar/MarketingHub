@@ -5,8 +5,8 @@ import {
   approveKnowledgeDocument,
   retrieveApprovedSnippets,
   uploadKnowledgeDocument,
-} from "@/lib/brand-brain-rag";
-import { getKnowledgeDoc } from "@/lib/db";
+} from "@/lib/rag";
+import { getKnowledgeDoc, getRagKnowledgeSource } from "@/lib/db";
 import type { Company } from "@/lib/types";
 
 export function stubRagCompany(overrides: Partial<Company> = {}): Company {
@@ -47,7 +47,7 @@ export async function checkUploadCreatesDraftVersion(
     fileName: "winter-menu.txt",
     contentType: "text/plain",
   });
-  const loaded = await getKnowledgeDoc(doc.id);
+  const loaded = (await getRagKnowledgeSource(doc.id)) ?? (await getKnowledgeDoc(doc.id));
   const ok =
     doc.status === "draft" &&
     doc.version === 1 &&
@@ -55,7 +55,7 @@ export async function checkUploadCreatesDraftVersion(
     doc.title === "Self-test winter menu";
   return {
     ok,
-    detail: `status=${loaded?.status} v=${loaded?.version}`,
+    detail: `status=${loaded?.status} v=${doc.version}`,
   };
 }
 
@@ -71,7 +71,7 @@ export async function checkApprovedCited(
     sourceType: "price_list",
     addedById: userId,
   });
-  await approveKnowledgeDocument(doc.id);
+  await approveKnowledgeDocument(doc.id, userId);
 
   const snippets = await retrieveApprovedSnippets(
     companyId,

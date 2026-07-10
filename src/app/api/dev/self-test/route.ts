@@ -22,6 +22,7 @@ import { runCrmSelfTest } from "@/lib/selftest/crm";
 import { runCmsSelfTest } from "@/lib/selftest/cms";
 import { runFunnelSelfTest } from "@/lib/selftest/funnel";
 import { runLoyaltySelfTest } from "@/lib/selftest/loyalty";
+import { runRagSelfTest } from "@/lib/selftest/rag";
 import { devToolsOpen } from "@/lib/env";
 
 function constantTimeEquals(a: string, b: string): boolean {
@@ -52,7 +53,7 @@ function authorize(req: NextRequest): { ok: true } | { ok: false; status: number
 async function handle(req: NextRequest) {
   const auth = authorize(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const [iso, portal, reports, publicApi, crm, cms, funnel, loyalty] = await Promise.all([
+  const [iso, portal, reports, publicApi, crm, cms, funnel, loyalty, rag] = await Promise.all([
     runIsolationSelfTest(),
     runPortalSelfTest(),
     runClientReportsSelfTest(),
@@ -61,15 +62,16 @@ async function handle(req: NextRequest) {
     runCmsSelfTest(),
     runFunnelSelfTest(),
     runLoyaltySelfTest(),
+    runRagSelfTest(),
   ]);
-  const checks = [...iso.checks, ...portal.checks, ...reports.checks, ...publicApi.checks, ...crm.checks, ...cms.checks, ...funnel.checks, ...loyalty.checks];
+  const checks = [...iso.checks, ...portal.checks, ...reports.checks, ...publicApi.checks, ...crm.checks, ...cms.checks, ...funnel.checks, ...loyalty.checks, ...rag.checks];
   const failed = checks.filter((c) => !c.ok).length;
   const report = {
-    ok: iso.ok && portal.ok && reports.ok && publicApi.ok && crm.ok && cms.ok && funnel.ok && loyalty.ok,
+    ok: iso.ok && portal.ok && reports.ok && publicApi.ok && crm.ok && cms.ok && funnel.ok && loyalty.ok && rag.ok,
     passed: checks.length - failed,
     failed,
-    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed, ...reports.purgeFailed, ...publicApi.purgeFailed, ...crm.purgeFailed, ...cms.purgeFailed, ...funnel.purgeFailed, ...loyalty.purgeFailed],
-    durationMs: iso.durationMs + portal.durationMs + reports.durationMs + publicApi.durationMs + crm.durationMs + cms.durationMs + funnel.durationMs + loyalty.durationMs,
+    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed, ...reports.purgeFailed, ...publicApi.purgeFailed, ...crm.purgeFailed, ...cms.purgeFailed, ...funnel.purgeFailed, ...loyalty.purgeFailed, ...rag.purgeFailed],
+    durationMs: iso.durationMs + portal.durationMs + reports.durationMs + publicApi.durationMs + crm.durationMs + cms.durationMs + funnel.durationMs + loyalty.durationMs + rag.durationMs,
     checks,
   };
   return NextResponse.json(report, { status: report.ok ? 200 : 500 });

@@ -160,6 +160,16 @@ import {
   checkUploadCreatesDraftVersion,
 } from "@/lib/selftest/brand-brain-rag";
 import {
+  checkGovernedStatusGates,
+  checkImportSimulated,
+  checkOutdatedBlocked,
+  checkProhibitedLifecycle,
+  checkSimulatedWhenLiveOff as checkRagSimulatedWhenLiveOff,
+  checkSourcePersisted,
+  checkUploadCreatesDraftVersion as checkRagUploadCreatesDraftVersion,
+  checkVersionSupersedes,
+} from "@/lib/selftest/rag";
+import {
   checkAgencyNeedsAttentionSort,
   checkFactorsExplainable,
   checkScoreInRange,
@@ -775,6 +785,24 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("brandBrainRag.approvedCited", () =>
       checkApprovedCited(companyA.id, ownerAUser.id),
     );
+
+    await expect("rag.simulatedWhenLiveOff", () => checkRagSimulatedWhenLiveOff());
+
+    await expect("rag.governedStatusGates", () => checkGovernedStatusGates());
+
+    await expect("rag.uploadCreatesDraftVersion", () =>
+      checkRagUploadCreatesDraftVersion(companyA.id, ownerAUser.id),
+    );
+
+    await expect("rag.versionSupersedes", () => checkVersionSupersedes(companyA.id, ownerAUser.id));
+
+    await expect("rag.outdatedBlocked", () => checkOutdatedBlocked(companyA.id, ownerAUser.id));
+
+    await expect("rag.prohibitedLifecycle", () => checkProhibitedLifecycle(companyA.id, ownerAUser.id));
+
+    await expect("rag.importSimulated", () => checkImportSimulated());
+
+    await expect("rag.sourcePersisted", () => checkSourcePersisted(companyA.id, ownerAUser.id));
 
     await expect("healthScores.scoreInRange", () => checkScoreInRange());
 

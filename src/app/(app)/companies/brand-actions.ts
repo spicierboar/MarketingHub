@@ -15,6 +15,7 @@ import {
   getClaim,
   getConsent,
   getKnowledgeDoc,
+  getRagKnowledgeSource,
   getLocalProfile,
   getOffer,
   getResponse,
@@ -44,10 +45,12 @@ import {
   approveKnowledgeDocument,
   archiveKnowledgeDocument,
   extractTextFromUpload,
+  markKnowledgeOutdated,
+  markKnowledgeProhibited,
   restoreKnowledgeDocument,
   reviseRagDocument,
   uploadKnowledgeDocument,
-} from "@/lib/brand-brain-rag";
+} from "@/lib/rag";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -57,6 +60,26 @@ function lines(fd: FormData, key: string): string[] {
     .split(/[\n,]/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+async function resolveKnowledgeDoc(docId: string) {
+  const legacy = await getKnowledgeDoc(docId);
+  if (legacy) return legacy;
+  const source = await getRagKnowledgeSource(docId);
+  if (!source) return undefined;
+  return {
+    id: source.id,
+    companyId: source.companyId,
+    title: source.title,
+    content: "",
+    sourceType: source.sourceType,
+    status: source.status,
+    version: 1,
+    previousVersions: [],
+    addedById: source.addedById,
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+  };
 }
 
 // ---- Knowledge documents ------------------------------------------------------
@@ -136,7 +159,7 @@ export async function uploadRagDocumentAction(formData: FormData) {
 export async function reviseKnowledgeDocAction(formData: FormData) {
   const user = await requireAdmin();
   const docId = text(formData, "docId");
-  const doc = await getKnowledgeDoc(docId);
+  const doc = await resolveKnowledgeDoc(docId);
   if (!doc) throw new Error("Document not found");
   if (!(await canAccessCompany(user, doc.companyId))) {
     throw new Error("Forbidden: no access to this company");
@@ -158,19 +181,23 @@ export async function reviseKnowledgeDocAction(formData: FormData) {
 export async function setKnowledgeDocStatusAction(formData: FormData) {
   const user = await requireAdmin();
   const docId = text(formData, "docId");
-  const status = text(formData, "status") as "draft" | "approved" | "archived";
-  const doc = await getKnowledgeDoc(docId);
+  const status = text(formData, "status") as "draft" | "approved" | "archived" | "outdated" | "prohibited";
+  const doc = await resolveKnowledgeDoc(docId);
   if (!doc) throw new Error("Document not found");
   if (!(await canAccessCompany(user, doc.companyId))) {
     throw new Error("Forbidden: no access to this company");
   }
 
   if (status === "approved") {
-    await approveKnowledgeDocument(docId);
+    await approveKnowledgeDocument(docId, user.id);
   } else if (status === "archived") {
     await archiveKnowledgeDocument(docId);
   } else if (status === "draft") {
     await restoreKnowledgeDocument(docId);
+  } else if (status === "outdated") {
+    await markKnowledgeOutdated(docId);
+  } else if (status === "prohibited") {
+    await markKnowledgeProhibited(docId);
   } else {
     await setKnowledgeDocStatus(docId, status);
   }
