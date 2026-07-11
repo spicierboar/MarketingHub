@@ -23,6 +23,8 @@ import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
 import { resolveOrigin } from "@/lib/origin";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
+import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
+import { defaultServiceLevel } from "@/lib/managed-service/authority";
 import type { AddonId, BusinessType, CompanyProfile } from "@/lib/types";
 
 const BUSINESS_TYPES: BusinessType[] = [
@@ -165,6 +167,33 @@ export async function provisionClientAction(formData: FormData) {
     companyId,
     detail: `Field sales portal client ${name} (${email})`,
   });
+
+  // Kick managed delivery when the workspace is already onboarded (strategy SLA).
+  const tenant = await getTenant(user.tenantId);
+  if (tenant?.onboardingCompletedAt) {
+    const company = await getCompany(companyId);
+    if (company && company.status !== "archived") {
+      const level = company.profile.managedService?.serviceLevel ?? defaultServiceLevel();
+      if (!company.profile.managedService) {
+        await updateCompany(companyId, {
+          profile: { ...company.profile, managedService: { serviceLevel: level } },
+        });
+      }
+      const run = await enqueueManagedDeliveryForCompany({
+        tenantId: user.tenantId,
+        companyId,
+        onboardingCompletedAt: tenant.onboardingCompletedAt,
+        serviceLevel: level,
+      });
+      await logAction(user, "managed_delivery.enqueued", {
+        targetType: "managed_delivery_run",
+        targetId: run.id,
+        companyId,
+        detail: `due ${run.strategyDueAt}`,
+      });
+    }
+  }
+
   revalidatePath("/users");
   redirect(wizardPath("done", companyId, { clientEmail: email }));
 }

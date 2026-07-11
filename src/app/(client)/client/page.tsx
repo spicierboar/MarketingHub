@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
+import { listManagedDeliveryRuns } from "@/lib/db";
 import { visibleContent, visibleRequests } from "@/lib/scope";
 import { buildClientRoiReport } from "@/lib/client-reports";
+import { clientStatusMessage } from "@/lib/managed-service/status-copy";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,21 +12,49 @@ import { formatDate } from "@/lib/utils";
 
 export default async function ClientDashboardPage() {
   const { user, companyId } = await requirePortalUser();
-  const [requests, content, roi] = await Promise.all([
+  const [requests, content, roi, deliveryRuns] = await Promise.all([
     visibleRequests(user),
     visibleContent(user),
     buildClientRoiReport(user.tenantId, companyId),
+    listManagedDeliveryRuns(user.tenantId, companyId),
   ]);
   const openRequests = requests.filter((r) => !["completed", "cancelled", "published"].includes(r.status));
   const pendingApprovals = content.filter(
     (c) => c.status === "pending_approval" && c.clientReview?.status === "pending",
   );
+  const latestDelivery = deliveryRuns[0];
+  const statusLine = latestDelivery
+    ? clientStatusMessage(latestDelivery.statusMessageKey)
+    : "Your marketing service is active";
 
   return (
     <div>
-      <PageHeader title={`Welcome, ${user.name.split(" ")[0]}`} description="Track requests and approve content.">
+      <PageHeader
+        title={`Welcome, ${user.name.split(" ")[0]}`}
+        description="We manage your marketing. Review approvals and track progress here."
+      >
         <Link href="/client/requests/new" className={buttonClasses()}>New request</Link>
       </PageHeader>
+      <div className="px-6 pt-4">
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <p className="text-sm font-medium">{statusLine}</p>
+            {latestDelivery && (
+              <Badge
+                tone={
+                  latestDelivery.phase === "awaiting_approval" || latestDelivery.phase === "active"
+                    ? "success"
+                    : latestDelivery.phase === "blocked" || latestDelivery.phase === "failed"
+                      ? "warning"
+                      : "neutral"
+                }
+              >
+                {latestDelivery.phase.replace(/_/g, " ")}
+              </Badge>
+            )}
+          </CardContent>
+        </Card>
+      </div>
       <div className="grid gap-4 p-6 sm:grid-cols-3">
         {[
           { label: "Open requests", value: openRequests.length, href: "/client/requests" },
@@ -40,6 +70,24 @@ export default async function ClientDashboardPage() {
             </Card>
           </Link>
         ))}
+      </div>
+      <div className="grid gap-4 px-6 pb-2 sm:grid-cols-2">
+        <Link href="/client/calendar">
+          <Card className="transition-colors hover:border-primary/40">
+            <CardContent className="p-5">
+              <p className="font-medium">Calendar</p>
+              <p className="mt-1 text-sm text-muted-foreground">Your social media schedule</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/client/payments">
+          <Card className="transition-colors hover:border-primary/40">
+            <CardContent className="p-5">
+              <p className="font-medium">Payments</p>
+              <p className="mt-1 text-sm text-muted-foreground">Subscription and ad spending limits</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
       <div className="grid gap-6 px-6 pb-6 lg:grid-cols-2">
         <section>

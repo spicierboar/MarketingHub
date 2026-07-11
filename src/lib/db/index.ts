@@ -107,6 +107,7 @@ import type {
   PrivacyRequest,
   PrivacyRequestStatus,
   PrivacyRequestType,
+  ManagedDeliveryRun,
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
@@ -771,6 +772,7 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.aiMosSignalRuns = keepTenant(s.aiMosSignalRuns);
   s.calendarAssistSuggestions = keepTenant(s.calendarAssistSuggestions);
   s.privacyRequests = keepCompany(s.privacyRequests ?? []);
+  s.managedDeliveryRuns = keepCompany(s.managedDeliveryRuns ?? []);
   s.aiCampaignRecommendations = keepCompany(s.aiCampaignRecommendations ?? []);
   s.aiOrchestrationRuns = keepCompany(s.aiOrchestrationRuns ?? []);
   s.approvalPolicies = keepTenant(s.approvalPolicies ?? []);
@@ -3889,6 +3891,71 @@ export async function updatePrivacyRequest(
 }
 
 export type { PrivacyRequest, PrivacyRequestStatus, PrivacyRequestType };
+
+// ---- Managed delivery runs (0038) ---------------------------------------------
+
+const OPEN_MANAGED_PHASES = new Set([
+  "queued",
+  "validating",
+  "analysing",
+  "strategy",
+  "calendar",
+  "content",
+]);
+
+export async function listManagedDeliveryRuns(
+  tenantId: string,
+  companyId?: string,
+): Promise<ManagedDeliveryRun[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listManagedDeliveryRuns(tenantId, companyId);
+  let rows = (db().managedDeliveryRuns ?? []).filter((r) => r.tenantId === tenantId);
+  if (companyId) rows = rows.filter((r) => r.companyId === companyId);
+  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function listOpenManagedDeliveryRuns(
+  tenantId: string,
+): Promise<ManagedDeliveryRun[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listOpenManagedDeliveryRuns(tenantId);
+  return (db().managedDeliveryRuns ?? [])
+    .filter((r) => r.tenantId === tenantId && OPEN_MANAGED_PHASES.has(r.phase))
+    .sort((a, b) => a.strategyDueAt.localeCompare(b.strategyDueAt));
+}
+
+export async function getManagedDeliveryRun(
+  runId: string,
+): Promise<ManagedDeliveryRun | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getManagedDeliveryRun(runId);
+  return (db().managedDeliveryRuns ?? []).find((r) => r.id === runId);
+}
+
+export async function createManagedDeliveryRun(
+  input: Omit<ManagedDeliveryRun, "id" | "createdAt" | "updatedAt">,
+): Promise<ManagedDeliveryRun> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedDeliveryRun(input);
+  const t = now();
+  const row: ManagedDeliveryRun = {
+    ...input,
+    id: id("mdr"),
+    createdAt: t,
+    updatedAt: t,
+  };
+  (db().managedDeliveryRuns ??= []).push(row);
+  return row;
+}
+
+export async function updateManagedDeliveryRun(
+  runId: string,
+  patch: Partial<ManagedDeliveryRun>,
+): Promise<ManagedDeliveryRun | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateManagedDeliveryRun(runId, patch);
+  const row = await getManagedDeliveryRun(runId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export type { ManagedDeliveryRun };
 
 // ---- Campaign A/B experiments (0036_campaign_experiments) --------------------
 

@@ -1,45 +1,41 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **W7 DONE** · **AI LAYER COMMITTED** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **MANAGED-SERVICE FOUNDATION** · **W6 WAITING ON GOOGLE**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ `6360e83` (+ handover refresh) · live flags **OFF** · ahead of origin by **9+**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` · live flags **OFF**
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
 > | W0–W5 | DONE | `w5_complete=yes` |
-> | **W7** | **DONE** | M50–M55 + M01-FINAL · `w7_complete=yes` |
+> | **W7** | **DONE** | `w7_complete=yes` |
+> | **Managed service** | **FOUNDATION SHIPPED** | Model · delivery runner · client calendar/payments · 24h enqueue |
 > | **W6** | **WAITING** | Owner Google Cloud billing — **do not flip `*_LIVE`** |
 >
-> **Ledger:** `docs/parallel/PROGRESS.md` · **AI layer doc:** `docs/AI-CAMPAIGN-LAYER.md` · **Handoff:** `docs/parallel/M01-FINAL-handoff.md`
+> **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **AI layer:** `docs/AI-CAMPAIGN-LAYER.md`
 >
-> **Fixtures (post AI-layer commit):** self-test **265/265** · queue-test **20/20** (`npx tsx scripts/run-fixtures.mjs`) — includes ai-campaign-layer, rbac, experiments, privacy, spend
+> **Fixtures:** self-test **268/268** · queue-test **20/20** (`npx tsx scripts/run-fixtures.mjs`)
 >
-> **Owner migrations PASTED:** W2–W5 + `0034_bookings` + `0034_learning` + **`0035_ai_campaign_layer`** + batch **`_owner_paste_0036_0037_batch`** (RBAC · experiments · privacy)
+> **Owner migrations PASTED:** … + `0035`–`0037`. **NEW — paste:**  
+> `notepad F:\MarketingHub\command-centre\supabase\migrations\0038_managed_delivery.sql`
 >
-> **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. Isolation · `appEnv()` · OAuth-only · never force-push main. AI never auto-publishes / auto-spends / activates promotions without human gate.
+> **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. AI never auto-publishes / auto-spends. `fully_managed` = pre-authorised low-risk + critique — not unsupervised publish. Payments = **C1** (delegated ads + SaaS Stripe); prepaid credit **C2 deferred**.
 >
-> ### COMMITTED this arc
+> ### SHIPPED this arc (managed service foundation)
 >
-> - `ddbda68` / `ea7bfbf` — company-scoped nav + business-type tools
-> - **`6360e83`** — AI campaign layer + deferred suite (prompts, RBAC, calendar DnD, experiments, privacy, connectors, spend gate) + company lifecycle / filters / approvals assist / email-SMS AI / schedule-at-best-time
+> - `docs/MANAGED-SERVICE-MODEL.md` — service levels, C1 payments, 24h SLA
+> - Delivery runner + cron + onboarding/sales enqueue (drafts + calendar suggestions only)
+> - Client portal: `/client/calendar` · `/client/payments` · status copy on dashboard
+> - Self-tests: `managedDelivery.*` (+3) · fixtures **268/268**
 >
 > **Still untracked (do not commit):** `scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`
 >
-> **Verified surfaces:** `/ai-prompts` · `/privacy` · calendar DnD → `rescheduleOne` (critique) · campaign experiments panel · `/ads` propose→accept→apply
->
-> **Local demo:**
-> ```
-> CC_LOCAL_DEMO=true
-> NEXT_PUBLIC_CC_LOCAL_DEMO=true
-> ```
-> ```powershell
-> cd F:\MarketingHub\command-centre
-> npx next dev -p 3002
-> ```
+> **Local demo:** `npx next dev -p 3002` · `/dev` + `admin@wattlegroup.dev`
 >
 > **NEXT:**
-> 1. **Until Google GO:** park live cutover; optional push of ahead commits; optional UI polish only
-> 2. **When Google billing is GO:** W6 OWNER-OPS (`docs/parallel/M-OWNER-OPS-prompt.md` / `docs/OWNER-LIVE-CUTOVER.md`) → M45 verify → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE` together
+> 1. Owner paste **0038_managed_delivery**
+> 2. Continue: rolling calendar maintainer · client asset upload · exception-only notify · admin service-level UI
+> 3. Until Google GO: park live cutover
+> 4. When Google GO: W6 OWNER-OPS → M45 → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE`
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >

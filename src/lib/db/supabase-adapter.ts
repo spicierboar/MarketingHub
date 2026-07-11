@@ -39,6 +39,7 @@ import type {
   AutomationSettings, BrandTemplate, Campaign, CampaignBuilderRun, CampaignDraftScheduleItem, CampaignItem, CampaignPlanVersion, Company,
   ApprovalPolicy, AiCampaignRecommendation, AiOrchestrationRun, AiPromptVersion, CampaignPerformanceSnapshot,
   PrivacyRequest,
+  ManagedDeliveryRun,
 
   CompanyAccess, CompanyEntitlement, ConsentRecord, ContentComment, ContentItem, EvidenceRecord,
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
@@ -2656,6 +2657,73 @@ export const supabaseRepo = {
       .select("*")
       .maybeSingle();
     return data ? toDomain<PrivacyRequest>(data) : undefined;
+  },
+
+  // ---- Managed delivery runs (0038) ------------------------------------------
+  async listManagedDeliveryRuns(
+    tenantId: string,
+    companyId?: string,
+  ): Promise<ManagedDeliveryRun[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb
+      .from("managed_delivery_runs")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false });
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q;
+    return many<ManagedDeliveryRun>(data);
+  },
+  async listOpenManagedDeliveryRuns(tenantId: string): Promise<ManagedDeliveryRun[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb
+      .from("managed_delivery_runs")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .in("phase", [
+        "queued",
+        "validating",
+        "analysing",
+        "strategy",
+        "calendar",
+        "content",
+      ])
+      .order("strategy_due_at", { ascending: true });
+    return many<ManagedDeliveryRun>(data);
+  },
+  async getManagedDeliveryRun(runId: string): Promise<ManagedDeliveryRun | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("managed_delivery_runs")
+      .select("*")
+      .eq("id", runId)
+      .maybeSingle();
+    return data ? toDomain<ManagedDeliveryRun>(data) : undefined;
+  },
+  async createManagedDeliveryRun(
+    input: Omit<ManagedDeliveryRun, "id" | "createdAt" | "updatedAt">,
+  ): Promise<ManagedDeliveryRun> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb
+      .from("managed_delivery_runs")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createManagedDeliveryRun: " + error.message);
+    return toDomain<ManagedDeliveryRun>(data);
+  },
+  async updateManagedDeliveryRun(
+    runId: string,
+    patch: Partial<ManagedDeliveryRun>,
+  ): Promise<ManagedDeliveryRun | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("managed_delivery_runs")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", runId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<ManagedDeliveryRun>(data) : undefined;
   },
 
   // ---- Campaign A/B experiments (0036) ---------------------------------------

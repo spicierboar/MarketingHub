@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, CheckSquare, LogOut, BarChart3 } from "lucide-react";
+import {
+  LayoutDashboard,
+  Inbox,
+  CheckSquare,
+  LogOut,
+  BarChart3,
+  CalendarDays,
+  CreditCard,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
@@ -10,6 +18,8 @@ const NAV = [
   { href: "/client", label: "Dashboard", icon: LayoutDashboard },
   { href: "/client/requests", label: "Requests", icon: Inbox },
   { href: "/client/approvals", label: "Approvals", icon: CheckSquare },
+  { href: "/client/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/client/payments", label: "Payments", icon: CreditCard },
   { href: "/client/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 

@@ -21,6 +21,7 @@ import { planIncludesAutomations } from "@/lib/billing";
 import { emptyQueueCounts, publishDuePosts } from "@/lib/publish-queue";
 import { runAutomations } from "@/lib/automation";
 import { runScheduledClientReports } from "@/lib/client-reports";
+import { processDueManagedDeliveries } from "@/lib/managed-service/delivery-runner";
 import type { ActingUser } from "@/lib/types";
 
 // A synthetic actor scoped to one tenant. Its audit entries are honestly
@@ -47,6 +48,7 @@ export interface TenantTickResult {
   dead: number; // dead-lettered this tick after exhausting retries
   automationOutcomes: number;
   clientReportsSent: number;
+  managedDeliveryProcessed?: number;
 }
 
 export async function runScheduledTick(): Promise<TenantTickResult[]> {
@@ -77,7 +79,15 @@ export async function runScheduledTick(): Promise<TenantTickResult[]> {
       } catch {
         /* automation gate/errors never abort the tick */
       }
-      return { ...pub, automationOutcomes, clientReportsSent: 0 };
+
+      let managedDeliveryProcessed = 0;
+      try {
+        managedDeliveryProcessed = await processDueManagedDeliveries(actor, tenant.id);
+      } catch {
+        /* managed delivery failure must not abort the tick */
+      }
+
+      return { ...pub, automationOutcomes, clientReportsSent: 0, managedDeliveryProcessed };
     });
     results.push({ tenantId: tenant.id, ...tick });
   }

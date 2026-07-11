@@ -250,6 +250,11 @@ import {
   checkPublishingSimWhenLiveOff,
 } from "@/lib/selftest/publishing-connectors";
 import { checkOptedOutContactBlocked } from "@/lib/selftest/privacy-dsr";
+import {
+  checkManagedDeliveryEnqueueDueWithin24h,
+  checkManagedDeliveryNeverAutoPublish,
+  checkManagedDeliveryProcessNoSchedule,
+} from "@/lib/selftest/managed-delivery";
 import { checkSpendApplyRequiresApproval } from "@/lib/selftest/spend-approval";
 import {
   checkLogRecordsDedupeKey,
@@ -1029,6 +1034,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
 
     await expect("privacyDsr.optedOutContactBlocked", () => checkOptedOutContactBlocked());
+
+    await expect("managedDelivery.enqueueDueWithin24h", () =>
+      checkManagedDeliveryEnqueueDueWithin24h(),
+    );
+    await expect("managedDelivery.processNoSchedule", () =>
+      checkManagedDeliveryProcessNoSchedule(),
+    );
+    await expect("managedDelivery.neverAutoPublish", () =>
+      checkManagedDeliveryNeverAutoPublish(),
+    );
 
     await expect("spendApproval.applyRequiresAccept", () => checkSpendApplyRequiresApproval());
 

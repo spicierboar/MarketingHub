@@ -6,7 +6,9 @@ import {
   currentTerms,
   getTenant,
   hasAcceptedTerms,
+  listCompanies,
   recordTermsAcceptance,
+  updateCompany,
   updateTenant,
 } from "@/lib/db";
 import { requireTenantOwnerRaw } from "@/lib/auth/rbac";
@@ -14,6 +16,8 @@ import { createCheckoutSession, stripeConfigured } from "@/lib/billing";
 import { resolveOrigin } from "@/lib/origin";
 import { clientIp } from "@/lib/ratelimit";
 import { logAction } from "@/lib/audit";
+import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
+import { defaultServiceLevel } from "@/lib/managed-service/authority";
 import { now } from "@/lib/utils";
 import { PLANS } from "@/lib/plans";
 import type { PlanId, TenantOnboarding } from "@/lib/types";
@@ -89,7 +93,35 @@ export async function completeOnboardingAction() {
     });
     await logAction(user, "terms.accepted", { detail: `Accepted Terms v${terms.version} (onboarding)` });
   }
-  await updateTenant(user.tenantId, { onboardingCompletedAt: now() });
+  const completedAt = now();
+  await updateTenant(user.tenantId, { onboardingCompletedAt: completedAt });
   await logAction(user, "onboarding.completed", {});
+
+  const companies = await listCompanies(user.tenantId);
+  for (const company of companies) {
+    if (company.status === "archived") continue;
+    const level = company.profile.managedService?.serviceLevel ?? defaultServiceLevel();
+    if (!company.profile.managedService) {
+      await updateCompany(company.id, {
+        profile: {
+          ...company.profile,
+          managedService: { serviceLevel: level },
+        },
+      });
+    }
+    const run = await enqueueManagedDeliveryForCompany({
+      tenantId: user.tenantId,
+      companyId: company.id,
+      onboardingCompletedAt: completedAt,
+      serviceLevel: level,
+    });
+    await logAction(user, "managed_delivery.enqueued", {
+      targetType: "managed_delivery_run",
+      targetId: run.id,
+      companyId: company.id,
+      detail: `due=${run.strategyDueAt}`,
+    });
+  }
+
   redirect("/dashboard");
 }

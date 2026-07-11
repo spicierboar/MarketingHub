@@ -336,6 +336,8 @@ export interface CompanyProfile {
     lastSentAt?: string;
     frequencyDays?: number;
   };
+  /** Managed-service delivery settings (outsourced marketing, not self-serve). */
+  managedService?: ManagedServiceSettings;
 }
 
 export interface UploadedAsset {
@@ -3187,5 +3189,50 @@ export interface PrivacyRequest {
   notes?: string;
   createdBy?: string;
   createdAt: string;
+}
+
+// ---- Managed service delivery ------------------------------------------------
+export type ManagedServiceLevel = "approval" | "managed_exceptions" | "fully_managed";
+export type ManagedDeliveryPhase =
+  | "queued"
+  | "validating"
+  | "analysing"
+  | "strategy"
+  | "calendar"
+  | "content"
+  | "awaiting_approval"
+  | "active"
+  | "blocked"
+  | "failed";
+export interface ManagedServiceSettings {
+  serviceLevel: ManagedServiceLevel;
+  operatingAuthorityConfirmedAt?: string;
+  strategyDueAt?: string;
+  strategyStartedAt?: string;
+  strategyCompletedAt?: string;
+  calendarCompletedAt?: string;
+  lastDeliveryRunId?: string;
+}
+export interface ManagedDeliveryRun {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  phase: ManagedDeliveryPhase;
+  serviceLevel: ManagedServiceLevel;
+  onboardingCompletedAt: string;
+  strategyDueAt: string;
+  strategyStartedAt?: string | null;
+  strategyCompletedAt?: string | null;
+  calendarCompletedAt?: string | null;
+  campaignId?: string | null;
+  strategyVersion: number;
+  calendarVersion: number;
+  missingInfo: string[];
+  assumptions: string[];
+  errors: string[];
+  retryCount: number;
+  statusMessageKey: string; // maps to client status copy
+  createdAt: string;
+  updatedAt: string;
 }
 

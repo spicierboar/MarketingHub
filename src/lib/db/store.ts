@@ -39,6 +39,7 @@ import type {
   CampaignPlanVersion,
   Company,
   PrivacyRequest,
+  ManagedDeliveryRun,
   CompanyEntitlement,
   MenuDesign,
   OrderMenuItem,
@@ -236,6 +237,8 @@ export interface DataStore {
   campaignPerformanceSnapshots: CampaignPerformanceSnapshot[];
   // Privacy DSR (0037)
   privacyRequests: PrivacyRequest[];
+  // Managed service delivery (0038)
+  managedDeliveryRuns: ManagedDeliveryRun[];
   tasks: Task[];
   // V1 module 11: AI-MOS opportunities
   aiMosOpportunities: AiMosOpportunity[];
@@ -2031,6 +2034,7 @@ function seed(): DataStore {
     aiCampaignRecommendations: [],
     campaignPerformanceSnapshots: [],
     privacyRequests: [],
+    managedDeliveryRuns: [],
     tasks: [],
     aiMosOpportunities: [],
     aiMosSignalRuns: [],
