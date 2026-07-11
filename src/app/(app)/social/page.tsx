@@ -59,7 +59,7 @@ export default async function SocialPage({
             ) : (
               <form action={draftSocialAction} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Company" htmlFor="companyId">
+                  <Field label="Client" htmlFor="companyId">
                     <Select
                       id="companyId"
                       name="companyId"

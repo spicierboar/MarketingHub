@@ -59,57 +59,45 @@ export function CompanyLifecycleRow({
   return (
     <Link
       href={`/companies/${company.id}`}
-      className="group block border-b border-border px-6 py-5 transition-colors hover:bg-muted/40"
+      className="group flex items-center gap-3 border-b border-border px-4 py-2.5 transition-colors hover:bg-muted/40 sm:gap-4 sm:px-6"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-base font-semibold tracking-tight group-hover:text-primary">
-              {company.name}
-            </h2>
-            <StatusBadge status={company.status} />
-          </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <h2 className="truncate text-sm font-semibold tracking-tight group-hover:text-primary">
+            {company.name}
+          </h2>
+          <StatusBadge status={company.status} />
+          <span className="truncate text-xs text-muted-foreground">
             {industry} · {location}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Users className="h-3.5 w-3.5" />
-          {userCount} user{userCount === 1 ? "" : "s"}
+          </span>
         </div>
       </div>
 
-      <ol className="mt-5 grid grid-cols-5 gap-0">
+      <ol
+        className="hidden shrink-0 items-center gap-0.5 md:flex"
+        aria-label={`Lifecycle ${doneCount} of ${steps.length}`}
+      >
         {steps.map((step, i) => {
           const Icon = STEP_ICONS[step.id];
           const isNext = next?.id === step.id;
-          const lineDone = step.done;
           return (
-            <li key={step.id} className="relative flex flex-col items-center">
+            <li key={step.id} className="flex items-center">
               {i > 0 && (
                 <span
                   className={cn(
-                    "absolute left-0 right-1/2 top-[1.125rem] h-0.5 -translate-y-1/2",
+                    "mx-0.5 h-0.5 w-2.5",
                     steps[i - 1]?.done ? "bg-emerald-400" : "bg-border",
                   )}
                   aria-hidden
                 />
               )}
-              {i < steps.length - 1 && (
-                <span
-                  className={cn(
-                    "absolute left-1/2 right-0 top-[1.125rem] h-0.5 -translate-y-1/2",
-                    lineDone ? "bg-emerald-400" : "bg-border",
-                  )}
-                  aria-hidden
-                />
-              )}
               <span
+                title={step.label}
                 className={cn(
-                  "relative z-[1] flex h-9 w-9 items-center justify-center rounded-full border-2",
+                  "flex h-6 w-6 items-center justify-center rounded-full border",
                   step.done && "border-emerald-500 bg-emerald-500 text-white",
                   isNext &&
-                    "border-primary bg-primary/10 text-primary ring-2 ring-primary/20",
+                    "border-primary bg-primary/10 text-primary ring-1 ring-primary/25",
                   !step.done &&
                     !isNext &&
                     "border-border bg-card text-muted-foreground",
@@ -117,48 +105,37 @@ export function CompanyLifecycleRow({
                 aria-current={isNext ? "step" : undefined}
               >
                 {step.done ? (
-                  <Check className="h-4 w-4" strokeWidth={2.5} />
+                  <Check className="h-3 w-3" strokeWidth={2.5} />
                 ) : (
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3 w-3" />
                 )}
-              </span>
-              <span
-                className={cn(
-                  "mt-2 text-center text-[11px] font-medium leading-tight",
-                  step.done && "text-emerald-700",
-                  isNext && "text-primary",
-                  !step.done && !isNext && "text-muted-foreground",
-                )}
-              >
-                {step.label}
               </span>
             </li>
           );
         })}
       </ol>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-        <p className="text-muted-foreground">
-          {allDone ? (
-            <span className="font-medium text-emerald-700">
-              Lifecycle complete — open workspace
+      <p className="hidden shrink-0 text-xs text-muted-foreground sm:block sm:w-40 lg:w-48">
+        {allDone ? (
+          <span className="font-medium text-emerald-700">Complete</span>
+        ) : (
+          <>
+            <span className="text-muted-foreground">Next </span>
+            <span className="font-medium text-foreground">{next!.label}</span>
+            <span className="text-muted-foreground">
+              {" "}
+              · {doneCount}/{steps.length}
             </span>
-          ) : (
-            <>
-              <span>Next: </span>
-              <span className="font-medium text-foreground">{next!.label}</span>
-              <span>
-                {" "}
-                · {doneCount}/{steps.length} stages
-              </span>
-            </>
-          )}
-        </p>
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-          Open workspace
-          <ArrowRight className="h-3.5 w-3.5" />
-        </span>
+          </>
+        )}
+      </p>
+
+      <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <Users className="h-3.5 w-3.5" />
+        <span className="tabular-nums">{userCount}</span>
       </div>
+
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
     </Link>
   );
 }

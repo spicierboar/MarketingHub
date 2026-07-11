@@ -34,7 +34,7 @@ export default async function ClientRequestDetailPage({ params }: { params: Prom
 
   return (
     <div>
-      <PageHeader title={req.topic} description={`${company.name} · ${req.id}`}>
+      <PageHeader title={req.topic} description={`${company.name} · ${req.id}`} hideExplainer>
         <StatusBadge status={req.status} />
       </PageHeader>
       <div className="grid gap-6 p-6 lg:grid-cols-3">

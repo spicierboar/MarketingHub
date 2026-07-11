@@ -35,8 +35,9 @@ export default async function AiMosPage() {
   return (
     <div>
       <PageHeader
-        title="AI-MOS"
-        description="Suggest-only marketing operating system — monitors health, calendar, cadence, recommendations, reviews, and loyalty signals."
+        title="Signals"
+        explainerId="signals"
+        explainer="Ops radar: scan clients for health, calendar gaps, cadence, approvals, reviews, and loyalty. Convert a signal into a draft or dismiss it — never auto-publishes."
       >
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="info">{titleCase(aiMosExecutionMode().replace(/_/g, " "))}</Badge>
@@ -44,7 +45,7 @@ export default async function AiMosPage() {
             {aiMosConfigured() ? "Live connectors" : "Simulated signals"}
           </Badge>
           <form action={scanAiMosAction}>
-            <Button type="submit" variant="outline">Scan all companies</Button>
+            <Button type="submit" variant="outline">Scan all clients</Button>
           </form>
         </div>
       </PageHeader>

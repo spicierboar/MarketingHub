@@ -52,7 +52,7 @@ export default async function LearningPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Company" htmlFor="lrn-company">
+            <Field label="Client" htmlFor="lrn-company">
               <Select id="lrn-company" name="company" defaultValue={companyId}>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>

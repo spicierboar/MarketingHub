@@ -25,7 +25,7 @@ export default async function AuditPage() {
                 <th className="px-4 py-3 font-medium">When</th>
                 <th className="px-4 py-3 font-medium">Actor</th>
                 <th className="px-4 py-3 font-medium">Action</th>
-                <th className="px-4 py-3 font-medium">Company</th>
+                <th className="px-4 py-3 font-medium">Client</th>
                 <th className="px-4 py-3 font-medium">Detail</th>
               </tr>
             </thead>

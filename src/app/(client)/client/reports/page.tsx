@@ -10,10 +10,10 @@ const money = (x: number) => `$${Math.round(x).toLocaleString("en-AU")}`;
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <Card>
-      <CardContent className="p-5">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-bold">{value}</p>
-        {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      <CardContent className="p-3 sm:p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-0.5 text-xl font-bold tabular-nums sm:text-2xl">{value}</p>
+        {hint ? <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p> : null}
       </CardContent>
     </Card>
   );
@@ -42,16 +42,18 @@ export default async function ClientReportsPage() {
     <div>
       <PageHeader
         title="How things are going"
-        description={`${report.periodLabel} for ${report.companyName}.`}
+        explainerId="client-results"
+        explainer="Results for your marketing — leads, estimated revenue, and what’s working. Ask us if something looks off."
+        description={`${report.periodLabel} · ${report.companyName}`}
       />
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-4 sm:p-5">
         <Card>
-          <CardContent className="p-5">
+          <CardContent className="p-4">
             <p className="text-sm font-medium">Closed-loop snapshot</p>
-            <p className="mt-1 text-base text-foreground">{loopLine}</p>
+            <p className="mt-1 text-sm text-foreground">{loopLine}</p>
           </CardContent>
         </Card>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Stat label="Leads" value={n(report.combined.totalLeads)} />
           <Stat
             label="Estimated revenue"
@@ -67,11 +69,11 @@ export default async function ClientReportsPage() {
             }
           />
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           <Card>
-            <CardContent className="p-6">
-              <h3 className="mb-3 font-semibold">Posts &amp; reach</h3>
-              <p className="text-sm text-muted-foreground">
+            <CardContent className="p-4">
+              <h3 className="mb-2 text-sm font-semibold">Posts &amp; reach</h3>
+              <p className="text-xs text-muted-foreground sm:text-sm">
                 {n(report.organic.publishedPosts)} posts · {n(report.organic.reach)}{" "}
                 reach · {n(report.organic.leads)} organic leads ·{" "}
                 {n(report.organic.engagement)} engagement
@@ -79,9 +81,9 @@ export default async function ClientReportsPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-6">
-              <h3 className="mb-3 font-semibold">Ads</h3>
-              <p className="text-sm text-muted-foreground">
+            <CardContent className="p-4">
+              <h3 className="mb-2 text-sm font-semibold">Ads</h3>
+              <p className="text-xs text-muted-foreground sm:text-sm">
                 {money(report.paid.spendUsd)} spend · {n(report.paid.leads)} paid
                 leads
                 {report.paid.roas != null
@@ -95,13 +97,13 @@ export default async function ClientReportsPage() {
           </Card>
         </div>
         <Card>
-          <CardContent className="p-6">
-            <h3 className="mb-3 font-semibold">Summary</h3>
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+          <CardContent className="p-4">
+            <h3 className="mb-2 text-sm font-semibold">Summary</h3>
+            <p className="whitespace-pre-wrap text-xs text-muted-foreground sm:text-sm">
               {summary.text}
             </p>
             {tenant?.branding?.emailFromName && (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
                 Branded as {tenant.branding.emailFromName}
               </p>
             )}

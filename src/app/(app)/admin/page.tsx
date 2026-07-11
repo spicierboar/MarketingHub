@@ -165,7 +165,7 @@ export default async function AdminPage() {
               <Field label="Data retention (days)" htmlFor="retentionDays" hint="§53 retention policy">
                 <Input id="retentionDays" name="retentionDays" type="number" min={30} defaultValue={s.retentionDays} />
               </Field>
-              <Field label="AI monthly cost cap (USD)" htmlFor="aiMonthlyCapUsd" hint="0 = uncapped">
+              <Field label="AI monthly cost cap (AUD)" htmlFor="aiMonthlyCapUsd" hint="0 = uncapped">
                 <Input id="aiMonthlyCapUsd" name="aiMonthlyCapUsd" type="number" min={0} defaultValue={s.aiMonthlyCapUsd} />
               </Field>
               <div className="flex items-end">

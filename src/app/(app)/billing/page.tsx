@@ -136,7 +136,7 @@ export default async function BillingPage({
                 )}
               </div>
               <Meter
-                label="Client companies"
+                label="Clients"
                 value={usage.companiesUsed}
                 max={usage.companyLimit}
               />
@@ -160,7 +160,7 @@ export default async function BillingPage({
               <h2 className="mb-3 font-semibold">What&apos;s included</h2>
               <ul className="space-y-2 text-sm">
                 <li className="flex justify-between">
-                  <span>Client companies</span>
+                  <span>Clients</span>
                   <span className="font-medium">
                     {usage.companyLimit === null ? "Unlimited" : usage.companyLimit}
                   </span>
@@ -207,7 +207,7 @@ export default async function BillingPage({
                     <ul className="mb-5 space-y-1 text-sm text-muted-foreground">
                       <li>
                         {p.companyLimit === null
-                          ? "Unlimited client companies"
+                          ? "Unlimited clients"
                           : `Up to ${p.companyLimit} client compan${p.companyLimit === 1 ? "y" : "ies"}`}
                       </li>
                       <li>US${p.aiIncludedUsd}/month AI allowance</li>
@@ -226,7 +226,7 @@ export default async function BillingPage({
             })}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Downgrading never deletes anything: existing client companies keep
+            Downgrading never deletes anything: existing clients keep
             working — only adding new ones is blocked while you&apos;re over the
             limit.
           </p>
@@ -277,7 +277,7 @@ export default async function BillingPage({
 
           {companies.length === 0 ? (
             <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-              No client companies yet. Add one, then enable add-ons for it here.
+              No clients yet. Add one, then enable add-ons for it here.
             </p>
           ) : (
             <div className="space-y-3">
@@ -392,7 +392,7 @@ export default async function BillingPage({
               <CardContent className="p-6">
                 <h3 className="font-medium">Export your data</h3>
                 <p className="mb-4 mt-1 text-sm text-muted-foreground">
-                  Download everything this workspace holds — companies, content,
+                  Download everything this workspace holds — clients, content,
                   approvals, audit trail and more — as a single JSON file
                   (portability / data-subject access).
                 </p>

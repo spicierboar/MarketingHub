@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
 import { StatusBadge } from "@/components/status-badge";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatMoney } from "@/lib/utils";
 import { AD_PLATFORMS } from "@/lib/types";
 import type { AdAccount, AdBudget, AdCampaign, AdPlatform, AudienceSegment, Company, Lead } from "@/lib/types";
 import { AudienceForm } from "./audience-form";
@@ -46,8 +46,8 @@ import {
 import { decideAiCampaignRecommendationAction } from "@/app/(app)/campaigns/ai-layer-actions";
 import { scanCalendarAssistAction } from "@/app/(app)/calendar/actions";
 
-const money = (x: number) => `$${Math.round(x).toLocaleString("en-AU")}`;
-const money2 = (x: number | null) => (x === null ? "—" : `$${x.toFixed(2)}`);
+const money = (x: number) => formatMoney(x);
+const money2 = (x: number | null) => (x === null ? "—" : formatMoney(x, { fractionDigits: 2 }));
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const roasFmt = (x: number | null) => (x === null ? "—" : `${x.toFixed(1)}×`);
 
@@ -224,7 +224,7 @@ export default async function AdsPage({
           </CardContent>
         </Card>
 
-        {!sel && <p className="text-sm text-muted-foreground">Add a client company to manage paid advertising.</p>}
+        {!sel && <p className="text-sm text-muted-foreground">Add a client to manage paid advertising.</p>}
 
         {sel && guidance && (
           <>
@@ -371,7 +371,7 @@ export default async function AdsPage({
                   <h2 className="mb-4 font-semibold">Budget &amp; management fee</h2>
                   <form action={saveBudgetAction} className="space-y-4">
                     <input type="hidden" name="companyId" value={sel.company.id} />
-                    <Field label="Monthly ad budget (client's spend, USD)" htmlFor="mb">
+                    <Field label="Monthly ad budget (client's spend, AUD)" htmlFor="mb">
                       <Input id="mb" name="monthlyBudgetUsd" type="number" min="0" step="50" defaultValue={sel.budget?.monthlyBudgetUsd ?? 0} />
                     </Field>
                     <div className="grid gap-4 sm:grid-cols-3">
@@ -629,7 +629,7 @@ export default async function AdsPage({
                             {["leads", "traffic", "awareness", "sales"].map((o) => (<option key={o} value={o}>{o}</option>))}
                           </Select>
                         </Field>
-                        <Field label="Daily budget (USD)" htmlFor="cd"><Input id="cd" name="dailyBudgetUsd" type="number" min="0" step="5" defaultValue={20} /></Field>
+                        <Field label="Daily budget (AUD)" htmlFor="cd"><Input id="cd" name="dailyBudgetUsd" type="number" min="0" step="5" defaultValue={20} /></Field>
                         <Field label="Start date" htmlFor="cs"><Input id="cs" name="startDate" type="date" required /></Field>
                         <Field label="Audience (optional)" htmlFor="ca" hint="Platform-mismatched picks fall back to broad.">
                           <Select id="ca" name="audienceSegmentId" defaultValue="">
@@ -682,7 +682,7 @@ export default async function AdsPage({
                       </Select>
                     </Field>
                     <Field label="Source" htmlFor="ls"><Input id="ls" name="source" defaultValue="meta_lead_ad" /></Field>
-                    <Field label="Value (USD, optional)" htmlFor="lv"><Input id="lv" name="valueUsd" type="number" min="0" step="1" /></Field>
+                    <Field label="Value (AUD, optional)" htmlFor="lv"><Input id="lv" name="valueUsd" type="number" min="0" step="1" /></Field>
                     <div className="flex items-end"><Button type="submit" size="sm">Record lead</Button></div>
                   </form>
                 </details>

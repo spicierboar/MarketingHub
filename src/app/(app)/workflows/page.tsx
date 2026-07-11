@@ -72,7 +72,7 @@ export default async function WorkflowsPage({
       </Card>
 
       <form method="get" className="flex flex-wrap items-end gap-3">
-        <Field label="Company">
+        <Field label="Client">
           <Select name="company" defaultValue={selectedId ?? ""}>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
@@ -138,7 +138,7 @@ export default async function WorkflowsPage({
         <>
           <Card>
             <CardContent className="space-y-4 p-6">
-              <h2 className="text-lg font-semibold">Company workflows — {company.name}</h2>
+              <h2 className="text-lg font-semibold">Client workflows — {company.name}</h2>
               <form action={createCompanyWorkflowAction} className="flex flex-wrap items-end gap-2">
                 <input type="hidden" name="companyId" value={company.id} />
                 <Field label="Name">

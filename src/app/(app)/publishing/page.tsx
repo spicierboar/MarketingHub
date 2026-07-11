@@ -194,7 +194,7 @@ export default async function PublishingPage({
                   </div>
                   <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
                     <input type="checkbox" name="sendEmail" value="true" className="rounded" />
-                    Email links to each company&apos;s approval contact (when set)
+                    Email links to each client&apos;s approval contact (when set)
                   </label>
                 </div>
               </div>
@@ -377,7 +377,7 @@ export default async function PublishingPage({
                 </p>
                 <form action={startOAuthConnectAction} className="mt-3 space-y-3">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Company" htmlFor="oa-company">
+                    <Field label="Client" htmlFor="oa-company">
                       <Select id="oa-company" name="companyId" required>
                         {companies.map((c) => (
                           <option key={c.id} value={c.id}>
@@ -443,7 +443,7 @@ export default async function PublishingPage({
               </summary>
               <form action={connectIntegrationAction} className="mt-3 space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Company" htmlFor="pi-company">
+                  <Field label="Client" htmlFor="pi-company">
                     <Select id="pi-company" name="companyId" required>
                       {companies.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -632,7 +632,7 @@ export default async function PublishingPage({
                   <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="px-4 py-2 font-medium">When</th>
-                      <th className="px-4 py-2 font-medium">Company</th>
+                      <th className="px-4 py-2 font-medium">Client</th>
                       <th className="px-4 py-2 font-medium">Platform</th>
                       <th className="px-4 py-2 font-medium">Status</th>
                       <th className="px-4 py-2 font-medium">Detail</th>

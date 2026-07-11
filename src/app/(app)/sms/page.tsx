@@ -1,4 +1,4 @@
-ï»¿import { requireAdmin } from "@/lib/auth/rbac";
+import { requireAdmin } from "@/lib/auth/rbac";
 import {
   getSmsCompanySettings,
   listCompanies,
@@ -63,7 +63,7 @@ export default async function SmsPage({
         </CardContent>
       </Card>
       <form method="get" className="flex flex-wrap items-end gap-3">
-        <Field label="Company">
+        <Field label="Client">
           <Select name="company" defaultValue={selectedId ?? ""}>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
@@ -85,7 +85,7 @@ export default async function SmsPage({
                   <Field label="Quiet start"><Input name="quietHoursStart" type="time" defaultValue={settings.quietHoursStart} /></Field>
                   <Field label="Quiet end"><Input name="quietHoursEnd" type="time" defaultValue={settings.quietHoursEnd} /></Field>
                 </div>
-                <Field label="Monthly cap USD"><Input name="monthlySpendCapUsd" type="number" min={0} defaultValue={settings.monthlySpendCapUsd ?? ""} /></Field>
+                <Field label="Monthly cap AUD"><Input name="monthlySpendCapUsd" type="number" min={0} defaultValue={settings.monthlySpendCapUsd ?? ""} /></Field>
                 <Button type="submit">Save settings</Button>
               </form>
             </CardContent></Card>
@@ -109,9 +109,9 @@ export default async function SmsPage({
                 {subs.map((sub) => (
                   <tr key={sub.id} className="border-b">
                     <td className="py-2 font-mono text-xs">{sub.phoneE164}</td>
-                    <td>{sub.name ?? "â€”"}</td>
+                    <td>{sub.name ?? "—"}</td>
                     <td><StatusBadge status={sub.consentStatus} /></td>
-                    <td>{sub.tags.join(", ") || "â€”"}</td>
+                    <td>{sub.tags.join(", ") || "—"}</td>
                     <td className="flex gap-2">
                       {sub.consentStatus !== "opted_in" && <form action={setSmsConsentAction}><input type="hidden" name="subscriberId" value={sub.id} /><input type="hidden" name="status" value="opted_in" /><Button size="sm" variant="secondary" type="submit">Opt in</Button></form>}
                       {sub.consentStatus !== "opted_out" && <form action={setSmsConsentAction}><input type="hidden" name="subscriberId" value={sub.id} /><input type="hidden" name="status" value="opted_out" /><Button size="sm" variant="outline" type="submit">Opt out</Button></form>}
@@ -131,9 +131,9 @@ export default async function SmsPage({
               const cost = previewSmsCost(camp.body, camp.stats.recipients, settings.countryCode);
               return (
                 <div key={camp.id} className="rounded-lg border p-4">
-                  <div className="flex justify-between gap-2"><div><p className="font-medium">{camp.name}</p><p className="text-xs text-muted-foreground">{kindLabel(camp.kind)}{camp.sentAt ? ` Â· ${formatDate(camp.sentAt)}` : ""}</p></div><StatusBadge status={camp.status} /></div>
+                  <div className="flex justify-between gap-2"><div><p className="font-medium">{camp.name}</p><p className="text-xs text-muted-foreground">{kindLabel(camp.kind)}{camp.sentAt ? ` · ${formatDate(camp.sentAt)}` : ""}</p></div><StatusBadge status={camp.status} /></div>
                   <p className="mt-2 text-sm whitespace-pre-wrap">{camp.body}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">Est. {money(camp.stats.estimatedCostUsd || cost.estimatedCostUsd)} Â· {cost.segmentsPerMessage} seg/msg Â· {camp.stats.recipients} recipients</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Est. {money(camp.stats.estimatedCostUsd || cost.estimatedCostUsd)} · {cost.segmentsPerMessage} seg/msg · {camp.stats.recipients} recipients</p>
                   {(camp.status === "draft" || camp.status === "scheduled") && (
                     <form action={sendSmsCampaignAction} className="mt-3"><input type="hidden" name="campaignId" value={camp.id} /><Button size="sm" type="submit">Send now (simulated)</Button></form>
                   )}

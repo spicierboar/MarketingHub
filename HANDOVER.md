@@ -1,45 +1,59 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **PLATFORM IMPROVEMENTS WAVE** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **UX + PROMO + CREATE-SCRAPE** · **uncommitted** · **W6 WAITING ON GOOGLE**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (ahead of origin; large **uncommitted** tree) · live flags **OFF**
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
 > | W0–W5 + W7 | DONE | - |
-> | **Managed service** | **SHIPPED** | foundation → wave 3 + agency exception desk + 2-user demo |
-> | **C2 credit** | **SHIPPED** | $50 floor · Stripe Checkout top-up · tax invoices · off-session auto top-up path |
-> | **Signup pre-fill** | **SHIPPED** | scrape deepen · templates · ABN/Places · Looks-correct |
-> | **Platform improvements** | **SHIPPED** | client pack · exception deep-links · portal · ROI · playbooks · chunked `.in()` |
+> | Managed / C2 / signup pre-fill / platform improvements | SHIPPED (committed) | see archived block |
+> | **Promo catalog (30 packs)** | **CODE DONE · uncommitted** | `src/lib/promo-catalog.ts` · agency admin `/promo-catalog` · client picker · migration **0042** |
+> | **Add-client scrape + declutter** | **CODE DONE · uncommitted** | website+consent on create → auto-apply high/medium · setup-focus company page |
+> | **Modals / AUD / clients list** | **CODE DONE · uncommitted** | FormModal flows · `formatMoney` AUD · compressed lifecycle row |
 > | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
 >
-> **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **Pending:** `docs/MANAGED-SERVICE-PENDING.md`
+> ### Just finished (this session — create-scrape + overview declutter)
+> - **Problem:** name-only create → empty scrape + cluttered `/companies/[id]`
+> - **Fix:** `AddClientModal` / `/companies/new` collect **website + consent**; `createCompanyAction` → `scrapeAndApplyInitialProfile` (`src/lib/auto-onboarding.ts`); redirect `?scraped=1|0`
+> - **UI:** draft/pending clients get **setup focus** (scrape + profile + score/checklist/status); advanced sidebar (promos, health, templates, …) hidden until approved/ai_ready path
+> - **Demo scrape host:** `harbourroasters.example` (+ consent)
 >
-> **Fixtures:** self-test **295+/291+** (+4 platform checks) · queue-test **20/20**
+> ### Key paths
+> - Create: `src/components/add-client-modal.tsx` · `src/app/(app)/companies/actions.ts` · `src/lib/auto-onboarding.ts` (`scrapeAndApplyInitialProfile`)
+> - Overview: `src/app/(app)/companies/[id]/page.tsx`
+> - Promo: `src/lib/promo-catalog.ts` · `src/lib/promo-catalog-agency.ts` · `src/app/(app)/promo-catalog/` · `supabase/migrations/0042_tenant_promo_catalog.sql`
 >
-> **Owner migrations PASTED:** … + **0038–0040**. **NEW — paste:**  
-> `notepad F:\MarketingHub\command-centre\supabase\migrations\0041_credit_wallet_stripe_pm.sql`
+> **Owner migrations — paste if not done:**
+> ```powershell
+> notepad F:\MarketingHub\command-centre\supabase\migrations\0041_credit_wallet_stripe_pm.sql
+> notepad F:\MarketingHub\command-centre\supabase\migrations\0042_tenant_promo_catalog.sql
+> ```
 >
-> **Hard locks:** Do **NOT** flip `*_LIVE` until W6 GO. Critique gate untouched. AI never auto-publishes / auto-spends.
+> **Hard locks:** Do **NOT** flip `*_LIVE` until W6 GO. Critique gate untouched. AI never auto-publishes / auto-spends. Data via `@/lib/db` (await). No commit unless asked.
 >
-> **Local demo:** `/dev` → **Agency** `sasha@brightspark.dev` · **Client** `liam@brightspark.dev` (Dental seed credit $200)
+> **Local demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · `/dev` → Agency `sasha@brightspark.dev` · Client `liam@brightspark.dev`
 >
-> **NEXT:**
-> 1. Owner paste **0041** (Stripe PM columns on credit wallets)
-> 2. Optional: set `TAX_INVOICE_SELLER_*` letterhead env
-> 3. Demo: campaign → **Send pack to client Approvals** → Liam `/client/approvals`
-> 4. Park live cutover until Google GO
+> **NEXT (priority):**
+> 1. **Verify** Add client → `harbourroasters.example` + consent → pre-filled setup page (not the old cluttered stack)
+> 2. **Commit** the uncommitted UX/promo/scrape tree when owner asks (exclude `scripts/*.snip`, `_owner_paste_*`, `.next`, integrator temps)
+> 3. Owner paste **0041** + **0042**
+> 4. Optional polish: further compress AutoOnboardingPanel on setup page; sales wizard website field
+> 5. Park live cutover until Google GO
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
-> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path:
-> ```powershell
-> notepad F:\MarketingHub\command-centre\supabase\migrations\NNNN_name.sql
-> ```
+> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
 >
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, **PLATFORM IMPROVEMENTS WAVE** · **W6 WAITING ON GOOGLE**) — archived
+>
+> Platform improvements shipped @ `a405118`. Large UX/promo/create-scrape tree continued uncommitted — see block above.
 >
 > ---
 >
@@ -119,6 +133,21 @@
 >
 > ### ▶ GBP LOCAL AUDIT (V1 module 6, 2026-07-08)
 > **Engine:** `src/lib/gbp-audit.ts` — NAP, hours, categories, photos, FAQ checklist vs connected GBP profile; `buildCanonicalGbp()` ground truth; `simulateGbpSnapshot()` when live off; `fetchLiveGbpSnapshot()` when `gbpAuditLive()`. **Gate:** `gbpAuditLive()` requires `PUBLISHING_LIVE=true` + `PUBLISHING_TOKEN_KEY` + `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET` (owner Google Cloud still blocked — simulated mode). **UI:** `/companies/[id]/local-seo` + `gbp-audit-panel.tsx`; **Local SEO** nav on company profile. **Self-test:** `gbpAudit.napConsistency`, `gbpAudit.simulatedWhenLiveOff`, `gbpAudit.checklistActionable`. **No migration** (slot 0019 reserved, unused).
+>
+> ---
+>
+> ### ▶ AI DISCOVERY / GEO (2026-07-11)
+> **Engine:** `src/lib/ai-discovery.ts` — readiness checklist (website, NAP, suburbs, GBP, Bing Places, Yelp, schema, landings, FAQ, reviews), customer prompt pack, manual mention scorecard (ChatGPT / Gemini / Perplexity). Honest disclaimer: improves odds, never guarantees a mention. **Persistence:** `companies.profile.aiDiscovery` jsonb (directories + scorecards). **UI:** `ai-discovery-panel.tsx` on `/companies/[id]/local-seo`; company nav **Local SEO & AI**. **Actions:** `saveAiDiscoveryDirectoriesAction`, `saveAiDiscoveryScorecardAction` + audit. **Self-test:** `aiDiscovery.promptPack`, `aiDiscovery.readinessScore`, `aiDiscovery.mentionRate`. **No migration**.
+>
+> ---
+>
+> ### ▶ QUALITY ROUTING (managed service, 2026-07-11)
+> **Engine:** `src/lib/managed-service/quality-routing.ts` — after AI draft, critique → PASS/WARN/FAIL/ESCALATE; `fully_managed`/`managed_exceptions` + PASS/WARN auto-submit to client review; FAIL/ESCALATE or `approval` level → agency hold. Never publishes. **Wired:** Studio · submit for approval · **delivery-runner content phase** · **campaign pack** (FAIL/ESCALATE stay held). **UI:** content badges + Needs attention; Dashboard `quality_hold`; Monitor = Clients + AI next steps (Signals demoted to link). **Self-test:** `qualityRouting.gateMapping`, `qualityRouting.decisions`. **No migration** (`content.qualityRouting` jsonb).
+>
+> ---
+>
+> ### ▶ CLIENT PROMO CATALOG (2026-07-11)
+> **Engine:** `src/lib/promo-catalog.ts` + `promo-requests.ts` — industry templates (retail, restaurant, fast food, hotel, professional, general); client sets dates/budget/channels; default **15% markup** (`managedService.promoMarkupPercent`); spawns draft campaign + items. **UI:** client Home + `/client/promos` + calendar “not on calendar yet”; agency company overview markup + Mark on calendar. **Self-test:** `promoCatalog.byIndustry`, `promoCatalog.markupMath`. **No migration** (`profile.promoSelections` jsonb).
 >
 > ---
 >

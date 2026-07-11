@@ -27,6 +27,20 @@ export function formatDate(iso?: string | null): string {
   });
 }
 
+/** Australian dollar formatting (en-AU). */
+export function formatMoney(
+  amount: number,
+  opts?: { fractionDigits?: number },
+): string {
+  const digits = opts?.fractionDigits ?? 0;
+  return amount.toLocaleString("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 export function titleCase(s: string): string {
   return s
     .replace(/_/g, " ")

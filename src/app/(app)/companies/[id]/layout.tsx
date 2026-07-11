@@ -30,6 +30,7 @@ export default async function CompanyWorkspaceLayout({
         status={company.status}
         businessType={businessType}
         activeAddons={activeAddons}
+        serviceLevel={company.profile.managedService?.serviceLevel}
       />
       {children}
     </div>

@@ -1,4 +1,4 @@
-﻿import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
+import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
 import {
   listAiCampaignRecommendations,
@@ -6,9 +6,10 @@ import {
   resurfaceExpiredSnoozedRecommendations,
 } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { titleCase } from "@/lib/utils";
 import {
   buildAgencyPortfolioAttention,
@@ -51,9 +52,14 @@ export default async function RecommendationsPage() {
   return (
     <div>
       <PageHeader
-        title="Recommendations"
-        description="Ranked, evidence-backed next steps from analytics, calendar gaps, reviews, loyalty, and Brand Brain signals."
-      />
+        title="AI next steps"
+        explainerId="recommendations"
+        explainer="AI ranks what to do next. One click starts a draft or campaign — quality routing then sends it to the client or holds it for you. Nothing publishes without review."
+      >
+        <Link href="/ai-mos" className={buttonClasses("outline", "sm")}>
+          Ops signals
+        </Link>
+      </PageHeader>
 
       <div className="space-y-6 p-6">
         <AgencyPortfolioStrip rows={portfolio} />
@@ -83,7 +89,7 @@ export default async function RecommendationsPage() {
                   <form action={generateRecommendationsAction}>
                     <input type="hidden" name="companyId" value={company.id} />
                     <Button type="submit" variant="outline" size="sm" disabled={!aiReady}>
-                      {recs.length ? "Regenerate" : "Generate recommendations"}
+                      {recs.length ? "Rescan with AI" : "Ask AI what’s next"}
                     </Button>
                   </form>
                 </div>

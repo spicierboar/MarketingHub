@@ -70,7 +70,7 @@ export default async function AssetDetailPage({
 
   return (
     <div>
-      <PageHeader title={asset.name} description={`${company.name} · ${titleCase(asset.assetType)}`}>
+      <PageHeader title={asset.name} description={`${company.name} · ${titleCase(asset.assetType)}`} hideExplainer>
         <Badge tone="info">{licenceLabel(r.licenceType)}</Badge>
         <StatusBadge status={asset.status} />
       </PageHeader>

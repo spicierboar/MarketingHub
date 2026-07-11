@@ -65,17 +65,25 @@ export async function previewAutoOnboardingAction(
     const urls = readUrlsFromForm(formData);
     assertScrapeUrls(urls);
 
-    const preview = await scrapeForOnboardingPreview({
+    let preview = await scrapeForOnboardingPreview({
       company,
       consent,
       urls,
     });
 
+    const { enrichOnboardingPreview } = await import("@/lib/ai/onboarding-enrich");
+    const enriched = await enrichOnboardingPreview({
+      company,
+      preview,
+      actorId: user.id,
+    });
+    preview = enriched.preview;
+
     await logAction(user, "auto_onboarding.scraped", {
       targetType: "company",
       targetId: companyId,
       companyId,
-      detail: `mode=${preview.mode} fields=${preview.fields.length} urls=${preview.sources.length}`,
+      detail: `mode=${preview.mode} enrich=${enriched.enrichment.mode} fields=${preview.fields.length} urls=${preview.sources.length}`,
     });
 
     return { ok: true, preview };
@@ -110,12 +118,26 @@ export async function applyAutoOnboardingAction(
 
     const extracted = extractedFromPreview(preview);
     const overwrite = formData.get("overwrite") === "on";
-    const profile = applyExtractedFields(
+    let profile = applyExtractedFields(
       company.profile,
       extracted,
       selectedKeys,
       { overwrite },
     );
+
+    const { applyContactAndNotesToProfile } = await import("@/lib/ai/onboarding-enrich");
+    if (preview.extras) {
+      profile = applyContactAndNotesToProfile(profile, {
+        fields: {
+          localMarketNotes: preview.extras.localMarketNotes,
+          businessAddress: preview.extras.businessAddress,
+          phone: preview.extras.phone,
+          email: preview.extras.email,
+        },
+        inferredKeys: [],
+        mode: preview.extras.enrichMode ?? "template",
+      });
+    }
 
     const meta = buildAutoOnboardingMeta(preview, user.id, true);
     profile.autoOnboarding = {
@@ -128,7 +150,7 @@ export async function applyAutoOnboardingAction(
       targetType: "company",
       targetId: companyId,
       companyId,
-      detail: `fields=${selectedKeys.join(",")} mode=${preview.mode} overwrite=${overwrite}`,
+      detail: `fields=${selectedKeys.join(",")} mode=${preview.mode} enrich=${preview.extras?.enrichMode ?? "none"} overwrite=${overwrite}`,
     });
 
     revalidatePath(`/companies/${companyId}`);

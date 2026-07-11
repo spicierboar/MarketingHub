@@ -1,11 +1,10 @@
-﻿"use server";
+"use server";
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
   createRecommendation,
   createRecommendationDismissRecord,
-  createTask,
   getCompany,
   getRecommendation,
   getTask,
@@ -170,48 +169,14 @@ export async function toCampaignAction(formData: FormData) {
 }
 
 export async function toTaskAction(formData: FormData) {
-  const recId = text(formData, "recId");
-  const rec = await getRecommendation(recId);
-  if (!rec) throw new Error("Recommendation not found");
-  const user = await assertCompanyAccess(rec.companyId);
-  const task = await createTask({
-    companyId: rec.companyId,
-    title: rec.title,
-    detail: rec.action.objective ?? rec.rationale,
-    status: "open",
-    sourceRecommendationId: recId,
-    createdById: user.id,
-  });
-  await updateRecommendation(recId, {
-    status: "actioned",
-    resultType: "task",
-    resultId: task.id,
-  });
-  await logAction(user, "recommendation.to_task", {
-    targetType: "task",
-    targetId: task.id,
-    companyId: rec.companyId,
-    detail: rec.title,
-  });
-  revalidatePath("/recommendations");
-  revalidatePath("/tasks");
+  // Manual task lists are retired — route into the AI draft path instead.
+  return toRequestAction(formData);
 }
 
-export async function createTaskAction(formData: FormData) {
-  const companyId = text(formData, "companyId");
-  const user = await assertCompanyAccess(companyId);
-  const title = text(formData, "title");
-  if (!title) throw new Error("Task title is required");
-  await createTask({
-    companyId,
-    title,
-    detail: text(formData, "detail") || undefined,
-    status: "open",
-    sourceRecommendationId: null,
-    createdById: user.id,
-  });
-  await logAction(user, "task.created", { companyId, detail: title });
-  revalidatePath("/tasks");
+export async function createTaskAction(_formData: FormData) {
+  throw new Error(
+    "Manual tasks are retired. Use AI next steps → Let AI draft, or Content Studio.",
+  );
 }
 
 export async function toggleTaskAction(formData: FormData) {
@@ -230,5 +195,5 @@ export async function toggleTaskAction(formData: FormData) {
     companyId: task.companyId,
     detail: task.title,
   });
-  revalidatePath("/tasks");
+  revalidatePath("/recommendations");
 }

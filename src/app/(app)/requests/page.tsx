@@ -5,7 +5,7 @@ import { listCompanies, listUsers } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
-import { buttonClasses } from "@/components/ui/button";
+import { NewRequestModalTrigger } from "@/components/new-request-modal";
 import { formatDate, titleCase } from "@/lib/utils";
 
 const URGENCY_TONE = {
@@ -30,16 +30,21 @@ export default async function RequestsPage({
   );
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c]));
   const userById = new Map((await listUsers(user.tenantId)).map((u) => [u.id, u]));
+  const companyOptions = [...companyById.values()]
+    .filter((c) => allowed.has(c.id) && c.status !== "archived")
+    .map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <div>
       <PageHeader
         title="Marketing support requests"
-        description="Requests from local managers become trackable tickets."
+        explainerId="requests"
+        explainer="Messages from clients (Ask us) land here as tickets. Triage, convert to drafts/campaigns, and track status."
       >
-        <Link href="/requests/new" className={buttonClasses()}>
-          New request
-        </Link>
+        <NewRequestModalTrigger
+          companies={companyOptions}
+          defaults={companyId ? { companyId } : undefined}
+        />
       </PageHeader>
 
       <div className="p-6">
@@ -47,9 +52,12 @@ export default async function RequestsPage({
           <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center">
             <p className="text-sm text-muted-foreground">
               No requests yet.{" "}
-              <Link href="/requests/new" className="text-primary hover:underline">
-                Submit the first one
-              </Link>
+              <NewRequestModalTrigger
+                companies={companyOptions}
+                defaults={companyId ? { companyId } : undefined}
+                linkStyle
+                label="Submit the first one"
+              />
               .
             </p>
           </div>
@@ -59,7 +67,7 @@ export default async function RequestsPage({
               <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Topic</th>
-                  <th className="px-4 py-3 font-medium">Company</th>
+                  <th className="px-4 py-3 font-medium">Client</th>
                   <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Requested by</th>
                   <th className="px-4 py-3 font-medium">Urgency</th>

@@ -32,7 +32,7 @@ export function AddTaskForm({
 
   return (
     <form action={action} className="space-y-4">
-      <Field label="Company" htmlFor="companyId">
+      <Field label="Client" htmlFor="companyId">
         <Select id="companyId" name="companyId" required>
           {companies.map((c) => (
             <option key={c.id} value={c.id}>

@@ -26,7 +26,8 @@ export default async function ClientNewRequestPage() {
     <div>
       <PageHeader
         title="Ask us for something"
-        description="We'll already have your company details — just tell us what you need."
+        explainerId="client-request-new"
+        explainer="Tell us what you need — we'll already have your company details. This creates a ticket the agency will handle."
       />
       <div className="mx-auto max-w-3xl p-6">
         <form action={createClientRequestAction}>

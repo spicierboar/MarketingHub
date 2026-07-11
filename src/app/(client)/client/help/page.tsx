@@ -31,7 +31,8 @@ export default async function ClientHelpPage() {
     <div>
       <PageHeader
         title="Help"
-        description={`How your managed marketing service works for ${company?.name ?? "your business"}.`}
+        explainerId="client-help"
+        explainer="How your managed marketing service works — approvals, asks, billing, and what we handle for you."
       />
 
       <div className="space-y-8 p-6">
@@ -49,6 +50,11 @@ export default async function ClientHelpPage() {
               </p>
               <p>
                 Nothing goes live without the usual checks. AI never publishes or spends on its own.
+              </p>
+              <p>
+                We also work on <strong className="font-medium text-foreground">AI discovery</strong> —
+                setting up your online presence so tools like ChatGPT are more likely to recommend
+                you. That improves your odds; it is never a guaranteed listing.
               </p>
             </CardContent>
           </Card>

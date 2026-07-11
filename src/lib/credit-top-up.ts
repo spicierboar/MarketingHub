@@ -51,7 +51,7 @@ export async function applyPaidCreditTopUp(input: {
         companyId: input.companyId,
         kind: "credit_top_up",
         totalIncGst: input.amountUsd,
-        currency: "usd",
+        currency: "aud",
         description: `Prepaid account credit top-up ($${input.amountUsd.toFixed(2)})`,
         user: input.user,
         notes: input.reason,
@@ -88,7 +88,7 @@ export async function applyPaidCreditTopUp(input: {
     companyId: input.companyId,
     kind: "credit_top_up",
     totalIncGst: input.amountUsd,
-    currency: "usd",
+    currency: "aud",
     description: `Prepaid account credit top-up ($${input.amountUsd.toFixed(2)})`,
     user: input.user,
     notes: input.simulated

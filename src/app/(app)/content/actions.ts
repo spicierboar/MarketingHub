@@ -43,6 +43,10 @@ import { recordAiUsage } from "@/lib/ai/metering";
 import { assertAiRateLimit } from "@/lib/ratelimit";
 import { canApproveRoute, ROUTE_LABEL } from "@/lib/routing";
 import { governContent } from "@/lib/content-governance";
+import {
+  applyQualityRoutingAfterDraft,
+  submitHeldContentToClient,
+} from "@/lib/managed-service/quality-routing";
 
 // §54 — content (or its company) under an active legal hold must not be
 // overwritten. Guards every mutation path.
@@ -232,23 +236,42 @@ export async function submitForApprovalAction(formData: FormData) {
     throw new Error("Only editable drafts can be submitted for approval.");
   }
 
-  // Route to the correct approval queue at submission time (§26).
-  const governed = await governContent(content, content.body);
-  await updateContent(contentId, {
-    status: "pending_approval",
-    // A new approval cycle starts un-shared — any prior client review is stale.
-    ...(content.clientReview ? { clientReview: undefined } : {}),
-    ...governed,
+  // Quality gate → service-level routing (auto client vs agency hold).
+  const routed = await applyQualityRoutingAfterDraft({
+    contentId,
+    actor: user,
+    origin: await requestOrigin(),
   });
+
   if (content.requestId) await advanceRequest(content.requestId, "pending_approval", user.id);
 
   await logAction(user, "content.submitted_for_approval", {
     targetType: "content",
     targetId: contentId,
     companyId: content.companyId,
-    detail: `Routed to: ${ROUTE_LABEL[governed.routedTo]}`,
+    detail: `${routed.gate} → ${routed.decision} · ${ROUTE_LABEL[routed.content.routedTo ?? "admin"]}`,
   });
   revalidatePath(`/content/${contentId}`);
+  revalidatePath("/approvals");
+  revalidatePath("/dashboard");
+}
+
+export async function submitHeldToClientAction(formData: FormData) {
+  const contentId = String(formData.get("contentId") || "");
+  const email = String(formData.get("clientEmail") || "").trim() || undefined;
+  const content = await getContent(contentId);
+  if (!content) throw new Error("Content not found");
+  const user = await assertAdminCompanyAccess(content.companyId);
+  await submitHeldContentToClient({
+    contentId,
+    actor: user,
+    origin: await requestOrigin(),
+    clientEmail: email,
+  });
+  revalidatePath(`/content/${contentId}`);
+  revalidatePath("/approvals");
+  revalidatePath("/dashboard");
+  revalidatePath("/client/approvals");
 }
 
 export async function approveContentAction(formData: FormData) {

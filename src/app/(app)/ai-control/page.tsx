@@ -52,7 +52,7 @@ export default async function AiControlPage() {
           </Card>
           <Card>
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Est. cost (USD)</p>
+              <p className="text-sm text-muted-foreground">Est. cost (AUD)</p>
               <p className="mt-1 text-3xl font-bold">${totalCost.toFixed(2)}</p>
             </CardContent>
           </Card>
@@ -111,7 +111,7 @@ export default async function AiControlPage() {
                   <tr>
                     <th className="px-4 py-3 font-medium">When</th>
                     <th className="px-4 py-3 font-medium">Kind</th>
-                    <th className="px-4 py-3 font-medium">Company</th>
+                    <th className="px-4 py-3 font-medium">Client</th>
                     <th className="px-4 py-3 font-medium">Prompt</th>
                     <th className="px-4 py-3 font-medium">Model</th>
                     <th className="px-4 py-3 font-medium">Sources</th>

@@ -146,6 +146,19 @@ import {
   checkGbpSimulatedWhenLiveOff,
 } from "@/lib/selftest/gbp-audit";
 import {
+  checkAiDiscoveryMentionRate,
+  checkAiDiscoveryPromptPack,
+  checkAiDiscoveryReadinessScore,
+} from "@/lib/selftest/ai-discovery";
+import {
+  checkQualityGateMapping,
+  checkQualityRoutingDecisions,
+} from "@/lib/selftest/quality-routing";
+import {
+  checkPromoCatalogByIndustry,
+  checkPromoMarkupMath,
+} from "@/lib/selftest/promo-catalog";
+import {
   checkCampaignBuilderGoalProducesPlan,
   checkCampaignBuilderKpisPresent,
   checkCampaignBuilderSpawnsDraftContentNotScheduled,
@@ -814,6 +827,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("gbpAudit.simulatedWhenLiveOff", () => checkGbpSimulatedWhenLiveOff());
 
     await expect("gbpAudit.checklistActionable", () => checkGbpChecklistActionable());
+
+    await expect("aiDiscovery.promptPack", () => checkAiDiscoveryPromptPack());
+    await expect("aiDiscovery.readinessScore", () => checkAiDiscoveryReadinessScore());
+    await expect("aiDiscovery.mentionRate", () => checkAiDiscoveryMentionRate());
+
+    await expect("qualityRouting.gateMapping", () => checkQualityGateMapping());
+    await expect("qualityRouting.decisions", () => checkQualityRoutingDecisions());
+
+    await expect("promoCatalog.byIndustry", () => checkPromoCatalogByIndustry());
+    await expect("promoCatalog.markupMath", () => checkPromoMarkupMath());
 
     await expect("liveAds.simulatedWhenOff", () => checkLiveAdsSimulatedWhenOff());
     await expect("liveAds.dispatchNullWhenOff", () => checkLiveAdsDispatchNullWhenOff());

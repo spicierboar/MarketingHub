@@ -28,7 +28,7 @@ export const AI_CAMPAIGN_PLAN_SECTIONS = [
   {
     key: "systemData",
     title: "System data",
-    hint: "Company profile, services, timezone, and Brand Brain context retrieved for this tenant.",
+    hint: "Client profile, services, timezone, and Brand Brain context retrieved for this tenant.",
   },
   {
     key: "assumptions",

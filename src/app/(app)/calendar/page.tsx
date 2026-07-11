@@ -210,7 +210,9 @@ export default async function CalendarPage({
     <div>
       <PageHeader
         title="Social & content calendar"
-        description={`${scheduledCount} scheduled post(s) and ${filtered.length - scheduledCount} planned item(s) shown. Tenant clock: ${intelligence.clock.clockLabel}.`}
+        explainerId="calendar"
+        explainer="Plan and schedule posts across channels. Nothing goes live until it has been approved."
+        description={`${scheduledCount} scheduled · ${filtered.length - scheduledCount} planned · ${intelligence.clock.clockLabel}`}
       >
         <Link
           href={`/calendar?${filterQs({ month: grid.prev })}`}
@@ -238,9 +240,9 @@ export default async function CalendarPage({
           <input type="hidden" name="month" value={month} />
           {view === "portfolio" && <input type="hidden" name="view" value="portfolio" />}
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Company</label>
+            <label className="mb-1 block text-xs text-muted-foreground">Client</label>
             <Select name="company" defaultValue={fCompany} className="h-9 w-44">
-              <option value="">All companies</option>
+              <option value="">All clients</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}

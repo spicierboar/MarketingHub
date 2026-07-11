@@ -41,6 +41,7 @@ import {
   saveReuseAction,
   shareForClientApprovalAction,
   submitForApprovalAction,
+  submitHeldToClientAction,
 } from "../actions";
 
 const REPURPOSE_TYPES: [string, string][] = [
@@ -117,7 +118,7 @@ export default async function ContentDetailPage({
 
   return (
     <div>
-      <PageHeader title={content.title} description={`${company.name} · ${titleCase(content.type)}`}>
+      <PageHeader title={content.title} description={`${company.name} · ${titleCase(content.type)}`} hideExplainer>
         {content.groundingLabel && (
           <Badge tone={content.groundingLabel === "grounded" ? "success" : "warning"}>
             {titleCase(content.groundingLabel)}
@@ -126,6 +127,23 @@ export default async function ContentDetailPage({
         {content.routedTo && awaitingApproval && (
           <Badge tone={content.routedTo === "admin" ? "neutral" : "warning"}>
             {ROUTE_LABEL[content.routedTo]}
+          </Badge>
+        )}
+        {content.qualityRouting && (
+          <Badge
+            tone={
+              content.qualityRouting.queue === "in_client_review"
+                ? "success"
+                : content.qualityRouting.gate === "fail" ||
+                    content.qualityRouting.gate === "escalate"
+                  ? "danger"
+                  : "warning"
+            }
+          >
+            {content.qualityRouting.queue === "in_client_review"
+              ? "In client review"
+              : "In agency review"}{" "}
+            · {content.qualityRouting.gate.toUpperCase()}
           </Badge>
         )}
         <StatusBadge status={content.status} />
@@ -141,6 +159,26 @@ export default async function ContentDetailPage({
           {qs.scheduledAt && (
             <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
               Scheduled at best time: {qs.scheduledAt}
+            </div>
+          )}
+          {content.qualityRouting && (
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                content.qualityRouting.queue === "in_client_review"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              }`}
+            >
+              <p className="font-medium">
+                Quality routing · {content.qualityRouting.gate.toUpperCase()} →{" "}
+                {content.qualityRouting.queue === "in_client_review"
+                  ? "client review"
+                  : "agency review"}
+              </p>
+              <p className="mt-1 text-xs opacity-90">{content.qualityRouting.reason}</p>
+              <p className="mt-1 text-xs opacity-80">
+                Service level: {content.qualityRouting.serviceLevel.replace(/_/g, " ")}
+              </p>
             </div>
           )}
           {content.duplicateWarning && (
@@ -376,6 +414,33 @@ export default async function ContentDetailPage({
               </CardContent>
             </Card>
           )}
+
+          {/* Quality hold — staff submit to client after review */}
+          {admin &&
+            awaitingApproval &&
+            content.qualityRouting?.decision === "hold_agency" &&
+            !content.clientReview && (
+              <Card className="border-amber-200">
+                <CardContent className="p-6">
+                  <h2 className="mb-1 font-semibold">Needs attention</h2>
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Held for agency review. After you&apos;re satisfied, submit to the client
+                    Approvals queue — they get notified. Nothing publishes from here.
+                  </p>
+                  <form action={submitHeldToClientAction} className="space-y-2">
+                    <input type="hidden" name="contentId" value={content.id} />
+                    <Input
+                      type="email"
+                      name="clientEmail"
+                      placeholder="client@example.com (optional if profile has email)"
+                    />
+                    <Button type="submit" className="w-full">
+                      Submit to client review
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
 
           {/* T6 — tokenised no-login client approval */}
           {admin && awaitingApproval && (

@@ -10,7 +10,6 @@ import {
   snoozeRecommendationAction,
   toCampaignAction,
   toRequestAction,
-  toTaskAction,
 } from "@/app/(app)/recommendations/actions";
 
 function rankLabel(_rec: Recommendation, index: number): string {
@@ -35,45 +34,41 @@ function EvidenceTrail({ rec }: { rec: Recommendation }) {
 
 function ActionButtons({ rec }: { rec: Recommendation }) {
   const idField = <input type="hidden" name="recId" value={rec.id} />;
+  const kind = rec.action.kind;
+  const openHref = rec.action.reviewHref;
+
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      {rec.action.kind === "content_request" && (
+      {kind === "content_request" && (
         <form action={toRequestAction}>
           {idField}
           <Button type="submit" size="sm">
-            Turn into request
+            Let AI draft
           </Button>
         </form>
       )}
-      {rec.action.kind === "campaign" && (
+      {kind === "campaign" && (
         <form action={toCampaignAction}>
           {idField}
           <Button type="submit" size="sm">
-            Turn into campaign
+            Let AI plan campaign
           </Button>
         </form>
       )}
-      {rec.action.kind === "task" && (
-        <form action={toTaskAction}>
+      {kind === "task" && !openHref && (
+        <form action={toRequestAction}>
           {idField}
           <Button type="submit" size="sm">
-            Create task
+            Let AI draft
           </Button>
         </form>
       )}
-      {(rec.action.kind === "repurpose" || rec.action.kind === "review") && rec.action.reviewHref && (
-        <Link href={rec.action.reviewHref} className={buttonClasses("default", "sm")}>
-          {rec.action.kind === "repurpose" ? "Open to repurpose" : "Review"}
-        </Link>
-      )}
-      {rec.action.kind !== "task" && (
-        <form action={toTaskAction}>
-          {idField}
-          <Button type="submit" variant="outline" size="sm">
-            Add as task
-          </Button>
-        </form>
-      )}
+      {(kind === "repurpose" || kind === "review" || (kind === "task" && openHref)) &&
+        openHref && (
+          <Link href={openHref} className={buttonClasses("default", "sm")}>
+            {kind === "repurpose" ? "Open to repurpose" : "Open"}
+          </Link>
+        )}
       <form action={snoozeRecommendationAction} className="flex items-center gap-1">
         {idField}
         <input type="hidden" name="snoozeDays" value="7" />
@@ -175,7 +170,7 @@ export function RecommendationStrip({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Top recommendations
+          Top AI next steps
         </p>
         <Link href={viewAllHref} className="text-xs text-primary hover:underline">
           View all

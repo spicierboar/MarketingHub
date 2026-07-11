@@ -78,7 +78,7 @@ export default async function FunnelPage({
         <Card className="lg:col-span-3">
           <CardContent className="flex flex-wrap items-end gap-4 p-6">
             <form method="get" className="flex gap-3">
-              <Field label="Company" htmlFor="company">
+              <Field label="Client" htmlFor="company">
                 <Select id="company" name="company" defaultValue={companyId ?? ""}>
                   {companies.map((c) => (
                     <option key={c.id} value={c.id}>

@@ -6,14 +6,16 @@ import {
   visibleRequests,
 } from "@/lib/scope";
 import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate, titleCase } from "@/lib/utils";
-import { listCompanies, listAiMosOpportunities } from "@/lib/db";
+import { listCompanies } from "@/lib/db";
 import { buildLocalDashboard } from "@/lib/analytics";
 import { buildAgencyOpsBundle } from "@/lib/agency-ops";
+import { buildTenantExecDash } from "@/lib/exec-dash";
 import { AgencyAlertsList } from "@/components/agency-ops-panel";
+import { ExecutiveClientAccordion } from "@/components/executive-client-accordion";
 import { onboardingScore } from "@/lib/types";
 import type { AgencyAlert } from "@/lib/agency-ops";
 import type { AiMosOpportunity, Company } from "@/lib/types";
@@ -34,13 +36,15 @@ function verbTitleForAlert(alert: AgencyAlert): string {
       return `Client review waiting — ${alert.companyName}`;
     case "health_attention":
       return `Health risk — ${alert.companyName}`;
+    case "credit_low":
+      return `Top up credit — ${alert.companyName}`;
+    case "reconnect_needed":
+      return `Reconnect account — ${alert.companyName}`;
+    case "quality_hold":
+      return `Needs attention — ${alert.companyName}`;
     default:
       return alert.title;
   }
-}
-
-function verbTitleForAiMos(opp: AiMosOpportunity, companyName: string): string {
-  return `Opportunity signal — ${companyName}`;
 }
 
 function nextSpielStep(company: Company | undefined, admin: boolean): {
@@ -52,10 +56,10 @@ function nextSpielStep(company: Company | undefined, admin: boolean): {
   if (!company) {
     return admin
       ? {
-          title: "Add your first company",
+          title: "Add your first client",
           detail: "Onboard a client so managed delivery can start.",
           href: "/companies",
-          cta: "Open companies",
+          cta: "Open clients",
         }
       : null;
   }
@@ -104,7 +108,6 @@ function buildAttentionItems(input: {
     });
   }
 
-  // Prefer approvals/reviews, then AI-MOS, then health — already roughly ordered by mergeAgencyAlerts
   return items.slice(0, limit);
 }
 
@@ -120,11 +123,10 @@ export default async function DashboardPage() {
     ? null
     : await buildLocalDashboard(user.tenantId, await accessibleCompanyIds(user));
 
-  const agencyOps = admin ? await buildAgencyOpsBundle(user.tenantId) : null;
-  const aiMosOpen = admin
-    ? (await listAiMosOpportunities(user.tenantId, undefined, "open")).slice(0, 4)
-    : [];
-  const companyNames = new Map(companies.map((c) => [c.id, c.name]));
+  const [agencyOps, execRows] = await Promise.all([
+    admin ? buildAgencyOpsBundle(user.tenantId) : Promise.resolve(null),
+    admin ? buildTenantExecDash(user.tenantId) : Promise.resolve([]),
+  ]);
 
   const firstCompany = companies[0];
   const nextUp = nextSpielStep(firstCompany, admin);
@@ -132,8 +134,8 @@ export default async function DashboardPage() {
   const attention = admin
     ? buildAttentionItems({
         alerts: agencyOps?.alerts ?? [],
-        aiMos: aiMosOpen,
-        companyNames,
+        aiMos: [],
+        companyNames: new Map(companies.map((c) => [c.id, c.name])),
       })
     : (local?.missingOnboarding ?? []).slice(0, 6).map((m) => ({
         id: `onboard-${m.company}`,
@@ -150,32 +152,33 @@ export default async function DashboardPage() {
     <div>
       <PageHeader
         title={`Welcome back, ${user.name.split(" ")[0]}`}
-        description={
+        explainerId="dashboard"
+        explainer={
           admin
-            ? "Managed delivery runs for your clients. Step in only when something is blocked or needs a human decision."
-            : "Exceptions and status for your assigned clients."
+            ? "Exceptions desk first — quality holds, overdue approvals, credit, and reconnects. AI drafts route themselves; you only touch what needs a human."
+            : "Exceptions and status for your assigned clients — clear blockers, then delivery continues."
         }
       >
-        <Link href="/approvals" className={buttonClasses()}>
-          Review exceptions
+        <Link href="/approvals" className={buttonClasses("default", "sm")}>
+          Approvals
         </Link>
         <Link
           href="/companies"
-          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+          className="text-xs text-muted-foreground hover:text-foreground hover:underline sm:text-sm"
         >
-          Portfolio
+          Clients
         </Link>
       </PageHeader>
 
-      <div className="mx-auto max-w-3xl space-y-8 p-6">
+      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-5">
         {nextUp && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2.5">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Setup
               </p>
-              <p className="font-medium">{nextUp.title}</p>
-              <p className="text-sm text-muted-foreground">{nextUp.detail}</p>
+              <p className="text-sm font-medium">{nextUp.title}</p>
+              <p className="text-xs text-muted-foreground">{nextUp.detail}</p>
             </div>
             <Link href={nextUp.href} className={buttonClasses("subtle", "sm")}>
               {nextUp.cta}
@@ -184,21 +187,21 @@ export default async function DashboardPage() {
         )}
 
         <section>
-          <div className="mb-3 flex items-end justify-between gap-3">
+          <div className="mb-2 flex items-end justify-between gap-3">
             <div>
-              <h2 className="font-semibold">Exceptions</h2>
-              <p className="text-sm text-muted-foreground">
-                Only items that need a human — approvals, stuck reviews, health risks.
+              <h2 className="text-sm font-semibold">Exceptions</h2>
+              <p className="text-xs text-muted-foreground">
+                Quality holds, overdue approvals, client waits, credit, reconnects.
               </p>
             </div>
             {admin && (
-              <Link href="/approvals" className="text-sm text-primary hover:underline">
-                Approvals queue
+              <Link href="/approvals" className="text-xs text-primary hover:underline">
+                Queue
               </Link>
             )}
           </div>
           {attention.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+            <p className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
               Delivery is on track — no exceptions right now.
             </p>
           ) : admin ? (
@@ -210,18 +213,18 @@ export default async function DashboardPage() {
               extras={[]}
             />
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-1.5">
               {attention.map((item) => (
                 <li key={item.id}>
                   <Link
                     href={item.href}
-                    className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5 text-sm hover:bg-muted"
+                    className="flex items-start justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-muted"
                   >
                     <div className="min-w-0">
                       <p className="font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">{item.detail}</p>
+                      <p className="text-[11px] text-muted-foreground">{item.detail}</p>
                     </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">open →</span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">open →</span>
                   </Link>
                 </li>
               ))}
@@ -229,52 +232,29 @@ export default async function DashboardPage() {
           )}
         </section>
 
-        {admin && aiMosOpen.length > 0 && (
-          <section>
-            <div className="mb-3 flex items-end justify-between gap-3">
-              <div>
-                <h2 className="font-semibold">Signals</h2>
-                <p className="text-sm text-muted-foreground">
-                  Optional opportunities — not required to keep delivery moving.
-                </p>
-              </div>
-              <Link href="/ai-mos" className="text-sm text-primary hover:underline">
-                View signals
-              </Link>
-            </div>
-            <ul className="space-y-2">
-              {aiMosOpen.slice(0, 4).map((opp) => {
-                const name = companyNames.get(opp.companyId) ?? "Client";
-                return (
-                  <li key={opp.id}>
-                    <Link
-                      href="/ai-mos"
-                      className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5 text-sm hover:bg-muted"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium">{verbTitleForAiMos(opp, name)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {opp.diagnosis.slice(0, 140)}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs text-muted-foreground">review →</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+        {admin && (
+          <Card id="clients">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Client scorecards</CardTitle>
+              <CardDescription>
+                Lowest scores first. Expand a row for metrics and next actions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ExecutiveClientAccordion rows={execRows} />
+            </CardContent>
+          </Card>
         )}
 
         {!admin && local && (local.upcoming.length > 0 || local.missingOnboarding.length > 0) && (
           <section>
-            <h2 className="mb-3 font-semibold">Coming up</h2>
+            <h2 className="mb-2 text-sm font-semibold">Coming up</h2>
             {local.upcoming.length > 0 ? (
               <ul className="space-y-1 text-sm">
                 {local.upcoming.slice(0, 5).map((u, i) => (
                   <li key={i} className="flex justify-between gap-2 border-b border-border py-2">
                     <span className="truncate">{u.title}</span>
-                    <span className="whitespace-nowrap text-muted-foreground">
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">
                       {u.platform} · {u.date}
                     </span>
                   </li>
@@ -287,9 +267,9 @@ export default async function DashboardPage() {
         )}
 
         <section>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="font-semibold">Client asks</h2>
-            <Link href="/requests" className="text-sm text-primary hover:underline">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Client asks</h2>
+            <Link href="/requests" className="text-xs text-primary hover:underline">
               View all
             </Link>
           </div>
@@ -299,11 +279,11 @@ export default async function DashboardPage() {
                 <Link
                   key={r.id}
                   href={`/requests/${r.id}`}
-                  className="flex items-center justify-between px-5 py-3 hover:bg-muted"
+                  className="flex items-center justify-between px-3 py-2.5 hover:bg-muted"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.topic}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="truncate text-[11px] text-muted-foreground">
                       {companyById.get(r.companyId)?.name} · {titleCase(r.requestType)} ·{" "}
                       {formatDate(r.createdAt)}
                     </p>
@@ -312,7 +292,7 @@ export default async function DashboardPage() {
                 </Link>
               ))}
               {recentRequests.length === 0 && (
-                <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                   No client asks right now.
                 </p>
               )}
@@ -322,9 +302,9 @@ export default async function DashboardPage() {
 
         {recentContent.length > 0 && (
           <section>
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="font-semibold">Recent delivery</h2>
-              <Link href="/content" className="text-sm text-primary hover:underline">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">Recent delivery</h2>
+              <Link href="/content" className="text-xs text-primary hover:underline">
                 View all
               </Link>
             </div>
@@ -334,11 +314,11 @@ export default async function DashboardPage() {
                   <Link
                     key={c.id}
                     href={`/content/${c.id}`}
-                    className="flex items-center justify-between px-5 py-3 hover:bg-muted"
+                    className="flex items-center justify-between px-3 py-2.5 hover:bg-muted"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{c.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="truncate text-[11px] text-muted-foreground">
                         {companyById.get(c.companyId)?.name} · {formatDate(c.createdAt)}
                       </p>
                     </div>

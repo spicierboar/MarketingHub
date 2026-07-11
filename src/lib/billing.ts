@@ -23,6 +23,7 @@ import {
   getTenant,
   listCompanies,
 } from "@/lib/db";
+import { localDemoEnabled } from "@/lib/env";
 import { planFor, type PlanDef } from "@/lib/plans";
 import type { AddonId, PlanId, Tenant } from "@/lib/types";
 
@@ -81,7 +82,9 @@ export async function tenantUsage(tenantId: string): Promise<TenantUsage> {
 
 // The plan gate on company count — call BEFORE creating a company. Existing
 // companies are never touched by a downgrade; only new creation is blocked.
+// Local demo skips the gate so seed tenants stay usable for walkthroughs.
 export async function assertCompanyQuota(tenantId: string): Promise<void> {
+  if (localDemoEnabled()) return;
   const usage = await tenantUsage(tenantId);
   if (usage.atCompanyLimit) {
     throw new Error(
@@ -224,7 +227,7 @@ export async function createManagementFeeInvoice(
   const item = await stripePost("invoiceitems", {
     customer: tenant.stripeCustomerId,
     amount: String(cents),
-    currency: "usd",
+    currency: "aud",
     description: description.slice(0, 350),
     "metadata[tenantId]": tenant.id,
     "metadata[kind]": "ad_management_fee",
@@ -394,7 +397,7 @@ export async function chargeOffSessionCreditTopUp(input: {
   const amountStr = String(input.amountUsd);
   const pi = await stripePost("payment_intents", {
     amount: String(cents),
-    currency: "usd",
+    currency: "aud",
     customer: input.customerId,
     payment_method: input.paymentMethodId,
     confirm: "true",

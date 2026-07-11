@@ -67,7 +67,7 @@ export default async function PhotographersPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Company" htmlFor="ph-company">
+            <Field label="Client" htmlFor="ph-company">
               <Select id="ph-company" name="company" defaultValue={companyId}>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>

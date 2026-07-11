@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -89,7 +89,7 @@ function profileFromForm(fd: FormData, businessType: BusinessType): CompanyProfi
 export async function saveBusinessStepAction(formData: FormData) {
   const user = await requireSalesRepOrAdmin();
   const name = String(formData.get("name") || "").trim();
-  if (!name) throw new Error("Company name is required");
+  if (!name) throw new Error("Client name is required");
   const raw = String(formData.get("businessType") || "other");
   const businessType = BUSINESS_TYPES.includes(raw as BusinessType) ? (raw as BusinessType) : "other";
   await assertCompanyQuota(user.tenantId);

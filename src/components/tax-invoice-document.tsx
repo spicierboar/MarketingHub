@@ -1,7 +1,8 @@
 import type { TaxInvoice } from "@/lib/types";
 
 const money = (currency: string, amount: number) => {
-  const code = currency.toUpperCase() === "AUD" ? "AUD" : "USD";
+  const raw = (currency || "AUD").toUpperCase();
+  const code = raw === "USD" ? "AUD" : raw;
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
     currency: code,

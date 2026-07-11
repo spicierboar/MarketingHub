@@ -14,7 +14,8 @@ export default async function ClientApprovalsPage() {
     <div>
       <PageHeader
         title="Ready for your review"
-        description="We prepared this for your business. Approve or ask for changes."
+        explainerId="client-approvals"
+        explainer="Drafts waiting on you. Approve so we can schedule after our usual checks — or ask for changes. Nothing goes live without those gates."
       />
       <div className="space-y-4 p-6">
         {pending.length === 0 ? (

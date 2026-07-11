@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/rbac";
 import {
   listCompanies,
@@ -8,7 +7,7 @@ import {
 } from "@/lib/db";
 import { onboardingScore } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
-import { buttonClasses } from "@/components/ui/button";
+import { AddClientModalTrigger } from "@/components/add-client-modal";
 import {
   CompanyLifecycleRow,
   type LifecycleStep,
@@ -32,21 +31,18 @@ export default async function CompaniesPage() {
   return (
     <div>
       <PageHeader
-        title="Companies"
-        description="Each row is a client lifecycle — profile → connect → content → AI-ready. Open a company to run its workspace."
+        title="Clients"
+        explainerId="clients"
+        explainer="One row per client — lifecycle stages on the right. Open a client to run its workspace. Add client opens a quick form."
       >
-        <Link href="/companies/new" className={buttonClasses()}>
-          Add company
-        </Link>
+        <AddClientModalTrigger />
       </PageHeader>
 
       {companies.length === 0 ? (
         <div className="p-6">
           <p className="rounded-lg border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
             No companies yet.{" "}
-            <Link href="/companies/new" className="text-primary hover:underline">
-              Add the first client
-            </Link>
+            <AddClientModalTrigger linkStyle label="Add the first client" />
           </p>
         </div>
       ) : (

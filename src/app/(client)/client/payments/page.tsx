@@ -24,12 +24,10 @@ import {
   saveClientAutoTopUpAction,
   topUpClientCreditAction,
 } from "./actions";
+import { formatMoney } from "@/lib/utils";
 
-const money = (x: number) =>
-  `$${Math.round(x).toLocaleString("en-AU", { maximumFractionDigits: 0 })}`;
-
-const money2 = (x: number) =>
-  `$${x.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (x: number) => formatMoney(x);
+const money2 = (x: number) => formatMoney(x, { fractionDigits: 2 });
 
 const platformLabel = (key: string) =>
   AD_PLATFORMS.find((p) => p.key === key)?.label ?? key;
@@ -67,12 +65,13 @@ export default async function ClientPaymentsPage() {
     <div>
       <PageHeader
         title="Billing"
-        description="Account credit, plan overview, and advertising budget."
+        explainerId="client-billing"
+        explainer="Account credit, plan overview, and advertising budget. Top up credit or manage your saved card here."
       />
 
-      <div className="space-y-8 p-6">
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Account credit</h2>
+      <div className="space-y-5 p-4 sm:p-5">
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">Account credit</h2>
           <Card>
             <CardContent className="space-y-6 p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -107,7 +106,7 @@ export default async function ClientPaymentsPage() {
                 </p>
                 <form action={topUpClientCreditAction} className="flex flex-wrap items-end gap-3">
                   <input type="hidden" name="companyId" value={companyId} />
-                  <Field label="Amount (USD)" htmlFor="topUpAmount">
+                  <Field label="Amount (AUD)" htmlFor="topUpAmount">
                     <Input
                       id="topUpAmount"
                       name="amountUsd"
@@ -164,7 +163,7 @@ export default async function ClientPaymentsPage() {
                       : "Demo mode simulates ledger credit only — no card is charged."}
                   </p>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Field label="Trigger balance (USD)" htmlFor="triggerBal">
+                    <Field label="Trigger balance (AUD)" htmlFor="triggerBal">
                       <Input
                         id="triggerBal"
                         name="topUpTriggerBalanceUsd"
@@ -175,7 +174,7 @@ export default async function ClientPaymentsPage() {
                         required
                       />
                     </Field>
-                    <Field label="Top-up amount (USD)" htmlFor="topUpAmt">
+                    <Field label="Top-up amount (AUD)" htmlFor="topUpAmt">
                       <Input
                         id="topUpAmt"
                         name="topUpAmountUsd"
@@ -186,7 +185,7 @@ export default async function ClientPaymentsPage() {
                         required
                       />
                     </Field>
-                    <Field label="Max top-up amount (USD)" htmlFor="maxTopUp">
+                    <Field label="Max top-up amount (AUD)" htmlFor="maxTopUp">
                       <Input
                         id="maxTopUp"
                         name="maxTopUpAmountUsd"

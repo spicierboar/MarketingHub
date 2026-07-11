@@ -14,6 +14,7 @@ import { assertCompanyQuota } from "@/lib/billing";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
 import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
+import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
 import { onboardingScore } from "@/lib/types";
 import { id, now } from "@/lib/utils";
 import {
@@ -78,13 +79,30 @@ function readSocialLinks(fd: FormData): SocialLink[] {
   return out;
 }
 
-export async function createCompanyAction(formData: FormData) {
+export async function createCompanyAction(
+  formData: FormData,
+): Promise<{ error: string } | void> {
   const user = await requireAdmin();
   const name = String(formData.get("name") || "").trim();
-  if (!name) throw new Error("Company name is required");
+  if (!name) return { error: "Client name is required." };
+  const websiteRaw = String(formData.get("website") || "").trim();
+  const consent =
+    formData.get("consent") === "on" || formData.get("consent") === "true";
   // T4: pricing is per client company — enforce the plan's company limit on
   // the acting user's tenant before creating.
-  await assertCompanyQuota(user.tenantId);
+  try {
+    await assertCompanyQuota(user.tenantId);
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Client limit reached for this plan.",
+    };
+  }
+  if (websiteRaw && !consent) {
+    return {
+      error:
+        "Confirm client consent to scrape public website data, or leave the website blank.",
+    };
+  }
   const company = await createCompany({ tenantId: user.tenantId, name, createdBy: user.id });
   await logAction(user, "company.created", {
     targetType: "company",
@@ -92,7 +110,44 @@ export async function createCompanyAction(formData: FormData) {
     companyId: company.id,
     detail: name,
   });
-  redirect(`/companies/${company.id}`);
+
+  let scrapedParam = "";
+  if (websiteRaw && consent) {
+    const result = await scrapeAndApplyInitialProfile({
+      company,
+      website: websiteRaw,
+      actorId: user.id,
+    });
+    await updateCompany(company.id, { profile: result.profile });
+    if (result.mode !== "failed") {
+      await logAction(user, "auto_onboarding.scraped", {
+        targetType: "company",
+        targetId: company.id,
+        companyId: company.id,
+        detail: `mode=${result.mode} fields=${result.fieldCount} initial=1`,
+      });
+    }
+    if (result.fieldCount > 0) {
+      await logAction(user, "auto_onboarding.applied", {
+        targetType: "company",
+        targetId: company.id,
+        companyId: company.id,
+        detail: `fields=${result.fieldCount} initial=1`,
+      });
+    }
+    scrapedParam =
+      result.fieldCount > 0 ? "?scraped=1" : result.mode === "failed" ? "?scraped=0" : "?scraped=0";
+  }
+
+  redirect(`/companies/${company.id}${scrapedParam}`);
+}
+
+/** Form-action wrapper for `/companies/new` (must return void). */
+export async function createCompanyFormAction(formData: FormData): Promise<void> {
+  const result = await createCompanyAction(formData);
+  if (result?.error) {
+    redirect(`/companies/new?error=${encodeURIComponent(result.error)}`);
+  }
 }
 
 export async function saveOnboardingAction(formData: FormData) {
@@ -117,6 +172,9 @@ export async function saveOnboardingAction(formData: FormData) {
     brandVoice: text(formData, "brandVoice"),
     currentOffers: text(formData, "currentOffers"),
     localMarketNotes: text(formData, "localMarketNotes"),
+    businessAddress: text(formData, "businessAddress"),
+    phone: text(formData, "phone"),
+    email: text(formData, "email"),
     serviceAreas: lines(formData, "serviceAreas"),
     services: lines(formData, "services"),
     callsToAction: lines(formData, "callsToAction"),

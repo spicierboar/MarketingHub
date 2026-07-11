@@ -42,7 +42,7 @@ export default async function ReviewsPage({
         <Card><CardContent className="p-6">
           <h2 className="mb-4 font-semibold">Import reviews</h2>
           <form action={importReviewsAction} className="space-y-4">
-            <Field label="Company" htmlFor="companyId"><Select id="companyId" name="companyId" required defaultValue={companyDefault}>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+            <Field label="Client" htmlFor="companyId"><Select id="companyId" name="companyId" required defaultValue={companyDefault}>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
             <Field label="Platform" htmlFor="platform"><Select id="platform" name="platform" defaultValue="google"><option value="google">Google</option><option value="facebook">Facebook</option><option value="yelp">Yelp</option><option value="tripadvisor">TripAdvisor</option></Select></Field>
             <Button type="submit">Import reviews</Button>
           </form>
@@ -50,7 +50,7 @@ export default async function ReviewsPage({
         <Card><CardContent className="p-6">
           <h2 className="mb-4 font-semibold">Review-request campaign</h2>
           <form action={createReviewCampaignAction} className="space-y-4">
-            <Field label="Company" htmlFor="cc"><Select id="cc" name="companyId" required defaultValue={companyDefault}>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+            <Field label="Client" htmlFor="cc"><Select id="cc" name="companyId" required defaultValue={companyDefault}>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
             <Field label="Name" htmlFor="name"><Input id="name" name="name" required /></Field>
             <Field label="Channel" htmlFor="channel"><Select id="channel" name="channel" defaultValue="email"><option value="email">Email</option><option value="sms">SMS</option><option value="qr">QR</option><option value="receipt">Receipt</option><option value="post_stay">Post-stay</option></Select></Field>
             <Button type="submit">Create campaign</Button>

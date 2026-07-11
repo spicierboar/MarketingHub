@@ -80,7 +80,7 @@ export default async function BookingsPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Company" htmlFor="bk-company">
+            <Field label="Client" htmlFor="bk-company">
               <Select id="bk-company" name="company" defaultValue={companyId}>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>

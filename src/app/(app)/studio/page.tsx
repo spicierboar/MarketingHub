@@ -84,7 +84,8 @@ export default async function StudioPage({
     <div>
       <PageHeader
         title="Content Studio"
-        description="Generate any content type directly — grounded, compliance-checked, and routed for approval like everything else."
+        explainerId="studio"
+        explainer="Generate any content type here. Drafts are compliance-checked and routed for approval — never published automatically."
       />
 
       <div className="grid gap-6 p-6 lg:grid-cols-3">
@@ -100,7 +101,7 @@ export default async function StudioPage({
               <Card>
                 <CardContent className="space-y-5 p-6">
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <Field label="Company" htmlFor="companyId">
+                    <Field label="Client" htmlFor="companyId">
                       <Select
                         id="companyId"
                         name="companyId"

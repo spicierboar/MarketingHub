@@ -74,7 +74,7 @@ export function CalendarAssistPanel({
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Scan company</label>
             <Select name="companyId" defaultValue={filterCompanyId ?? ""} className="h-9 w-44">
-              <option value="">All companies</option>
+              <option value="">All clients</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}

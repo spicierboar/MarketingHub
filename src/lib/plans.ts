@@ -64,7 +64,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     automations: true,
     whiteLabel: true,
     limits: { aiPerMinute: 40, aiTokensPerMonth: 2_000_000 },
-    blurb: "Unlimited client companies, highest AI allowance, priority support.",
+    blurb: "Unlimited clients, highest AI allowance, priority support.",
   },
 };
 

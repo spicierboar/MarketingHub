@@ -74,6 +74,11 @@ export interface Tenant {
   // logo is an external URL). Gated by the plan's whiteLabel flag. Applied to
   // the app shell, client-facing approval pages and outbound emails.
   branding?: TenantBranding;
+  /**
+   * Agency-authored ready-made promo campaigns (jsonb). Merged with the
+   * platform catalog for client picks; filtered by industry per company.
+   */
+  promoCatalog?: AgencyPromoTemplate[];
   // Schedule due-ness: IANA timezone for calendar intent (e.g. Australia/Sydney).
   // When unset, publish-queue falls back to CC_TZ_OFFSET_MINUTES then UTC.
   timezone?: string;
@@ -312,6 +317,10 @@ export interface CompanyProfile {
   requiredDisclaimers: string[];
   currentOffers?: string;
   localMarketNotes?: string;
+  /** Street / full business address from scrape or Places (display + local SEO). */
+  businessAddress?: string;
+  phone?: string;
+  email?: string;
   /**
    * AU business number (ABR) — optional attribute for tax/legal display only.
    * NEVER a primary key or uniqueness constraint: one ABN can cover many
@@ -349,6 +358,53 @@ export interface CompanyProfile {
   };
   /** Managed-service delivery settings (outsourced marketing, not self-serve). */
   managedService?: ManagedServiceSettings;
+  /**
+   * AI discovery / GEO (jsonb slice, no migration).
+   * Improves odds of ChatGPT / Gemini / Perplexity mentions — never a guarantee.
+   */
+  aiDiscovery?: AiDiscoveryProfileSlice;
+  /**
+   * Client-chosen ready-made promotions (jsonb slice, no migration).
+   * Separate from the agency strategy calendar until accepted onto it.
+   */
+  promoSelections?: ClientPromoSelection[];
+}
+
+/** Platforms we track for AI answer mentions (manual scorecard). */
+export type AiDiscoveryPlatform = "chatgpt" | "gemini" | "perplexity";
+
+export type AiDiscoveryCheckStatus = "pass" | "warn" | "fail" | "info";
+
+export type AiDiscoveryMentionResult = "mentioned" | "not_mentioned" | "not_run";
+
+export interface AiDiscoveryDirectoryFlags {
+  bingPlacesClaimed?: boolean;
+  yelpListed?: boolean;
+  yelpUrl?: string;
+  notes?: string;
+}
+
+export interface AiDiscoveryObservationRow {
+  promptId: string;
+  platform: AiDiscoveryPlatform;
+  result: AiDiscoveryMentionResult;
+  notes?: string;
+}
+
+export interface AiDiscoveryScorecard {
+  id: string;
+  ranAt: string;
+  ranById: string;
+  rows: AiDiscoveryObservationRow[];
+  /** mentioned / (mentioned + not_mentioned); null if nothing recorded. */
+  mentionRate: number | null;
+  completedCount: number;
+}
+
+export interface AiDiscoveryProfileSlice {
+  directories?: AiDiscoveryDirectoryFlags;
+  /** Newest first; keep last ~12. */
+  scorecards?: AiDiscoveryScorecard[];
 }
 
 export interface UploadedAsset {
@@ -549,6 +605,8 @@ export interface ContentItem {
   aiRunId?: string | null; // link to ai_runs row for this generation
   estCostUsd?: number; // estimated cost of the generation run
   aiCritique?: AiCritique; // last pre-publish critique (set at schedule time)
+  /** Managed-service quality gate → client vs agency queue. */
+  qualityRouting?: QualityRoutingRecord;
   // Phase 5 — Content Reuse Library (§45):
   reusePermitted?: boolean;
   reuseChannels?: string[]; // empty = all channels
@@ -944,7 +1002,8 @@ export interface AiRun {
     | "calendar_assist_dismiss"
     | "ai_campaign_plan"
     | "ai_campaign_optimise"
-    | "ai_campaign_decision";
+    | "ai_campaign_decision"
+    | "onboarding_enrich";
   model: string;
   promptSummary: string;
   outputChars: number;
@@ -970,6 +1029,26 @@ export interface AiCritique {
   model: string;
   critiquedAt: string;
   platform?: string;
+}
+
+/**
+ * Post-draft quality gate (managed service). Maps critique + approval route
+ * into PASS / WARN / FAIL / ESCALATE, then service level decides auto-submit
+ * to client vs hold for agency review.
+ */
+export type QualityGateStatus = "pass" | "warn" | "fail" | "escalate";
+
+export type QualityRoutingDecision = "auto_submit_client" | "hold_agency";
+
+export interface QualityRoutingRecord {
+  gate: QualityGateStatus;
+  decision: QualityRoutingDecision;
+  serviceLevel: ManagedServiceLevel;
+  decidedAt: string;
+  decidedById: string;
+  reason: string;
+  /** Human-facing queue label. */
+  queue: "in_client_review" | "in_agency_review";
 }
 
 // ---- Phase 4: Campaign Planner --------------------------------------------------
@@ -2713,7 +2792,7 @@ export const MINIMUM_ONBOARDING_FIELDS: {
   label: string;
   present: (c: Company) => boolean;
 }[] = [
-  { key: "name", label: "Company name", present: (c) => !!c.name.trim() },
+  { key: "name", label: "Client name", present: (c) => !!c.name.trim() },
   {
     key: "serviceAreas",
     label: "Location / service area",
@@ -3223,6 +3302,84 @@ export interface ManagedServiceSettings {
   strategyCompletedAt?: string;
   calendarCompletedAt?: string;
   lastDeliveryRunId?: string;
+  /** Fallback agency markup when no catalog template applies (0.42 = 42%). */
+  promoMarkupPercent?: number;
+}
+
+/** Industry tag for ready-made promos (extends BusinessType with verticals). */
+export type PromoIndustry =
+  | BusinessType
+  | "fast_food"
+  | "fitness"
+  | "beauty_salon";
+
+/** One pre-written post inside an agency or platform promo template. */
+export interface AgencyPromoPost {
+  dayOffset: number;
+  channel: string;
+  contentType?: string;
+  title: string;
+  caption: string;
+  hashtags: string;
+  cta: string;
+}
+
+/**
+ * Tenant-scoped promo campaign the agency adds for clients.
+ * Shape mirrors the platform PromoTemplate; `active: false` hides from clients.
+ */
+export interface AgencyPromoTemplate {
+  id: string;
+  industry: PromoIndustry;
+  name: string;
+  promotion: string;
+  blurb?: string;
+  defaultDurationDays: number;
+  ongoing?: boolean;
+  suggestedClientPriceUsd: number;
+  markupPercent: number;
+  defaultChannels: string[];
+  availableChannels: string[];
+  objective: string;
+  keyMessage: string;
+  outlines: AgencyPromoPost[];
+  active: boolean;
+  /** custom = agency-created; platform_override = edited built-in pack (same id). */
+  source?: "custom" | "platform_override";
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ClientPromoSelectionStatus =
+  | "requested"
+  | "on_calendar"
+  | "in_delivery"
+  | "completed"
+  | "cancelled";
+
+/** Client request for a catalog promotion — dates, budget, channels only. */
+export interface ClientPromoSelection {
+  id: string;
+  templateId: string;
+  templateName: string;
+  industry: PromoIndustry;
+  status: ClientPromoSelectionStatus;
+  startDate: string;
+  endDate: string;
+  /** Delivery / media portion (client package price minus markup fee). */
+  budgetUsd: number;
+  /** Markup on delivery cost (from catalog template) at request time. */
+  markupPercent: number;
+  /** Fee amount embedded in package price. */
+  feeUsd: number;
+  /** Total client package price (what they pay). */
+  totalUsd: number;
+  channels: string[];
+  campaignId?: string | null;
+  requestedById: string;
+  requestedAt: string;
+  notes?: string;
 }
 export interface ManagedDeliveryRun {
   id: string;
@@ -3318,7 +3475,7 @@ export interface TaxInvoice {
   invoiceNumber: string;
   kind: TaxInvoiceKind;
   status: TaxInvoiceStatus;
-  currency: string; // usd | aud
+  currency: string; // aud (display + Stripe)
   seller: TaxInvoiceParty;
   buyer: TaxInvoiceParty;
   lines: TaxInvoiceLine[];

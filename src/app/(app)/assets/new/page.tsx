@@ -64,7 +64,7 @@ export default async function NewAssetPage({
             <CardContent className="space-y-5 p-6">
               <h2 className="font-semibold">Asset details</h2>
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Company" htmlFor="companyId">
+                <Field label="Client" htmlFor="companyId">
                   <Select id="companyId" name="companyId" required defaultValue={preCompany}>
                     {companies.map((c) => (
                       <option key={c.id} value={c.id}>

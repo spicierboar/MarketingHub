@@ -66,7 +66,7 @@ export default async function NewRequestPage({
             <Card>
               <CardContent className="space-y-5 p-6">
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Company" htmlFor="companyId">
+                  <Field label="Client" htmlFor="companyId">
                     <Select id="companyId" name="companyId" required defaultValue={pfCompany}>
                       {companies.map((c) => (
                         <option key={c.id} value={c.id}>

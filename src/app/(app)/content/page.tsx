@@ -34,7 +34,8 @@ export default async function ContentPage({
     <div>
       <PageHeader
         title="Content"
-        description="AI-drafted marketing content and its approval status."
+        explainerId="content-library"
+        explainer="All drafted marketing content and its approval status. Export approved items when you need a CSV."
       >
         <a
           href="/api/export/content.csv"
@@ -62,7 +63,7 @@ export default async function ContentPage({
               <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Title</th>
-                  <th className="px-4 py-3 font-medium">Company</th>
+                  <th className="px-4 py-3 font-medium">Client</th>
                   <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Risk</th>
                   <th className="px-4 py-3 font-medium">Status</th>

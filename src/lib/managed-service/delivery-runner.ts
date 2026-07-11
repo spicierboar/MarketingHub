@@ -21,6 +21,7 @@ import {
 import { surfaceCalendarAssistSuggestions } from "@/lib/ai/calendar-assist";
 import { defaultServiceLevel } from "@/lib/managed-service/authority";
 import { notifyClientException } from "@/lib/managed-service/exception-notify";
+import { applyQualityRoutingAfterDraft } from "@/lib/managed-service/quality-routing";
 import { now } from "@/lib/utils";
 import type {
   ActingUser,
@@ -378,19 +379,47 @@ export async function processManagedDeliveryRun(
         });
       }
 
+      // Quality gate → client review or agency hold (never publish).
+      const origin =
+        process.env.APP_ORIGIN?.trim().replace(/\/+$/, "") ?? "http://localhost:3000";
+      let routedClient = 0;
+      let routedAgency = 0;
+      const routeErrors: string[] = [];
+      for (const draft of drafts) {
+        try {
+          const result = await applyQualityRoutingAfterDraft({
+            contentId: draft.id,
+            actor,
+            origin,
+          });
+          if (result.decision === "auto_submit_client") routedClient += 1;
+          else routedAgency += 1;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          routeErrors.push(`quality_route:${draft.id}:${msg.slice(0, 120)}`);
+        }
+      }
+
       const statusMessageKey =
-        drafts.length > 0 ? "content_ready" : "approval_required";
+        routedClient > 0
+          ? "content_ready"
+          : drafts.length > 0
+            ? "approval_required"
+            : "approval_required";
 
       run = await advancePhase(run, {
         phase: "awaiting_approval",
         statusMessageKey:
           run.serviceLevel === "approval" ? "approval_required" : statusMessageKey,
+        ...(routeErrors.length
+          ? { errors: [...run.errors, ...routeErrors] }
+          : {}),
       });
       await logAction(actor, "managed_delivery.awaiting_approval", {
         targetType: "managed_delivery_run",
         targetId: run.id,
         companyId: company.id,
-        detail: `drafts=${drafts.length}`,
+        detail: `drafts=${drafts.length} client=${routedClient} agency=${routedAgency}`,
       });
     }
 

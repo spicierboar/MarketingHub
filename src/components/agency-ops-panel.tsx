@@ -51,18 +51,18 @@ export function AgencyAlertsList({
         <li key={alert.id}>
           <Link
             href={alert.href}
-            className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5 text-sm hover:bg-muted"
+            className="flex items-start justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-muted"
           >
             <div className="min-w-0">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
+              <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
                 <Badge tone={ALERT_TONE[alert.kind]}>{ALERT_LABEL[alert.kind]}</Badge>
-                <span className="font-medium">{alert.title}</span>
+                <span className="font-medium leading-snug">{alert.title}</span>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 {alert.companyName} · {alert.detail}
               </p>
             </div>
-            <span className="shrink-0 text-xs text-muted-foreground">open →</span>
+            <span className="shrink-0 text-[11px] text-muted-foreground">open →</span>
           </Link>
         </li>
       ))}

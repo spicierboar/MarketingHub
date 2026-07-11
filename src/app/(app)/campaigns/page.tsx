@@ -44,7 +44,8 @@ export default async function CampaignsPage({
     <div>
       <PageHeader
         title="Campaigns"
-        description="Full AI-planned campaigns — every item goes through the governed content pipeline."
+        explainerId="campaigns"
+        explainer="Full campaign plans — every item still goes through draft → review → approval before anything publishes."
       >
         <Link href={newHref} className={buttonClasses()}>
           New campaign

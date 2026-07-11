@@ -16,6 +16,21 @@ Product decisions for Marketing Command Centre as an **outsourced managed market
 | `managed_exceptions` | Low-risk operational drafts/suggestions may proceed within policy; material publish/spend still gated. |
 | `fully_managed` | Pre-authorised **low-risk** work within limits + critique + audit. **Not** unsupervised AI publish. May call `scheduleOne` on **already-approved** content under pre-granted authority (`schedule_approved`) — critique still runs inside `scheduleOne`. |
 
+### Quality routing after AI draft
+
+```
+AI generates content
+  → Quality gate (PASS / WARN / FAIL / ESCALATE)
+  → Did it pass quality (PASS or WARN)?
+       YES + fully_managed | managed_exceptions → auto-submit to client (IN_CLIENT_REVIEW)
+       YES + approval → hold for staff (IN_AGENCY_REVIEW)
+       NO (FAIL / ESCALATE) → hold for staff (IN_AGENCY_REVIEW)
+```
+
+- **Auto-submit:** `pending_approval` + `clientReview` pending + email “Your content is ready for review”. Staff do not need to touch it. **Never publishes.**
+- **Hold:** appears on Dashboard exceptions as **Needs attention** (`quality_hold`). Staff review, then **Submit to client review**.
+- Engine: `src/lib/managed-service/quality-routing.ts`. Wired from Content Studio drafts, Submit for approval, **managed delivery runner**, and **campaign pack share**.
+
 `fully_managed` still requires:
 
 - Critique / `scheduleOne` (or equivalent) before anything goes live
@@ -55,15 +70,25 @@ Parked showstoppers and deferred product work: [`MANAGED-SERVICE-PENDING.md`](./
 
 1. Home (status)  
 2. Approvals  
-3. Calendar  
-4. Results  
-5. Files  
-6. Business profile (editable changeable fields only — ABN / legal name locked)  
-7. Billing  
-8. Ask us  
-9. Help  
+3. **Ready-made promotions** (industry templates — dates, budget, channels; agency markup)  
+4. Calendar  
+5. Results  
+6. Files  
+7. Business profile (editable changeable fields only — ABN / legal name locked)  
+8. Billing  
+9. Ask us  
+10. Help  
 
 Nav is review-first. No self-serve publish console in the client portal.
+
+### Ready-made promotions
+
+- Catalog in `src/lib/promo-catalog.ts` (retail, restaurant, fast food, hotel, professional, general).
+- Client picks template → sets **start/end**, **media budget**, **channels** only.
+- Agency **markup** (`managedService.promoMarkupPercent`, default 15%) shown as management fee.
+- Spawns a **draft campaign** (never published). Stays **not on calendar** until agency marks it.
+- UI: client Home + `/client/promos`; calendar callout; company overview markup + “Mark on calendar”.
+
 
 ## Hard locks (preserved)
 

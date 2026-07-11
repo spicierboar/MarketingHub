@@ -35,7 +35,8 @@ export default async function InboxPage({
     <div>
       <PageHeader
         title="Social Inbox"
-        description="Incoming mentions, comments and DMs from your connected platforms. Draft a reply and it flows through the same governed approval pipeline."
+        explainerId="inbox"
+        explainer="Customer social mentions, comments, and DMs — not client portal messages. Draft a reply; it still needs human approval before sending."
       >
         <form action={checkForMentionsAction}>
           <Button type="submit" variant="outline">Check for new mentions</Button>

@@ -86,7 +86,7 @@ export default async function OrderingPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Company" htmlFor="ord-company">
+            <Field label="Client" htmlFor="ord-company">
               <Select id="ord-company" name="company" defaultValue={companyId}>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>

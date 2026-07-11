@@ -27,7 +27,11 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
 
   return (
     <div>
-      <PageHeader title={content.title} description="Does this look right to go live?" />
+      <PageHeader
+        title={content.title}
+        description="Does this look right? Approve and we’ll schedule it after our usual checks — it won’t go live without them."
+        hideExplainer
+      />
       <div className="mx-auto max-w-3xl p-6">
         <Card>
           <CardContent className="p-6">

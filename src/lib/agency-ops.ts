@@ -38,7 +38,8 @@ export type AgencyAlertKind =
   | "overdue_client_review"
   | "health_attention"
   | "credit_low"
-  | "reconnect_needed";
+  | "reconnect_needed"
+  | "quality_hold";
 
 export type AgencyAlertSeverity = "warning" | "danger";
 
@@ -163,6 +164,42 @@ export function detectOverdueApprovalAlerts(args: {
   return alerts.sort(
     (a, b) => b.daysOverdue - a.daysOverdue || a.companyName.localeCompare(b.companyName),
   );
+}
+
+/** Agency monitoring: quality gate held items that staff must review. */
+export function detectQualityHoldAlerts(args: {
+  content: ContentItem[];
+  companiesById: Map<string, { id: string; name: string }>;
+}): AgencyAlert[] {
+  const { content, companiesById } = args;
+  const alerts: AgencyAlert[] = [];
+
+  for (const item of content) {
+    if (item.qualityRouting?.decision !== "hold_agency") continue;
+    if (!["pending_approval", "ai_draft", "user_edited"].includes(item.status)) continue;
+    // Already with the client — not an agency hold.
+    if (item.clientReview?.status === "pending") continue;
+
+    const company = companiesById.get(item.companyId);
+    if (!company) continue;
+    const gate = item.qualityRouting.gate.toUpperCase();
+    alerts.push({
+      id: `quality-hold:${item.id}`,
+      kind: "quality_hold",
+      severity:
+        item.qualityRouting.gate === "fail" || item.qualityRouting.gate === "escalate"
+          ? "danger"
+          : "warning",
+      companyId: company.id,
+      companyName: company.name,
+      title: item.title,
+      detail: `Needs attention — quality ${gate}. ${item.qualityRouting.reason}`,
+      href: `/content/${item.id}`,
+      daysOverdue: 0,
+    });
+  }
+
+  return alerts.sort((a, b) => a.companyName.localeCompare(b.companyName));
 }
 
 export function buildWorkloadSummary(args: {
@@ -402,6 +439,7 @@ export async function buildAgencyOpsBundle(
     companiesById,
     todayIso: clock.today,
   });
+  const qualityHoldAlerts = detectQualityHoldAlerts({ content, companiesById });
 
   const wallets = await Promise.all(
     companies.map(async (c) => {
@@ -430,6 +468,7 @@ export async function buildAgencyOpsBundle(
 
   const alerts = mergeAgencyAlerts(
     [
+      qualityHoldAlerts,
       overdueAlerts,
       healthAttentionAlerts(needsAttention),
       creditAlerts,

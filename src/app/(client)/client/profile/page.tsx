@@ -34,7 +34,8 @@ export default async function ClientProfilePage() {
     <div>
       <PageHeader
         title="Business profile"
-        description="Update details that change over time. Legal identity (ABN, legal name) is locked — ask your agency if those need correcting. One ABN can cover several businesses; each location/brand is its own record."
+        explainerId="client-profile"
+        explainer="Update details that change over time. Legal identity (ABN, legal name) is locked — ask your agency if those need correcting."
       />
 
       <div className="space-y-8 p-6">

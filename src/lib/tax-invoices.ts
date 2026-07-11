@@ -149,7 +149,7 @@ export async function issueTaxInvoice(input: {
     invoiceNumber: await nextInvoiceNumber(input.tenantId),
     kind: input.kind,
     status: "issued",
-    currency: input.currency ?? "usd",
+    currency: input.currency ?? "aud",
     seller: sellerFromEnv(tenant.name),
     buyer: buyerFromCompany(company),
     lines,

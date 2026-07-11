@@ -130,7 +130,7 @@ export default async function UtmRoiPage({
               <h3 className="mb-4 font-semibold">Build a tracking link</h3>
               <form action={createUtmLinkAction} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Company" htmlFor="companyId">
+                  <Field label="Client" htmlFor="companyId">
                     <Select
                       id="companyId"
                       name="companyId"

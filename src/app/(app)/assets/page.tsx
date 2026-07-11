@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 import { Field, Select } from "@/components/ui/form";
+import { RegisterAssetModalTrigger } from "@/components/register-asset-modal";
 import { now, titleCase } from "@/lib/utils";
 import type { Asset, Company } from "@/lib/types";
 import { ImageBriefCard } from "./image-brief-card";
@@ -85,16 +86,12 @@ export default async function AssetsPage({
         <Link href="/assets/templates" className={buttonClasses("ghost", "sm")}>
           Brand templates
         </Link>
-        <Link
-          href={
-            sp.company && byId.has(sp.company)
-              ? `/assets/new?company=${sp.company}`
-              : "/assets/new"
+        <RegisterAssetModalTrigger
+          companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+          defaultCompanyId={
+            sp.company && byId.has(sp.company) ? sp.company : undefined
           }
-          className={buttonClasses("default", "sm")}
-        >
-          Register asset
-        </Link>
+        />
       </PageHeader>
 
       <div className="grid gap-6 p-6 lg:grid-cols-3">
@@ -102,9 +99,9 @@ export default async function AssetsPage({
           <Card>
             <CardContent className="p-4">
               <form className="grid gap-3 sm:grid-cols-3">
-                <Field label="Company">
+                <Field label="Client">
                   <Select name="company" defaultValue={sp.company ?? ""}>
-                    <option value="">All companies</option>
+                    <option value="">All clients</option>
                     {companies.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}

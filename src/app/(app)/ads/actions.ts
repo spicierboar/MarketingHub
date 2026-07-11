@@ -637,7 +637,7 @@ export async function invoiceManagementFeeAction() {
       companyId: row.companyId,
       kind: "management_fee",
       totalIncGst: row.fee,
-      currency: "usd",
+      currency: "aud",
       description: `Ad management fee — period to ${new Date().toISOString().slice(0, 10)}`,
       user,
       notes: invoiceId

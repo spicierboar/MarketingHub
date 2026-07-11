@@ -16,22 +16,61 @@ import {
   Menu,
   X,
   Building2,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 
-/** Managed-service order: review first, ask-us last. */
-const NAV = [
-  { href: "/client", label: "Home", icon: Home },
-  { href: "/client/approvals", label: "Approvals", icon: CheckSquare },
-  { href: "/client/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/client/reports", label: "Results", icon: BarChart3 },
-  { href: "/client/assets", label: "Files", icon: Image },
-  { href: "/client/profile", label: "Business", icon: Building2 },
-  { href: "/client/payments", label: "Billing", icon: CreditCard },
-  { href: "/client/requests", label: "Ask us", icon: Inbox },
-  { href: "/client/help", label: "Help", icon: LifeBuoy },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  /** Short label for mobile quick strip */
+  short?: string;
+};
+
+/** Review first, then account, then support — matches managed-service mental model. */
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Review",
+    items: [
+      { href: "/client", label: "Home", icon: Home, short: "Home" },
+      { href: "/client/approvals", label: "Approvals", icon: CheckSquare, short: "Approve" },
+      { href: "/client/promos", label: "Promotions", icon: Megaphone, short: "Promos" },
+      { href: "/client/calendar", label: "Calendar", icon: CalendarDays, short: "Calendar" },
+      { href: "/client/reports", label: "Results", icon: BarChart3, short: "Results" },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { href: "/client/assets", label: "Files", icon: Image, short: "Files" },
+      { href: "/client/profile", label: "Business", icon: Building2, short: "Business" },
+      { href: "/client/payments", label: "Billing", icon: CreditCard, short: "Billing" },
+    ],
+  },
+  {
+    label: "Support",
+    items: [
+      { href: "/client/requests", label: "Ask us", icon: Inbox, short: "Ask" },
+      { href: "/client/help", label: "Help", icon: LifeBuoy, short: "Help" },
+    ],
+  },
+];
+
+const MOBILE_QUICK = [
+  "/client/approvals",
+  "/client/calendar",
+  "/client/reports",
+  "/client/payments",
 ] as const;
+
+function isActive(pathname: string, href: string) {
+  return (
+    pathname === href ||
+    (href !== "/client" && pathname.startsWith(href + "/"))
+  );
+}
 
 function NavLinks({
   pathname,
@@ -42,28 +81,35 @@ function NavLinks({
 }) {
   return (
     <>
-      {NAV.map((item) => {
-        const active =
-          pathname === item.href ||
-          (item.href !== "/client" && pathname.startsWith(item.href + "/"));
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              active
-                ? "bg-accent text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {item.label}
-          </Link>
-        );
-      })}
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label} className="mb-2.5">
+          <p className="mb-0.5 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+            {group.label}
+          </p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => {
+              const active = isActive(pathname, item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-accent text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </>
   );
 }
@@ -87,37 +133,51 @@ export function ClientShell({
     ? ({ ["--primary"]: branding.accentColor } as React.CSSProperties)
     : undefined;
 
+  const quickItems = NAV_GROUPS.flatMap((g) => g.items).filter((i) =>
+    (MOBILE_QUICK as readonly string[]).includes(i.href),
+  );
+
   return (
     <div className="flex min-h-screen flex-1" style={brandStyle}>
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
-        <div className="flex h-16 items-center gap-2.5 border-b border-border px-4">
+      <aside className="hidden w-52 shrink-0 flex-col border-r border-border bg-card md:flex">
+        <div className="flex h-12 items-center gap-2 border-b border-border px-3">
           {branding?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={branding.logoUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+            <img
+              src={branding.logoUrl}
+              alt=""
+              className="h-7 w-7 shrink-0 rounded-md object-cover"
+            />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-[11px] font-bold text-primary-foreground">
               {companyName.slice(0, 2).toUpperCase()}
             </div>
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{companyName}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{tenantName}</p>
+            <p className="truncate text-sm font-semibold leading-tight">
+              {companyName}
+            </p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {tenantName}
+            </p>
           </div>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 overflow-y-auto p-2">
           <NavLinks pathname={pathname} />
         </nav>
-        <div className="border-t border-border p-3">
-          <div className="mb-2 px-2">
-            <p className="truncate text-sm font-medium">{user.name}</p>
-            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+        <div className="border-t border-border p-2">
+          <div className="mb-1 px-2">
+            <p className="truncate text-xs font-medium">{user.name}</p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {user.email}
+            </p>
           </div>
           <form action={signOut}>
             <button
               type="submit"
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
               Sign out
             </button>
           </form>
@@ -125,54 +185,50 @@ export function ClientShell({
       </aside>
 
       <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between gap-3 border-b border-border bg-card px-4 md:hidden">
+        <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-card px-3 md:hidden">
           <button
             type="button"
-            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileOpen((o) => !o)}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          <span className="min-w-0 flex-1 truncate font-semibold">{companyName}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+            {companyName}
+          </span>
           <form action={signOut}>
-            <button type="submit" className="text-sm text-muted-foreground">
+            <button type="submit" className="text-xs text-muted-foreground">
               Sign out
             </button>
           </form>
         </header>
 
         {mobileOpen && (
-          <nav className="space-y-1 border-b border-border bg-card p-3 md:hidden">
-            <NavLinks pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+          <nav className="border-b border-border bg-card p-2 md:hidden">
+            <NavLinks
+              pathname={pathname}
+              onNavigate={() => setMobileOpen(false)}
+            />
           </nav>
         )}
 
-        {/* Quick actions on mobile when menu closed */}
         {!mobileOpen && (
-          <div className="flex gap-2 border-b border-border bg-card px-3 py-2 md:hidden">
-            <Link
-              href="/client/approvals"
-              className={cn(
-                "flex-1 rounded-md px-2 py-1.5 text-center text-xs font-medium",
-                pathname.startsWith("/client/approvals")
-                  ? "bg-accent text-primary"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              Approvals
-            </Link>
-            <Link
-              href="/client/calendar"
-              className={cn(
-                "flex-1 rounded-md px-2 py-1.5 text-center text-xs font-medium",
-                pathname.startsWith("/client/calendar")
-                  ? "bg-accent text-primary"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              Calendar
-            </Link>
+          <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-2 py-1.5 md:hidden">
+            {quickItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "shrink-0 rounded-md px-2.5 py-1 text-center text-[11px] font-medium",
+                  isActive(pathname, item.href)
+                    ? "bg-accent text-primary"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                {item.short ?? item.label}
+              </Link>
+            ))}
           </div>
         )}
 

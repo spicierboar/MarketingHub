@@ -24,17 +24,15 @@ export function CompanyContextBar({
   if (!company) return null;
 
   return (
-    <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-sm">
+    <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-xs">
       <Link
         href={`/companies/${company.id}`}
-        className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
+        className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
       >
-        <ArrowLeft className="h-3.5 w-3.5" />
+        <ArrowLeft className="h-3 w-3" />
         {company.name}
       </Link>
-      <span className="text-muted-foreground">
-        Working in {company.name} context
-      </span>
+      <span className="text-muted-foreground">· client context</span>
     </div>
   );
 }

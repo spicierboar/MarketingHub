@@ -52,7 +52,8 @@ export default async function ClientAssetsPage() {
     <div>
       <PageHeader
         title="Your photos & files"
-        description="Share materials for us to use in your marketing."
+        explainerId="client-files"
+        explainer="Share logos, photos, and files for us to use. We review materials before they appear in your marketing."
       />
 
       <div className="space-y-8 p-6">

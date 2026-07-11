@@ -43,7 +43,7 @@ export default async function PrivacyPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Company" htmlFor="company">
+            <Field label="Client" htmlFor="company">
               <Select id="company" name="company" defaultValue={companyId}>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>

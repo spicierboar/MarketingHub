@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSalesRepOrAdmin } from "@/lib/auth/rbac";
 import { getCompany } from "@/lib/db";
@@ -106,7 +106,7 @@ export default async function NewClientPage({
             {step === "business" && (
               <form id="new-client-business-form" action={saveBusinessStepAction} className="space-y-4">
                 <Field
-                  label="Company name"
+                  label="Client name"
                   htmlFor="name"
                   hint="Trading name customers recognise — not necessarily the legal entity."
                 >

@@ -173,7 +173,7 @@ export default async function UsersPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         {access.length === 0 && (
                           <span className="text-sm text-muted-foreground">
-                            No companies assigned
+                            No clients assigned
                           </span>
                         )}
                         {access.map((a) => (
@@ -196,7 +196,7 @@ export default async function UsersPage() {
                             <input type="hidden" name="userId" value={u.id} />
                             <Select name="companyId" defaultValue="" className="h-8 py-0 text-xs">
                               <option value="" disabled>
-                                + Add company
+                                + Add client
                               </option>
                               {unassigned.map((c) => (
                                 <option key={c.id} value={c.id}>

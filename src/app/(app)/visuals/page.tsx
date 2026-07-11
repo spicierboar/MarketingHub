@@ -87,7 +87,7 @@ export default async function VisualsPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Company" htmlFor="vis-company">
+            <Field label="Client" htmlFor="vis-company">
               <Select id="vis-company" name="company" defaultValue={companyId}>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>

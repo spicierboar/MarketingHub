@@ -15,7 +15,11 @@ export default async function ClientRequestsPage() {
 
   return (
     <div>
-      <PageHeader title="Things you've asked us to handle">
+      <PageHeader
+        title="Things you've asked us to handle"
+        explainerId="client-requests"
+        explainer="Your messages to the agency. Track status here, or ask for something new."
+      >
         <Link href="/client/requests/new" className={buttonClasses()}>Ask for something</Link>
       </PageHeader>
       <div className="p-6">

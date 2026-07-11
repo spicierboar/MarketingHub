@@ -27,7 +27,7 @@ export function ImageBriefCard({ companies }: { companies: Company[] }) {
           routed for review like any other content.
         </p>
         <form action={generateImageBriefAction} className="space-y-3">
-          <Field label="Company" htmlFor="ib-company">
+          <Field label="Client" htmlFor="ib-company">
             <Select id="ib-company" name="companyId" required>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>

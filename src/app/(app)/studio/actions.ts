@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import {
   createContent,
   createPromptTemplate,
@@ -15,6 +16,8 @@ import { duplicateWarning } from "@/lib/ai/similarity";
 import { assertAiBudget } from "@/lib/ai/budget";
 import { recordAiUsage } from "@/lib/ai/metering";
 import { assertAiRateLimit } from "@/lib/ratelimit";
+import { applyQualityRoutingAfterDraft } from "@/lib/managed-service/quality-routing";
+import { resolveOrigin } from "@/lib/origin";
 import {
   canRepurposeSource,
   normalizePlatformKey,
@@ -26,6 +29,11 @@ import type { DraftTone, GroundingLabel, RepurposePlatform, RequestType } from "
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
+}
+
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  return resolveOrigin((k) => h.get(k));
 }
 
 // Content Studio (Phase 5): direct generation of any content type, with
@@ -98,6 +106,7 @@ export async function generateStudioDraftAction(formData: FormData) {
 
   const variantGroupId = tones.length > 1 ? id("vg") : null;
   let firstId: string | null = null;
+  const origin = await requestOrigin();
 
   for (const v of tones) {
     const draft = await draftContent({
@@ -166,6 +175,18 @@ export async function generateStudioDraftAction(formData: FormData) {
       companyId,
       detail: `Studio · ${contentType} · ${v.label} · risk ${compliance.riskLevel}`,
     });
+
+    try {
+      await applyQualityRoutingAfterDraft({
+        contentId: content.id,
+        actor: user,
+        origin,
+        platform: channel || "facebook",
+      });
+    } catch (err) {
+      // Draft is saved; routing failure must not lose the generation.
+      console.error("quality routing after studio draft", err);
+    }
   }
 
   redirect(`/content/${firstId}`);

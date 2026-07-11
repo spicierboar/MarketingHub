@@ -25,6 +25,8 @@ Showstoppers and deferred product work that are **out of scope for the current m
 - **C2 prepaid credit wallet** ($50 min floor, ledger, simulated auto top-up; gates on spend apply / activate / save budget)
 - **C2 follow-ons:** Stripe Checkout top-up (`kind=credit_top_up`) + webhook credit · local tax-invoice suite (GST, list/print, credit notes/void, management-fee invoices)
 - **Platform improvements wave:** nested company-form fix · send campaign pack to client Approvals · exception deep-links (credit / reconnect) · letterhead helper · off-session auto top-up + saved PM (migration **0041**) · client Stripe portal · closed-loop Results snapshot · guided checklist (service level + first campaign) · vertical playbook default channels · chunked `.in(company_id)` lists
+- **AI discovery / GEO** on Local SEO — readiness checklist, prompt pack, mention scorecard (odds, not guarantees)
+- **Quality routing** — PASS/WARN/FAIL/ESCALATE → auto client review vs agency hold by service level (never auto-publishes)
 - Fixtures **291+** (+ platform improvement checks)
 
 ## Owner env (optional, production polish)

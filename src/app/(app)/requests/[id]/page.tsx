@@ -62,7 +62,7 @@ export default async function RequestDetailPage({
 
   return (
     <div>
-      <PageHeader title={req.topic} description={`${company.name} · Request ${req.id}`}>
+      <PageHeader title={req.topic} description={`${company.name} · Request ${req.id}`} hideExplainer>
         <StatusBadge status={req.status} />
       </PageHeader>
 

@@ -98,6 +98,7 @@ export default async function CampaignDetailPage({
       <PageHeader
         title={campaign.name}
         description={`${company.name} · ${campaign.durationDays}-day plan · starts ${campaign.startDate}`}
+        hideExplainer
       >
         <StatusBadge status={campaign.status} />
       </PageHeader>

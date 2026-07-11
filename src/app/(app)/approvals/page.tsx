@@ -108,7 +108,8 @@ export default async function ApprovalsPage() {
     <div>
       <PageHeader
         title="Approval inbox"
-        description="Content routes to the correct queue by type, risk, evidence and consent. Triage notes are suggest-only — nothing is published without your approval."
+        explainerId="approvals"
+        explainer="Agency approval inbox. Content routes by risk and type — nothing publishes until someone here approves."
       />
       <div className="space-y-8 p-6">
         <section>

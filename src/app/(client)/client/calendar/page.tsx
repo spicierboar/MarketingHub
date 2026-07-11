@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { listContent, listScheduledPosts } from "@/lib/db";
+import { getCompany, listContent, listScheduledPosts } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
-import { now, titleCase } from "@/lib/utils";
+import { now, titleCase, formatDate } from "@/lib/utils";
 import type { ScheduledPostStatus } from "@/lib/types";
+import { selectionsNotOnCalendar } from "@/lib/promo-requests";
 import {
   cancelClientScheduleAction,
   rescheduleClientPostAction,
@@ -65,10 +66,12 @@ export default async function ClientCalendarPage({
     ? params.month!
     : now().slice(0, 7);
 
-  const [allPosts, content] = await Promise.all([
+  const [allPosts, content, company] = await Promise.all([
     listScheduledPosts(user.tenantId),
     listContent(user.tenantId),
+    getCompany(companyId),
   ]);
+  const pendingPromos = company ? selectionsNotOnCalendar(company) : [];
   const titleById = new Map(
     content.filter((c) => c.companyId === companyId).map((c) => [c.id, c.title]),
   );
@@ -101,7 +104,8 @@ export default async function ClientCalendarPage({
     <div>
       <PageHeader
         title="Your calendar"
-        description="What's planned for your social channels. Ask us to move or pause a post if timing needs to change."
+        explainerId="client-calendar"
+        explainer="What's planned for your social channels. Ask us to move or pause a post if timing needs to change."
       >
         <div className="flex items-center gap-2">
           <Link href={`/client/calendar?month=${prev}`} className={buttonClasses("outline", "sm")}>
@@ -115,6 +119,31 @@ export default async function ClientCalendarPage({
       </PageHeader>
 
       <div className="space-y-6 p-6">
+        {pendingPromos.length > 0 && (
+          <Card className="border-amber-200 bg-amber-50/50">
+            <CardContent className="space-y-2 p-4">
+              <p className="text-sm font-medium text-amber-950">
+                Promotions not on this calendar yet
+              </p>
+              <p className="text-xs text-amber-900/80">
+                You requested these ready-made promos — they stay separate from strategy until we
+                place them into delivery.
+              </p>
+              <ul className="space-y-1 text-sm text-amber-950">
+                {pendingPromos.map((s) => (
+                  <li key={s.id}>
+                    {s.templateName} · {formatDate(s.startDate)} → {formatDate(s.endDate)} ·{" "}
+                    {s.channels.join(", ")}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/client/promos" className="text-xs text-primary hover:underline">
+                Manage promotions →
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
         {dates.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">

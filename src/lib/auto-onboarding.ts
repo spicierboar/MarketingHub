@@ -69,6 +69,14 @@ export interface AutoOnboardingScrapeResult {
   urls: AutoOnboardingUrls;
   fields: AutoOnboardingFieldPreview[];
   sources: AutoOnboardingSourceSnippet[];
+  /** AI/template extras not in the core field key enum. */
+  extras?: {
+    localMarketNotes?: string;
+    businessAddress?: string;
+    phone?: string;
+    email?: string;
+    enrichMode?: "claude" | "template";
+  };
 }
 
 export interface AutoOnboardingProfileMeta {
@@ -183,6 +191,7 @@ export interface OnboardingHtmlExtract {
   schemaEmail?: string;
   schemaLocality?: string;
   schemaRegion?: string;
+  schemaStreet?: string;
   schemaOpeningHours?: string[];
   schemaSameAs: string[];
   schemaTypes: string[];
@@ -415,15 +424,17 @@ function schemaTypeMatches(type: unknown, ...names: string[]): boolean {
 
 function readPostalAddress(
   addr: unknown,
-): { locality?: string; region?: string } | undefined {
+): { locality?: string; region?: string; street?: string } | undefined {
   if (!addr || typeof addr !== "object") return undefined;
   const a = addr as Record<string, unknown>;
   const locality =
     typeof a.addressLocality === "string" ? a.addressLocality.trim() : undefined;
   const region =
     typeof a.addressRegion === "string" ? a.addressRegion.trim() : undefined;
-  if (!locality && !region) return undefined;
-  return { locality, region };
+  const street =
+    typeof a.streetAddress === "string" ? a.streetAddress.trim() : undefined;
+  if (!locality && !region && !street) return undefined;
+  return { locality, region, street };
 }
 
 function extractSchemaOrg(html: string): Partial<OnboardingHtmlExtract> {
@@ -472,6 +483,7 @@ function extractSchemaOrg(html: string): Partial<OnboardingHtmlExtract> {
       const addr = readPostalAddress(node.address);
       if (addr?.locality && !out.schemaLocality) out.schemaLocality = addr.locality;
       if (addr?.region && !out.schemaRegion) out.schemaRegion = addr.region;
+      if (addr?.street && !out.schemaStreet) out.schemaStreet = addr.street;
       if (typeof node.openingHours === "string") {
         out.schemaOpeningHours!.push(node.openingHours.trim());
       } else if (Array.isArray(node.openingHours)) {
@@ -497,6 +509,7 @@ function extractSchemaOrg(html: string): Partial<OnboardingHtmlExtract> {
       const addr = readPostalAddress(node);
       if (addr?.locality && !out.schemaLocality) out.schemaLocality = addr.locality;
       if (addr?.region && !out.schemaRegion) out.schemaRegion = addr.region;
+      if (addr?.street && !out.schemaStreet) out.schemaStreet = addr.street;
     }
   }
 
@@ -617,6 +630,14 @@ export function parseHtmlForOnboarding(html: string, pageUrl: string): Onboardin
   if (logoUrl) notes.push(`Logo URL: ${logoUrl}`);
   if (schema.schemaTelephone) notes.push(`Telephone: ${schema.schemaTelephone}`);
   if (schema.schemaEmail) notes.push(`Email: ${schema.schemaEmail}`);
+  if (schema.schemaStreet || schema.schemaLocality) {
+    const parts = [
+      schema.schemaStreet,
+      schema.schemaLocality,
+      schema.schemaRegion,
+    ].filter(Boolean);
+    notes.push(`Address: ${parts.join(", ")}`);
+  }
   if (schema.schemaOpeningHours?.length) {
     notes.push(`Opening hours: ${schema.schemaOpeningHours.join("; ")}`);
   }
@@ -632,6 +653,7 @@ export function parseHtmlForOnboarding(html: string, pageUrl: string): Onboardin
     schemaEmail: schema.schemaEmail,
     schemaLocality: schema.schemaLocality,
     schemaRegion: schema.schemaRegion,
+    schemaStreet: schema.schemaStreet,
     schemaOpeningHours: schema.schemaOpeningHours ?? [],
     schemaSameAs: schema.schemaSameAs ?? [],
     schemaTypes: schema.schemaTypes ?? [],
@@ -1163,4 +1185,77 @@ export function buildAutoOnboardingMeta(
     lastAppliedAt: new Date().toISOString(),
     lastAppliedBy: actorId,
   };
+}
+
+/**
+ * Run scrape + AI/template enrichment + apply high/medium fields when creating a client.
+ * Always persists a normalised website when provided; scrape failures still keep the URL.
+ */
+export async function scrapeAndApplyInitialProfile(input: {
+  company: Company;
+  website: string;
+  actorId: string;
+}): Promise<{
+  profile: CompanyProfile;
+  fieldCount: number;
+  mode: AutoOnboardingScrapeResult["mode"] | "failed";
+  enrichMode?: "claude" | "template";
+}> {
+  const urls = parseAutoOnboardingUrls({
+    website: input.website,
+    socialLinks: [],
+  });
+  const website = urls.website;
+  if (!website) {
+    return {
+      profile: input.company.profile,
+      fieldCount: 0,
+      mode: "failed",
+    };
+  }
+
+  const baseProfile: CompanyProfile = {
+    ...input.company.profile,
+    website,
+  };
+
+  try {
+    let preview = await scrapeForOnboardingPreview({
+      company: { ...input.company, profile: baseProfile },
+      consent: true,
+      urls,
+    });
+
+    const { enrichOnboardingPreview, applyContactAndNotesToProfile } =
+      await import("@/lib/ai/onboarding-enrich");
+    const enriched = await enrichOnboardingPreview({
+      company: { ...input.company, profile: baseProfile },
+      preview,
+      actorId: input.actorId,
+    });
+    preview = enriched.preview;
+
+    const keys = preview.fields
+      .filter((f) => f.confidence === "high" || f.confidence === "medium")
+      .map((f) => f.key);
+    const extracted = extractedFromPreview(preview);
+    let profile = applyExtractedFields(baseProfile, extracted, keys, {
+      overwrite: false,
+    });
+    profile = applyContactAndNotesToProfile(profile, enriched.enrichment);
+    profile.website = profile.website || website;
+    profile.autoOnboarding = buildAutoOnboardingMeta(
+      preview,
+      input.actorId,
+      keys.length > 0,
+    );
+    return {
+      profile,
+      fieldCount: keys.length,
+      mode: preview.mode,
+      enrichMode: enriched.enrichment.mode,
+    };
+  } catch {
+    return { profile: baseProfile, fieldCount: 0, mode: "failed" };
+  }
 }

@@ -418,6 +418,7 @@ export function AutoOnboardingPanel({
   defaultWebsite,
   defaultSocial,
   lastScrape,
+  compact = false,
 }: {
   companyId: string;
   companyName: string;
@@ -428,6 +429,8 @@ export function AutoOnboardingPanel({
     mode?: "live" | "simulated";
     appliedAt?: string;
   };
+  /** Setup mode: website + consent only; extras behind a disclosure. */
+  compact?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -437,6 +440,7 @@ export function AutoOnboardingPanel({
   const [enrichmentPatch, setEnrichmentPatch] = useState<Record<string, unknown>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [overwrite, setOverwrite] = useState(false);
+  const [collapsed, setCollapsed] = useState(!!lastScrape?.appliedAt);
 
   const reviewFields: ReviewableField[] = preview
     ? [
@@ -539,178 +543,159 @@ export function AutoOnboardingPanel({
       setEnrichmentFields([]);
       setEnrichmentPatch({});
       setSelected(new Set());
+      setCollapsed(true);
     });
   }
 
   const grouped = preview ? groupFieldsByConfidence(reviewFields) : null;
   const summary = preview ? buildPreviewSummary(preview, companyName, reviewFields) : null;
 
-  return (
-    <Card className="border-primary/20">
-      <CardContent className="space-y-5 p-6">
-        <div>
-          <h2 className="font-semibold">Auto-onboarding scrape</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            With explicit client consent, scrape {companyName}&apos;s public website and
-            social profile URLs to pre-fill Brand Brain fields.
-          </p>
-          {lastScrape?.at && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Last scrape: {new Date(lastScrape.at).toLocaleString()}
-              {lastScrape.mode ? ` (${lastScrape.mode})` : ""}
-              {lastScrape.appliedAt
-                ? ` · applied ${new Date(lastScrape.appliedAt).toLocaleString()}`
-                : ""}
-            </p>
-          )}
-        </div>
+  if (compact && collapsed && !preview) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+        <p className="text-muted-foreground">
+          Profile filled from website
+          {lastScrape?.at ? ` · ${new Date(lastScrape.at).toLocaleDateString()}` : ""}
+          {lastScrape?.mode ? ` · ${lastScrape.mode}` : ""}
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setCollapsed(false)}
+        >
+          Update from website
+        </Button>
+      </div>
+    );
+  }
 
-        <form action={handlePreview} className="space-y-4">
-          <input type="hidden" name="companyId" value={companyId} />
-
-          <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm">
-            <input
-              type="checkbox"
-              name="consent"
-              required
-              className="mt-1"
-              disabled={pending}
-            />
-            <span>
-              <strong className="font-medium text-foreground">Client consent</strong> — I
-              confirm the client has authorised us to fetch their public website and
-              social profile pages for onboarding purposes only.
-            </span>
-          </label>
-
-          <Field label="Website URL" htmlFor="auto_website">
+  const extras = (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {SOCIAL_PLATFORMS.map((s) => (
+          <Field key={s.key} label={s.label} htmlFor={`auto_social_${s.key}`}>
             <Input
-              id="auto_website"
-              name="website"
-              type="url"
+              id={`auto_social_${s.key}`}
+              name={`social_${s.key}`}
+              type="text"
               inputMode="url"
-              placeholder="https://example.com"
-              defaultValue={defaultWebsite}
+              placeholder={s.placeholder}
+              defaultValue={defaultSocial[s.key] ?? ""}
               disabled={pending}
             />
           </Field>
+        ))}
+      </div>
+      <EnrichmentSection
+        companyId={companyId}
+        disabled={pending}
+        pending={pending}
+        onPreviewed={handleEnrichmentPreviewed}
+      />
+    </>
+  );
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {SOCIAL_PLATFORMS.map((s) => (
-              <Field key={s.key} label={s.label} htmlFor={`auto_social_${s.key}`}>
-                <Input
-                  id={`auto_social_${s.key}`}
-                  name={`social_${s.key}`}
-                  type="url"
-                  inputMode="url"
-                  placeholder={s.placeholder}
-                  defaultValue={defaultSocial[s.key] ?? ""}
-                  disabled={pending}
-                />
-              </Field>
-            ))}
-          </div>
+  const reviewBlock =
+    preview && grouped && summary ? (
+      <div className="space-y-4 border-t border-border pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-medium">Review before applying</h3>
+          <Badge tone={preview.mode === "live" ? "primary" : "neutral"}>
+            {preview.mode === "live" ? "Live" : "Simulated"}
+          </Badge>
+        </div>
 
-          <EnrichmentSection
-            companyId={companyId}
+        {!compact && <PreviewSummaryCard summary={summary} />}
+
+        <div className="space-y-3">
+          {CONFIDENCE_ORDER.map((confidence) => {
+            const fields = grouped[confidence];
+            if (fields.length === 0) return null;
+            if (compact && confidence === "low") {
+              return (
+                <details key={confidence} className="rounded-md border border-border p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+                    Low confidence ({fields.length}) — optional
+                  </summary>
+                  <ul className="mt-3 space-y-2">
+                    {fields.map((field) => (
+                      <FieldReviewRow
+                        key={`${field.source ?? "scrape"}-${field.key}-${field.label}`}
+                        field={field}
+                        checked={selected.has(selectionId(field))}
+                        disabled={pending}
+                        onToggle={() => toggleField(field)}
+                      />
+                    ))}
+                  </ul>
+                </details>
+              );
+            }
+            return (
+              <section
+                key={confidence}
+                className={
+                  compact
+                    ? "space-y-2"
+                    : `space-y-2 rounded-lg border p-3 ${CONFIDENCE_GROUP_STYLE[confidence]}`
+                }
+              >
+                {!compact && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-sm font-medium">{CONFIDENCE_GROUP_LABEL[confidence]}</h4>
+                    <Badge tone={CONFIDENCE_TONE[confidence]}>{fields.length}</Badge>
+                  </div>
+                )}
+                <ul className="space-y-2">
+                  {fields.map((field) => (
+                    <FieldReviewRow
+                      key={`${field.source ?? "scrape"}-${field.key}-${field.label}`}
+                      field={field}
+                      checked={selected.has(selectionId(field))}
+                      disabled={pending}
+                      onToggle={() => toggleField(field)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={overwrite}
+            onChange={(e) => setOverwrite(e.target.checked)}
             disabled={pending}
-            pending={pending}
-            onPreviewed={handleEnrichmentPreviewed}
           />
+          Overwrite fields that already have values
+        </label>
 
-          <Button type="submit" variant="outline" disabled={pending}>
-            {pending && !preview ? "Scraping…" : "Preview extracted fields"}
-          </Button>
-        </form>
-
-        {error && (
-          <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {error}
-          </p>
-        )}
-        {success && (
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            {success}
-          </p>
-        )}
-
-        {preview && grouped && summary && (
-          <div className="space-y-4 border-t border-border pt-4">
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-medium">Review before applying</h3>
-                <Badge tone={preview.mode === "live" ? "primary" : "neutral"}>
-                  {preview.mode === "live" ? "Live fetch" : "Simulated"}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {reviewFields.length} field(s) from {preview.sources.length} source(s)
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Review public data before applying. Nothing publishes automatically.
-              </p>
-            </div>
-
-            <PreviewSummaryCard summary={summary} />
-
-            <div className="space-y-4">
-              {CONFIDENCE_ORDER.map((confidence) => {
-                const fields = grouped[confidence];
-                if (fields.length === 0) return null;
-                return (
-                  <section
-                    key={confidence}
-                    className={`space-y-2 rounded-lg border p-3 ${CONFIDENCE_GROUP_STYLE[confidence]}`}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-sm font-medium">{CONFIDENCE_GROUP_LABEL[confidence]}</h4>
-                      <Badge tone={CONFIDENCE_TONE[confidence]}>{fields.length}</Badge>
-                    </div>
-                    <ul className="space-y-2">
-                      {fields.map((field) => (
-                        <FieldReviewRow
-                          key={`${field.source ?? "scrape"}-${field.key}-${field.label}`}
-                          field={field}
-                          checked={selected.has(selectionId(field))}
-                          disabled={pending}
-                          onToggle={() => toggleField(field)}
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                );
-              })}
-            </div>
-
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2">
+          <form action={handleApply} className="inline">
+            <input type="hidden" name="companyId" value={companyId} />
+            <input type="hidden" name="consent" value="true" />
+            <input type="hidden" name="website" value={preview.urls.website ?? ""} />
+            {preview.urls.socialLinks.map((l) => (
               <input
-                type="checkbox"
-                checked={overwrite}
-                onChange={(e) => setOverwrite(e.target.checked)}
-                disabled={pending}
+                key={l.platform}
+                type="hidden"
+                name={`social_${l.platform}`}
+                value={l.url}
               />
-              Overwrite fields that already have values
-            </label>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <form action={handleApply} className="inline">
-                <input type="hidden" name="companyId" value={companyId} />
-                <input type="hidden" name="consent" value="true" />
-                <input type="hidden" name="website" value={preview.urls.website ?? ""} />
-                {preview.urls.socialLinks.map((l) => (
-                  <input
-                    key={l.platform}
-                    type="hidden"
-                    name={`social_${l.platform}`}
-                    value={l.url}
-                  />
-                ))}
-                <Button type="submit" disabled={pending || selected.size === 0}>
-                  {pending
-                    ? "Applying…"
-                    : `Looks correct — apply selected (${selected.size})`}
-                </Button>
-              </form>
+            ))}
+            <Button type="submit" disabled={pending || selected.size === 0}>
+              {pending
+                ? "Applying…"
+                : compact
+                  ? `Apply selected (${selected.size})`
+                  : `Looks correct — apply selected (${selected.size})`}
+            </Button>
+          </form>
+          {!compact && (
+            <>
               <Button
                 type="button"
                 variant="outline"
@@ -729,9 +714,118 @@ export function AutoOnboardingPanel({
               >
                 Clear selection
               </Button>
+            </>
+          )}
+        </div>
+      </div>
+    ) : null;
+
+  return (
+    <Card className={compact ? "border-border" : "border-primary/20"}>
+      <CardContent className={compact ? "space-y-4 p-5" : "space-y-5 p-6"}>
+        <div>
+          <h2 className="font-semibold">
+            {compact ? "Fill from website" : "Auto-onboarding scrape"}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {compact
+              ? "Scrape public pages, then AI fills gaps and infers the rest. Nothing publishes automatically."
+              : `With explicit client consent, scrape ${companyName}'s public website and social profile URLs to pre-fill Brand Brain fields.`}
+          </p>
+          {!compact && lastScrape?.at && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Last scrape: {new Date(lastScrape.at).toLocaleString()}
+              {lastScrape.mode ? ` (${lastScrape.mode})` : ""}
+              {lastScrape.appliedAt
+                ? ` · applied ${new Date(lastScrape.appliedAt).toLocaleString()}`
+                : ""}
+            </p>
+          )}
+        </div>
+
+        <form action={handlePreview} className="space-y-4">
+          <input type="hidden" name="companyId" value={companyId} />
+
+          <div className={compact ? "flex flex-col gap-3 sm:flex-row sm:items-end" : "space-y-4"}>
+            <div className="min-w-0 flex-1">
+              <Field label="Website" htmlFor="auto_website">
+                <Input
+                  id="auto_website"
+                  name="website"
+                  type="text"
+                  inputMode="url"
+                  placeholder="https://example.com"
+                  defaultValue={defaultWebsite}
+                  disabled={pending}
+                />
+              </Field>
             </div>
+            {!compact && (
+              <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  name="consent"
+                  required
+                  className="mt-1"
+                  disabled={pending}
+                />
+                <span>
+                  <strong className="font-medium text-foreground">Client consent</strong> — I
+                  confirm the client has authorised us to fetch their public website and
+                  social profile pages for onboarding purposes only.
+                </span>
+              </label>
+            )}
+            {compact && (
+              <Button type="submit" disabled={pending} className="sm:mb-0.5">
+                {pending && !preview ? "Scraping…" : "Scrape"}
+              </Button>
+            )}
           </div>
+
+          {compact ? (
+            <label className="flex items-start gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                name="consent"
+                required
+                className="mt-1"
+                disabled={pending}
+              />
+              <span>Client consents to using public website data for onboarding.</span>
+            </label>
+          ) : null}
+
+          {compact ? (
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                Social links &amp; ABN / Places (optional)
+              </summary>
+              <div className="mt-3 space-y-4">{extras}</div>
+            </details>
+          ) : (
+            extras
+          )}
+
+          {!compact && (
+            <Button type="submit" variant="outline" disabled={pending}>
+              {pending && !preview ? "Scraping…" : "Preview extracted fields"}
+            </Button>
+          )}
+        </form>
+
+        {error && (
+          <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {error}
+          </p>
         )}
+        {success && (
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            {success}
+          </p>
+        )}
+
+        {reviewBlock}
       </CardContent>
     </Card>
   );
