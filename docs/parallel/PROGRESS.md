@@ -1,6 +1,6 @@
 ﻿# Orchestrator ledger
 
-Last updated: 2026-07-11 (**MANAGED-SERVICE FOUNDATION** · **W6 WAITING ON GOOGLE**)
+Last updated: 2026-07-11 (**MANAGED-SERVICE WAVE 2** · **W6 WAITING ON GOOGLE**)
 
 **Owner lock:** Full SRS → vision · go-live = non-negotiable.  
 **Schedule:** `docs/parallel/FULL-ORCHESTRATION.md`  
@@ -14,20 +14,21 @@ Last updated: 2026-07-11 (**MANAGED-SERVICE FOUNDATION** · **W6 WAITING ON GOOG
 |------|--------|-------|
 | W0–W5 | DONE | - |
 | **W7** | **DONE** | `w7_complete=yes` |
-| **Managed service** | **FOUNDATION** | runner + portal calendar/payments + 24h enqueue |
+| **Managed service** | **WAVE 2** | foundation + rolling calendar · client assets · exception notify · service-level UI |
 | **W6** | **WAITING** | Google Cloud billing — park live cutover |
 | **`full_complete`** | no | after W6 go-live |
 
 ---
 
-## Managed service foundation
+## Managed service
 
-- Service levels: `approval` | `managed_exceptions` | `fully_managed` (pre-auth low-risk + critique; never unsupervised publish)
-- Payments: **C1** (delegated ads + SaaS Stripe); C2 prepaid credit deferred
-- Delivery runner on cron + onboarding/sales enqueue → draft campaign + calendar suggestions only
-- Client: `/client/calendar`, `/client/payments`, status copy
-- Migration **0038_managed_delivery** — **owner pasted** (2026-07-11)
-- Fixtures: **268/268** + **20/20**
+- Service levels + C1 payments locked in model doc
+- Delivery runner (drafts/suggestions only) + 0038 pasted
+- Rolling calendar maintainer (assist-only, cron)
+- Client: calendar · payments · assets · status copy
+- Exception email on delivery blocked/failed
+- Admin service-level on company page
+- Fixtures: **271/271** + **20/20**
 
 ## Wave 6 — WAITING ON GOOGLE
 

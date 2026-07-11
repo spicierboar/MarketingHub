@@ -1,6 +1,6 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **MANAGED-SERVICE FOUNDATION** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **MANAGED-SERVICE WAVE 2** · **W6 WAITING ON GOOGLE**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` · live flags **OFF**
 >
@@ -8,30 +8,29 @@
 > |------|--------|-------|
 > | W0–W5 | DONE | `w5_complete=yes` |
 > | **W7** | **DONE** | `w7_complete=yes` |
-> | **Managed service** | **FOUNDATION SHIPPED** | Model · delivery runner · client calendar/payments · 24h enqueue |
+> | **Managed service** | **WAVE 2 SHIPPED** | Foundation + rolling calendar · client assets · exception notify · service-level UI |
 > | **W6** | **WAITING** | Owner Google Cloud billing — **do not flip `*_LIVE`** |
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **AI layer:** `docs/AI-CAMPAIGN-LAYER.md`
 >
-> **Fixtures:** self-test **268/268** · queue-test **20/20** (`npx tsx scripts/run-fixtures.mjs`)
+> **Fixtures:** self-test **271/271** · queue-test **20/20**
 >
-> **Owner migrations PASTED:** … + `0035`–`0037` + **`0038_managed_delivery`** (2026-07-11).
+> **Owner migrations PASTED:** … + `0035`–`0037` + **`0038_managed_delivery`** (2026-07-11). No new migration this wave (profile jsonb + existing assets).
 >
-> **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. AI never auto-publishes / auto-spends. `fully_managed` = pre-authorised low-risk + critique — not unsupervised publish. Payments = **C1** (delegated ads + SaaS Stripe); prepaid credit **C2 deferred**.
+> **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. AI never auto-publishes / auto-spends. Payments **C1**; prepaid credit **C2 deferred**.
 >
-> ### SHIPPED this arc (managed service foundation)
+> ### SHIPPED (managed service)
 >
-> - `docs/MANAGED-SERVICE-MODEL.md` — service levels, C1 payments, 24h SLA
-> - Delivery runner + cron + onboarding/sales enqueue (drafts + calendar suggestions only)
-> - Client portal: `/client/calendar` · `/client/payments` · status copy on dashboard
-> - Self-tests: `managedDelivery.*` (+3) · fixtures **268/268**
+> - Foundation: model · delivery runner · `/client/calendar` · `/client/payments` · 24h enqueue
+> - Wave 2: rolling calendar maintainer (assist-only) · `/client/assets` · exception email on blocked/failed · admin service-level on `/companies/[id]`
+> - Fixtures **271/271**
 >
 > **Still untracked (do not commit):** `scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`
 >
 > **Local demo:** `npx next dev -p 3002` · `/dev` + `admin@wattlegroup.dev`
 >
 > **NEXT:**
-> 1. Continue managed-service: rolling calendar maintainer · client asset upload · exception-only notify · admin service-level UI
+> 1. Optional polish: client help/support context · rolling calendar accept path for managed_exceptions · richer Payments C1
 > 2. Until Google GO: park live cutover
 > 3. When Google GO: W6 OWNER-OPS → M45 → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE`
 >

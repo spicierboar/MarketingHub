@@ -254,7 +254,12 @@ import {
   checkManagedDeliveryEnqueueDueWithin24h,
   checkManagedDeliveryNeverAutoPublish,
   checkManagedDeliveryProcessNoSchedule,
+  checkManagedExceptionNotifyNoThrow,
 } from "@/lib/selftest/managed-delivery";
+import {
+  checkRollingCalendarMaintainAddsSuggestionsOnly,
+  checkRollingCalendarNeedsTopUpWhenEmpty,
+} from "@/lib/selftest/rolling-calendar";
 import { checkSpendApplyRequiresApproval } from "@/lib/selftest/spend-approval";
 import {
   checkLogRecordsDedupeKey,
@@ -1043,6 +1048,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
     await expect("managedDelivery.neverAutoPublish", () =>
       checkManagedDeliveryNeverAutoPublish(),
+    );
+    await expect("managedDelivery.exceptionNotifyNoThrow", () =>
+      checkManagedExceptionNotifyNoThrow(),
+    );
+
+    await expect("rollingCalendar.needsTopUpWhenEmpty", () =>
+      checkRollingCalendarNeedsTopUpWhenEmpty(),
+    );
+    await expect("rollingCalendar.maintainAddsSuggestionsOnly", () =>
+      checkRollingCalendarMaintainAddsSuggestionsOnly(),
     );
 
     await expect("spendApproval.applyRequiresAccept", () => checkSpendApplyRequiresApproval());

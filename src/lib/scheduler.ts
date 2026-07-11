@@ -22,6 +22,7 @@ import { emptyQueueCounts, publishDuePosts } from "@/lib/publish-queue";
 import { runAutomations } from "@/lib/automation";
 import { runScheduledClientReports } from "@/lib/client-reports";
 import { processDueManagedDeliveries } from "@/lib/managed-service/delivery-runner";
+import { maintainRollingCalendarsForTenant } from "@/lib/managed-service/rolling-calendar";
 import type { ActingUser } from "@/lib/types";
 
 // A synthetic actor scoped to one tenant. Its audit entries are honestly
@@ -49,6 +50,7 @@ export interface TenantTickResult {
   automationOutcomes: number;
   clientReportsSent: number;
   managedDeliveryProcessed?: number;
+  rollingCalendarSuggestions?: number;
 }
 
 export async function runScheduledTick(): Promise<TenantTickResult[]> {
@@ -87,7 +89,20 @@ export async function runScheduledTick(): Promise<TenantTickResult[]> {
         /* managed delivery failure must not abort the tick */
       }
 
-      return { ...pub, automationOutcomes, clientReportsSent: 0, managedDeliveryProcessed };
+      let rollingCalendarSuggestions = 0;
+      try {
+        rollingCalendarSuggestions = await maintainRollingCalendarsForTenant(actor, tenant.id);
+      } catch {
+        /* rolling calendar top-up failure must not abort the tick */
+      }
+
+      return {
+        ...pub,
+        automationOutcomes,
+        clientReportsSent: 0,
+        managedDeliveryProcessed,
+        rollingCalendarSuggestions,
+      };
     });
     results.push({ tenantId: tenant.id, ...tick });
   }

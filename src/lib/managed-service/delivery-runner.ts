@@ -20,6 +20,7 @@ import {
 } from "@/lib/db";
 import { surfaceCalendarAssistSuggestions } from "@/lib/ai/calendar-assist";
 import { defaultServiceLevel } from "@/lib/managed-service/authority";
+import { notifyClientException } from "@/lib/managed-service/exception-notify";
 import { now } from "@/lib/utils";
 import type {
   ActingUser,
@@ -154,7 +155,33 @@ async function advancePhase(
     ...patch,
     updatedAt: now(),
   });
-  return updated ?? { ...run, ...patch, updatedAt: now() };
+  const next = updated ?? { ...run, ...patch, updatedAt: now() };
+
+  // One call site: notify the client when a run becomes blocked or failed.
+  if (next.phase === "blocked" || next.phase === "failed") {
+    const kind = next.phase;
+    const subject =
+      next.phase === "blocked"
+        ? "We need a bit more information to continue your marketing plan"
+        : "We hit a snag preparing your marketing plan";
+    const body =
+      next.phase === "blocked"
+        ? "Your marketing plan is on hold because some business details are missing or the account isn't ready. Please check in with your agency (or update your profile) so we can continue."
+        : "We couldn't finish preparing your marketing plan this time. Your agency has been notified and will follow up — nothing has been published.";
+    try {
+      await notifyClientException({
+        tenantId: next.tenantId,
+        companyId: next.companyId,
+        kind,
+        subject,
+        body,
+      });
+    } catch {
+      /* never abort the runner for notify failures */
+    }
+  }
+
+  return next;
 }
 
 export async function processManagedDeliveryRun(

@@ -21,12 +21,14 @@ import { PROFILE_FIELD_HELP } from "@/lib/profile-suggestions";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input, Textarea, Select } from "@/components/ui/form";
 import {
   addCompanyDocAction,
+  saveManagedServiceLevelAction,
   saveOnboardingAction,
   setCompanyStatusAction,
 } from "../actions";
+import { defaultServiceLevel } from "@/lib/managed-service/authority";
 
 export default async function CompanyOnboardingPage({
   params,
@@ -286,6 +288,39 @@ export default async function CompanyOnboardingPage({
         </div>
 
         <div className="space-y-6">
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <h2 className="font-semibold">Managed service level</h2>
+              <p className="text-sm text-muted-foreground">
+                Controls how much low-risk draft work the platform may prepare without an extra
+                client click. Publish, spend, and promotions always stay on the human path.
+              </p>
+              <form action={saveManagedServiceLevelAction} className="space-y-3">
+                <input type="hidden" name="companyId" value={company.id} />
+                <Field label="Service level" htmlFor="serviceLevel">
+                  <Select
+                    id="serviceLevel"
+                    name="serviceLevel"
+                    defaultValue={
+                      p.managedService?.serviceLevel ?? defaultServiceLevel()
+                    }
+                  >
+                    <option value="approval">Approval — every material action waits for approval</option>
+                    <option value="managed_exceptions">
+                      Managed exceptions — low-risk drafts may proceed; publish/spend still gated
+                    </option>
+                    <option value="fully_managed">
+                      Fully managed — pre-authorised low-risk work + critique (not unsupervised publish)
+                    </option>
+                  </Select>
+                </Field>
+                <Button type="submit" variant="outline" size="sm" className="w-full">
+                  Save service level
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
           {/* Getting-started checklist — walk a new client from onboarding to live */}
           <Card>
             <CardContent className="p-6">

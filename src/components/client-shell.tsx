@@ -10,6 +10,7 @@ import {
   BarChart3,
   CalendarDays,
   CreditCard,
+  Image,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -19,6 +20,7 @@ const NAV = [
   { href: "/client/requests", label: "Requests", icon: Inbox },
   { href: "/client/approvals", label: "Approvals", icon: CheckSquare },
   { href: "/client/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/client/assets", label: "Assets", icon: Image },
   { href: "/client/payments", label: "Payments", icon: CreditCard },
   { href: "/client/reports", label: "Reports", icon: BarChart3 },
 ] as const;

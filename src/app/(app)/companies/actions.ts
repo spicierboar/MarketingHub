@@ -2,11 +2,18 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createCompany, getCompany, updateCompany } from "@/lib/db";
+import {
+  createCompany,
+  getCompany,
+  getTenant,
+  listOpenManagedDeliveryRuns,
+  updateCompany,
+} from "@/lib/db";
 import { assertAdminCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
 import { assertCompanyQuota } from "@/lib/billing";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
+import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
 import { onboardingScore } from "@/lib/types";
 import { id, now } from "@/lib/utils";
 import {
@@ -14,9 +21,16 @@ import {
   type BusinessType,
   type CompanyStatus,
   type CompanyProfile,
+  type ManagedServiceLevel,
   type SocialLink,
   type UploadedAsset,
 } from "@/lib/types";
+
+const SERVICE_LEVELS: ManagedServiceLevel[] = [
+  "approval",
+  "managed_exceptions",
+  "fully_managed",
+];
 
 const BUSINESS_TYPES: BusinessType[] = [
   "restaurant_cafe",
@@ -209,5 +223,65 @@ export async function addCompanyDocAction(formData: FormData) {
       detail: docs.map((d) => d.name).join(", "),
     });
   }
+  revalidatePath(`/companies/${companyId}`);
+}
+
+export async function saveManagedServiceLevelAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "");
+  const user = await assertAdminCompanyAccess(companyId);
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("Company not found");
+
+  const raw = String(formData.get("serviceLevel") || "").trim();
+  if (!SERVICE_LEVELS.includes(raw as ManagedServiceLevel)) {
+    throw new Error("Invalid service level");
+  }
+  const serviceLevel = raw as ManagedServiceLevel;
+  const prev = company.profile.managedService;
+
+  await updateCompany(companyId, {
+    profile: {
+      ...company.profile,
+      managedService: {
+        ...(prev ?? { serviceLevel }),
+        serviceLevel,
+      },
+    },
+  });
+
+  await logAction(user, "company.managed_service_level_set", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail: serviceLevel,
+  });
+
+  // Switching onto a managed level: enqueue delivery if tenant is onboarded and
+  // there is no open run yet (same path as sales/onboarding).
+  const managed =
+    serviceLevel === "managed_exceptions" || serviceLevel === "fully_managed";
+  if (managed && company.status !== "archived") {
+    const tenant = await getTenant(user.tenantId);
+    if (tenant?.onboardingCompletedAt) {
+      const open = (await listOpenManagedDeliveryRuns(user.tenantId)).filter(
+        (r) => r.companyId === companyId,
+      );
+      if (open.length === 0) {
+        const run = await enqueueManagedDeliveryForCompany({
+          tenantId: user.tenantId,
+          companyId,
+          onboardingCompletedAt: tenant.onboardingCompletedAt,
+          serviceLevel,
+        });
+        await logAction(user, "managed_delivery.enqueued", {
+          targetType: "managed_delivery_run",
+          targetId: run.id,
+          companyId,
+          detail: `due ${run.strategyDueAt}`,
+        });
+      }
+    }
+  }
+
   revalidatePath(`/companies/${companyId}`);
 }

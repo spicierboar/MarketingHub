@@ -171,3 +171,44 @@ export async function checkManagedDeliveryNeverAutoPublish(): Promise<{
     detail: `publishBlocked=${blocked} draftsOk=${draftsOk}`,
   };
 }
+
+/** Exception notify must not throw when Resend is unset (soft no-op). */
+export async function checkManagedExceptionNotifyNoThrow(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const { notifyClientException } = await import(
+    "@/lib/managed-service/exception-notify"
+  );
+  const t = await createTenant({
+    name: `Exception Notify ${Date.now()}`,
+    kind: "agency",
+    plan: "starter",
+    status: "active",
+    timezone: "Australia/Sydney",
+  });
+  try {
+    const company = await createCompany({
+      tenantId: t.id,
+      name: "Notify Co",
+      createdBy: "selftest",
+    });
+    await updateCompany(company.id, {
+      profile: {
+        ...company.profile,
+        approvalContact: "owner@example.dev",
+      },
+    });
+    const result = await notifyClientException({
+      tenantId: t.id,
+      companyId: company.id,
+      kind: "blocked",
+      subject: "Test exception",
+      body: "We need a bit more information to continue.",
+    });
+    const ok = typeof result.ok === "boolean" && typeof result.detail === "string";
+    return { ok, detail: `ok=${result.ok} detail=${result.detail}` };
+  } finally {
+    await purgeTenant(t.id);
+  }
+}
