@@ -40,7 +40,8 @@ Never without the human path:
 ## Payments (track)
 
 - **C1 (now):** delegated ad spend + SaaS Stripe billing
-- **C2 (shipping):** prepaid company credit wallet with **$50 minimum floor**, ledger, simulated auto top-up (no Stripe charge yet); gates activate/spend paths via `assertPrepaidCredit`
+- **C2 (shipped):** prepaid company credit wallet with **$50 minimum floor**, ledger, Stripe Checkout top-up when configured (webhook credits + tax invoice), simulated path in demo; auto top-up still ledger-only until off-session PM; gates activate/spend paths via `assertPrepaidCredit`
+- **Tax invoices (shipped):** local AU GST tax-invoice SoT (`tax_invoices`), client + agency list/print, credit notes / void; management-fee runs also issue local invoices
 
 Parked showstoppers and deferred product work: [`MANAGED-SERVICE-PENDING.md`](./MANAGED-SERVICE-PENDING.md).
 

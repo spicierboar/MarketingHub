@@ -16,7 +16,7 @@ Showstoppers and deferred product work that are **out of scope for the current m
 - 1000-client live load proof on real platforms
 - `managed_exceptions` auto-schedule (only `fully_managed` gets `schedule_approved` in wave 3)
 - Photo marketplace webhook settlement gap (if still open)
-- **C2 follow-ons:** tax-invoice suite · Stripe top-up charge (wallet + $50 floor + simulated auto top-up shipped; live card charge still deferred)
+- Off-session auto top-up card charge (needs saved payment method; manual Checkout top-up shipped)
 
 ## Done this arc
 
@@ -24,4 +24,5 @@ Showstoppers and deferred product work that are **out of scope for the current m
 - `fully_managed` critique-gated auto-schedule (`schedule_approved` → `scheduleOne` only)
 - Client Help (`/client/help`) + richer Payments C1 overview (no wallet)
 - **C2 prepaid credit wallet** ($50 min floor, ledger, simulated auto top-up; gates on spend apply / activate / save budget)
-- Fixtures **276/276** + **20/20** (was 273; +3 credit-wallet checks)
+- **C2 follow-ons:** Stripe Checkout top-up (`kind=credit_top_up`) + webhook credit · local tax-invoice suite (GST, list/print, credit notes/void, management-fee invoices)
+- Fixtures **281/281** + **20/20** (was 276; +5 tax-invoice / top-up settlement checks)

@@ -1,5 +1,6 @@
 // Prepaid company credit wallet (C2).
-// $50 minimum floor. Auto top-up is ledger-simulated (no Stripe charge yet).
+// $50 minimum floor. Manual top-ups use Stripe Checkout when configured;
+// auto top-up remains ledger-simulated until off-session card charge ships.
 // Does not flip ADS_LIVE or bypass spend-approval human gates.
 
 import { logAction } from "@/lib/audit";
@@ -195,7 +196,8 @@ export async function updateCreditAutoTopUpSettings(
 /**
  * If auto top-up is enabled and balance <= trigger, add topUpAmount
  * capped by maxTopUpAmount and maxTopUpPerDay (count today's auto_top_up entries).
- * Simulated — ledger only, no Stripe charge yet.
+ * Ledger-simulated only — live off-session card charge needs a saved payment
+ * method (deferred). Manual top-ups use Stripe Checkout when configured.
  */
 export async function maybeAutoTopUp(
   companyId: string,
@@ -221,7 +223,7 @@ export async function maybeAutoTopUp(
     amountUsd,
     user,
     kind: "auto_top_up",
-    reason: "Simulated auto top-up (no Stripe charge yet)",
+    reason: "Simulated auto top-up (off-session card charge deferred)",
   });
 }
 

@@ -1,16 +1,24 @@
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getAdBudget, getCompany, getTenant, listAdCampaigns } from "@/lib/db";
+import {
+  getAdBudget,
+  getCompany,
+  getTenant,
+  listAdCampaigns,
+  listTaxInvoices,
+} from "@/lib/db";
 import {
   MIN_CREDIT_FLOOR_USD,
   getOrCreateCreditWallet,
 } from "@/lib/credit-wallet";
+import { stripeConfigured } from "@/lib/billing";
 import { planFor } from "@/lib/plans";
 import { AD_PLATFORMS } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
+import Link from "next/link";
 import {
   saveClientAutoTopUpAction,
   topUpClientCreditAction,
@@ -31,12 +39,13 @@ function looksLikeEmail(value: string): boolean {
 
 export default async function ClientPaymentsPage() {
   const { user, companyId } = await requirePortalUser();
-  const [tenant, company, budget, campaigns, wallet] = await Promise.all([
+  const [tenant, company, budget, campaigns, wallet, invoices] = await Promise.all([
     getTenant(user.tenantId),
     getCompany(companyId),
     getAdBudget(companyId),
     listAdCampaigns(user.tenantId, companyId),
     getOrCreateCreditWallet(companyId),
+    listTaxInvoices(user.tenantId, { companyId }),
   ]);
 
   const plan = planFor(tenant?.plan);
@@ -49,6 +58,7 @@ export default async function ClientPaymentsPage() {
   const hasStripeSub = Boolean(tenant?.stripeSubscriptionId?.trim());
   const approvalContact = company?.profile.approvalContact?.trim() ?? "";
   const supportMailto = looksLikeEmail(approvalContact) ? approvalContact : null;
+  const liveCard = stripeConfigured();
 
   const balanceOk = wallet.balanceUsd >= MIN_CREDIT_FLOOR_USD;
 
@@ -86,9 +96,13 @@ export default async function ClientPaymentsPage() {
               </p>
 
               <div className="rounded-md border border-border p-4">
-                <p className="mb-3 text-sm font-medium">Add credit (simulated)</p>
+                <p className="mb-3 text-sm font-medium">
+                  {liveCard ? "Add credit (card)" : "Add credit (simulated)"}
+                </p>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Demo top-up only — no card is captured here.
+                  {liveCard
+                    ? "You will be redirected to Stripe Checkout to pay by card. Credit is applied after payment, and a tax invoice is issued."
+                    : "Demo top-up only — no card is captured here. A tax invoice is still issued for the ledger credit."}
                 </p>
                 <form action={topUpClientCreditAction} className="flex flex-wrap items-end gap-3">
                   <input type="hidden" name="companyId" value={companyId} />
@@ -105,7 +119,7 @@ export default async function ClientPaymentsPage() {
                     />
                   </Field>
                   <Button type="submit" size="sm">
-                    Add credit
+                    {liveCard ? "Pay & add credit" : "Add credit"}
                   </Button>
                 </form>
               </div>
@@ -340,16 +354,48 @@ export default async function ClientPaymentsPage() {
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Tax invoices</h2>
           <Card>
-            <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
-              <p>
-                Subscription invoices come from your agency. Ask them for copies — they aren&apos;t
-                listed here. Platform ad delivery may also appear on your Google Ads / Meta
-                statements.
-              </p>
-              <p>
+            <CardContent className="space-y-3 p-6">
+              {invoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No tax invoices yet. Topping up credit issues a GST tax invoice
+                  (amounts include 10% GST). Subscription plan invoices may still
+                  come from your agency separately.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {invoices.map((inv) => (
+                    <li
+                      key={inv.id}
+                      className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-medium">{inv.invoiceNumber}</p>
+                        <p className="text-muted-foreground">
+                          {new Date(inv.issuedAt).toLocaleDateString("en-AU")} ·{" "}
+                          {inv.kind.replace(/_/g, " ")} · {inv.status}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span>
+                          {money2(inv.totalIncGst)} {inv.currency.toUpperCase()}
+                        </span>
+                        <Link
+                          href={`/client/payments/invoices/${inv.id}`}
+                          className={buttonClasses("outline", "sm")}
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Open an invoice and use your browser print dialog to save a PDF.
                 {supportMailto ? (
                   <>
-                    Need a copy?{" "}
+                    {" "}
+                    Questions?{" "}
                     <a
                       href={`mailto:${supportMailto}`}
                       className="font-medium text-primary underline"
@@ -358,11 +404,7 @@ export default async function ClientPaymentsPage() {
                     </a>
                     .
                   </>
-                ) : approvalContact ? (
-                  <>Need a copy? Contact {approvalContact}.</>
-                ) : (
-                  <>Need a copy? Contact your agency.</>
-                )}
+                ) : null}
               </p>
             </CardContent>
           </Card>

@@ -21,6 +21,7 @@ import {
   createPortalSession,
   stripeConfigured,
 } from "@/lib/billing";
+import { issueCreditNote, voidTaxInvoice } from "@/lib/tax-invoices";
 import { isAddonId } from "@/lib/addons";
 import { resolveOrigin } from "@/lib/origin";
 import { PLANS } from "@/lib/plans";
@@ -178,4 +179,25 @@ export async function openBillingPortalAction() {
     );
   }
   redirect(url);
+}
+
+export async function issueCreditNoteAction(formData: FormData) {
+  const user = await requireTenantOwner();
+  const invoiceId = String(formData.get("invoiceId") || "").trim();
+  const reason = String(formData.get("reason") || "Credit note").trim();
+  if (!invoiceId) throw new Error("Missing invoice");
+  const note = await issueCreditNote(invoiceId, user, reason);
+  revalidatePath("/billing");
+  revalidatePath(`/billing/invoices/${invoiceId}`);
+  redirect(`/billing/invoices/${note.id}`);
+}
+
+export async function voidTaxInvoiceAction(formData: FormData) {
+  const user = await requireTenantOwner();
+  const invoiceId = String(formData.get("invoiceId") || "").trim();
+  const reason = String(formData.get("reason") || "Voided").trim();
+  if (!invoiceId) throw new Error("Missing invoice");
+  await voidTaxInvoice(invoiceId, user, reason);
+  revalidatePath("/billing");
+  revalidatePath(`/billing/invoices/${invoiceId}`);
 }

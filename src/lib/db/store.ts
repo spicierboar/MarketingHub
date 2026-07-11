@@ -42,6 +42,7 @@ import type {
   ManagedDeliveryRun,
   CompanyCreditWallet,
   CompanyCreditLedgerEntry,
+  TaxInvoice,
   CompanyEntitlement,
   MenuDesign,
   OrderMenuItem,
@@ -244,6 +245,8 @@ export interface DataStore {
   // Prepaid credit wallet (0039)
   companyCreditWallets: CompanyCreditWallet[];
   companyCreditLedger: CompanyCreditLedgerEntry[];
+  // Tax invoices (0040)
+  taxInvoices: TaxInvoice[];
   tasks: Task[];
   // V1 module 11: AI-MOS opportunities
   aiMosOpportunities: AiMosOpportunity[];
@@ -2077,6 +2080,7 @@ function seed(): DataStore {
       },
     ],
     companyCreditLedger: [],
+    taxInvoices: [],
     tasks: [],
     aiMosOpportunities: [],
     aiMosSignalRuns: [],

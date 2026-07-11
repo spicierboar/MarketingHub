@@ -48,6 +48,7 @@ import type {
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
   MenuDesign,
   Offer, OrderMenuItem, OrderingSettings, BookingSettings, ServicePeriod, Reservation, PhotoShoot, PhotographerProfile, PhotographerPackage, PhotoMarketplaceBooking, PromptTemplate, PublishingControls, PublishingIntegration, PublishLog,
+  TaxInvoice,
   ConnectInvite,
   ApiKey,
   PartnerWebhook,
@@ -2803,6 +2804,92 @@ export const supabaseRepo = {
     if (opts?.since) q = q.gte("created_at", opts.since);
     const { data } = await q;
     return many<CompanyCreditLedgerEntry>(data);
+  },
+  async findCompanyCreditLedgerByRelated(
+    companyId: string,
+    relatedType: string,
+    relatedId: string,
+  ): Promise<CompanyCreditLedgerEntry | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("company_credit_ledger")
+      .select("*")
+      .eq("company_id", companyId)
+      .eq("related_type", relatedType)
+      .eq("related_id", relatedId)
+      .maybeSingle();
+    return data ? toDomain<CompanyCreditLedgerEntry>(data) : undefined;
+  },
+
+  // ---- Tax invoices (0040) ---------------------------------------------------
+  async listTaxInvoices(
+    tenantId: string,
+    opts?: { companyId?: string },
+  ): Promise<TaxInvoice[]> {
+    const sb = await usr(); if (!sb) return [];
+    const ids = opts?.companyId
+      ? [opts.companyId]
+      : await companyIds(sb, tenantId);
+    if (!ids.length) return [];
+    const { data } = await sb
+      .from("tax_invoices")
+      .select("*")
+      .in("company_id", ids)
+      .order("issued_at", { ascending: false });
+    return many<TaxInvoice>(data);
+  },
+  async getTaxInvoice(invoiceId: string): Promise<TaxInvoice | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("tax_invoices")
+      .select("*")
+      .eq("id", invoiceId)
+      .maybeSingle();
+    return data ? toDomain<TaxInvoice>(data) : undefined;
+  },
+  async getTaxInvoiceByStripeCheckoutSession(
+    sessionId: string,
+  ): Promise<TaxInvoice | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("tax_invoices")
+      .select("*")
+      .eq("stripe_checkout_session_id", sessionId)
+      .maybeSingle();
+    return data ? toDomain<TaxInvoice>(data) : undefined;
+  },
+  async createTaxInvoice(
+    input: Omit<TaxInvoice, "id" | "createdAt" | "updatedAt">,
+  ): Promise<TaxInvoice> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    if (input.stripeCheckoutSessionId) {
+      const existing = await this.getTaxInvoiceByStripeCheckoutSession(
+        input.stripeCheckoutSessionId,
+      );
+      if (existing) return existing;
+    }
+    const { data, error } = await sb
+      .from("tax_invoices")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createTaxInvoice: " + error.message);
+    return toDomain<TaxInvoice>(data);
+  },
+  async updateTaxInvoice(
+    invoiceId: string,
+    patch: Partial<
+      Pick<TaxInvoice, "status" | "voidedAt" | "notes" | "stripeInvoiceId">
+    >,
+  ): Promise<TaxInvoice | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("tax_invoices")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", invoiceId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<TaxInvoice>(data) : undefined;
   },
 
   // ---- Campaign A/B experiments (0036) ---------------------------------------

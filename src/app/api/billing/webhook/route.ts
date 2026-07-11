@@ -19,13 +19,28 @@ import {
   upsertCompanyEntitlement,
 } from "@/lib/db";
 import { planForPriceId, stripeConfigured, verifyStripeSignature } from "@/lib/billing";
+import { applyPaidCreditTopUp } from "@/lib/credit-top-up";
 import { planFor } from "@/lib/plans";
 import { isAddonId } from "@/lib/addons";
 import { runInServiceContext } from "@/lib/db/service-context";
 import { logAction } from "@/lib/audit";
-import type { PlanId, Tenant } from "@/lib/types";
+import type { ActingUser, PlanId, Tenant } from "@/lib/types";
+import { TENANT_ROLE_TIER } from "@/lib/types";
 
 const WEBHOOK_ACTOR = { id: "stripe_webhook", email: "webhooks@stripe.com" };
+
+function webhookUser(tenantId: string): ActingUser {
+  return {
+    id: WEBHOOK_ACTOR.id,
+    email: WEBHOOK_ACTOR.email,
+    name: "Stripe Webhook",
+    role: TENANT_ROLE_TIER.owner,
+    active: true,
+    tenantId,
+    tenantRole: "owner",
+    createdAt: "",
+  };
+}
 
 type StripeObject = Record<string, unknown>;
 
@@ -45,6 +60,10 @@ async function onCheckoutCompleted(session: StripeObject): Promise<void> {
   }
   if (str(meta?.kind) === "order") {
     await onOrderCheckout(session);
+    return;
+  }
+  if (str(meta?.kind) === "credit_top_up") {
+    await onCreditTopUpCheckout(session);
     return;
   }
   const tenantId =
@@ -107,6 +126,37 @@ async function onOrderCheckout(session: StripeObject): Promise<void> {
       targetId: orderId,
       companyId,
       detail: `Order paid via Stripe Checkout (${sessionId ?? "?"})`,
+    });
+  });
+}
+
+// Prepaid credit top-up Checkout → wallet credit + local tax invoice.
+// Idempotent on stripe checkout session id (ledger related + tax_invoices unique).
+async function onCreditTopUpCheckout(session: StripeObject): Promise<void> {
+  const meta = session.metadata as StripeObject | undefined;
+  const companyId = str(meta?.companyId);
+  const tenantId = str(meta?.tenantId) ?? str(session.client_reference_id);
+  const amountUsd = Number(str(meta?.amountUsd) ?? NaN);
+  const sessionId = str(session.id);
+  if (!companyId || !tenantId || !sessionId || !(amountUsd > 0)) return;
+  const paymentStatus = str(session.payment_status);
+  if (paymentStatus && paymentStatus !== "paid") return;
+
+  await runInServiceContext(tenantId, async () => {
+    const company = await getCompany(companyId);
+    if (!company || company.tenantId !== tenantId) return;
+    const paymentIntent = session.payment_intent;
+    const piId =
+      typeof paymentIntent === "string"
+        ? paymentIntent
+        : str((paymentIntent as StripeObject | undefined)?.id);
+    await applyPaidCreditTopUp({
+      companyId,
+      amountUsd,
+      user: webhookUser(tenantId),
+      reason: "Stripe Checkout credit top-up",
+      stripeCheckoutSessionId: sessionId,
+      stripePaymentIntentId: piId,
     });
   });
 }

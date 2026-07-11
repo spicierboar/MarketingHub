@@ -49,6 +49,7 @@ import {
 } from "@/lib/ad-connectors";
 import { companyPaidSummary } from "@/lib/paid";
 import { createManagementFeeInvoice } from "@/lib/billing";
+import { issueTaxInvoice } from "@/lib/tax-invoices";
 import { normaliseTargeting, suggestTargeting } from "@/lib/targeting";
 import { AD_PLATFORMS } from "@/lib/types";
 import type {
@@ -610,6 +611,7 @@ export async function invoiceManagementFeeAction() {
   if (!tenant) throw new Error("Tenant not found");
   const companies = await listCompanies(user.tenantId);
   let feeTotal = 0;
+  const perCompany: { companyId: string; fee: number }[] = [];
   for (const company of companies) {
     const budget = await getAdBudget(company.id);
     const campaigns = await listAdCampaigns(user.tenantId, company.id);
@@ -620,12 +622,30 @@ export async function invoiceManagementFeeAction() {
     }
     const summary = companyPaidSummary({ company, campaigns, leads, budget, connectedPlatforms: connected });
     feeTotal += summary.managementFeeUsd;
+    if (summary.managementFeeUsd > 0) {
+      perCompany.push({ companyId: company.id, fee: summary.managementFeeUsd });
+    }
   }
   const invoiceId = await createManagementFeeInvoice(
     tenant,
     feeTotal,
     `Ad management fee — ${companies.length} client(s), period to ${new Date().toISOString().slice(0, 10)}`,
   );
+  for (const row of perCompany) {
+    await issueTaxInvoice({
+      tenantId: user.tenantId,
+      companyId: row.companyId,
+      kind: "management_fee",
+      totalIncGst: row.fee,
+      currency: "usd",
+      description: `Ad management fee — period to ${new Date().toISOString().slice(0, 10)}`,
+      user,
+      notes: invoiceId
+        ? `Stripe invoice ${invoiceId}`
+        : "Stripe not configured — local tax invoice only",
+      stripeInvoiceId: invoiceId ?? undefined,
+    });
+  }
   await logAction(user, "ad_management_fee.invoiced", {
     detail: invoiceId
       ? `$${Math.round(feeTotal)} invoiced (Stripe invoice ${invoiceId})`

@@ -1,11 +1,17 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import {
-  topUpCredit,
-  updateCreditAutoTopUpSettings,
-} from "@/lib/credit-wallet";
+  createCreditTopUpCheckoutSession,
+  stripeConfigured,
+} from "@/lib/billing";
+import { applyPaidCreditTopUp } from "@/lib/credit-top-up";
+import { updateCreditAutoTopUpSettings } from "@/lib/credit-wallet";
+import { getTenant } from "@/lib/db";
+import { resolveOrigin } from "@/lib/origin";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -23,7 +29,16 @@ function revalidateBilling() {
   revalidatePath("/client/billing");
 }
 
-/** Simulated prepaid credit top-up (demo — no card capture). */
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  return resolveOrigin((k) => h.get(k));
+}
+
+/**
+ * Top up prepaid credit. With Stripe configured → hosted Checkout (card charge);
+ * webhook credits the wallet + issues a tax invoice. Demo (no keys) → simulated
+ * ledger credit + tax invoice immediately.
+ */
 export async function topUpClientCreditAction(formData: FormData) {
   const { user, companyId: portalCompanyId } = await requirePortalUser();
   const companyId = text(formData, "companyId");
@@ -34,12 +49,29 @@ export async function topUpClientCreditAction(formData: FormData) {
   const amountUsd = num(formData, "amountUsd");
   if (amountUsd <= 0) throw new Error("Top-up amount must be greater than zero");
 
-  await topUpCredit({
+  if (stripeConfigured()) {
+    const tenant = await getTenant(user.tenantId);
+    if (!tenant) throw new Error("Workspace not found");
+    const url = await createCreditTopUpCheckoutSession(
+      tenant,
+      companyId,
+      amountUsd,
+      await requestOrigin(),
+    );
+    if (!url) {
+      throw new Error(
+        "Could not start card checkout — check Stripe configuration (see server logs).",
+      );
+    }
+    redirect(url);
+  }
+
+  await applyPaidCreditTopUp({
     companyId,
     amountUsd,
     user,
-    kind: "top_up",
     reason: "Client portal simulated top-up",
+    simulated: true,
   });
 
   revalidateBilling();

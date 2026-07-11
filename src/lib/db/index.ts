@@ -111,6 +111,7 @@ import type {
   CompanyCreditWallet,
   CompanyCreditLedgerEntry,
   CreditLedgerKind,
+  TaxInvoice,
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
@@ -778,6 +779,7 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.managedDeliveryRuns = keepCompany(s.managedDeliveryRuns ?? []);
   s.companyCreditWallets = keepCompany(s.companyCreditWallets ?? []);
   s.companyCreditLedger = keepCompany(s.companyCreditLedger ?? []);
+  s.taxInvoices = keepCompany(s.taxInvoices ?? []);
   s.aiCampaignRecommendations = keepCompany(s.aiCampaignRecommendations ?? []);
   s.aiOrchestrationRuns = keepCompany(s.aiOrchestrationRuns ?? []);
   s.approvalPolicies = keepTenant(s.approvalPolicies ?? []);
@@ -4036,7 +4038,97 @@ export async function listCompanyCreditLedger(
   return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export async function findCompanyCreditLedgerByRelated(
+  companyId: string,
+  relatedType: string,
+  relatedId: string,
+): Promise<CompanyCreditLedgerEntry | undefined> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.findCompanyCreditLedgerByRelated(
+      companyId,
+      relatedType,
+      relatedId,
+    );
+  }
+  return (db().companyCreditLedger ?? []).find(
+    (e) =>
+      e.companyId === companyId &&
+      e.relatedType === relatedType &&
+      e.relatedId === relatedId,
+  );
+}
+
 export type { CompanyCreditWallet, CompanyCreditLedgerEntry, CreditLedgerKind };
+
+// ---- Tax invoices (0040_tax_invoices) ----------------------------------------
+
+export async function listTaxInvoices(
+  tenantId: string,
+  opts?: { companyId?: string },
+): Promise<TaxInvoice[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listTaxInvoices(tenantId, opts);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().taxInvoices ?? [])
+    .filter((inv) => {
+      if (!ids.has(inv.companyId)) return false;
+      if (opts?.companyId && inv.companyId !== opts.companyId) return false;
+      return true;
+    })
+    .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+export async function getTaxInvoice(
+  invoiceId: string,
+): Promise<TaxInvoice | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getTaxInvoice(invoiceId);
+  return (db().taxInvoices ?? []).find((inv) => inv.id === invoiceId);
+}
+
+export async function getTaxInvoiceByStripeCheckoutSession(
+  sessionId: string,
+): Promise<TaxInvoice | undefined> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.getTaxInvoiceByStripeCheckoutSession(sessionId);
+  }
+  return (db().taxInvoices ?? []).find(
+    (inv) => inv.stripeCheckoutSessionId === sessionId,
+  );
+}
+
+export async function createTaxInvoice(
+  input: Omit<TaxInvoice, "id" | "createdAt" | "updatedAt">,
+): Promise<TaxInvoice> {
+  if (isSupabaseConfigured()) return supabaseRepo.createTaxInvoice(input);
+  if (input.stripeCheckoutSessionId) {
+    const existing = await getTaxInvoiceByStripeCheckoutSession(
+      input.stripeCheckoutSessionId,
+    );
+    if (existing) return existing;
+  }
+  const row: TaxInvoice = {
+    ...input,
+    id: id(),
+    createdAt: now(),
+    updatedAt: now(),
+  };
+  (db().taxInvoices ??= []).push(row);
+  return row;
+}
+
+export async function updateTaxInvoice(
+  invoiceId: string,
+  patch: Partial<
+    Pick<TaxInvoice, "status" | "voidedAt" | "notes" | "stripeInvoiceId">
+  >,
+): Promise<TaxInvoice | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateTaxInvoice(invoiceId, patch);
+  const row = (db().taxInvoices ?? []).find((inv) => inv.id === invoiceId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export type { TaxInvoice };
 
 // ---- Campaign A/B experiments (0036_campaign_experiments) --------------------
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireTenantOwner } from "@/lib/auth/rbac";
-import { getTenant, listCompanies } from "@/lib/db";
+import { getTenant, listCompanies, listTaxInvoices } from "@/lib/db";
 import { stripeConfigured, tenantUsage } from "@/lib/billing";
 import { tenantAddonSummary } from "@/lib/entitlements";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
@@ -8,7 +8,7 @@ import { ADDONS, ADDON_ORDER } from "@/lib/addons";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
 import type { AddonId } from "@/lib/types";
 import {
@@ -55,14 +55,16 @@ export default async function BillingPage({
   searchParams: Promise<{ checkout?: string; addon?: string }>;
 }) {
   const user = await requireTenantOwner();
-  const [tenant, usage, companies, addonSummary, params] = await Promise.all([
+  const [tenant, usage, companies, addonSummary, params, taxInvoices] = await Promise.all([
     getTenant(user.tenantId),
     tenantUsage(user.tenantId),
     listCompanies(user.tenantId),
     tenantAddonSummary(user.tenantId),
     searchParams,
+    listTaxInvoices(user.tenantId),
   ]);
   const live = stripeConfigured();
+  const companyName = new Map(companies.map((c) => [c.id, c.name]));
 
   // Which add-ons are active for each company (built once from the tenant roll-up
   // so the matrix is a single query, not N).
@@ -326,6 +328,52 @@ export default async function BillingPage({
             photo creation, restaurant menus, the &ldquo;Order Now&rdquo; button).
             Disabling stops future billing; existing work is kept.
           </p>
+        </div>
+
+        <div>
+          <h2 className="mb-3 font-semibold">Tax invoices</h2>
+          <Card>
+            <CardContent className="space-y-3 p-6">
+              {taxInvoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No tax invoices yet. Client credit top-ups and management-fee
+                  runs issue GST tax invoices here (print to PDF from the detail
+                  page). Set{" "}
+                  <code className="text-xs">TAX_INVOICE_SELLER_ABN</code> (and
+                  optional name/address/email) for seller details on invoices.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {taxInvoices.slice(0, 25).map((inv) => (
+                    <li
+                      key={inv.id}
+                      className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-medium">{inv.invoiceNumber}</p>
+                        <p className="text-muted-foreground">
+                          {companyName.get(inv.companyId) ?? inv.companyId} ·{" "}
+                          {new Date(inv.issuedAt).toLocaleDateString("en-AU")} ·{" "}
+                          {inv.kind.replace(/_/g, " ")} · {inv.status}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span>
+                          ${inv.totalIncGst.toFixed(2)} {inv.currency.toUpperCase()}
+                        </span>
+                        <Link
+                          href={`/billing/invoices/${inv.id}`}
+                          className={buttonClasses("outline", "sm")}
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Data & privacy — GDPR / Privacy Act */}

@@ -1,6 +1,6 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **C2 CREDIT $50** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **C2 TOP-UP + TAX INVOICES** · **W6 WAITING ON GOOGLE**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` · live flags **OFF**
 >
@@ -8,24 +8,26 @@
 > |------|--------|-------|
 > | W0–W5 + W7 | DONE | - |
 > | **Managed service** | **SHIPPED** | foundation → wave 3 + agency exception desk + 2-user demo |
-> | **C2 credit** | **SHIPPED** | $50 floor · ledger · simulated top-up · gates on activate/spend |
+> | **C2 credit** | **SHIPPED** | $50 floor · Stripe Checkout top-up · tax invoices · simulated demo path |
 > | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **Pending:** `docs/MANAGED-SERVICE-PENDING.md`
 >
-> **Fixtures:** self-test **276/276** · queue-test **20/20**
+> **Fixtures:** self-test **281/281** · queue-test **20/20**
 >
 > **Owner migrations PASTED:** … + **0038**. **NEW — paste:**  
-> `notepad F:\MarketingHub\command-centre\supabase\migrations\0039_prepaid_credit.sql`
+> `notepad F:\MarketingHub\command-centre\supabase\migrations\0039_prepaid_credit.sql`  
+> `notepad F:\MarketingHub\command-centre\supabase\migrations\0040_tax_invoices.sql`
 >
 > **Hard locks:** Do **NOT** flip `*_LIVE` until W6 GO. Critique gate untouched. AI never auto-publishes / auto-spends.
 >
 > **Local demo:** `/dev` → **Agency** `sasha@brightspark.dev` · **Client** `liam@brightspark.dev` (Dental seed credit $200)
 >
 > **NEXT:**
-> 1. Owner paste **0039_prepaid_credit**
-> 2. Park live cutover until Google GO
-> 3. Deferred: Stripe charge for wallet top-up · tax-invoice suite
+> 1. Owner paste **0039** + **0040**
+> 2. Optional: set `TAX_INVOICE_SELLER_ABN` (+ name/address/email) for invoice letterhead
+> 3. Park live cutover until Google GO
+> 4. Deferred: off-session auto top-up card charge · portal Stripe deep-link
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
@@ -37,6 +39,12 @@
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, **C2 CREDIT $50** · **W6 WAITING ON GOOGLE**) — archived
+>
+> C2 wallet shipped ($50 floor · simulated top-up); Stripe charge + tax-invoice suite deferred → now shipped above.
 >
 > ---
 >

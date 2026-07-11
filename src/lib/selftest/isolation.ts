@@ -271,6 +271,13 @@ import {
   checkCreditTopUpThenAssertPasses,
 } from "@/lib/selftest/credit-wallet";
 import {
+  checkGstInclusiveSplit,
+  checkTaxInvoiceCreditNote,
+  checkTaxInvoiceVoid,
+  checkTopUpIssuesTaxInvoice,
+  checkTopUpStripeSessionIdempotent,
+} from "@/lib/selftest/tax-invoices";
+import {
   checkLogRecordsDedupeKey,
   checkRetrySkipsWhenAlreadyPublished,
   checkStaleClaimSafeRecovery,
@@ -1083,6 +1090,13 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("creditWallet.autoTopUpWhenBelowTrigger", () =>
       checkCreditAutoTopUpWhenBelowTrigger(),
     );
+    await expect("taxInvoice.gstInclusiveSplit", () => checkGstInclusiveSplit());
+    await expect("taxInvoice.topUpIssuesInvoice", () => checkTopUpIssuesTaxInvoice());
+    await expect("taxInvoice.stripeSessionIdempotent", () =>
+      checkTopUpStripeSessionIdempotent(),
+    );
+    await expect("taxInvoice.creditNote", () => checkTaxInvoiceCreditNote());
+    await expect("taxInvoice.void", () => checkTaxInvoiceVoid());
 
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());
 

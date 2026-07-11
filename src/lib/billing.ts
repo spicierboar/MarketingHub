@@ -306,6 +306,51 @@ export async function cancelStripeSubscription(subscriptionId: string): Promise<
   return !!(await stripeDelete(`subscriptions/${encodeURIComponent(subscriptionId)}`));
 }
 
+// ---- Prepaid credit top-up (mode=payment) ------------------------------------
+//
+// One-off Checkout for company wallet top-ups. Webhook (metadata.kind ===
+// credit_top_up) credits the wallet + issues a local tax invoice. Returns null
+// when Stripe is unconfigured (demo falls back to simulated ledger credit).
+
+export async function createCreditTopUpCheckoutSession(
+  tenant: Tenant,
+  companyId: string,
+  amountUsd: number,
+  origin: string,
+  opts?: { successPath?: string; cancelPath?: string },
+): Promise<string | null> {
+  if (!stripeConfigured()) return null;
+  const cents = Math.round(amountUsd * 100);
+  if (!(cents > 0)) return null;
+  const successPath =
+    opts?.successPath ?? `/client/payments?topup=success`;
+  const cancelPath =
+    opts?.cancelPath ?? `/client/payments?topup=cancelled`;
+  const amountStr = String(amountUsd);
+  const params: Record<string, string> = {
+    mode: "payment",
+    client_reference_id: tenant.id,
+    "line_items[0][price_data][currency]": "usd",
+    "line_items[0][price_data][unit_amount]": String(cents),
+    "line_items[0][price_data][product_data][name]":
+      `Account credit top-up ($${amountUsd.toFixed(2)})`,
+    "line_items[0][quantity]": "1",
+    "metadata[kind]": "credit_top_up",
+    "metadata[tenantId]": tenant.id,
+    "metadata[companyId]": companyId,
+    "metadata[amountUsd]": amountStr,
+    "payment_intent_data[metadata][kind]": "credit_top_up",
+    "payment_intent_data[metadata][tenantId]": tenant.id,
+    "payment_intent_data[metadata][companyId]": companyId,
+    "payment_intent_data[metadata][amountUsd]": amountStr,
+    success_url: `${origin}${successPath}`,
+    cancel_url: `${origin}${cancelPath}`,
+  };
+  if (tenant.stripeCustomerId) params.customer = tenant.stripeCustomerId;
+  const session = await stripePost("checkout/sessions", params);
+  return typeof session?.url === "string" ? session.url : null;
+}
+
 // ---- Webhook signature (Stripe-Signature: t=...,v1=...) -------------------------
 //
 // HMAC-SHA256 of `${t}.${rawBody}` with the webhook secret, timing-safe

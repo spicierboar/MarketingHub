@@ -3269,3 +3269,58 @@ export interface CompanyCreditLedgerEntry {
   createdAt: string;
 }
 
+// ---- Tax invoices (local SoT; Stripe refs are payment proof) -----------------
+
+export type TaxInvoiceKind =
+  | "credit_top_up"
+  | "management_fee"
+  | "subscription"
+  | "credit_note"
+  | "adjustment";
+
+export type TaxInvoiceStatus = "issued" | "void" | "credited";
+
+export interface TaxInvoiceParty {
+  name: string;
+  abn?: string;
+  email?: string;
+  address?: string;
+}
+
+export interface TaxInvoiceLine {
+  description: string;
+  quantity: number;
+  unitAmountExGst: number;
+  gstAmount: number;
+  amountIncGst: number;
+}
+
+export interface TaxInvoice {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  invoiceNumber: string;
+  kind: TaxInvoiceKind;
+  status: TaxInvoiceStatus;
+  currency: string; // usd | aud
+  seller: TaxInvoiceParty;
+  buyer: TaxInvoiceParty;
+  lines: TaxInvoiceLine[];
+  subtotalExGst: number;
+  gstAmount: number;
+  totalIncGst: number;
+  gstInclusive: boolean;
+  notes?: string;
+  relatedType?: string;
+  relatedId?: string;
+  creditsInvoiceId?: string;
+  stripeCheckoutSessionId?: string;
+  stripePaymentIntentId?: string;
+  stripeInvoiceId?: string;
+  issuedAt: string;
+  voidedAt?: string;
+  createdById?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
