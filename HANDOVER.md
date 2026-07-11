@@ -1,28 +1,33 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **UX + PROMO + CREATE-SCRAPE** · **uncommitted** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **AGENCY/CLIENT SURFACES + CALENDAR CONTEXT** · **partial uncommitted** · **W6 WAITING ON GOOGLE**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (ahead of origin; large **uncommitted** tree) · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 2**; calendar/context polish **uncommitted**) · live flags **OFF**
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
-> | W0–W5 + W7 | DONE | - |
-> | Managed / C2 / signup pre-fill / platform improvements | SHIPPED (committed) | see archived block |
-> | **Promo catalog (30 packs)** | **CODE DONE · uncommitted** | `src/lib/promo-catalog.ts` · agency admin `/promo-catalog` · client picker · migration **0042** |
-> | **Add-client scrape + declutter** | **CODE DONE · uncommitted** | website+consent on create → auto-apply high/medium · setup-focus company page |
-> | **Modals / AUD / clients list** | **CODE DONE · uncommitted** | FormModal flows · `formatMoney` AUD · compressed lifecycle row |
+> | W0–W5 + W7 · managed · C2 · signup · platform | SHIPPED | - |
+> | **Promo + onboarding scrape/AI + UX declutter** | **COMMITTED** `294611e` | promo catalog · create scrape+enrich · setup overview · tools menu |
+> | **Agency vs client surfaces + calendar context** | **CODE DONE · uncommitted** | seasonal date bug · delivery vs planning · `?company=` scope for assist |
 > | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
 >
-> ### Just finished (this session — create-scrape + overview declutter)
-> - **Problem:** name-only create → empty scrape + cluttered `/companies/[id]`
-> - **Fix:** `AddClientModal` / `/companies/new` collect **website + consent**; `createCompanyAction` → `scrapeAndApplyInitialProfile` (`src/lib/auto-onboarding.ts`); redirect `?scraped=1|0`
-> - **UI:** draft/pending clients get **setup focus** (scrape + profile + score/checklist/status); advanced sidebar (promos, health, templates, …) hidden until approved/ai_ready path
-> - **Demo scrape host:** `harbourroasters.example` (+ consent)
+> ### Shipped @ `294611e` (do not redo)
+> - Add client: website + consent → `scrapeAndApplyInitialProfile` + AI/template enrich (`src/lib/ai/onboarding-enrich.ts`)
+> - Profile: `businessAddress` / `phone` / `email`; setup-focus company overview
+> - Promo catalog (30 packs) + `/promo-catalog` + client promos · migration **0042**
+> - Company tools nav: primary strip + **More tools** dropdown (not wall of links)
+> - AUD / modals / compressed clients list
 >
-> ### Key paths
-> - Create: `src/components/add-client-modal.tsx` · `src/app/(app)/companies/actions.ts` · `src/lib/auto-onboarding.ts` (`scrapeAndApplyInitialProfile`)
-> - Overview: `src/app/(app)/companies/[id]/page.tsx`
-> - Promo: `src/lib/promo-catalog.ts` · `src/lib/promo-catalog-agency.ts` · `src/app/(app)/promo-catalog/` · `supabase/migrations/0042_tenant_promo_catalog.sql`
+> ### Just finished (this session — uncommitted)
+> - **Seasonal bug:** MM-DD events were remapped onto every viewed month → fixed in `calendar-intelligence.ts`
+> - **Agency vs client:** `docs/MANAGED-SERVICE-MODEL.md` matrix; agency calendar = delivery first when `?company=`; planning under collapsed **Agency planning**; client portal stays posts-only
+> - **Context leak:** assist/ready-to-schedule/campaigns now scoped to `?company=`; scan locked; context bar = `{Client} / module · Agency tools`
+> - Key files: `src/app/(app)/calendar/page.tsx` · `calendar-assist-panel.tsx` · `calendar-intelligence*.ts(x)` · `company-context-bar.tsx` · `company-tools-nav.tsx`
+>
+> ### Product rule (keep)
+> **AI/planning = agency. Review = client portal.** Seasonal prompts, AI assist, optimal windows never on `/client/*`. With `?company=`, no other-client data leak.
+>
+> **Demo scrape:** `harbourroasters.example` + consent
 >
 > **Owner migrations — paste if not done:**
 > ```powershell
@@ -35,10 +40,10 @@
 > **Local demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · `/dev` → Agency `sasha@brightspark.dev` · Client `liam@brightspark.dev`
 >
 > **NEXT (priority):**
-> 1. **Verify** Add client → `harbourroasters.example` + consent → pre-filled setup page (not the old cluttered stack)
-> 2. **Commit** the uncommitted UX/promo/scrape tree when owner asks (exclude `scripts/*.snip`, `_owner_paste_*`, `.next`, integrator temps)
+> 1. **Commit** uncommitted calendar/context/tools polish when owner asks (exclude `_owner_paste_*`, `scripts/*`, `temp-route-ours.ts`)
+> 2. Verify: Clients → open client → Calendar — delivery first; Agency planning collapsed; assist only that client; July ≠ Valentine’s/Christmas
 > 3. Owner paste **0041** + **0042**
-> 4. Optional polish: further compress AutoOnboardingPanel on setup page; sales wizard website field
+> 4. Optional: sales wizard website field; push `main` when asked
 > 5. Park live cutover until Google GO
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
@@ -48,6 +53,12 @@
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, **UX + PROMO + CREATE-SCRAPE** · **uncommitted**) — archived
+>
+> Promo/onboarding/UX tree committed as `294611e`. Calendar agency/client split continued — see block above.
 >
 > ---
 >

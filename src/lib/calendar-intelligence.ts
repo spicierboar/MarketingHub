@@ -172,35 +172,63 @@ function isoInMonth(iso: string, monthKey: string): boolean {
   return iso.slice(0, 7) === monthKey;
 }
 
+/** Resolve MM-DD or ISO date against a calendar year. */
+function toIsoInYear(mdOrIso: string, year: number): string {
+  if (mdOrIso.length === 10) return mdOrIso;
+  return `${year}-${mdOrIso}`;
+}
+
 function eventInMonth(ev: { date: string; endDate?: string }, monthKey: string): boolean {
   const [y, m] = monthKey.split("-").map(Number);
-  const start = ev.date.length === 5 ? `${monthKey}-${ev.date.slice(3)}` : ev.date;
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = `${monthKey}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+
+  // Fixed MM-DD events belong to that month of the viewed year (not remapped onto July).
+  if (ev.date.length === 5 && !ev.endDate) {
+    return ev.date.slice(0, 2) === monthKey.slice(5, 7);
+  }
+
+  let start = toIsoInYear(ev.date, y);
   if (isoInMonth(start, monthKey)) return true;
+
   if (ev.endDate) {
-    const end =
-      ev.endDate.length === 5
-        ? ev.endDate < ev.date
-          ? `${y + 1}-${ev.endDate}`
-          : `${monthKey}-${ev.endDate.slice(3)}`
-        : ev.endDate;
+    const wrapsYear =
+      ev.date.length === 5 &&
+      ev.endDate.length === 5 &&
+      ev.endDate < ev.date;
+    const end = toIsoInYear(ev.endDate, wrapsYear ? y + 1 : y);
     if (isoInMonth(end, monthKey)) return true;
-    // Span across month
-    const monthStart = `${monthKey}-01`;
-    const monthEnd = `${monthKey}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
     if (start <= monthEnd && end >= monthStart) return true;
+
+    // Dec→Jan wrap when viewing January of year y
+    if (wrapsYear) {
+      const startPrev = toIsoInYear(ev.date, y - 1);
+      const endThis = toIsoInYear(ev.endDate, y);
+      if (startPrev <= monthEnd && endThis >= monthStart) return true;
+    }
   }
   return false;
 }
 
 function resolveEventDate(ev: { date: string }, monthKey: string): string {
   if (ev.date.length === 10) return ev.date;
-  return `${monthKey}-${ev.date.slice(3)}`;
+  return `${monthKey.slice(0, 4)}-${ev.date}`;
+}
+
+function industryMatches(promptTags: string[], industries: string[]): boolean {
+  if (!promptTags.length || !industries.length) return false;
+  return promptTags.some((tag) =>
+    industries.some(
+      (ind) => ind.includes(tag) || tag.includes(ind.split(/\s+/)[0] ?? ""),
+    ),
+  );
 }
 
 /** AU public holidays + seasonal/local prompts for a calendar month. */
 export function seasonalPromptsForMonth(
   monthKey: string,
   industries?: string[],
+  opts?: { relevantOnly?: boolean },
 ): SeasonalPrompt[] {
   const prompts: SeasonalPrompt[] = [];
 
@@ -226,16 +254,24 @@ export function seasonalPromptsForMonth(
     });
   }
 
-  const norm = (industries ?? []).map((i) => i.toLowerCase());
-  const scored = prompts.map((p) => {
+  const norm = (industries ?? []).map((i) => i.toLowerCase()).filter(Boolean);
+  let scored = prompts.map((p) => {
     if (!norm.length || !p.industries.length) return p;
-    const match = p.industries.some((tag) =>
-      norm.some((ind) => ind.includes(tag) || tag.includes(ind.split(/\s+/)[0] ?? "")),
-    );
-    return match
+    return industryMatches(p.industries, norm)
       ? { ...p, priority: p.priority === "low" ? ("medium" as const) : ("high" as const) }
       : p;
   });
+
+  // When viewing one client, hide industry prompts that don't match them.
+  // Holidays and untagged events stay (they're calendar facts).
+  if (opts?.relevantOnly && norm.length) {
+    scored = scored.filter(
+      (p) =>
+        p.category === "holiday" ||
+        p.industries.length === 0 ||
+        industryMatches(p.industries, norm),
+    );
+  }
 
   const order = { high: 0, medium: 1, low: 2 };
   return scored.sort(
@@ -510,10 +546,18 @@ export async function buildCalendarIntelligence(
   tenant: Pick<Tenant, "timezone"> | null | undefined,
   tenantId: string,
   monthKey: string,
-  opts?: { companyIds?: string[]; industries?: string[]; platform?: string },
+  opts?: {
+    companyIds?: string[];
+    industries?: string[];
+    platform?: string;
+    /** When true, drop seasonal prompts that don't match the given industries. */
+    relevantOnly?: boolean;
+  },
 ): Promise<CalendarIntelligenceBundle> {
   const clock = resolveQueueClock(tenant);
-  const seasonalPrompts = seasonalPromptsForMonth(monthKey, opts?.industries);
+  const seasonalPrompts = seasonalPromptsForMonth(monthKey, opts?.industries, {
+    relevantOnly: opts?.relevantOnly,
+  });
   const optimalWindows = await optimalPostWindows(tenantId, {
     companyIds: opts?.companyIds,
     platform: opts?.platform,

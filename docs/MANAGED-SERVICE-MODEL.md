@@ -66,6 +66,32 @@ Parked showstoppers and deferred product work: [`MANAGED-SERVICE-PENDING.md`](./
 - Rolling **30-day** calendar maintained via background jobs (`processDueManagedDeliveries` on the scheduler tick)
 - Managed auto-progress (`progressManagedSchedulesForTenant`) schedules assist-ready approved content for `fully_managed` companies after the rolling calendar top-up
 
+## Agency vs client surfaces (automation-first)
+
+Rule: **AI and delivery run at agency level; clients review outcomes.**  
+Do not put agency planning tools on the client portal, and when the agency is looking at one client, keep **delivery** above **planning**.
+
+| Concern | Agency (`/…`) | Client portal (`/client/…`) |
+|--------|----------------|------------------------------|
+| Who operates | Staff / AI runners | Business owner / approver |
+| Job | Plan, draft, schedule, publish path | Approve, glance schedule, ask |
+| Seasonal / AU event prompts | Yes — portfolio + agency planning | **Never** |
+| AI calendar assist / scan | Yes — creates `ai_draft` only | **Never** |
+| Optimal post windows | Yes — advisory for staff | **Never** (agency schedules) |
+| Month grid of posts | Portfolio or one client | Own posts only (“Your calendar”) |
+| Approvals | Exception desk + Approvals | Primary inbox |
+| Studio / Brand Brain / ads | Yes | **Never** |
+| Ready-made promos | Catalog admin + mark on calendar | Pick promo → request only |
+| Publish / spend | Critique + human path | Approve content; no publish console |
+
+### Calendar specifically
+
+1. **Agency · All clients** — portfolio planning: seasonal prompts, assist scan, optimal windows, multi-client grid.  
+2. **Agency · One client (`?company=`)** — **delivery first** for that client. Assist, seasons, campaigns, and windows must be **scoped to that company id** (no other-client leak). Agency planning sits under an explicit section. Context bar labels **Agency tools**, not the client portal.  
+3. **Client portal calendar** — only their scheduled posts + move/pause asks + promo “not on calendar yet”. No seasonal wall, no scan, no industry defaults.
+
+Automation still drafts and tops up calendars in the background; clients see **results**, not the machinery.
+
 ## Client portal surfaces (only)
 
 1. Home (status)  

@@ -105,7 +105,7 @@ export default async function ClientCalendarPage({
       <PageHeader
         title="Your calendar"
         explainerId="client-calendar"
-        explainer="What's planned for your social channels. Ask us to move or pause a post if timing needs to change."
+        explainer="What's planned for your channels. We handle strategy and scheduling — ask us here only if timing needs to change."
       >
         <div className="flex items-center gap-2">
           <Link href={`/client/calendar?month=${prev}`} className={buttonClasses("outline", "sm")}>

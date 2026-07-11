@@ -20,19 +20,35 @@ export function CalendarIntelligencePanel({
   prompts,
   windows,
   monthLabel,
+  scopedCompanyName,
+  agencyLabel,
 }: {
   clock: QueueClock;
   prompts: SeasonalPrompt[];
   windows: OptimalPostWindow[];
   monthLabel: string;
+  /** When set, copy clarifies prompts are filtered for this client. */
+  scopedCompanyName?: string;
+  /** Prefix titles so staff know this is not client-facing. */
+  agencyLabel?: boolean;
 }) {
+  const seasonTitle = agencyLabel
+    ? "Agency · Seasonal & event prompts"
+    : "Seasonal & event prompts";
+  const windowsTitle = agencyLabel
+    ? "Agency · Optimal post windows"
+    : "Optimal post windows";
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Seasonal &amp; event prompts</CardTitle>
+          <CardTitle>{seasonTitle}</CardTitle>
           <CardDescription>
-            AU-aware planning ideas for {monthLabel}. Local clock: {clock.clockLabel} ({clock.today})
+            {scopedCompanyName
+              ? `AU planning ideas for ${monthLabel} relevant to ${scopedCompanyName} (staff only).`
+              : `AU-aware planning ideas for ${monthLabel} (staff / automation only).`}{" "}
+            Local clock: {clock.clockLabel} ({clock.today})
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -56,10 +72,10 @@ export function CalendarIntelligencePanel({
 
       <Card id="optimal-windows">
         <CardHeader>
-          <CardTitle>Optimal post windows</CardTitle>
+          <CardTitle>{windowsTitle}</CardTitle>
           <CardDescription>
-            Analytics-informed slots (simulated engagement until live Insights are connected).
-            Basis shown under each window.
+            Analytics-informed slots for agency scheduling (simulated until live Insights).
+            Not shown in the client portal.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">

@@ -247,8 +247,8 @@ export function CompanyToolsNav({
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Agency workspace — clients review in their portal; AI drafts stay here until
-            approved
+            Agency workspace — clients review in their portal; seasonal planning and AI
+            drafts stay here until approved
           </p>
         </div>
         <StatusBadge status={status} />

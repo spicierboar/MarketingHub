@@ -144,11 +144,18 @@ export default async function CalendarPage({
   }
 
   const tenant = await getTenant(user.tenantId);
-  const industries = companies.map((c) => c.profile.industry ?? "").filter(Boolean);
+  const focusCompanies = fCompany
+    ? companies.filter((c) => c.id === fCompany)
+    : companies;
+  const industries = focusCompanies
+    .map((c) => c.profile.industry ?? "")
+    .filter(Boolean);
   const intelligence = await buildCalendarIntelligence(tenant, user.tenantId, month, {
-    companyIds: [...companyIds],
+    companyIds: fCompany ? [fCompany] : [...companyIds],
     industries,
     platform: fPlatform || undefined,
+    // One client selected → only show seasonal prompts relevant to them (+ holidays).
+    relevantOnly: Boolean(fCompany),
   });
 
   // Attach optimal-timing hints to scheduled posts (soft advisory).
@@ -188,30 +195,84 @@ export default async function CalendarPage({
     if (conflicts.length) conflictsByDay[day] = conflicts;
   }
 
-  const campaigns = (await listCampaigns(user.tenantId)).filter((c) => companyIds.has(c.companyId));
-  const businessTypes = distinctBusinessTypes(companies);
+  const campaigns = (await listCampaigns(user.tenantId)).filter((c) =>
+    fCompany ? c.companyId === fCompany : companyIds.has(c.companyId),
+  );
+  const businessTypes = distinctBusinessTypes(
+    fCompany ? companies.filter((c) => c.id === fCompany) : companies,
+  );
   const scheduledCount = filtered.filter((e) => e.kind === "post").length;
   const summary = portfolioSummary(filtered);
+
+  // Honour ?company= context for assist lists — do not leak other clients' suggestions.
+  const assistCompanyIds = fCompany ? [fCompany] : [...companyIds];
   const assistSuggestions = await listOpenCalendarAssistForTenant(
     user.tenantId,
-    [...companyIds],
+    assistCompanyIds,
     12,
   );
   const assistReadyToSchedule = await listAssistReadyToSchedule(
     user.tenantId,
-    [...companyIds],
+    assistCompanyIds,
     8,
   );
 
   const filterQs = (extra?: Record<string, string>) =>
     new URLSearchParams({ ...params, month, ...extra } as Record<string, string>);
 
+  const scopedCompany = fCompany ? companyById.get(fCompany) : undefined;
+  const agencyPlanning = (
+    <>
+      <CalendarAssistPanel
+        suggestions={assistSuggestions}
+        readyToSchedule={assistReadyToSchedule}
+        companies={focusCompanies.length ? focusCompanies : companies}
+        filterCompanyId={fCompany}
+        lockCompany={Boolean(fCompany)}
+      />
+      <CalendarIntelligencePanel
+        clock={intelligence.clock}
+        prompts={intelligence.seasonalPrompts}
+        windows={intelligence.optimalWindows}
+        monthLabel={grid.label}
+        scopedCompanyName={scopedCompany?.name}
+        agencyLabel
+      />
+    </>
+  );
+
+  const deliveryCalendar =
+    view === "portfolio" ? (
+      <PortfolioCalendarTable
+        entries={filtered}
+        summary={summary}
+        month={month}
+        params={params}
+      />
+    ) : (
+      <CalendarGrid
+        weeks={grid.weeks}
+        entriesByDay={entriesByDay}
+        conflictsByDay={conflictsByDay}
+        holidays={AU_HOLIDAYS}
+        optimalWindows={intelligence.optimalWindows}
+      />
+    );
+
   return (
     <div>
       <PageHeader
-        title="Social & content calendar"
+        title={
+          scopedCompany
+            ? `${scopedCompany.name} · delivery calendar`
+            : "Agency calendar"
+        }
         explainerId="calendar"
-        explainer="Plan and schedule posts across channels. Nothing goes live until it has been approved."
+        explainer={
+          scopedCompany
+            ? "This client’s scheduled and planned posts. Seasonal prompts and AI assist are agency planning tools — folded below, not client-facing."
+            : "Portfolio planning across clients. Seasonal prompts and AI assist run here; clients only see their own posts in the portal."
+        }
         description={`${scheduledCount} scheduled · ${filtered.length - scheduledCount} planned · ${intelligence.clock.clockLabel}`}
       >
         <Link
@@ -231,7 +292,7 @@ export default async function CalendarPage({
           href={`/calendar?${filterQs({ view: view === "month" ? "portfolio" : "month" })}`}
           className={buttonClasses(view === "portfolio" ? "default" : "outline", "sm")}
         >
-          {view === "portfolio" ? "Portfolio" : "Portfolio view"}
+          {view === "portfolio" ? "Month grid" : "Portfolio view"}
         </Link>
       </PageHeader>
 
@@ -242,7 +303,7 @@ export default async function CalendarPage({
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Client</label>
             <Select name="company" defaultValue={fCompany} className="h-9 w-44">
-              <option value="">All clients</option>
+              <option value="">All clients (agency)</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -250,17 +311,19 @@ export default async function CalendarPage({
               ))}
             </Select>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Business type</label>
-            <Select name="businessType" defaultValue={fBusinessType} className="h-9 w-48">
-              <option value="">All types</option>
-              {businessTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </Select>
-          </div>
+          {!fCompany && (
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Business type</label>
+              <Select name="businessType" defaultValue={fBusinessType} className="h-9 w-48">
+                <option value="">All types</option>
+                {businessTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Channel</label>
             <Input name="platform" defaultValue={params.platform} placeholder="e.g. Facebook" className="h-9 w-36" />
@@ -299,35 +362,59 @@ export default async function CalendarPage({
           </Link>
         </form>
 
-        <CalendarAssistPanel
-          suggestions={assistSuggestions}
-          readyToSchedule={assistReadyToSchedule}
-          companies={companies}
-          filterCompanyId={fCompany}
-        />
+        {scopedCompany ? (
+          <>
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight">Client delivery</h2>
+                <p className="text-xs text-muted-foreground">
+                  What is planned or scheduled for {scopedCompany.name}. This is what the client
+                  can see (as a simpler list) in their portal.
+                </p>
+              </div>
+              {deliveryCalendar}
+            </section>
 
-        <CalendarIntelligencePanel
-          clock={intelligence.clock}
-          prompts={intelligence.seasonalPrompts}
-          windows={intelligence.optimalWindows}
-          monthLabel={grid.label}
-        />
-
-        {view === "portfolio" ? (
-          <PortfolioCalendarTable
-            entries={filtered}
-            summary={summary}
-            month={month}
-            params={params}
-          />
+            <details className="group rounded-lg border border-border bg-muted/20">
+              <summary className="cursor-pointer list-none px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Agency planning</p>
+                    <p className="text-xs text-muted-foreground">
+                      Seasonal prompts · AI assist · optimal windows — staff/automation only; not
+                      shown to the client
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
+                  <span className="hidden text-xs text-muted-foreground group-open:inline">Hide</span>
+                </div>
+              </summary>
+              <div className="space-y-4 border-t border-border p-4">{agencyPlanning}</div>
+            </details>
+          </>
         ) : (
-          <CalendarGrid
-            weeks={grid.weeks}
-            entriesByDay={entriesByDay}
-            conflictsByDay={conflictsByDay}
-            holidays={AU_HOLIDAYS}
-            optimalWindows={intelligence.optimalWindows}
-          />
+          <>
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight">Agency planning</h2>
+                <p className="text-xs text-muted-foreground">
+                  AU seasons, gaps, and AI assist across the portfolio. Clients never see this
+                  panel — automation drafts here; they approve in the portal.
+                </p>
+              </div>
+              {agencyPlanning}
+            </section>
+
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight">Delivery across clients</h2>
+                <p className="text-xs text-muted-foreground">
+                  Scheduled and planned posts. Filter to one client to focus delivery.
+                </p>
+              </div>
+              {deliveryCalendar}
+            </section>
+          </>
         )}
       </div>
     </div>
