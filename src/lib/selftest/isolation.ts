@@ -209,6 +209,17 @@ import {
   checkSurfaceDedupesByKind,
 } from "@/lib/selftest/ai-mos";
 import {
+  checkDecideRejectDoesNotPublish,
+  checkOptimiseEmitsApprovalRequired,
+  checkPlanFromInstructionCreatesDraftOnly,
+  checkRecommendationSchemaRejectsBad,
+  checkRecommendationSchemaValidatesGood,
+} from "@/lib/selftest/ai-campaign-layer";
+import {
+  checkRbacCapabilityGrant,
+  checkRbacLegacyAdminFallback,
+} from "@/lib/selftest/rbac-matrix";
+import {
   checkAcceptCreatesDraftOnly as checkCalendarAssistAcceptDraftOnly,
   checkBuildAdAlignmentDrafts,
   checkBuildCalendarAssistDrafts,
@@ -233,10 +244,13 @@ import {
   checkSimulatedBillingWhenLiveOff,
 } from "@/lib/selftest/photo-marketplace";
 import {
+  checkConnectorCapabilityRegistry,
   checkPublishingHealthInBundle,
   checkPublishingPlatformHealthRows,
   checkPublishingSimWhenLiveOff,
 } from "@/lib/selftest/publishing-connectors";
+import { checkOptedOutContactBlocked } from "@/lib/selftest/privacy-dsr";
+import { checkSpendApplyRequiresApproval } from "@/lib/selftest/spend-approval";
 import {
   checkLogRecordsDedupeKey,
   checkRetrySkipsWhenAlreadyPublished,
@@ -250,6 +264,11 @@ import {
   checkFunnelLandingAnalyticsSimulated,
   checkFunnelSimulatedWhenLiveOff,
 } from "@/lib/selftest/funnel";
+import {
+  checkCampaignExperimentWinnerAllowed,
+  checkCampaignExperimentWinnerBlockedConfidence,
+  checkCampaignExperimentWinnerBlockedSample,
+} from "@/lib/selftest/campaign-experiments";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 import type { ActingUser, TenantRole, User } from "@/lib/types";
 
@@ -949,6 +968,32 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
       checkDismissAudited(companyA.id, ownerAUser.id, tenantAId!),
     );
 
+    await expect("aiCampaignLayer.schemaValidatesGood", () =>
+      checkRecommendationSchemaValidatesGood(),
+    );
+
+    await expect("aiCampaignLayer.schemaRejectsBad", () =>
+      checkRecommendationSchemaRejectsBad(),
+    );
+
+    await expect("aiCampaignLayer.planCreatesDraftOnly", () =>
+      checkPlanFromInstructionCreatesDraftOnly(),
+    );
+
+    await expect("aiCampaignLayer.optimiseApprovalRequired", () =>
+      checkOptimiseEmitsApprovalRequired(),
+    );
+
+    await expect("aiCampaignLayer.decideRejectNoPublish", () =>
+      checkDecideRejectDoesNotPublish(),
+    );
+
+    await expect("rbacMatrix.legacyAdminFallback", () =>
+      checkRbacLegacyAdminFallback(),
+    );
+
+    await expect("rbacMatrix.capabilityGrant", () => checkRbacCapabilityGrant());
+
     await expect("autoOnboarding.consentRequired", () => checkConsentRequired());
 
     await expect("autoOnboarding.simulatedWhenLiveOff", () =>
@@ -979,6 +1024,14 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("publishingConnectors.healthInBundle", () => checkPublishingHealthInBundle());
 
+    await expect("publishingConnectors.capabilityRegistry", () =>
+      checkConnectorCapabilityRegistry(),
+    );
+
+    await expect("privacyDsr.optedOutContactBlocked", () => checkOptedOutContactBlocked());
+
+    await expect("spendApproval.applyRequiresAccept", () => checkSpendApplyRequiresApproval());
+
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());
 
     await expect("photoMarketplace.simulatedBillingWhenLiveOff", () =>
@@ -1005,6 +1058,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("funnel.ctaConversionMetrics", async () => checkFunnelCtaConversionMetrics());
     await expect("funnel.abTestDeterministicWinner", async () => checkFunnelAbTestDeterministicWinner());
     await expect("funnel.fetchNullWhenLiveOff", async () => checkFunnelFetchNullWhenLiveOff());
+
+    await expect("campaignExperiments.winnerBlockedSample", async () =>
+      checkCampaignExperimentWinnerBlockedSample(),
+    );
+    await expect("campaignExperiments.winnerBlockedConfidence", async () =>
+      checkCampaignExperimentWinnerBlockedConfidence(),
+    );
+    await expect("campaignExperiments.winnerAllowed", async () =>
+      checkCampaignExperimentWinnerAllowed(),
+    );
 
     await expect("businessProfiles.retailAiContext", async () => {
       const company = await getCompany(companyA.id);

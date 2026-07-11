@@ -133,6 +133,8 @@ export interface TenantMember {
   role: TenantRole;
   roleTitle?: RoleTitle; // granular §9 title within this tenant
   portalOnly?: boolean; // explicit client-portal flag (migration 0028; field sales)
+  /** Optional additive permissions (migration 0036). Empty/absent = legacy RBAC. */
+  capabilities?: string[];
   createdAt: string;
 }
 
@@ -146,7 +148,12 @@ export const TENANT_ROLE_TIER: Record<TenantRole, Role> = {
 };
 
 // A session-resolved user always carries their active tenant context.
-export type ActingUser = User & { tenantId: string; tenantRole: TenantRole };
+export type ActingUser = User & {
+  tenantId: string;
+  tenantRole: TenantRole;
+  /** Stamped from TenantMember.capabilities when present (additive RBAC). */
+  capabilities?: string[];
+};
 
 // ---- Roles & access ---------------------------------------------------------
 
@@ -921,7 +928,10 @@ export interface AiRun {
     | "ai_mos_dismiss"
     | "calendar_assist_scan"
     | "calendar_assist_accept"
-    | "calendar_assist_dismiss";
+    | "calendar_assist_dismiss"
+    | "ai_campaign_plan"
+    | "ai_campaign_optimise"
+    | "ai_campaign_decision";
   model: string;
   promptSummary: string;
   outputChars: number;
@@ -958,6 +968,48 @@ export type CampaignStatus =
   | "cancelled"
   | "completed";
 
+// AI campaign layer — supported campaign types (product brief §3).
+export type CampaignType =
+  | "brand_awareness"
+  | "product_launch"
+  | "lead_generation"
+  | "website_traffic"
+  | "engagement"
+  | "follower_growth"
+  | "sales_conversion"
+  | "app_downloads"
+  | "event_promotion"
+  | "seasonal"
+  | "user_generated_content"
+  | "influencer"
+  | "customer_testimonials"
+  | "educational"
+  | "community_building"
+  | "retargeting"
+  | "recruitment"
+  | "customer_retention"
+  | "crisis_communication"
+  | "corporate_responsibility";
+
+export type CampaignPriority = "low" | "medium" | "high" | "critical";
+
+export interface CampaignUtm {
+  source?: string;
+  medium?: string;
+  campaign?: string;
+  content?: string;
+  term?: string;
+}
+
+/** AI assumptions, risks, missing info, performance targets (campaigns.layer_meta). */
+export interface CampaignLayerMeta {
+  assumptions?: string[];
+  risks?: string[];
+  missingInfo?: string[];
+  performanceTargets?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface Campaign {
   id: string;
   companyId: string;
@@ -979,6 +1031,21 @@ export interface Campaign {
   approvedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  // AI campaign layer (0035) — optional so existing rows/seeds stay valid
+  campaignType?: CampaignType | string;
+  description?: string;
+  priority?: CampaignPriority | string;
+  timezone?: string;
+  budgetAmount?: number;
+  currency?: string;
+  dailySpendLimit?: number;
+  geographicScope?: string[];
+  landingPageUrl?: string;
+  utm?: CampaignUtm;
+  associatedProducts?: string[];
+  endDate?: string;
+  archivedAt?: string | null;
+  layerMeta?: CampaignLayerMeta;
 }
 
 export type CampaignItemStatus =
@@ -1717,6 +1784,46 @@ export interface FunnelAbExperiment {
   updatedAt: string;
 }
 
+// Campaign A/B experiments — winner engine with sample + confidence gates.
+export type CampaignExperimentStatus =
+  | "draft"
+  | "running"
+  | "completed"
+  | "cancelled";
+
+export interface CampaignExperimentVariant {
+  id: string;
+  label: string;
+  role: "control" | "test";
+  /** Cumulative observations (impressions / exposures). */
+  impressions: number;
+  /** Success events for successMetric. */
+  conversions: number;
+}
+
+export interface CampaignExperiment {
+  id: string;
+  companyId: string;
+  campaignId: string;
+  hypothesis: string;
+  controlVariantId: string;
+  testVariantId: string;
+  variants: CampaignExperimentVariant[];
+  /** Percent of audience on control (test gets 100 - audienceSplit). */
+  audienceSplit: number;
+  startDate?: string;
+  endDate?: string;
+  successMetric: string;
+  minSampleSize: number;
+  /** 0–1, e.g. 0.95 — refuse winner below this confidence. */
+  confidenceThreshold: number;
+  winningVariation?: string | null;
+  status: CampaignExperimentStatus;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface FunnelStageMetric {
   stageId: string;
   stageName: string;
@@ -1729,6 +1836,45 @@ export interface FunnelStageMetric {
 }
 
 export type OfferStatus = "draft" | "approved" | "archived";
+
+// AI campaign layer — promotion types (product brief §3; Offer is the Promotion root).
+export type PromotionType =
+  | "discount_code"
+  | "limited_time_offer"
+  | "flash_sale"
+  | "competition"
+  | "giveaway"
+  | "bogo"
+  | "free_trial"
+  | "free_sample"
+  | "referral_incentive"
+  | "loyalty_reward"
+  | "early_access"
+  | "exclusive_follower_discount"
+  | "bundle_deal"
+  | "gift_with_purchase"
+  | "free_shipping"
+  | "influencer_promo_code"
+  | "affiliate"
+  | "live_shopping"
+  | "countdown"
+  | "subscriber_only"
+  | "event_ticket"
+  | "pre_order_incentive"
+  | "cashback"
+  | "digital_coupon"
+  | "cross_promotion";
+
+export type PromotionApprovalStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "archived";
+
+export interface PromotionMeta {
+  [key: string]: unknown;
+}
 
 // Offer & Promotion Manager (§30). The AI may only promote live approved offers.
 export interface Offer {
@@ -1745,6 +1891,27 @@ export interface Offer {
   status: OfferStatus;
   createdAt: string;
   updatedAt: string;
+  // AI campaign layer promotion fields (0035) — optional for existing rows
+  promotionType?: PromotionType | string;
+  offerDescription?: string;
+  discountAmount?: number;
+  discountPercentage?: number;
+  couponCode?: string;
+  minimumPurchaseAmount?: number;
+  maximumDiscount?: number;
+  eligibleProducts?: string[];
+  eligibleCategories?: string[];
+  eligibleSegments?: string[];
+  excludedProducts?: string[];
+  excludedCustomers?: string[];
+  eligibleRegions?: string[];
+  excludedRegions?: string[];
+  totalUsageLimit?: number;
+  perCustomerUsageLimit?: number;
+  redemptionChannel?: string;
+  inventoryAllocation?: number;
+  approvalStatus?: PromotionApprovalStatus | string;
+  promotionMeta?: PromotionMeta;
 }
 
 // ---- Phase 11: Creative Asset System (§46) -----------------------------------------
@@ -2803,6 +2970,222 @@ export interface LearningLesson {
   dismissReason?: string;
   hypothesisId?: string | null;
   createdById: string;
+  createdAt: string;
+}
+
+// ---- AI campaign management layer (0035) ----------------------------------------
+
+export type ApprovalPolicyEntityType =
+  | "campaign"
+  | "content"
+  | "promotion"
+  | "budget"
+  | "spend"
+  | "complaint"
+  | "crisis"
+  | "regulated_claim";
+
+export type ApprovalLevel =
+  | "none"
+  | "single"
+  | "two"
+  | "departmental"
+  | "legal"
+  | "executive";
+
+export interface ApprovalPolicyTriggerRules {
+  campaignTypes?: Array<CampaignType | string>;
+  minBudget?: number;
+  minRiskScore?: number;
+  platforms?: string[];
+  regions?: string[];
+  [key: string]: unknown;
+}
+
+export interface ApprovalPolicy {
+  id: string;
+  tenantId: string;
+  name: string;
+  entityType: ApprovalPolicyEntityType | string;
+  triggerRules: ApprovalPolicyTriggerRules;
+  approvalLevel: ApprovalLevel | string;
+  active: boolean;
+  createdById?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiPromptVersion {
+  id: string;
+  /** null tenant = platform library */
+  tenantId?: string | null;
+  promptKey: string;
+  name: string;
+  purpose: string;
+  promptText: string;
+  version: number;
+  modelProvider: string;
+  modelName?: string;
+  temperature?: number;
+  outputSchema?: Record<string, unknown>;
+  active: boolean;
+  createdById?: string;
+  approvedById?: string;
+  effectiveAt?: string | null;
+  retiredAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AiOrchestrationOperation =
+  | "plan_campaign"
+  | "design_promotion"
+  | "generate_content"
+  | "revise_content"
+  | "optimise"
+  | "analyse_performance"
+  | "analyse_sentiment"
+  | "allocate_budget"
+  | "check_compliance"
+  | "route_approval"
+  | "generate_report"
+  | "select_audience"
+  | "schedule_content"
+  | "detect_anomaly";
+
+export type AiOrchestrationRunStatus =
+  | "proposed"
+  | "awaiting_approval"
+  | "approved"
+  | "rejected"
+  | "executed"
+  | "failed";
+
+export interface AiOrchestrationRun {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  campaignId?: string | null;
+  operation: AiOrchestrationOperation | string;
+  inputSummary?: string;
+  structuredOutput: Record<string, unknown>;
+  modelProvider?: string;
+  modelName?: string;
+  promptVersionId?: string | null;
+  confidenceScore?: number;
+  riskScore?: number;
+  approvalRequired: boolean;
+  status: AiOrchestrationRunStatus | string;
+  createdById?: string;
+  correlationId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Brief §17 — snake_case keys; stored in ai_campaign_recommendations.payload. */
+export interface AiRecommendedAction {
+  action_type: string;
+  entity_id?: string;
+  current_value?: string;
+  proposed_value?: string;
+  reason?: string;
+  expected_impact?: string;
+  confidence_score?: number;
+  risk_score?: number;
+  approval_required?: boolean;
+}
+
+export interface AiRecommendationPayload {
+  recommendation_type: string;
+  campaign_id?: string;
+  summary: string;
+  recommended_actions: AiRecommendedAction[];
+  data_sources: string[];
+  assumptions: string[];
+  compliance_flags: string[];
+  generated_at: string;
+  model_version: string;
+  prompt_version: string;
+}
+
+export type AiRecommendationHumanDecision =
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "overridden";
+
+export interface AiCampaignRecommendation {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  campaignId?: string | null;
+  orchestrationRunId?: string | null;
+  recommendationType: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  summary: string;
+  payload: AiRecommendationPayload | Record<string, unknown>;
+  confidenceScore?: number;
+  riskScore?: number;
+  expectedOutcome?: string;
+  modelProvider?: string;
+  modelName?: string;
+  modelVersion?: string;
+  promptVersion?: string;
+  humanDecision?: AiRecommendationHumanDecision | string;
+  humanDecisionAt?: string | null;
+  overrideReason?: string;
+  actionTaken?: string;
+  actualOutcome?: string;
+  feedbackScore?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignPerformanceSnapshot {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  campaignId?: string | null;
+  contentId?: string | null;
+  platformAccountId?: string;
+  periodStart: string;
+  periodEnd: string;
+  metrics: Record<string, unknown>;
+  dataSource: string;
+  attributionStatus?: string;
+  collectedAt: string;
+  createdAt: string;
+}
+
+// ---- Privacy DSR (data-subject requests) ------------------------------------
+export type PrivacyRequestType =
+  | "access"
+  | "deletion"
+  | "rectification"
+  | "restriction"
+  | "portability";
+
+export type PrivacyRequestStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "rejected";
+
+export interface PrivacyRequest {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  /** CRM contact id, email, or other subject identifier */
+  subjectRef: string;
+  requestType: PrivacyRequestType;
+  status: PrivacyRequestStatus;
+  lawfulBasis?: string;
+  jurisdiction?: string;
+  dueAt?: string | null;
+  completedAt?: string | null;
+  notes?: string;
+  createdBy?: string;
   createdAt: string;
 }
 

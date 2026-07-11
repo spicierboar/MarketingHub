@@ -34,7 +34,10 @@ import {
   PortfolioCalendarTable,
 } from "@/components/calendar-intelligence-panel";
 import { CalendarAssistPanel } from "@/components/calendar-assist-panel";
-import { listOpenCalendarAssistForTenant } from "@/lib/ai/calendar-assist";
+import {
+  listAssistReadyToSchedule,
+  listOpenCalendarAssistForTenant,
+} from "@/lib/ai/calendar-assist";
 import { Select, Input } from "@/components/ui/form";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { now, titleCase } from "@/lib/utils";
@@ -194,6 +197,11 @@ export default async function CalendarPage({
     [...companyIds],
     12,
   );
+  const assistReadyToSchedule = await listAssistReadyToSchedule(
+    user.tenantId,
+    [...companyIds],
+    8,
+  );
 
   const filterQs = (extra?: Record<string, string>) =>
     new URLSearchParams({ ...params, month, ...extra } as Record<string, string>);
@@ -291,6 +299,7 @@ export default async function CalendarPage({
 
         <CalendarAssistPanel
           suggestions={assistSuggestions}
+          readyToSchedule={assistReadyToSchedule}
           companies={companies}
           filterCompanyId={fCompany}
         />
@@ -315,6 +324,7 @@ export default async function CalendarPage({
             entriesByDay={entriesByDay}
             conflictsByDay={conflictsByDay}
             holidays={AU_HOLIDAYS}
+            optimalWindows={intelligence.optimalWindows}
           />
         )}
       </div>

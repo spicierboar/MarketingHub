@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth/rbac";
+import { isAdmin, requireUser } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
 import { liveOffers } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { createCampaignAction, createCampaignFromGoalAction } from "../actions";
+import { planCampaignFromInstructionAction } from "../ai-layer-actions";
 import { resolveBusinessType } from "@/lib/business-profiles";
 import { CampaignObjectiveHints } from "../campaign-objective-hints";
 import { CampaignBuilderPanel } from "@/components/campaign-builder-panel";
@@ -26,6 +27,7 @@ export default async function NewCampaignPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const user = await requireUser();
+  const admin = isAdmin(user);
   const companies = (await visibleCompanies(user)).filter(
     (c) => c.status === "ai_ready" || c.status === "approved",
   );
@@ -126,12 +128,27 @@ export default async function NewCampaignPage({
                 </CardContent>
               </Card>
 
-              <div className="mt-4 flex items-center justify-end gap-2">
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
                 <Link href="/campaigns" className="text-sm text-muted-foreground hover:text-foreground">
                   Cancel
                 </Link>
                 <Button type="submit">Build from goal</Button>
+                {admin && (
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    formAction={planCampaignFromInstructionAction}
+                  >
+                    Build with AI layer review
+                  </Button>
+                )}
               </div>
+              {admin && (
+                <p className="mt-2 text-right text-xs text-muted-foreground">
+                  AI layer review stores a structured recommendation (facts / assumptions /
+                  risks / approvals) and keeps the campaign in draft — no publish or spend.
+                </p>
+              )}
             </form>
 
             <div className="relative">

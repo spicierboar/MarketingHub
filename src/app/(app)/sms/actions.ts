@@ -16,6 +16,11 @@ import {
 } from "@/lib/db";
 import { assertAdminCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
+import { draftSmsCampaignCopy } from "@/lib/ai/channel-campaign-draft";
+import { assertAiBudget } from "@/lib/ai/budget";
+import { checkCompliance } from "@/lib/ai/compliance";
+import { recordAiUsage } from "@/lib/ai/metering";
+import { assertAiRateLimit } from "@/lib/ratelimit";
 import { dispatchSmsBatch, smsLive } from "@/lib/sms-connectors";
 import {
   appendUtmToLink,
@@ -23,6 +28,7 @@ import {
   emptySmsCampaignStats,
   normalisePhoneE164,
   personaliseSmsBody,
+  smsSegmentCount,
   validateSmsCampaignSend,
 } from "@/lib/sms";
 import type { SmsCampaignKind, SmsConsentStatus } from "@/lib/types";
@@ -30,6 +36,14 @@ import type { SmsCampaignKind, SmsConsentStatus } from "@/lib/types";
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
+
+export type SmsAiDraftState = {
+  name: string;
+  body: string;
+  model: string;
+  segments: number;
+  complianceWarning?: string;
+} | null;
 
 function numOrUndef(fd: FormData, key: string): number | undefined {
   const raw = fd.get(key);
@@ -101,6 +115,63 @@ export async function setSmsConsentAction(formData: FormData) {
   }
   await logAction(user, "sms.consent.updated", { targetType: "sms_subscriber", targetId: subscriberId, detail: status });
   refresh();
+}
+
+/** Brand Brain–grounded SMS body for the create form — does not send. */
+export async function draftSmsCampaignCopyAction(
+  _prev: SmsAiDraftState,
+  formData: FormData,
+): Promise<SmsAiDraftState> {
+  const companyId = text(formData, "companyId");
+  const topic = text(formData, "topic");
+  const objective = text(formData, "objective");
+  if (!companyId || !topic || !objective) throw new Error("Company, topic, and objective are required.");
+  const user = await assertAdminCompanyAccess(companyId);
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("Company not found.");
+  if (company.status !== "ai_ready" && company.status !== "approved") {
+    throw new Error("Company is not AI-ready. Complete onboarding first.");
+  }
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId);
+
+  const kind = (text(formData, "kind") || "promotional") as SmsCampaignKind;
+  const draft = await draftSmsCampaignCopy({
+    company,
+    topic,
+    objective,
+    audience: text(formData, "audience") || undefined,
+    offer: text(formData, "offer") || undefined,
+    callToAction: text(formData, "callToAction") || undefined,
+    promotional: kind === "promotional",
+  });
+  const compliance = await checkCompliance(draft.body, company);
+  await recordAiUsage({
+    tenantId: user.tenantId,
+    companyId,
+    userId: user.id,
+    kind: "content_draft",
+    model: draft.model,
+    promptSummary: `SMS campaign draft: ${topic}`.slice(0, 120),
+    outputChars: draft.body.length,
+    sourcesUsed: draft.sources,
+    contextChars: topic.length + objective.length,
+  });
+  await logAction(user, "sms.campaign.ai_drafted", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail: draft.model,
+  });
+  return {
+    name: draft.name,
+    body: draft.body,
+    model: draft.model,
+    segments: smsSegmentCount(draft.body),
+    complianceWarning: compliance.issues.length
+      ? `${compliance.issues.length} compliance flag(s) — review before sending.`
+      : undefined,
+  };
 }
 
 export async function createSmsCampaignAction(formData: FormData) {

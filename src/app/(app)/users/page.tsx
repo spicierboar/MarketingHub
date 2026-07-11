@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth/rbac";
-import { accessForUser, listCompanies, listUsers } from "@/lib/db";
+import { accessForUser, listCompanies, listMembers, listUsers } from "@/lib/db";
 import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -8,12 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
 import { titleCase } from "@/lib/utils";
 import {
+  ALL_PERMISSIONS,
+  ALL_SUGGESTED_ROLES,
+  PERMISSION_CATALOG,
+} from "@/lib/rbac-matrix";
+import {
+  applySuggestedRoleAction,
   createUserAction,
   grantAccessAction,
   revokeAccessAction,
   revokeSessionsAction,
   setRoleTitleAction,
   setUserActiveAction,
+  toggleCapabilityAction,
 } from "./actions";
 
 // Granular role structure (§9).
@@ -34,6 +41,10 @@ export default async function UsersPage() {
   const user = await requireAdmin();
   const users = await listUsers(user.tenantId);
   const companies = await listCompanies(user.tenantId);
+  const members = await listMembers(user.tenantId);
+  const capsByUserId = new Map(
+    members.map((m) => [m.userId, new Set(m.capabilities ?? [])] as const),
+  );
   // Prefetch per-user access lists and company names (async lookups can't
   // run inside the JSX map callbacks). Access rows are global (a user can be
   // a member of several tenants) — show ONLY rows for THIS tenant's companies,
@@ -201,6 +212,48 @@ export default async function UsersPage() {
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-4 border-t border-border pt-4">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Capabilities (additive)
+                    </p>
+                    <div className="mb-2 flex flex-wrap items-center gap-1">
+                      {ALL_PERMISSIONS.map((perm) => {
+                        const on = capsByUserId.get(u.id)?.has(perm) ?? false;
+                        return (
+                          <form key={perm} action={toggleCapabilityAction}>
+                            <input type="hidden" name="userId" value={u.id} />
+                            <input type="hidden" name="permission" value={perm} />
+                            <input type="hidden" name="enable" value={on ? "false" : "true"} />
+                            <button
+                              type="submit"
+                              title={PERMISSION_CATALOG[perm].description}
+                              className={
+                                on
+                                  ? "rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200"
+                                  : "rounded-full bg-slate-50 px-2.5 py-1 text-xs text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
+                              }
+                            >
+                              {PERMISSION_CATALOG[perm].label}
+                            </button>
+                          </form>
+                        );
+                      })}
+                    </div>
+                    <form action={applySuggestedRoleAction} className="flex flex-wrap items-center gap-1">
+                      <input type="hidden" name="userId" value={u.id} />
+                      <Select name="suggestedRole" defaultValue="approver" className="h-8 w-44 py-0 text-xs">
+                        {ALL_SUGGESTED_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {titleCase(r)}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button type="submit" variant="outline" size="sm">
+                        Apply preset
+                      </Button>
+                    </form>
+                  </div>
                 </CardContent>
               </Card>
             );

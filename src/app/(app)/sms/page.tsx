@@ -11,16 +11,16 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/utils";
 import {
   addSmsSubscriberAction,
-  createSmsCampaignAction,
   saveSmsSettingsAction,
   sendSmsCampaignAction,
   setSmsConsentAction,
 } from "./actions";
+import { SmsCampaignAiDraft } from "./sms-ai-draft";
 
 const money = (x: number) => `$${x.toFixed(2)}`;
 
@@ -123,18 +123,7 @@ export default async function SmsPage({
           </CardContent></Card>
           <Card><CardContent className="space-y-4 p-6">
             <h2 className="text-lg font-semibold">New campaign</h2>
-            <form action={createSmsCampaignAction} className="grid gap-3 md:grid-cols-2">
-              <input type="hidden" name="companyId" value={company.id} />
-              <Field label="Name"><Input name="name" required /></Field>
-              <Field label="Kind"><Select name="kind" defaultValue="promotional"><option value="promotional">Promotional</option><option value="transactional">Transactional</option></Select></Field>
-              <Field label="Segment tag"><Input name="segmentTag" /></Field>
-              <Field label="UTM campaign"><Input name="utmCampaign" /></Field>
-              <Field label="Short link" className="md:col-span-2"><Input name="shortLink" type="url" /></Field>
-              <Field label="Message" className="md:col-span-2" hint="Include STOP for promotional">
-                <Textarea name="body" rows={4} required defaultValue="Hi {{name}} — offer at {{company}}. Reply STOP to opt out." />
-              </Field>
-              <div className="md:col-span-2"><Button type="submit">Save draft</Button></div>
-            </form>
+            <SmsCampaignAiDraft companyId={company.id} />
           </CardContent></Card>
           <Card><CardContent className="space-y-4 p-6">
             <h2 className="text-lg font-semibold">Campaigns</h2>

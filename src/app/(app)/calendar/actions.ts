@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import {
   activeSchedulesForContent,
   getCalendarAssistSuggestion,
@@ -9,16 +10,17 @@ import {
   getCampaignItem,
   getContent,
   getScheduledPost,
+  getTenant,
   listCampaignItems,
   transitionScheduledPost,
   updateCampaignItem,
   updateContent,
-  updateScheduledPost,
 } from "@/lib/db";
 import { assertCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { addDaysIso } from "@/lib/calendar-utils";
-import { scheduleOne } from "@/lib/scheduling";
+import { resolveNextOptimalSlot } from "@/lib/calendar-intelligence";
+import { rescheduleOne, scheduleOne } from "@/lib/scheduling";
 import {
   acceptCalendarAssistSuggestion,
   dismissCalendarAssistSuggestion,
@@ -59,30 +61,45 @@ export async function schedulePostAction(formData: FormData) {
   refreshPaths(contentId, content.campaignId);
 }
 
-// Drag-and-drop (and form) rescheduling.
-export async function reschedulePostAction(formData: FormData) {
+// Drag-and-drop (and form) rescheduling — always via rescheduleOne (critique gate).
+export async function reschedulePostAction(formData: FormData): Promise<{
+  ok: boolean;
+  error?: string;
+  conflictWarning?: string;
+}> {
   const postId = text(formData, "postId");
   const date = text(formData, "date");
   const post = await getScheduledPost(postId);
-  if (!post) throw new Error("Scheduled post not found");
+  if (!post) return { ok: false, error: "Scheduled post not found" };
   if (post.status !== "scheduled") {
-    throw new Error("Only active schedules can be moved.");
+    return { ok: false, error: "Only active schedules can be moved." };
   }
-  if (!date) throw new Error("A date is required.");
-  const user = await assertCompanyAccess(post.companyId);
+  if (!date) return { ok: false, error: "A date is required." };
 
-  await updateScheduledPost(postId, {
-    scheduledDate: date,
-    scheduledTime: text(formData, "time") || post.scheduledTime,
-  });
-  await logAction(user, "content.rescheduled", {
-    targetType: "scheduled_post",
-    targetId: postId,
-    companyId: post.companyId,
-    detail: `→ ${date}`,
-  });
-  const content = await getContent(post.contentId);
-  refreshPaths(post.contentId, content?.campaignId);
+  try {
+    const user = await assertCompanyAccess(post.companyId);
+    const timeRaw = text(formData, "time");
+    const { post: updated, conflictWarning } = await rescheduleOne({
+      postId,
+      date,
+      time: timeRaw || undefined,
+      userId: user.id,
+      tenantId: user.tenantId,
+    });
+    await logAction(user, "content.rescheduled", {
+      targetType: "scheduled_post",
+      targetId: postId,
+      companyId: post.companyId,
+      detail: `→ ${updated.scheduledDate}${updated.scheduledTime ? ` ${updated.scheduledTime}` : ""}${
+        conflictWarning ? ` (soft conflict)` : ""
+      }`,
+    });
+    const content = await getContent(post.contentId);
+    refreshPaths(post.contentId, content?.campaignId);
+    return { ok: true, conflictWarning };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Reschedule failed" };
+  }
 }
 
 export async function cancelScheduleAction(formData: FormData) {
@@ -210,4 +227,67 @@ export async function dismissCalendarAssistSuggestionAction(formData: FormData) 
 
   await dismissCalendarAssistSuggestion(suggestion, user, dismissReason || undefined);
   revalidatePath("/calendar");
+}
+
+/**
+ * Schedule approved content at the next analytics-informed optimal window.
+ * Goes through scheduleOne — critique gate unchanged. Does not auto-approve drafts.
+ */
+export async function scheduleAtOptimalWindowAction(formData: FormData) {
+  const contentId = text(formData, "contentId");
+  const platformHint = text(formData, "platform");
+  const content = await getContent(contentId);
+  if (!content) throw new Error("Content not found");
+  const user = await assertCompanyAccess(content.companyId);
+
+  if (content.status !== "approved" && content.status !== "scheduled") {
+    redirect(
+      `/content/${contentId}?scheduleError=${encodeURIComponent(
+        "Only approved content can be scheduled at the best time. Accept assist → review → approve first.",
+      )}`,
+    );
+  }
+
+  const tenant = await getTenant(user.tenantId);
+  const slot = await resolveNextOptimalSlot(user.tenantId, {
+    companyId: content.companyId,
+    platform: platformHint || undefined,
+    tenant,
+  });
+  if (!slot) {
+    redirect(
+      `/content/${contentId}?scheduleError=${encodeURIComponent(
+        "No optimal window available — set a platform manually or publish more posts to refine windows.",
+      )}`,
+    );
+  }
+
+  try {
+    const post = await scheduleOne({
+      contentId,
+      platform: platformHint || slot.platform,
+      date: slot.date,
+      time: slot.time,
+      userId: user.id,
+      tenantId: user.tenantId,
+    });
+
+    await logAction(user, "content.scheduled", {
+      targetType: "scheduled_post",
+      targetId: post.id,
+      companyId: content.companyId,
+      detail: `optimal:${content.title} → ${post.platform} ${post.scheduledDate}${post.scheduledTime ? ` ${post.scheduledTime}` : ""} (${slot.dayOfWeek} score ${slot.score})`,
+    });
+    refreshPaths(contentId, content.campaignId);
+    redirect(
+      `/content/${contentId}?scheduledAt=${encodeURIComponent(`${post.scheduledDate} ${post.scheduledTime ?? ""}`.trim())}`,
+    );
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    // scheduleOne persists aiCritique before throwing on block — surface message + critique on content.
+    revalidatePath(`/content/${contentId}`);
+    revalidatePath("/calendar");
+    const msg = e instanceof Error ? e.message : "Scheduling failed";
+    redirect(`/content/${contentId}?scheduleError=${encodeURIComponent(msg)}`);
+  }
 }

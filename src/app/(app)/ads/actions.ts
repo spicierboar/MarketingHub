@@ -28,10 +28,16 @@ import {
   canAccessCompany,
   requireAdmin,
   requireTenantOwner,
+  requireUser,
+  userHasPermission,
 } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { encryptToken } from "@/lib/crypto";
 import { recommendAllocation } from "@/lib/ai/allocation";
+import {
+  applySpendChange,
+  proposeAllocationSpendChange,
+} from "@/lib/spend-approval";
 import {
   adsLive,
   dispatchCampaignSync,
@@ -211,7 +217,13 @@ export async function disconnectAdAccountAction(formData: FormData) {
 // guidance); they are clamped to [0,1].
 export async function saveBudgetAction(formData: FormData) {
   const companyId = text(formData, "companyId");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await requireUser();
+  if (!userHasPermission(user, "manage_budgets")) {
+    throw new Error("Only finance reviewers or admins can manage budgets");
+  }
+  if (!(await canAccessCompany(user, companyId))) {
+    throw new Error("Forbidden: no access to this company");
+  }
   const monthlyBudgetUsd = Math.max(0, num(formData, "monthlyBudgetUsd"));
   const feeModel = (text(formData, "feeModel") || "percent_of_spend") as FeeModel;
   if (!["percent_of_spend", "flat_monthly"].includes(feeModel)) {
@@ -241,11 +253,18 @@ export async function saveBudgetAction(formData: FormData) {
   refresh();
 }
 
-// Apply the AI allocation guidance: recompute the recommended per-platform
-// split and write it onto the company's budget. Requires a budget to exist.
+// Apply the AI allocation guidance — approval-gated.
+// Prefer: propose → accept recommendation → applySpendChangeAction.
+// Legacy path preserved only with dual confirmation OR accepted recommendationId.
 export async function applyAllocationAction(formData: FormData) {
   const companyId = text(formData, "companyId");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await requireUser();
+  if (!userHasPermission(user, "manage_budgets")) {
+    throw new Error("Only finance reviewers or admins can manage budgets");
+  }
+  if (!(await canAccessCompany(user, companyId))) {
+    throw new Error("Forbidden: no access to this company");
+  }
   const company = await getCompany(companyId);
   const budget = await getAdBudget(companyId);
   if (!company || !budget) throw new Error("Set a monthly budget first.");
@@ -256,22 +275,69 @@ export async function applyAllocationAction(formData: FormData) {
   }
   const guidance = recommendAllocation({ company, budget, campaigns, connectedPlatforms: connected });
   if (!guidance.hasConnected) throw new Error("Connect an ad account before applying an allocation.");
-  await upsertAdBudget({
+
+  const recommendationId = text(formData, "recommendationId") || undefined;
+  const dualConfirm = text(formData, "dualConfirm") === "yes";
+  const dualConfirmAck = text(formData, "dualConfirmAck") === "yes";
+
+  await applySpendChange({
+    user,
     companyId,
-    monthlyBudgetUsd: budget.monthlyBudgetUsd,
+    recommendationId,
+    dualConfirm,
+    dualConfirmAck,
     allocation: guidance.recommended,
-    feeModel: budget.feeModel,
-    feePercent: budget.feePercent,
-    feeFlatUsd: budget.feeFlatUsd,
-    updatedById: user.id,
   });
-  await logAction(user, "ad_budget.allocation_applied", {
-    targetType: "ad_budget",
-    targetId: companyId,
+  refresh();
+}
+
+/** Create a pending AI allocation recommendation (does not move budget). */
+export async function proposeAllocationAction(formData: FormData) {
+  const companyId = text(formData, "companyId");
+  const user = await requireUser();
+  if (!userHasPermission(user, "manage_budgets")) {
+    throw new Error("Only finance reviewers or admins can manage budgets");
+  }
+  if (!(await canAccessCompany(user, companyId))) {
+    throw new Error("Forbidden: no access to this company");
+  }
+  const company = await getCompany(companyId);
+  const budget = await getAdBudget(companyId);
+  if (!company || !budget) throw new Error("Set a monthly budget first.");
+  const campaigns = await listAdCampaigns(user.tenantId, companyId);
+  await proposeAllocationSpendChange({ user, company, budget, campaigns });
+  refresh();
+}
+
+/** Apply spend change only after recommendation accept OR dual confirm. */
+export async function applySpendChangeAction(formData: FormData) {
+  const companyId = text(formData, "companyId");
+  const user = await requireUser();
+  if (!userHasPermission(user, "manage_budgets")) {
+    throw new Error("Only finance reviewers or admins can manage budgets");
+  }
+  if (!(await canAccessCompany(user, companyId))) {
+    throw new Error("Forbidden: no access to this company");
+  }
+  const recommendationId = text(formData, "recommendationId") || undefined;
+  const dualConfirm = text(formData, "dualConfirm") === "yes";
+  const dualConfirmAck = text(formData, "dualConfirmAck") === "yes";
+  let allocation: Partial<Record<AdPlatform, number>> | undefined;
+  const rawAlloc = text(formData, "allocationJson");
+  if (rawAlloc) {
+    try {
+      allocation = JSON.parse(rawAlloc) as Partial<Record<AdPlatform, number>>;
+    } catch {
+      throw new Error("Invalid allocation JSON.");
+    }
+  }
+  await applySpendChange({
+    user,
     companyId,
-    detail: Object.entries(guidance.recommended)
-      .map(([p, s]) => `${p} ${Math.round((s ?? 0) * 100)}%`)
-      .join(", "),
+    recommendationId,
+    dualConfirm,
+    dualConfirmAck,
+    allocation,
   });
   refresh();
 }

@@ -12,6 +12,7 @@ import type {
   RequestConsent,
   User,
 } from "@/lib/types";
+import { userHasPermission } from "@/lib/rbac-matrix";
 
 export function routeContent(args: {
   type: ContentItem["type"];
@@ -56,12 +57,20 @@ export const ROUTE_LABEL: Record<ApprovalRoute, string> = {
   compliance: "Compliance review",
 };
 
-// Who may approve a given route under the Phase 1-3 role model.
+// Who may approve a given route. Additive capabilities extend the Phase 1-3
+// admin / super_admin model without removing it.
 export function canApproveRoute(user: User, route: ApprovalRoute): boolean {
-  if (route === "senior" || route === "compliance") {
+  if (route === "senior") {
     return user.role === "super_admin";
   }
-  return user.role === "admin" || user.role === "super_admin";
+  if (route === "compliance") {
+    // Keep senior-only for admins; legal_review capability is an explicit grant
+    // (do not use userHasPermission — that would let every admin through).
+    if (user.role === "super_admin") return true;
+    const caps = (user as User & { capabilities?: string[] }).capabilities;
+    return Array.isArray(caps) && caps.includes("legal_review");
+  }
+  return userHasPermission(user, "approve_content");
 }
 
 // T6 — which routes an external CLIENT (no login) may give FINAL approval on.

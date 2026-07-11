@@ -18,12 +18,14 @@ import {
   ScrollText,
   ShieldCheck,
   ShieldAlert,
+  Shield,
   CreditCard,
   Palette,
   Landmark,
   Radar,
   LogOut,
   ChevronDown,
+  MessageSquareCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -98,7 +100,9 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/branding", label: "Branding", icon: Palette, ownerOnly: true },
       { href: "/billing", label: "Billing & plan", icon: CreditCard, ownerOnly: true },
       { href: "/admin", label: "Admin & security", icon: ShieldAlert, adminOnly: true },
+      { href: "/privacy", label: "Privacy", icon: Shield, adminOnly: true },
       { href: "/ai-control", label: "AI control", icon: ShieldCheck, adminOnly: true },
+      { href: "/ai-prompts", label: "AI prompts", icon: MessageSquareCode, adminOnly: true },
       { href: "/developers", label: "Developers & API", icon: Handshake, adminOnly: true },
       { href: "/audit", label: "Audit log", icon: ScrollText, adminOnly: true },
       { href: "/platform-admin", label: "Platform admin", icon: Landmark, platformAdminOnly: true },
@@ -145,16 +149,14 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function NavSection({
   group,
   pathname,
-  defaultOpen,
 }: {
   group: NavGroup;
   pathname: string;
-  defaultOpen: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   const hasActive = group.items.some(
     (item) => pathname === item.href || pathname.startsWith(item.href + "/"),
   );
+  const [open, setOpen] = useState(hasActive);
   const expanded = group.pinned || open || hasActive;
 
   if (group.items.length === 0) return null;
@@ -304,7 +306,6 @@ export function AppShell({
               key={group.id}
               group={group}
               pathname={pathname}
-              defaultOpen={false}
             />
           ))}
           {isAdmin && (

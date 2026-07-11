@@ -111,6 +111,9 @@ export function computeCtaMetrics(
 }
 
 export function determineAbWinner(experiment: FunnelAbExperiment): string | null {
+  // Funnel A/B is a lightweight simulated winner (no sample/confidence gate).
+  // Campaign-level experiments with min_sample_size + confidence_threshold live in
+  // src/lib/campaign-experiments.ts (evaluateWinner).
   const results = simulateAbVariantResults(experiment.id, experiment.variants);
   if (!results.length) return null;
   const winner = results.reduce((best, r) =>

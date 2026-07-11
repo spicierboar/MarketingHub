@@ -15,13 +15,22 @@ import {
   publishSocialReplyAction,
 } from "./actions";
 
-export default async function SocialPage() {
+export default async function SocialPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireUser();
   const admin = isAdmin(user);
   const superAdmin = user.role === "super_admin";
   const companies = (await visibleCompanies(user)).filter(
     (c) => c.status === "ai_ready" || c.status === "approved",
   );
+  const { company: companyParam } = await searchParams;
+  const companyDefault =
+    companyParam && companies.some((c) => c.id === companyParam)
+      ? companyParam
+      : undefined;
   const drafts = await visibleSocial(user);
   // Precompute company names for the drafts list (getCompany is async).
   const draftCompanyIds = Array.from(new Set(drafts.map((d) => d.companyId)));
@@ -51,7 +60,12 @@ export default async function SocialPage() {
               <form action={draftSocialAction} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Company" htmlFor="companyId">
-                    <Select id="companyId" name="companyId" required>
+                    <Select
+                      id="companyId"
+                      name="companyId"
+                      required
+                      defaultValue={companyDefault}
+                    >
                       {companies.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}

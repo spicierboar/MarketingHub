@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth/rbac";
+import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleContent } from "@/lib/scope";
 import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
@@ -8,11 +8,21 @@ import { formatDate, now, titleCase } from "@/lib/utils";
 
 // Content Reuse Library (Phase 5, §45): approved content that can be reused,
 // adapted and repurposed — with review/expiry controls enforced.
-export default async function LibraryPage() {
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireUser();
   const today = now().slice(0, 10);
-  const approved = (await visibleContent(user)).filter((c) =>
-    ["approved", "scheduled", "published"].includes(c.status),
+  const allowed = new Set(await accessibleCompanyIds(user));
+  const { company: companyParam } = await searchParams;
+  const companyId =
+    companyParam && allowed.has(companyParam) ? companyParam : undefined;
+  const approved = (await visibleContent(user)).filter(
+    (c) =>
+      ["approved", "scheduled", "published"].includes(c.status) &&
+      (!companyId || c.companyId === companyId),
   );
   // Precompute company names for the table rows (getCompany is async).
   const rowCompanyIds = Array.from(new Set(approved.map((c) => c.companyId)));

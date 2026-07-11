@@ -1,14 +1,26 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/rbac";
-import { listCompanies, usersForCompany } from "@/lib/db";
+import {
+  listCompanies,
+  listContent,
+  listIntegrations,
+  usersForCompany,
+} from "@/lib/db";
 import { onboardingScore } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
+import {
+  CompanyLifecycleRow,
+  type LifecycleStep,
+} from "@/components/company-lifecycle-row";
 
 export default async function CompaniesPage() {
   const user = await requireAdmin();
-  const companies = await listCompanies(user.tenantId);
+  const [companies, allContent, allIntegrations] = await Promise.all([
+    listCompanies(user.tenantId),
+    listContent(user.tenantId),
+    listIntegrations(user.tenantId),
+  ]);
   const userCounts = new Map(
     await Promise.all(
       companies.map(
@@ -21,48 +33,81 @@ export default async function CompaniesPage() {
     <div>
       <PageHeader
         title="Companies"
-        description="Open a company to run campaigns, inbox, CRM, ads, and the rest — tools live in the company workspace, not the global sidebar."
+        description="Each row is a client lifecycle — profile → connect → content → AI-ready. Open a company to run its workspace."
       >
         <Link href="/companies/new" className={buttonClasses()}>
           Add company
         </Link>
       </PageHeader>
 
-      <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
-        {companies.map((c) => {
-          const { score } = onboardingScore(c);
-          const users = userCounts.get(c.id) ?? 0;
-          return (
-            <Link
-              key={c.id}
-              href={`/companies/${c.id}`}
-              className="rounded-lg border border-border bg-card p-5 shadow-sm transition-colors hover:border-primary/40"
-            >
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <h3 className="font-semibold">{c.name}</h3>
-                <StatusBadge status={c.status} />
-              </div>
-              <p className="mb-3 text-sm text-muted-foreground">
-                {c.profile.industry ?? "Industry not set"} ·{" "}
-                {c.profile.serviceAreas[0] ?? "No location"}
-              </p>
-              <div className="mb-1 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Onboarding</span>
-                <span className="font-medium">{score}%</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full rounded-full ${score === 100 ? "bg-emerald-500" : "bg-primary"}`}
-                  style={{ width: `${score}%` }}
-                />
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                {users} user{users === 1 ? "" : "s"} assigned
-              </p>
+      {companies.length === 0 ? (
+        <div className="p-6">
+          <p className="rounded-lg border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
+            No companies yet.{" "}
+            <Link href="/companies/new" className="text-primary hover:underline">
+              Add the first client
             </Link>
-          );
-        })}
-      </div>
+          </p>
+        </div>
+      ) : (
+        <div className="border-t border-border bg-card">
+          {companies.map((c) => {
+            const { score } = onboardingScore(c);
+            const socialOk = (c.profile.socialLinks?.length ?? 0) > 0;
+            const connected = allIntegrations.some(
+              (i) => i.companyId === c.id && i.status === "connected",
+            );
+            const hasApprovedContent = allContent.some(
+              (item) =>
+                item.companyId === c.id &&
+                ["approved", "scheduled", "published"].includes(item.status),
+            );
+            const steps: LifecycleStep[] = [
+              {
+                id: "profile",
+                label: "Profile",
+                done: score === 100,
+                href: `/companies/${c.id}`,
+              },
+              {
+                id: "social",
+                label: "Social links",
+                done: socialOk,
+                href: `/companies/${c.id}`,
+              },
+              {
+                id: "connect",
+                label: "Connect",
+                done: connected,
+                href: `/publishing?company=${c.id}`,
+              },
+              {
+                id: "content",
+                label: "First content",
+                done: hasApprovedContent,
+                href: `/studio?company=${c.id}`,
+              },
+              {
+                id: "ai_ready",
+                label: "AI-ready",
+                done: c.status === "ai_ready",
+                href: `/companies/${c.id}`,
+              },
+            ];
+
+            return (
+              <CompanyLifecycleRow
+                key={c.id}
+                company={c}
+                industry={c.profile.industry ?? "Industry not set"}
+                location={c.profile.serviceAreas[0] ?? "No location"}
+                userCount={userCounts.get(c.id) ?? 0}
+                steps={steps}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

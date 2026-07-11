@@ -17,13 +17,30 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 const CONTENT_TYPES = ["social_post", "email_newsletter", "ad_copy", "landing_page", "blog_article"];
 
-export default async function UtmRoiPage() {
+export default async function UtmRoiPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireAdmin();
   const allCompanies = await listCompanies(user.tenantId);
   const companies = allCompanies.filter((c) => c.status !== "archived");
   const companyById = new Map(allCompanies.map((c) => [c.id, c]));
-  const links = await listUtmLinks(user.tenantId);
-  const r = await buildReport(user.tenantId);
+  const { company: companyParam } = await searchParams;
+  const companyId =
+    companyParam && companies.some((c) => c.id === companyParam)
+      ? companyParam
+      : undefined;
+  const links = (await listUtmLinks(user.tenantId)).filter(
+    (l) => !companyId || l.companyId === companyId,
+  );
+  const r = await buildReport(
+    user.tenantId,
+    companyId ? [companyId] : undefined,
+  );
+  const analyticsHref = companyId
+    ? `/analytics?company=${companyId}`
+    : "/analytics";
 
   return (
     <div>
@@ -31,7 +48,7 @@ export default async function UtmRoiPage() {
         title="UTM & ROI attribution"
         description="Build trackable links and see attributed leads and revenue by campaign, company and platform (§42)."
       >
-        <Link href="/analytics" className="text-sm text-primary hover:underline">
+        <Link href={analyticsHref} className="text-sm text-primary hover:underline">
           ← Analytics
         </Link>
       </PageHeader>
@@ -114,7 +131,12 @@ export default async function UtmRoiPage() {
               <form action={createUtmLinkAction} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Company" htmlFor="companyId">
-                    <Select id="companyId" name="companyId" required>
+                    <Select
+                      id="companyId"
+                      name="companyId"
+                      required
+                      defaultValue={companyId}
+                    >
                       {companies.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}

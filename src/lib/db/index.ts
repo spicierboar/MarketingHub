@@ -66,6 +66,7 @@ import type {
   FunnelAbExperiment,
   FunnelJourney,
   FunnelLandingPage,
+  CampaignExperiment,
   CompanyReview,
   ReviewRequestCampaign,
   SmsCampaign,
@@ -98,6 +99,14 @@ import type {
   RecommendationDismissRecord,
   LearningHypothesis,
   LearningLesson,
+  ApprovalPolicy,
+  AiCampaignRecommendation,
+  AiOrchestrationRun,
+  AiPromptVersion,
+  CampaignPerformanceSnapshot,
+  PrivacyRequest,
+  PrivacyRequestStatus,
+  PrivacyRequestType,
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
@@ -329,6 +338,20 @@ export async function setMemberRoleTitle(
   if (m.role !== "owner") {
     m.role = ROLE_TITLE_TIER[roleTitle] === "user" ? "member" : "admin";
   }
+}
+
+/** Set additive capability strings on a membership (migration 0036). */
+export async function setMemberCapabilities(
+  tenantId: string,
+  userId: string,
+  capabilities: string[],
+): Promise<void> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.setMemberCapabilities(tenantId, userId, capabilities);
+  }
+  const m = await getMembership(tenantId, userId);
+  if (!m) return;
+  m.capabilities = [...capabilities];
 }
 
 // ---- Company access ---------------------------------------------------------
@@ -620,6 +643,8 @@ export async function exportTenantData(tenantId: string): Promise<Record<string,
     emailTemplates: byCompany(s.emailTemplates ?? []),
     emailSubscribers: byCompany(s.emailSubscribers ?? []),
     emailCampaigns: byCompany(s.emailCampaigns ?? []),
+    funnelAbExperiments: byCompany(s.funnelAbExperiments ?? []),
+    campaignExperiments: byCompany(s.campaignExperiments ?? []),
     companyEntitlements: byCompany(s.companyEntitlements),
     photoShoots: byCompany(s.photoShoots),
     photographerProfiles: s.photographerProfiles.filter(
@@ -700,6 +725,7 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.conversionFunnels = keepCompany(s.conversionFunnels ?? []);
   s.funnelLandingPages = keepCompany(s.funnelLandingPages ?? []);
   s.funnelAbExperiments = keepCompany(s.funnelAbExperiments ?? []);
+  s.campaignExperiments = keepCompany(s.campaignExperiments ?? []);
   s.smsSubscribers = keepCompany(s.smsSubscribers ?? []);
   s.smsCampaigns = keepCompany(s.smsCampaigns ?? []);
   s.smsCompanySettings = keepCompany(s.smsCompanySettings ?? []);
@@ -744,6 +770,11 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.aiMosOpportunities = keepTenant(s.aiMosOpportunities);
   s.aiMosSignalRuns = keepTenant(s.aiMosSignalRuns);
   s.calendarAssistSuggestions = keepTenant(s.calendarAssistSuggestions);
+  s.privacyRequests = keepCompany(s.privacyRequests ?? []);
+  s.aiCampaignRecommendations = keepCompany(s.aiCampaignRecommendations ?? []);
+  s.aiOrchestrationRuns = keepCompany(s.aiOrchestrationRuns ?? []);
+  s.approvalPolicies = keepTenant(s.approvalPolicies ?? []);
+  s.campaignPerformanceSnapshots = keepCompany(s.campaignPerformanceSnapshots ?? []);
   s.assets = keepCompany(s.assets);
   // Tenant-keyed rows (platform-library null rows survive).
   s.responses = keepTenant(s.responses);
@@ -3561,6 +3592,347 @@ export async function createLearningLesson(
   if (isSupabaseConfigured()) return supabaseRepo.createLearningLesson(input);
   const row: LearningLesson = { ...input, id: id("lles"), createdAt: now() };
   (db().learningLessons ??= []).push(row);
+  return row;
+}
+
+// ---- AI campaign management layer (0035) ---------------------------------------
+
+export async function listApprovalPolicies(
+  tenantId: string,
+  entityType?: string,
+): Promise<ApprovalPolicy[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listApprovalPolicies(tenantId, entityType);
+  let rows = (db().approvalPolicies ?? []).filter((p) => p.tenantId === tenantId);
+  if (entityType) rows = rows.filter((p) => p.entityType === entityType);
+  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getApprovalPolicy(policyId: string): Promise<ApprovalPolicy | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getApprovalPolicy(policyId);
+  return (db().approvalPolicies ?? []).find((p) => p.id === policyId);
+}
+
+export async function createApprovalPolicy(
+  input: Omit<ApprovalPolicy, "id" | "createdAt" | "updatedAt">,
+): Promise<ApprovalPolicy> {
+  if (isSupabaseConfigured()) return supabaseRepo.createApprovalPolicy(input);
+  const t = now();
+  const row: ApprovalPolicy = {
+    ...input,
+    triggerRules: input.triggerRules ?? {},
+    approvalLevel: input.approvalLevel ?? "single",
+    active: input.active ?? true,
+    id: id("ap"),
+    createdAt: t,
+    updatedAt: t,
+  };
+  (db().approvalPolicies ??= []).push(row);
+  return row;
+}
+
+export async function updateApprovalPolicy(
+  policyId: string,
+  patch: Partial<ApprovalPolicy>,
+): Promise<ApprovalPolicy | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateApprovalPolicy(policyId, patch);
+  const row = await getApprovalPolicy(policyId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listAiPromptVersions(
+  tenantId: string | null,
+  promptKey?: string,
+): Promise<AiPromptVersion[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listAiPromptVersions(tenantId, promptKey);
+  let rows = (db().aiPromptVersions ?? []).filter(
+    (p) => p.tenantId === tenantId || (tenantId != null && p.tenantId == null),
+  );
+  if (promptKey) rows = rows.filter((p) => p.promptKey === promptKey);
+  return rows.sort((a, b) => b.version - a.version);
+}
+
+export async function getAiPromptVersion(versionId: string): Promise<AiPromptVersion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getAiPromptVersion(versionId);
+  return (db().aiPromptVersions ?? []).find((p) => p.id === versionId);
+}
+
+export async function createAiPromptVersion(
+  input: Omit<AiPromptVersion, "id" | "createdAt" | "updatedAt">,
+): Promise<AiPromptVersion> {
+  if (isSupabaseConfigured()) return supabaseRepo.createAiPromptVersion(input);
+  const t = now();
+  const row: AiPromptVersion = {
+    ...input,
+    version: input.version ?? 1,
+    modelProvider: input.modelProvider ?? "anthropic",
+    active: input.active ?? false,
+    id: id("apv"),
+    createdAt: t,
+    updatedAt: t,
+  };
+  (db().aiPromptVersions ??= []).push(row);
+  return row;
+}
+
+export async function updateAiPromptVersion(
+  versionId: string,
+  patch: Partial<AiPromptVersion>,
+): Promise<AiPromptVersion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateAiPromptVersion(versionId, patch);
+  const row = await getAiPromptVersion(versionId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listAiOrchestrationRuns(
+  companyId: string,
+): Promise<AiOrchestrationRun[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listAiOrchestrationRuns(companyId);
+  return (db().aiOrchestrationRuns ?? [])
+    .filter((r) => r.companyId === companyId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getAiOrchestrationRun(runId: string): Promise<AiOrchestrationRun | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getAiOrchestrationRun(runId);
+  return (db().aiOrchestrationRuns ?? []).find((r) => r.id === runId);
+}
+
+export async function createAiOrchestrationRun(
+  input: Omit<AiOrchestrationRun, "id" | "createdAt" | "updatedAt">,
+): Promise<AiOrchestrationRun> {
+  if (isSupabaseConfigured()) return supabaseRepo.createAiOrchestrationRun(input);
+  const t = now();
+  const row: AiOrchestrationRun = {
+    ...input,
+    structuredOutput: input.structuredOutput ?? {},
+    approvalRequired: input.approvalRequired ?? true,
+    status: input.status ?? "proposed",
+    id: id("aor"),
+    createdAt: t,
+    updatedAt: t,
+  };
+  (db().aiOrchestrationRuns ??= []).push(row);
+  return row;
+}
+
+export async function updateAiOrchestrationRun(
+  runId: string,
+  patch: Partial<AiOrchestrationRun>,
+): Promise<AiOrchestrationRun | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateAiOrchestrationRun(runId, patch);
+  const row = await getAiOrchestrationRun(runId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listAiCampaignRecommendations(
+  companyId: string,
+  campaignId?: string,
+): Promise<AiCampaignRecommendation[]> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.listAiCampaignRecommendations(companyId, campaignId);
+  }
+  let rows = (db().aiCampaignRecommendations ?? []).filter((r) => r.companyId === companyId);
+  if (campaignId) rows = rows.filter((r) => r.campaignId === campaignId);
+  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getAiCampaignRecommendation(
+  recommendationId: string,
+): Promise<AiCampaignRecommendation | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getAiCampaignRecommendation(recommendationId);
+  return (db().aiCampaignRecommendations ?? []).find((r) => r.id === recommendationId);
+}
+
+export async function createAiCampaignRecommendation(
+  input: Omit<AiCampaignRecommendation, "id" | "createdAt" | "updatedAt">,
+): Promise<AiCampaignRecommendation> {
+  if (isSupabaseConfigured()) return supabaseRepo.createAiCampaignRecommendation(input);
+  const t = now();
+  const row: AiCampaignRecommendation = {
+    ...input,
+    payload: input.payload ?? {},
+    id: id("acr"),
+    createdAt: t,
+    updatedAt: t,
+  };
+  (db().aiCampaignRecommendations ??= []).push(row);
+  return row;
+}
+
+export async function updateAiCampaignRecommendation(
+  recommendationId: string,
+  patch: Partial<AiCampaignRecommendation>,
+): Promise<AiCampaignRecommendation | undefined> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.updateAiCampaignRecommendation(recommendationId, patch);
+  }
+  const row = await getAiCampaignRecommendation(recommendationId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listCampaignPerformanceSnapshots(
+  campaignId: string,
+): Promise<CampaignPerformanceSnapshot[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCampaignPerformanceSnapshots(campaignId);
+  return (db().campaignPerformanceSnapshots ?? [])
+    .filter((s) => s.campaignId === campaignId)
+    .sort((a, b) => b.periodStart.localeCompare(a.periodStart));
+}
+
+export async function getCampaignPerformanceSnapshot(
+  snapshotId: string,
+): Promise<CampaignPerformanceSnapshot | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCampaignPerformanceSnapshot(snapshotId);
+  return (db().campaignPerformanceSnapshots ?? []).find((s) => s.id === snapshotId);
+}
+
+export async function createCampaignPerformanceSnapshot(
+  input: Omit<CampaignPerformanceSnapshot, "id" | "createdAt" | "collectedAt"> & {
+    collectedAt?: string;
+  },
+): Promise<CampaignPerformanceSnapshot> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCampaignPerformanceSnapshot(input);
+  const t = now();
+  const row: CampaignPerformanceSnapshot = {
+    ...input,
+    metrics: input.metrics ?? {},
+    dataSource: input.dataSource ?? "simulated",
+    collectedAt: input.collectedAt ?? t,
+    id: id("cps"),
+    createdAt: t,
+  };
+  (db().campaignPerformanceSnapshots ??= []).push(row);
+  return row;
+}
+
+export async function updateCampaignPerformanceSnapshot(
+  snapshotId: string,
+  patch: Partial<CampaignPerformanceSnapshot>,
+): Promise<CampaignPerformanceSnapshot | undefined> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.updateCampaignPerformanceSnapshot(snapshotId, patch);
+  }
+  const row = await getCampaignPerformanceSnapshot(snapshotId);
+  if (!row) return undefined;
+  Object.assign(row, patch);
+  return row;
+}
+
+// ---- Privacy DSR (0037) -------------------------------------------------------
+
+export async function listPrivacyRequests(
+  tenantId: string,
+  companyId?: string,
+): Promise<PrivacyRequest[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listPrivacyRequests(tenantId, companyId);
+  let rows = (db().privacyRequests ?? []).filter((r) => r.tenantId === tenantId);
+  if (companyId) rows = rows.filter((r) => r.companyId === companyId);
+  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function listPrivacyRequestsForCompany(
+  companyId: string,
+): Promise<PrivacyRequest[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listPrivacyRequestsForCompany(companyId);
+  return (db().privacyRequests ?? [])
+    .filter((r) => r.companyId === companyId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getPrivacyRequest(
+  requestId: string,
+): Promise<PrivacyRequest | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getPrivacyRequest(requestId);
+  return (db().privacyRequests ?? []).find((r) => r.id === requestId);
+}
+
+export async function createPrivacyRequest(
+  input: Omit<PrivacyRequest, "id" | "createdAt">,
+): Promise<PrivacyRequest> {
+  if (isSupabaseConfigured()) return supabaseRepo.createPrivacyRequest(input);
+  const row: PrivacyRequest = {
+    ...input,
+    id: id("pdsr"),
+    createdAt: now(),
+  };
+  (db().privacyRequests ??= []).push(row);
+  return row;
+}
+
+export async function updatePrivacyRequest(
+  requestId: string,
+  patch: Partial<
+    Pick<
+      PrivacyRequest,
+      | "status"
+      | "lawfulBasis"
+      | "jurisdiction"
+      | "dueAt"
+      | "completedAt"
+      | "notes"
+    >
+  >,
+): Promise<PrivacyRequest | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updatePrivacyRequest(requestId, patch);
+  const row = await getPrivacyRequest(requestId);
+  if (!row) return undefined;
+  Object.assign(row, patch);
+  return row;
+}
+
+export type { PrivacyRequest, PrivacyRequestStatus, PrivacyRequestType };
+
+// ---- Campaign A/B experiments (0036_campaign_experiments) --------------------
+
+export async function listCampaignExperiments(
+  tenantId: string,
+  opts?: { companyId?: string; campaignId?: string },
+): Promise<CampaignExperiment[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCampaignExperiments(tenantId, opts);
+  const ids = tenantCompanyIdSet(tenantId);
+  return (db().campaignExperiments ?? [])
+    .filter((e) => {
+      if (!ids.has(e.companyId)) return false;
+      if (opts?.companyId && e.companyId !== opts.companyId) return false;
+      if (opts?.campaignId && e.campaignId !== opts.campaignId) return false;
+      return true;
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getCampaignExperiment(
+  experimentId: string,
+): Promise<CampaignExperiment | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCampaignExperiment(experimentId);
+  return (db().campaignExperiments ?? []).find((e) => e.id === experimentId);
+}
+
+export async function createCampaignExperiment(
+  input: Omit<CampaignExperiment, "id" | "createdAt" | "updatedAt">,
+): Promise<CampaignExperiment> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCampaignExperiment(input);
+  const t = now();
+  const row: CampaignExperiment = { ...input, id: id("cex"), createdAt: t, updatedAt: t };
+  (db().campaignExperiments ??= []).push(row);
+  return row;
+}
+
+export async function updateCampaignExperiment(
+  experimentId: string,
+  patch: Partial<CampaignExperiment>,
+): Promise<CampaignExperiment | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateCampaignExperiment(experimentId, patch);
+  const row = await getCampaignExperiment(experimentId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
   return row;
 }
 

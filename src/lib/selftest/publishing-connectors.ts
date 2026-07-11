@@ -5,6 +5,11 @@ import {
   dispatchPublish,
   publishingLive,
 } from "@/lib/publishing-connectors";
+import {
+  assertConnectorAction,
+  connectorSupports,
+  listConnectorCapabilityMatrix,
+} from "@/lib/connectors/capability-registry";
 import { buildIntegrationHealthBundle } from "@/lib/security-slice";
 import type { PublishingIntegration } from "@/lib/types";
 
@@ -50,5 +55,29 @@ export async function checkPublishingHealthInBundle(): Promise<{ ok: boolean; de
   return {
     ok,
     detail: `platforms=${bundle.publishingPlatforms.length} pub=${pub?.status}`,
+  };
+}
+
+export function checkConnectorCapabilityRegistry(): { ok: boolean; detail: string } {
+  const rows = listConnectorCapabilityMatrix();
+  const metaPublish = connectorSupports("meta", "publish");
+  const gbpDms = connectorSupports("google_business", "dms");
+  let threw = false;
+  try {
+    assertConnectorAction("google_business", "dms");
+  } catch {
+    threw = true;
+  }
+  let publishOk = false;
+  try {
+    assertConnectorAction("facebook", "publish");
+    publishOk = true;
+  } catch {
+    publishOk = false;
+  }
+  const ok = rows.length >= 7 && metaPublish && !gbpDms && threw && publishOk;
+  return {
+    ok,
+    detail: `rows=${rows.length} metaPublish=${metaPublish} gbpDmsBlocked=${threw} fbPublish=${publishOk}`,
   };
 }

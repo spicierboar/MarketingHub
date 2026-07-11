@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth/rbac";
+import { requirePermission } from "@/lib/auth/rbac";
 import { listAudit } from "@/lib/audit";
 import { listCompanies } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 
 export default async function AuditPage() {
-  const user = await requireAdmin();
+  // Additive RBAC: analyst capability OR admin (legacy admins unchanged).
+  const user = await requirePermission("view_audit");
   const entries = await listAudit(user.tenantId);
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c]));
 

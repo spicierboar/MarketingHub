@@ -5,10 +5,12 @@ import {
   getCampaign,
   getCompany,
   getOffer,
+  listAiCampaignRecommendations,
   listCampaignBuilderRuns,
   listCampaignDraftScheduleItems,
   listCampaignItems,
   listCampaignPlanVersions,
+  listCampaignExperiments,
 } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -23,8 +25,13 @@ import {
   skipItemAction,
   submitCampaignAction,
 } from "../actions";
+import { optimiseCampaignAction } from "../ai-layer-actions";
 import { bulkScheduleCampaignAction } from "../../calendar/actions";
 import { unpackKeyMessage } from "@/lib/ai/campaign-builder";
+import { AiCampaignPlanReviewSections } from "@/components/campaign-builder-panel";
+import { AiCampaignRecommendationsPanel } from "@/components/ai-campaign-recommendations-panel";
+import { CampaignExperimentsPanel } from "@/components/campaign-experiments-panel";
+import type { StructuredCampaignDraft } from "@/lib/ai-campaign-orchestrator";
 
 function addDays(iso: string, days: number): string {
   const d = new Date(iso + "T00:00:00Z");
@@ -56,6 +63,25 @@ export default async function CampaignDetailPage({
   const draftSchedule = await listCampaignDraftScheduleItems(campaign.id);
   const latestPlan = planVersions[planVersions.length - 1];
   const latestRun = builderRuns[0];
+  const aiRecommendations = await listAiCampaignRecommendations(
+    campaign.companyId,
+    campaign.id,
+  );
+  const experiments = await listCampaignExperiments(user.tenantId, {
+    campaignId: campaign.id,
+  });
+  const layerDraft = (campaign.layerMeta?.structuredDraft ??
+    (campaign.layerMeta
+      ? {
+          userFacts: (campaign.layerMeta.userFacts as string[] | undefined) ?? [],
+          systemData: (campaign.layerMeta.systemData as string[] | undefined) ?? [],
+          assumptions: campaign.layerMeta.assumptions ?? [],
+          recommendations: [],
+          risks: campaign.layerMeta.risks ?? [],
+          missingInfo: campaign.layerMeta.missingInfo ?? [],
+          requiredApprovals: [],
+        }
+      : null)) as StructuredCampaignDraft | null;
 
   // Group items by week of the plan.
   const weeks = new Map<number, typeof items>();
@@ -168,6 +194,14 @@ export default async function CampaignDetailPage({
                     </Button>
                   </form>
                 )}
+              {admin && !["cancelled", "completed"].includes(campaign.status) && (
+                <form action={optimiseCampaignAction}>
+                  <input type="hidden" name="campaignId" value={campaign.id} />
+                  <Button type="submit" variant="subtle" className="w-full">
+                    Run AI optimisation
+                  </Button>
+                </form>
+              )}
               <a
                 href={`/api/export/campaign/${campaign.id}`}
                 className={buttonClasses("outline") + " w-full"}
@@ -184,6 +218,30 @@ export default async function CampaignDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {(aiRecommendations.length > 0 || admin) && (
+            <Card>
+              <CardContent className="p-6">
+                <AiCampaignRecommendationsPanel
+                  recommendations={aiRecommendations}
+                  emptyMessage="No pending AI recommendations — run AI optimisation to analyse this campaign."
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {layerDraft && (
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="mb-3 font-semibold">AI layer plan review</h2>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Structured output from the AI campaign layer — facts separated from
+                  assumptions. Nothing here is live until you approve through existing gates.
+                </p>
+                <AiCampaignPlanReviewSections draft={layerDraft} />
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="p-6">
@@ -352,13 +410,22 @@ export default async function CampaignDetailPage({
                   addDays(campaign.startDate, campaign.durationDays - 1) >
                     offer.endDate && (
                     <p className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-700">
-                      This campaign runs past the offer's end date — items after{" "}
+                      This campaign runs past the offer&apos;s end date — items after{" "}
                       {offer.endDate} are flagged in the plan.
                     </p>
                   )}
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardContent className="p-6">
+              <CampaignExperimentsPanel
+                campaignId={campaign.id}
+                experiments={experiments}
+              />
+            </CardContent>
+          </Card>
 
           {campaign.eventName && (
             <Card>

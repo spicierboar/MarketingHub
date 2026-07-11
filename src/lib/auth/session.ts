@@ -53,6 +53,7 @@ function withMembership(user: User, m: TenantMember): ActingUser {
     tenantRole: m.role,
     role: TENANT_ROLE_TIER[m.role],
     roleTitle: m.roleTitle,
+    capabilities: m.capabilities,
   };
 }
 
@@ -133,11 +134,16 @@ async function getSupabaseUser(): Promise<ActingUser | null> {
     platformAdmin: (data.platform_admin as boolean) ?? false,
     createdAt: data.created_at as string,
   };
+  const rawCaps = m.capabilities;
+  const capabilities = Array.isArray(rawCaps)
+    ? (rawCaps as string[])
+    : undefined;
   return withMembership(user, {
     tenantId: m.tenant_id as string,
     userId: user.id,
     role: m.role as TenantMember["role"],
     roleTitle: (m.role_title as RoleTitle | null) ?? undefined,
+    capabilities,
     createdAt: m.created_at as string,
   });
 }

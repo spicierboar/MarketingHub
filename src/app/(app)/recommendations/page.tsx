@@ -1,6 +1,10 @@
 ﻿import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
-import { listRecommendations, resurfaceExpiredSnoozedRecommendations } from "@/lib/db";
+import {
+  listAiCampaignRecommendations,
+  listRecommendations,
+  resurfaceExpiredSnoozedRecommendations,
+} from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,8 +15,9 @@ import {
   dismissReasonOf,
   recommendationScore,
 } from "@/lib/recommendations";
-import type { Recommendation } from "@/lib/types";
+import type { AiCampaignRecommendation, Recommendation } from "@/lib/types";
 import { AgencyPortfolioStrip, RecommendationCard } from "@/components/recommendation-cards";
+import { AiCampaignRecommendationsPanel } from "@/components/ai-campaign-recommendations-panel";
 import { generateRecommendationsAction } from "./actions";
 
 export default async function RecommendationsPage() {
@@ -24,6 +29,11 @@ export default async function RecommendationsPage() {
   const open = allRecs.filter((r) => r.status === "open");
   const history = allRecs.filter((r) => r.status !== "open" && r.status !== "snoozed");
   const portfolio = buildAgencyPortfolioAttention(companies, allRecs, { limit: 8 });
+
+  const aiCampaignRecs: AiCampaignRecommendation[] = (
+    await Promise.all(scope.map((id) => listAiCampaignRecommendations(id)))
+  ).flat();
+  const companyById = new Map(companies.map((c) => [c.id, c.name]));
 
   const byCompany = new Map<string, Recommendation[]>();
   for (const r of open) {
@@ -47,6 +57,20 @@ export default async function RecommendationsPage() {
 
       <div className="space-y-6 p-6">
         <AgencyPortfolioStrip rows={portfolio} />
+
+        {aiCampaignRecs.some((r) => !r.humanDecision || r.humanDecision === "pending") && (
+          <Card>
+            <CardContent className="p-6">
+              <AiCampaignRecommendationsPanel
+                recommendations={aiCampaignRecs}
+                companyById={companyById}
+                title="AI campaign layer"
+                showCampaignLink
+                emptyMessage="No pending AI campaign recommendations."
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {companies.map((company) => {
           const recs = byCompany.get(company.id) ?? [];

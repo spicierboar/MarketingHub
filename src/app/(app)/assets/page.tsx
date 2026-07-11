@@ -85,7 +85,14 @@ export default async function AssetsPage({
         <Link href="/assets/templates" className={buttonClasses("ghost", "sm")}>
           Brand templates
         </Link>
-        <Link href="/assets/new" className={buttonClasses("default", "sm")}>
+        <Link
+          href={
+            sp.company && byId.has(sp.company)
+              ? `/assets/new?company=${sp.company}`
+              : "/assets/new"
+          }
+          className={buttonClasses("default", "sm")}
+        >
           Register asset
         </Link>
       </PageHeader>

@@ -17,6 +17,7 @@ import {
   workflowLive,
 } from "@/lib/marketing-automation-connectors";
 import { resolveQueueClockAt } from "@/lib/tenant-timezone";
+import { assertMarketingUseAllowed } from "@/lib/privacy";
 import type {
   CrmContact,
   MarketingWorkflow,
@@ -245,6 +246,15 @@ async function executeActionStep(input: {
   const channel: "email" | "sms" = action.kind === "send_sms" ? "sms" : "email";
   if (!(await contactChannelEligible(input.contact, channel))) {
     return { status: "blocked_consent", detail: "consent/opt-out", channel };
+  }
+  try {
+    await assertMarketingUseAllowed(input.contact);
+  } catch (err) {
+    return {
+      status: "blocked_consent",
+      detail: err instanceof Error ? err.message : "marketing use blocked",
+      channel,
+    };
   }
   if (quietHoursActive(input.settings, input.atIso, input.timezone)) {
     return { status: "blocked_quiet_hours", detail: "quiet hours", channel };

@@ -29,7 +29,7 @@ import {
   canAccessCompany,
   requireUser,
   requireAdmin,
-  isAdmin,
+  userHasPermission,
 } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
@@ -256,8 +256,10 @@ export async function approveContentAction(formData: FormData) {
   const content = await getContent(contentId);
   if (!content) throw new Error("Content not found");
   const user = await requireUser();
-  if (!isAdmin(user)) throw new Error("Only approvers can approve content");
-  // Tenant pin: an admin may only act on content within their own tenant.
+  if (!userHasPermission(user, "approve_content")) {
+    throw new Error("Only approvers can approve content");
+  }
+  // Tenant pin: an approver may only act on content within their own tenant.
   if (!(await canAccessCompany(user, content.companyId))) {
     throw new Error("Forbidden: no access to this company");
   }
@@ -339,8 +341,10 @@ export async function rejectContentAction(formData: FormData) {
   const content = await getContent(contentId);
   if (!content) throw new Error("Content not found");
   const user = await requireUser();
-  if (!isAdmin(user)) throw new Error("Only approvers can reject content");
-  // Tenant pin: an admin may only act on content within their own tenant.
+  if (!userHasPermission(user, "approve_content")) {
+    throw new Error("Only approvers can reject content");
+  }
+  // Tenant pin: an approver may only act on content within their own tenant.
   if (!(await canAccessCompany(user, content.companyId))) {
     throw new Error("Forbidden: no access to this company");
   }

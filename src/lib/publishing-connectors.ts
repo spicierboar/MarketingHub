@@ -18,6 +18,7 @@
 import { decryptToken } from "@/lib/crypto";
 import { sendEmail } from "@/lib/email";
 import { appEnv } from "@/lib/env";
+import { assertConnectorAction } from "@/lib/connectors/capability-registry";
 import type { PublishingIntegration } from "@/lib/types";
 
 const META_GRAPH_VERSION = "v21.0";
@@ -125,6 +126,16 @@ export async function dispatchPublish(
   body: string,
 ): Promise<ConnectorResult | null> {
   if (!publishingLive()) return null;
+  // Capability gate before any live publish attempt (registry is live-ready;
+  // flags remain OFF so this path is only hit when PUBLISHING_LIVE is on).
+  try {
+    assertConnectorAction(integration.platform, "publish");
+  } catch (err) {
+    return {
+      ok: false,
+      detail: err instanceof Error ? err.message : "Connector publish not supported",
+    };
+  }
   let token: string;
   try {
     token = decryptToken(integration.encryptedToken);

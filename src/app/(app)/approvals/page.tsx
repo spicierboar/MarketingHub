@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth/rbac";
+import { requirePermission } from "@/lib/auth/rbac";
 import { visibleContent } from "@/lib/scope";
 import { getCompany } from "@/lib/db";
 import { canApproveRoute, ROUTE_LABEL } from "@/lib/routing";
+import { buildApprovalAssist } from "@/lib/ai/approval-assist";
 import { PageHeader } from "@/components/page-header";
+import { ApprovalAssistNotes } from "@/components/approval-assist-notes";
 import { RiskBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +19,9 @@ async function ApprovalCard({ c, user }: { c: ContentItem; user: User }) {
   const blocked = !!c.compliance && !c.compliance.canProceed;
   const route = c.routedTo ?? "admin";
   const mayApprove = canApproveRoute(user, route) && !blocked;
-  const companyName = (await getCompany(c.companyId))?.name;
+  const company = await getCompany(c.companyId);
+  const companyName = company?.name;
+  const assist = company ? await buildApprovalAssist(c, company) : null;
 
   return (
     <Card>
@@ -44,6 +48,8 @@ async function ApprovalCard({ c, user }: { c: ContentItem; user: User }) {
         <p className="mt-3 line-clamp-3 whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
           {c.body}
         </p>
+
+        {assist && <ApprovalAssistNotes assist={assist} />}
 
         {blocked && (
           <p className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700">
@@ -86,7 +92,7 @@ async function ApprovalCard({ c, user }: { c: ContentItem; user: User }) {
 }
 
 export default async function ApprovalsPage() {
-  const user = await requireAdmin();
+  const user = await requirePermission("approve_content");
   const pending = (await visibleContent(user)).filter(
     (c) => c.status === "pending_approval",
   );
@@ -102,7 +108,7 @@ export default async function ApprovalsPage() {
     <div>
       <PageHeader
         title="Approval inbox"
-        description="Content routes to the correct queue by type, risk, evidence and consent. Nothing is published without approval."
+        description="Content routes to the correct queue by type, risk, evidence and consent. Triage notes are suggest-only — nothing is published without your approval."
       />
       <div className="space-y-8 p-6">
         <section>

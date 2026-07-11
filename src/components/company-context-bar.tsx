@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 /**
  * When a module page is opened with ?company=, remind the user they are
  * working inside a company context (tools live on the company workspace).
+ * Does not claim the screen is filtered — some pages only prefill forms.
  */
 export function CompanyContextBar({
   companies,
@@ -32,7 +33,7 @@ export function CompanyContextBar({
         {company.name}
       </Link>
       <span className="text-muted-foreground">
-        Company workspace — this screen is filtered to this client
+        Working in {company.name} context
       </span>
     </div>
   );

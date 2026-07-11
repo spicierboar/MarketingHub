@@ -682,3 +682,106 @@ export function scheduleTimingHint(
   if (minutes >= start && minutes < end) return null;
   return `Outside peak window for ${dow} — try ${match.timeStart}–${match.timeEnd}.`;
 }
+
+// ---- next optimal slot (one-click schedule) ----------------------------------
+
+export interface OptimalScheduleSlot {
+  date: string;
+  time: string;
+  platform: string;
+  dayOfWeek: string;
+  score: number;
+  basis: string;
+  timeEnd: string;
+}
+
+const DOW_INDEX: Record<string, number> = Object.fromEntries(DOW.map((d, i) => [d, i]));
+
+function windowSortKey(w: OptimalPostWindow): string {
+  return `${String(100 - w.score).padStart(3, "0")}|${DOW_INDEX[w.dayOfWeek] ?? 9}|${w.timeStart}|${w.platform}`;
+}
+
+/**
+ * Pick the next concrete date/time from analytics-informed optimal windows.
+ * Deterministic: highest score first (stable ties), then earliest future occurrence
+ * of that window within lookaheadDays. Skips today's slot if nowHhmm is past timeStart.
+ */
+export function nextOptimalSlot(
+  windows: OptimalPostWindow[],
+  opts: {
+    todayIso: string;
+    nowHhmm?: string;
+    companyId?: string;
+    platform?: string;
+    lookaheadDays?: number;
+  },
+): OptimalScheduleSlot | null {
+  const lookahead = opts.lookaheadDays ?? 21;
+  const nowHhmm = opts.nowHhmm ?? "00:00";
+  const platformFilter = opts.platform?.trim().toLowerCase();
+
+  let pool = windows.filter((w) => !opts.companyId || !w.companyId || w.companyId === opts.companyId);
+  if (platformFilter) {
+    const matched = pool.filter((w) => w.platform.toLowerCase() === platformFilter);
+    if (matched.length) pool = matched;
+  }
+  if (!pool.length) return null;
+
+  const ranked = [...pool].sort((a, b) => windowSortKey(a).localeCompare(windowSortKey(b)));
+  const bestScore = ranked[0].score;
+  // Consider top-tied windows so we take the soonest among equally-best scores.
+  const contenders = ranked.filter((w) => w.score === bestScore);
+
+  type Candidate = OptimalScheduleSlot & { sortKey: string };
+  const candidates: Candidate[] = [];
+
+  for (const w of contenders) {
+    for (let i = 0; i <= lookahead; i += 1) {
+      const date = addCalendarDays(opts.todayIso, i);
+      if (dayOfWeekFromIso(date) !== w.dayOfWeek) continue;
+      if (i === 0 && nowHhmm >= w.timeStart) continue;
+      candidates.push({
+        date,
+        time: w.timeStart,
+        platform: platformFilter ? (opts.platform!.trim() || w.platform) : w.platform,
+        dayOfWeek: w.dayOfWeek,
+        score: w.score,
+        basis: w.basis,
+        timeEnd: w.timeEnd,
+        sortKey: `${date}|${w.timeStart}|${w.platform}`,
+      });
+      break; // next occurrence of this window only
+    }
+  }
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  const { sortKey: _sk, ...slot } = candidates[0];
+  return slot;
+}
+
+/**
+ * Load optimal windows + tenant clock and resolve the next schedule slot.
+ */
+export async function resolveNextOptimalSlot(
+  tenantId: string,
+  opts: {
+    companyId: string;
+    platform?: string;
+    tenant?: Pick<Tenant, "timezone"> | null;
+    limit?: number;
+  },
+): Promise<OptimalScheduleSlot | null> {
+  const clock = resolveQueueClock(opts.tenant);
+  const windows = await optimalPostWindows(tenantId, {
+    companyIds: [opts.companyId],
+    platform: opts.platform,
+    limit: opts.limit ?? 6,
+  });
+  return nextOptimalSlot(windows, {
+    todayIso: clock.today,
+    nowHhmm: clock.hhmm,
+    companyId: opts.companyId,
+    platform: opts.platform,
+  });
+}

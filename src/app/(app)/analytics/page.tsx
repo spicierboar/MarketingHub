@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth/rbac";
+import { requireAdmin, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { buildReport } from "@/lib/analytics";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -77,10 +77,24 @@ function DimTable({
   );
 }
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireAdmin();
-  const r = await buildReport(user.tenantId);
+  const allowed = new Set(await accessibleCompanyIds(user));
+  const { company: companyParam } = await searchParams;
+  const companyId =
+    companyParam && allowed.has(companyParam) ? companyParam : undefined;
+  const r = await buildReport(
+    user.tenantId,
+    companyId ? [companyId] : undefined,
+  );
   const t = r.timeliness;
+  const utmHref = companyId
+    ? `/analytics/utm?company=${companyId}`
+    : "/analytics/utm";
 
   return (
     <div>
@@ -88,7 +102,7 @@ export default async function AnalyticsPage() {
         title="Analytics & reporting"
         description="Group-wide performance. Engagement is simulated per published post until live platform data is connected."
       >
-        <Link href="/analytics/utm" className={buttonClasses("outline")}>
+        <Link href={utmHref} className={buttonClasses("outline")}>
           UTM &amp; ROI builder
         </Link>
       </PageHeader>

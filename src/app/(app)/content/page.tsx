@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth/rbac";
+import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleContent } from "@/lib/scope";
 import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
@@ -7,9 +7,19 @@ import { StatusBadge, RiskBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate, titleCase } from "@/lib/utils";
 
-export default async function ContentPage() {
+export default async function ContentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireUser();
-  const content = await visibleContent(user);
+  const allowed = new Set(await accessibleCompanyIds(user));
+  const { company: companyParam } = await searchParams;
+  const companyId =
+    companyParam && allowed.has(companyParam) ? companyParam : undefined;
+  const content = (await visibleContent(user)).filter(
+    (c) => !companyId || c.companyId === companyId,
+  );
   const approvedCount = content.filter((c) =>
     ["approved", "scheduled", "published"].includes(c.status),
   ).length;

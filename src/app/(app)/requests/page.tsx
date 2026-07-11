@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth/rbac";
+import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleRequests } from "@/lib/scope";
 import { listCompanies, listUsers } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
@@ -15,9 +15,19 @@ const URGENCY_TONE = {
   urgent: "danger",
 } as const;
 
-export default async function RequestsPage() {
+export default async function RequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireUser();
-  const requests = await visibleRequests(user);
+  const allowed = new Set(await accessibleCompanyIds(user));
+  const { company: companyParam } = await searchParams;
+  const companyId =
+    companyParam && allowed.has(companyParam) ? companyParam : undefined;
+  const requests = (await visibleRequests(user)).filter(
+    (r) => !companyId || r.companyId === companyId,
+  );
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c]));
   const userById = new Map((await listUsers(user.tenantId)).map((u) => [u.id, u]));
 

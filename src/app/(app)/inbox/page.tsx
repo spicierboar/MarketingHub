@@ -11,12 +11,23 @@ import {
   draftReplyFromMentionAction,
 } from "./actions";
 
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireUser();
   const allowed = new Set(await accessibleCompanyIds(user));
+  const { company: companyParam } = await searchParams;
+  const companyId =
+    companyParam && allowed.has(companyParam) ? companyParam : undefined;
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c.name]));
   const all = await listSocialMentions(user.tenantId);
-  const scoped = all.filter((m) => allowed.has(m.companyId));
+  const scoped = all.filter(
+    (m) =>
+      allowed.has(m.companyId) &&
+      (!companyId || m.companyId === companyId),
+  );
   const newMentions = scoped.filter((m) => m.status === "new");
   const handled = scoped.filter((m) => m.status !== "new").length;
 

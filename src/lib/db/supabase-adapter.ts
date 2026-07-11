@@ -37,6 +37,8 @@ import type {
   AdAccount, AdBudget, AdCampaign, AdPlatform, AddonId, AudienceSegment,
   AiRun, AiMosOpportunity, AiMosSignalRun, CalendarAssistSuggestion, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
   AutomationSettings, BrandTemplate, Campaign, CampaignBuilderRun, CampaignDraftScheduleItem, CampaignItem, CampaignPlanVersion, Company,
+  ApprovalPolicy, AiCampaignRecommendation, AiOrchestrationRun, AiPromptVersion, CampaignPerformanceSnapshot,
+  PrivacyRequest,
 
   CompanyAccess, CompanyEntitlement, ConsentRecord, ContentComment, ContentItem, EvidenceRecord,
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
@@ -53,6 +55,7 @@ import type {
   CmsPage, CmsPageVersion, CmsSeoMetadata, CmsUpdateRequest,
   RagKnowledgeSource, RagKnowledgeVersion,
   ConversionFunnel, FunnelAbExperiment, FunnelJourney, FunnelLandingPage,
+  CampaignExperiment,
 } from "@/lib/types";
 
 // Request-scoped RLS client for company-scoped data — EXCEPT inside a trusted
@@ -85,6 +88,35 @@ function normaliseCompany(c: Company): Company {
       requiredDisclaimers: p.requiredDisclaimers ?? [],
     },
     documents: c.documents ?? [],
+  };
+}
+
+/** AI campaign layer (0035) defaults for rows missing new columns. */
+function normaliseCampaign(c: Campaign): Campaign {
+  return {
+    ...c,
+    priority: c.priority ?? "medium",
+    timezone: c.timezone ?? "Australia/Sydney",
+    currency: c.currency ?? "AUD",
+    geographicScope: c.geographicScope ?? [],
+    utm: c.utm ?? {},
+    associatedProducts: c.associatedProducts ?? [],
+    layerMeta: c.layerMeta ?? {},
+  };
+}
+
+function normaliseOffer(o: Offer): Offer {
+  return {
+    ...o,
+    eligibleProducts: o.eligibleProducts ?? [],
+    eligibleCategories: o.eligibleCategories ?? [],
+    eligibleSegments: o.eligibleSegments ?? [],
+    excludedProducts: o.excludedProducts ?? [],
+    excludedCustomers: o.excludedCustomers ?? [],
+    eligibleRegions: o.eligibleRegions ?? [],
+    excludedRegions: o.excludedRegions ?? [],
+    approvalStatus: o.approvalStatus ?? "draft",
+    promotionMeta: o.promotionMeta ?? {},
   };
 }
 
@@ -268,6 +300,20 @@ export const supabaseRepo = {
     const patch: Row = { role_title: roleTitle };
     if (m.role !== "owner") patch.role = ROLE_TITLE_TIER[roleTitle] === "user" ? "member" : "admin";
     await sb.from("tenant_members").update(patch).eq("tenant_id", tenantId).eq("user_id", userId);
+  },
+  async setMemberCapabilities(
+    tenantId: string,
+    userId: string,
+    capabilities: string[],
+  ): Promise<void> {
+    const sb = svc(); if (!sb) return;
+    const m = await this.getMembership(tenantId, userId);
+    if (!m) return;
+    await sb
+      .from("tenant_members")
+      .update({ capabilities })
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId);
   },
 
   async accessForUser(userId: string): Promise<CompanyAccess[]> {
@@ -876,23 +922,23 @@ export const supabaseRepo = {
   async listCampaigns(tenantId: string): Promise<Campaign[]> {
     const sb = await usr(); if (!sb) return [];
     const { data } = await sb.from("campaigns").select("*").in("company_id", await companyIds(sb, tenantId)).order("created_at", { ascending: false });
-    return many<Campaign>(data);
+    return many<Campaign>(data).map(normaliseCampaign);
   },
   async getCampaign(campaignId: string): Promise<Campaign | undefined> {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("campaigns").select("*").eq("id", campaignId).maybeSingle();
-    return data ? toDomain<Campaign>(data) : undefined;
+    return data ? normaliseCampaign(toDomain<Campaign>(data)) : undefined;
   },
   async createCampaign(input: Omit<Campaign, "id" | "createdAt" | "updatedAt">): Promise<Campaign> {
     const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
     const { data, error } = await sb.from("campaigns").insert(toRow(input)).select("*").single();
     if (error) throw new Error("createCampaign: " + error.message);
-    return toDomain<Campaign>(data);
+    return normaliseCampaign(toDomain<Campaign>(data));
   },
   async updateCampaign(campaignId: string, patch: Partial<Campaign>): Promise<Campaign | undefined> {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("campaigns").update({ ...toRow(patch), updated_at: now() }).eq("id", campaignId).select("*").maybeSingle();
-    return data ? toDomain<Campaign>(data) : undefined;
+    return data ? normaliseCampaign(toDomain<Campaign>(data)) : undefined;
   },
   async listCampaignItems(campaignId: string): Promise<CampaignItem[]> {
     const sb = await usr(); if (!sb) return [];
@@ -919,23 +965,23 @@ export const supabaseRepo = {
   async listOffers(companyId: string): Promise<Offer[]> {
     const sb = await usr(); if (!sb) return [];
     const { data } = await sb.from("offers").select("*").eq("company_id", companyId).order("created_at", { ascending: false });
-    return many<Offer>(data);
+    return many<Offer>(data).map(normaliseOffer);
   },
   async getOffer(offerId: string): Promise<Offer | undefined> {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("offers").select("*").eq("id", offerId).maybeSingle();
-    return data ? toDomain<Offer>(data) : undefined;
+    return data ? normaliseOffer(toDomain<Offer>(data)) : undefined;
   },
   async createOffer(input: Omit<Offer, "id" | "createdAt" | "updatedAt">): Promise<Offer> {
     const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
     const { data, error } = await sb.from("offers").insert(toRow(input)).select("*").single();
     if (error) throw new Error("createOffer: " + error.message);
-    return toDomain<Offer>(data);
+    return normaliseOffer(toDomain<Offer>(data));
   },
   async updateOffer(offerId: string, patch: Partial<Offer>): Promise<Offer | undefined> {
     const sb = await usr(); if (!sb) return undefined;
     const { data } = await sb.from("offers").update({ ...toRow(patch), updated_at: now() }).eq("id", offerId).select("*").maybeSingle();
-    return data ? toDomain<Offer>(data) : undefined;
+    return data ? normaliseOffer(toDomain<Offer>(data)) : undefined;
   },
 
   // ============================ Scheduled posts (RLS) ======================
@@ -2182,6 +2228,7 @@ export const supabaseRepo = {
       bookingSettings: many(await byCompany("booking_settings")),
       reservations: many(await byCompany("reservations")),
       recommendations: many(await byCompany("recommendations")),
+      campaignExperiments: many(await byCompany("campaign_experiments")),
       tasks: many(await byCompany("tasks")),
       aiMosOpportunities: many(await byTenant("ai_mos_opportunities")),
       aiMosSignalRuns: many(await byTenant("ai_mos_signal_runs")),
@@ -2339,11 +2386,330 @@ export const supabaseRepo = {
       .order("created_at", { ascending: false });
     return many<LearningLesson>(data);
   },
-  async createLearningLesson(input: Omit<LearningLesson, "id" | "createdAt">): Promise<LearningLesson> {
+    async createLearningLesson(input: Omit<LearningLesson, "id" | "createdAt">): Promise<LearningLesson> {
     const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
     const { data, error } = await sb.from("learning_lessons").insert(toRow(input)).select("*").single();
     if (error) throw new Error("createLearningLesson: " + error.message);
     return toDomain<LearningLesson>(data);
+  },
+
+  // ---- AI campaign management layer (0035) -------------------------------------
+  async listApprovalPolicies(tenantId: string, entityType?: string): Promise<ApprovalPolicy[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("approval_policies").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+    if (entityType) q = q.eq("entity_type", entityType);
+    const { data } = await q;
+    return many<ApprovalPolicy>(data);
+  },
+  async getApprovalPolicy(policyId: string): Promise<ApprovalPolicy | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("approval_policies").select("*").eq("id", policyId).maybeSingle();
+    return data ? toDomain<ApprovalPolicy>(data) : undefined;
+  },
+  async createApprovalPolicy(
+    input: Omit<ApprovalPolicy, "id" | "createdAt" | "updatedAt">,
+  ): Promise<ApprovalPolicy> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("approval_policies").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createApprovalPolicy: " + error.message);
+    return toDomain<ApprovalPolicy>(data);
+  },
+  async updateApprovalPolicy(
+    policyId: string,
+    patch: Partial<ApprovalPolicy>,
+  ): Promise<ApprovalPolicy | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("approval_policies")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", policyId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<ApprovalPolicy>(data) : undefined;
+  },
+
+  async listAiPromptVersions(
+    tenantId: string | null,
+    promptKey?: string,
+  ): Promise<AiPromptVersion[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("ai_prompt_versions").select("*").order("version", { ascending: false });
+    if (tenantId === null) q = q.is("tenant_id", null);
+    else q = q.or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+    if (promptKey) q = q.eq("prompt_key", promptKey);
+    const { data } = await q;
+    return many<AiPromptVersion>(data);
+  },
+  async getAiPromptVersion(versionId: string): Promise<AiPromptVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("ai_prompt_versions").select("*").eq("id", versionId).maybeSingle();
+    return data ? toDomain<AiPromptVersion>(data) : undefined;
+  },
+  async createAiPromptVersion(
+    input: Omit<AiPromptVersion, "id" | "createdAt" | "updatedAt">,
+  ): Promise<AiPromptVersion> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("ai_prompt_versions").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createAiPromptVersion: " + error.message);
+    return toDomain<AiPromptVersion>(data);
+  },
+  async updateAiPromptVersion(
+    versionId: string,
+    patch: Partial<AiPromptVersion>,
+  ): Promise<AiPromptVersion | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("ai_prompt_versions")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", versionId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<AiPromptVersion>(data) : undefined;
+  },
+
+  async listAiOrchestrationRuns(companyId: string): Promise<AiOrchestrationRun[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb
+      .from("ai_orchestration_runs")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false });
+    return many<AiOrchestrationRun>(data);
+  },
+  async getAiOrchestrationRun(runId: string): Promise<AiOrchestrationRun | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("ai_orchestration_runs").select("*").eq("id", runId).maybeSingle();
+    return data ? toDomain<AiOrchestrationRun>(data) : undefined;
+  },
+  async createAiOrchestrationRun(
+    input: Omit<AiOrchestrationRun, "id" | "createdAt" | "updatedAt">,
+  ): Promise<AiOrchestrationRun> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("ai_orchestration_runs").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createAiOrchestrationRun: " + error.message);
+    return toDomain<AiOrchestrationRun>(data);
+  },
+  async updateAiOrchestrationRun(
+    runId: string,
+    patch: Partial<AiOrchestrationRun>,
+  ): Promise<AiOrchestrationRun | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("ai_orchestration_runs")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", runId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<AiOrchestrationRun>(data) : undefined;
+  },
+
+  async listAiCampaignRecommendations(
+    companyId: string,
+    campaignId?: string,
+  ): Promise<AiCampaignRecommendation[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb
+      .from("ai_campaign_recommendations")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false });
+    if (campaignId) q = q.eq("campaign_id", campaignId);
+    const { data } = await q;
+    return many<AiCampaignRecommendation>(data);
+  },
+  async getAiCampaignRecommendation(
+    recommendationId: string,
+  ): Promise<AiCampaignRecommendation | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("ai_campaign_recommendations")
+      .select("*")
+      .eq("id", recommendationId)
+      .maybeSingle();
+    return data ? toDomain<AiCampaignRecommendation>(data) : undefined;
+  },
+  async createAiCampaignRecommendation(
+    input: Omit<AiCampaignRecommendation, "id" | "createdAt" | "updatedAt">,
+  ): Promise<AiCampaignRecommendation> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb
+      .from("ai_campaign_recommendations")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createAiCampaignRecommendation: " + error.message);
+    return toDomain<AiCampaignRecommendation>(data);
+  },
+  async updateAiCampaignRecommendation(
+    recommendationId: string,
+    patch: Partial<AiCampaignRecommendation>,
+  ): Promise<AiCampaignRecommendation | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("ai_campaign_recommendations")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", recommendationId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<AiCampaignRecommendation>(data) : undefined;
+  },
+
+  async listCampaignPerformanceSnapshots(
+    campaignId: string,
+  ): Promise<CampaignPerformanceSnapshot[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb
+      .from("campaign_performance_snapshots")
+      .select("*")
+      .eq("campaign_id", campaignId)
+      .order("period_start", { ascending: false });
+    return many<CampaignPerformanceSnapshot>(data);
+  },
+  async getCampaignPerformanceSnapshot(
+    snapshotId: string,
+  ): Promise<CampaignPerformanceSnapshot | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("campaign_performance_snapshots")
+      .select("*")
+      .eq("id", snapshotId)
+      .maybeSingle();
+    return data ? toDomain<CampaignPerformanceSnapshot>(data) : undefined;
+  },
+  async createCampaignPerformanceSnapshot(
+    input: Omit<CampaignPerformanceSnapshot, "id" | "createdAt" | "collectedAt"> & {
+      collectedAt?: string;
+    },
+  ): Promise<CampaignPerformanceSnapshot> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb
+      .from("campaign_performance_snapshots")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createCampaignPerformanceSnapshot: " + error.message);
+    return toDomain<CampaignPerformanceSnapshot>(data);
+  },
+  async updateCampaignPerformanceSnapshot(
+    snapshotId: string,
+    patch: Partial<CampaignPerformanceSnapshot>,
+  ): Promise<CampaignPerformanceSnapshot | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("campaign_performance_snapshots")
+      .update(toRow(patch))
+      .eq("id", snapshotId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<CampaignPerformanceSnapshot>(data) : undefined;
+  },
+
+  async listPrivacyRequests(
+    tenantId: string,
+    companyId?: string,
+  ): Promise<PrivacyRequest[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb
+      .from("privacy_requests")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false });
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q;
+    return many<PrivacyRequest>(data);
+  },
+  async listPrivacyRequestsForCompany(companyId: string): Promise<PrivacyRequest[]> {
+    const sb = await usr(); if (!sb) return [];
+    const { data } = await sb
+      .from("privacy_requests")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false });
+    return many<PrivacyRequest>(data);
+  },
+  async getPrivacyRequest(requestId: string): Promise<PrivacyRequest | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("privacy_requests")
+      .select("*")
+      .eq("id", requestId)
+      .maybeSingle();
+    return data ? toDomain<PrivacyRequest>(data) : undefined;
+  },
+  async createPrivacyRequest(
+    input: Omit<PrivacyRequest, "id" | "createdAt">,
+  ): Promise<PrivacyRequest> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("privacy_requests").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createPrivacyRequest: " + error.message);
+    return toDomain<PrivacyRequest>(data);
+  },
+  async updatePrivacyRequest(
+    requestId: string,
+    patch: Partial<PrivacyRequest>,
+  ): Promise<PrivacyRequest | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("privacy_requests")
+      .update(toRow(patch))
+      .eq("id", requestId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<PrivacyRequest>(data) : undefined;
+  },
+
+  // ---- Campaign A/B experiments (0036) ---------------------------------------
+  async listCampaignExperiments(
+    tenantId: string,
+    opts?: { companyId?: string; campaignId?: string },
+  ): Promise<CampaignExperiment[]> {
+    const sb = await usr();
+    if (!sb) return [];
+    const ids = opts?.companyId
+      ? [opts.companyId]
+      : await companyIds(sb, tenantId);
+    if (!ids.length) return [];
+    let q = sb.from("campaign_experiments").select("*").in("company_id", ids);
+    if (opts?.campaignId) q = q.eq("campaign_id", opts.campaignId);
+    const { data } = await q.order("created_at", { ascending: false });
+    return many<CampaignExperiment>(data);
+  },
+  async getCampaignExperiment(experimentId: string): Promise<CampaignExperiment | undefined> {
+    const sb = await usr();
+    if (!sb) return undefined;
+    const { data } = await sb
+      .from("campaign_experiments")
+      .select("*")
+      .eq("id", experimentId)
+      .maybeSingle();
+    return data ? toDomain<CampaignExperiment>(data) : undefined;
+  },
+  async createCampaignExperiment(
+    input: Omit<CampaignExperiment, "id" | "createdAt" | "updatedAt">,
+  ): Promise<CampaignExperiment> {
+    const sb = await usr();
+    if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb
+      .from("campaign_experiments")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createCampaignExperiment: " + error.message);
+    return toDomain<CampaignExperiment>(data);
+  },
+  async updateCampaignExperiment(
+    experimentId: string,
+    patch: Partial<CampaignExperiment>,
+  ): Promise<CampaignExperiment | undefined> {
+    const sb = await usr();
+    if (!sb) return undefined;
+    const { data } = await sb
+      .from("campaign_experiments")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", experimentId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<CampaignExperiment>(data) : undefined;
   },
 };
 

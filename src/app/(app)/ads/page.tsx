@@ -4,6 +4,7 @@ import {
   listAdAccounts,
   listAdBudgets,
   listAdCampaigns,
+  listAiCampaignRecommendations,
   listAudienceSegments,
   listCompanies,
   listLeads,
@@ -25,17 +26,20 @@ import type { AdAccount, AdBudget, AdCampaign, AdPlatform, AudienceSegment, Comp
 import { AudienceForm } from "./audience-form";
 import {
   applyAllocationAction,
+  applySpendChangeAction,
   connectAdAccountAction,
   createAdCampaignAction,
   deleteAudienceSegmentAction,
   disconnectAdAccountAction,
   invoiceManagementFeeAction,
+  proposeAllocationAction,
   recordLeadAction,
   saveBudgetAction,
   setCampaignAudienceAction,
   suggestAudienceAction,
   updateAdCampaignStatusAction,
 } from "./actions";
+import { decideAiCampaignRecommendationAction } from "@/app/(app)/campaigns/ai-layer-actions";
 import { scanCalendarAssistAction } from "@/app/(app)/calendar/actions";
 
 const money = (x: number) => `$${Math.round(x).toLocaleString("en-AU")}`;
@@ -122,6 +126,18 @@ export default async function AdsPage({
         connectedPlatforms: selConnected,
       })
     : undefined;
+
+  const spendRecs = sel
+    ? (await listAiCampaignRecommendations(sel.company.id)).filter(
+        (r) => r.recommendationType === "budget_allocation",
+      )
+    : [];
+  const pendingSpendRecs = spendRecs.filter(
+    (r) => !r.humanDecision || r.humanDecision === "pending",
+  );
+  const acceptedSpendRecs = spendRecs.filter(
+    (r) => r.humanDecision === "accepted" && r.actionTaken !== "allocation_applied",
+  );
 
   const accountById = new Map((sel?.accounts ?? []).map((a) => [a.id, a]));
   const metricsByCampaignId = new Map<string, PaidMetrics>();
@@ -251,11 +267,67 @@ export default async function AdsPage({
                     <li key={i} className="flex gap-2"><span className="text-primary">•</span><span>{r}</span></li>
                   ))}
                 </ul>
+                <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  AI cannot move budget without approval. Propose a change, accept it as an admin
+                  (or finance reviewer with <code className="text-xs">manage_budgets</code>), then apply —
+                  or use dual confirmation for a manual override.
+                </p>
                 {guidance.hasConnected && guidance.monthlyBudgetUsd > 0 && (
-                  <form action={applyAllocationAction} className="mt-4">
-                    <input type="hidden" name="companyId" value={sel.company.id} />
-                    <Button type="submit" size="sm">Apply this allocation</Button>
-                  </form>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <form action={proposeAllocationAction}>
+                      <input type="hidden" name="companyId" value={sel.company.id} />
+                      <Button type="submit" size="sm" variant="secondary">
+                        Propose allocation (needs approval)
+                      </Button>
+                    </form>
+                    <form action={applyAllocationAction} className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2">
+                      <input type="hidden" name="companyId" value={sel.company.id} />
+                      <label className="flex items-center gap-1.5 text-xs">
+                        <input type="checkbox" name="dualConfirm" value="yes" />
+                        Confirm spend change
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs">
+                        <input type="checkbox" name="dualConfirmAck" value="yes" />
+                        I understand AI cannot move budget without approval
+                      </label>
+                      <Button type="submit" size="sm" variant="outline">
+                        Apply with dual confirm
+                      </Button>
+                    </form>
+                  </div>
+                )}
+                {pendingSpendRecs.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h3 className="text-sm font-medium">Pending allocation approvals</h3>
+                    {pendingSpendRecs.map((rec) => (
+                      <div key={rec.id} className="flex flex-wrap items-center gap-2 rounded border border-border px-3 py-2 text-sm">
+                        <span className="text-muted-foreground">{rec.summary}</span>
+                        <form action={decideAiCampaignRecommendationAction}>
+                          <input type="hidden" name="recommendationId" value={rec.id} />
+                          <input type="hidden" name="decision" value="accepted" />
+                          <Button type="submit" size="sm">Accept</Button>
+                        </form>
+                        <form action={decideAiCampaignRecommendationAction}>
+                          <input type="hidden" name="recommendationId" value={rec.id} />
+                          <input type="hidden" name="decision" value="rejected" />
+                          <Button type="submit" size="sm" variant="outline">Reject</Button>
+                        </form>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {acceptedSpendRecs.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h3 className="text-sm font-medium">Accepted — ready to apply</h3>
+                    {acceptedSpendRecs.map((rec) => (
+                      <form key={rec.id} action={applySpendChangeAction} className="flex flex-wrap items-center gap-2">
+                        <input type="hidden" name="companyId" value={sel.company.id} />
+                        <input type="hidden" name="recommendationId" value={rec.id} />
+                        <span className="text-sm text-muted-foreground">{rec.summary}</span>
+                        <Button type="submit" size="sm">Apply approved allocation</Button>
+                      </form>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

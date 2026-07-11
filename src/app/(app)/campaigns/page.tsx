@@ -7,12 +7,24 @@ import { StatusBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 
-export default async function CampaignsPage() {
+export default async function CampaignsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireUser();
   const allowed = new Set(await accessibleCompanyIds(user));
+  const { company: companyParam } = await searchParams;
+  const companyId =
+    companyParam && allowed.has(companyParam) ? companyParam : undefined;
   const campaigns = (await listCampaigns(user.tenantId)).filter(
-    (c) => allowed.has(c.companyId),
+    (c) =>
+      allowed.has(c.companyId) &&
+      (!companyId || c.companyId === companyId),
   );
+  const newHref = companyId
+    ? `/campaigns/new?company=${companyId}`
+    : "/campaigns/new";
   const itemsByCampaign = new Map(
     await Promise.all(
       campaigns.map(
@@ -34,7 +46,7 @@ export default async function CampaignsPage() {
         title="Campaigns"
         description="Full AI-planned campaigns — every item goes through the governed content pipeline."
       >
-        <Link href="/campaigns/new" className={buttonClasses()}>
+        <Link href={newHref} className={buttonClasses()}>
           New campaign
         </Link>
       </PageHeader>
@@ -43,7 +55,7 @@ export default async function CampaignsPage() {
         {campaigns.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
             No campaigns yet.{" "}
-            <Link href="/campaigns/new" className="text-primary hover:underline">
+            <Link href={newHref} className="text-primary hover:underline">
               Plan the first one
             </Link>
             {" "}or convert a campaign-type support request.

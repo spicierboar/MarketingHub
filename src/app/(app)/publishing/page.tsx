@@ -30,7 +30,9 @@ import {
 } from "@/lib/publish-queue";
 import { CEILING_WINDOW_HOURS, platformCeiling } from "@/lib/platform-limits";
 import { resolveQueueClock, SCHEDULE_TIMEZONE_OPTIONS } from "@/lib/tenant-timezone";
-import { cancelScheduleAction } from "@/app/(app)/calendar/actions";
+import {
+  cancelScheduleAction,
+} from "@/app/(app)/calendar/actions";
 import {
   connectIntegrationAction,
   disconnectIntegrationAction,
@@ -44,6 +46,7 @@ import {
   createBulkConnectInvitesAction,
   revokeConnectInviteAction,
 } from "./actions";
+import { ConnectorCapabilityPanel } from "@/components/connector-capability-panel";
 
 // v1 platform set (owner decision 2026-07-06): Facebook Pages, Instagram
 // Business, Google Business Profile, TikTok — NOT X/LinkedIn — plus Email as
@@ -151,6 +154,9 @@ export default async function PublishingPage({
       </PageHeader>
 
       <div className="grid gap-6 p-6 lg:grid-cols-2">
+        <div className="lg:col-span-2">
+          <ConnectorCapabilityPanel />
+        </div>
         {/* Bulk client connect invites */}
         <Card className="lg:col-span-2">
           <CardContent className="p-6">

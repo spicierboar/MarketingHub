@@ -29,6 +29,10 @@ const NUMERIC_COLS = new Set([
   "est_cost_usd", "ai_monthly_cap_usd", "size_bytes", "size",
   // Module 6 paid-advertising money/fraction columns (numeric in Postgres).
   "monthly_budget_usd", "daily_budget_usd", "fee_percent", "fee_flat_usd", "value_usd",
+  // AI campaign layer (0035) numeric columns.
+  "budget_amount", "daily_spend_limit", "discount_amount", "discount_percentage",
+  "minimum_purchase_amount", "maximum_discount", "temperature",
+  "confidence_score", "risk_score", "feedback_score",
 ]);
 // tenant_id / company_id carry a MEANINGFUL null on the platform-library entities
 // (approved_responses / prompt_templates / brand_templates): null tenant_id =

@@ -27,12 +27,18 @@ import type {
   AutomationRun,
   AutomationSettings,
   BrandTemplate,
+  ApprovalPolicy,
+  AiCampaignRecommendation,
+  AiOrchestrationRun,
+  AiPromptVersion,
   Campaign,
   CampaignBuilderRun,
   CampaignDraftScheduleItem,
   CampaignItem,
+  CampaignPerformanceSnapshot,
   CampaignPlanVersion,
   Company,
+  PrivacyRequest,
   CompanyEntitlement,
   MenuDesign,
   OrderMenuItem,
@@ -95,6 +101,7 @@ import type {
   FunnelAbExperiment,
   FunnelJourney,
   FunnelLandingPage,
+  CampaignExperiment,
   MarketingWorkflow,
   MarketingWorkflowSettings,
   WorkflowDispatchLog,
@@ -175,6 +182,7 @@ export interface DataStore {
   conversionFunnels: ConversionFunnel[];
   funnelLandingPages: FunnelLandingPage[];
   funnelAbExperiments: FunnelAbExperiment[];
+  campaignExperiments: CampaignExperiment[];
   smsSubscribers: SmsSubscriber[];
   smsCampaigns: SmsCampaign[];
   smsCompanySettings: SmsCompanySettings[];
@@ -220,6 +228,14 @@ export interface DataStore {
   // W7 M55: Continuous learning
   learningHypotheses: LearningHypothesis[];
   learningLessons: LearningLesson[];
+  // AI campaign management layer (0035)
+  approvalPolicies: ApprovalPolicy[];
+  aiPromptVersions: AiPromptVersion[];
+  aiOrchestrationRuns: AiOrchestrationRun[];
+  aiCampaignRecommendations: AiCampaignRecommendation[];
+  campaignPerformanceSnapshots: CampaignPerformanceSnapshot[];
+  // Privacy DSR (0037)
+  privacyRequests: PrivacyRequest[];
   tasks: Task[];
   // V1 module 11: AI-MOS opportunities
   aiMosOpportunities: AiMosOpportunity[];
@@ -1742,6 +1758,7 @@ function seed(): DataStore {
     conversionFunnels: [],
     funnelLandingPages: [],
     funnelAbExperiments: [],
+    campaignExperiments: [],
     smsSubscribers: [],
     smsCampaigns: [],
     smsCompanySettings: [],
@@ -2008,6 +2025,12 @@ function seed(): DataStore {
     recommendationDismissHistory: [],
     learningHypotheses: [],
     learningLessons: [],
+    approvalPolicies: [],
+    aiPromptVersions: [],
+    aiOrchestrationRuns: [],
+    aiCampaignRecommendations: [],
+    campaignPerformanceSnapshots: [],
+    privacyRequests: [],
     tasks: [],
     aiMosOpportunities: [],
     aiMosSignalRuns: [],

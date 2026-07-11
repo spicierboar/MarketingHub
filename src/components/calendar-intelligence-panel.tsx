@@ -54,11 +54,12 @@ export function CalendarIntelligencePanel({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="optimal-windows">
         <CardHeader>
           <CardTitle>Optimal post windows</CardTitle>
           <CardDescription>
             Analytics-informed slots (simulated engagement until live Insights are connected).
+            Basis shown under each window.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">

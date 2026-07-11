@@ -21,8 +21,11 @@ import {
   listCompanies,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
+import { userHasPermission, type Permission } from "@/lib/rbac-matrix";
 import type { ActingUser, User } from "@/lib/types";
 export type { ActingUser } from "@/lib/types";
+export { userHasPermission } from "@/lib/rbac-matrix";
+export type { Permission } from "@/lib/rbac-matrix";
 
 // Company ids a portal client may access — member role, scoped to the active tenant.
 async function portalCompanyIdsInTenant(user: ActingUser): Promise<string[]> {
@@ -152,6 +155,13 @@ export async function requireTenantOwnerRaw(): Promise<ActingUser> {
 export async function requireAdmin(): Promise<ActingUser> {
   const user = await requireUser();
   if (!isAdmin(user)) redirect("/dashboard");
+  return user;
+}
+
+/** Additive permission gate — admins/owners still pass via userHasPermission. */
+export async function requirePermission(permission: Permission): Promise<ActingUser> {
+  const user = await requireUser();
+  if (!userHasPermission(user, permission)) redirect("/dashboard");
   return user;
 }
 

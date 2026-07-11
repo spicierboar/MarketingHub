@@ -7,12 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import {
-  createEmailCampaignAction,
   createEmailSubscriberAction,
   createEmailTemplateAction,
   sendEmailCampaignAction,
   unsubscribeSubscriberAction,
 } from "./actions";
+import { EmailCampaignAiDraft } from "./email-ai-draft";
 
 export default async function EmailMarketingPage({
   searchParams,
@@ -170,21 +170,11 @@ export default async function EmailMarketingPage({
                 </div>
               );
             })}
-            {companyId && templates[0] && (
-              <form action={createEmailCampaignAction} className="space-y-3 border-t pt-4">
-                <input type="hidden" name="companyId" value={companyId} />
-                <input type="hidden" name="templateId" value={templates[0].id} />
-                <Field label="Name" htmlFor="cmp-name">
-                  <Input id="cmp-name" name="name" required />
-                </Field>
-                <Field label="Subject" htmlFor="cmp-subject">
-                  <Input id="cmp-subject" name="subject" required />
-                </Field>
-                <Field label="Segment tag" htmlFor="cmp-seg">
-                  <Input id="cmp-seg" name="segmentTag" placeholder="newsletter" />
-                </Field>
-                <Button type="submit">Create draft</Button>
-              </form>
+            {companyId && (
+              <EmailCampaignAiDraft
+                companyId={companyId}
+                fallbackTemplateId={templates[0]?.id}
+              />
             )}
           </CardContent>
         </Card>

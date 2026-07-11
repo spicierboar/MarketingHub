@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { CalendarAssistSuggestion } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import {
   acceptCalendarAssistSuggestionAction,
   dismissCalendarAssistSuggestionAction,
   scanCalendarAssistAction,
+  scheduleAtOptimalWindowAction,
 } from "@/app/(app)/calendar/actions";
 
 function ActionButtons({ suggestion }: { suggestion: CalendarAssistSuggestion }) {
@@ -36,12 +38,21 @@ function ActionButtons({ suggestion }: { suggestion: CalendarAssistSuggestion })
   );
 }
 
+export type AssistReadyToSchedule = {
+  suggestion: CalendarAssistSuggestion;
+  contentId: string;
+  contentTitle: string;
+  platform: string;
+};
+
 export function CalendarAssistPanel({
   suggestions,
+  readyToSchedule = [],
   companies,
   filterCompanyId,
 }: {
   suggestions: CalendarAssistSuggestion[];
+  readyToSchedule?: AssistReadyToSchedule[];
   companies: { id: string; name: string }[];
   filterCompanyId?: string;
 }) {
@@ -55,7 +66,8 @@ export function CalendarAssistPanel({
           <CardDescription>
             Suggestions from seasonal prompts, calendar gaps, and{" "}
             <strong>active paid ads</strong> (organic posts that flank the same theme). Accept →
-            ai_draft only — never auto-schedules or spends.
+            ai_draft only — never auto-schedules, auto-approves, or spends. Approved drafts can use
+            “Schedule at best time”.
           </CardDescription>
         </div>
         <form action={scanCalendarAssistAction} className="flex flex-wrap items-end gap-2">
@@ -76,8 +88,47 @@ export function CalendarAssistPanel({
         </form>
       </CardHeader>
       <CardContent className="space-y-3">
+        {readyToSchedule.length > 0 && (
+          <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-emerald-800">
+              Approved — schedule at best time
+            </p>
+            {readyToSchedule.map((row) => (
+              <div
+                key={row.suggestion.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background p-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="success">approved</Badge>
+                    <Badge tone="info">{companyById.get(row.suggestion.companyId) ?? row.suggestion.companyId}</Badge>
+                    <Badge tone="neutral">{row.platform}</Badge>
+                    <Link href={`/content/${row.contentId}`} className="font-medium hover:underline">
+                      {row.contentTitle}
+                    </Link>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    From assist: {row.suggestion.title}
+                  </p>
+                </div>
+                <form action={scheduleAtOptimalWindowAction} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="contentId" value={row.contentId} />
+                  <input type="hidden" name="platform" value={row.platform} />
+                  <Button type="submit" size="sm">
+                    Schedule at best time
+                  </Button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+
         {suggestions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No open suggestions — run a scan to surface ideas.</p>
+          <p className="text-sm text-muted-foreground">
+            {readyToSchedule.length === 0
+              ? "No open suggestions — run a scan to surface ideas."
+              : "No open suggestions."}
+          </p>
         ) : (
           suggestions.map((s) => (
             <div key={s.id} className="rounded-md border border-border p-4">

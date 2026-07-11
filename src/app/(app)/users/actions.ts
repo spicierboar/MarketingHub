@@ -10,12 +10,21 @@ import {
   grantAccess,
   revokeAccess,
   revokeUserSessions,
+  setMemberCapabilities,
   setMemberRoleTitle,
   setUserActive,
 } from "@/lib/db";
 import { canAccessCompany, requireAdmin } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { ROLE_TITLE_TIER, type Role, type RoleTitle } from "@/lib/types";
+import {
+  ALL_PERMISSIONS,
+  applySuggestedRole,
+  isPermission,
+  type Permission,
+  type SuggestedRole,
+  SUGGESTED_ROLE_PERMISSIONS,
+} from "@/lib/rbac-matrix";
 
 export async function createUserAction(formData: FormData) {
   const admin = await requireAdmin();
@@ -147,6 +156,51 @@ export async function revokeAccessAction(formData: FormData) {
     targetType: "user",
     targetId: userId,
     companyId,
+  });
+  revalidatePath("/users");
+}
+
+export async function toggleCapabilityAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const userId = String(formData.get("userId") || "");
+  const permission = String(formData.get("permission") || "");
+  const enable = formData.get("enable") === "true";
+  if (!isPermission(permission)) throw new Error("Unknown permission");
+  const membership = await getMembership(admin.tenantId, userId);
+  if (!membership) throw new Error("User is not a member of your organisation");
+  const user = await getUser(userId);
+  if (!user) throw new Error("User not found");
+
+  const current = new Set(membership.capabilities ?? []);
+  if (enable) current.add(permission);
+  else current.delete(permission);
+  const next = ALL_PERMISSIONS.filter((p) => current.has(p));
+  await setMemberCapabilities(admin.tenantId, userId, next);
+
+  await logAction(admin, "user.capabilities_updated", {
+    targetType: "user",
+    targetId: userId,
+    detail: `${user.email}: ${enable ? "+" : "-"}${permission} → [${next.join(", ")}]`,
+  });
+  revalidatePath("/users");
+}
+
+export async function applySuggestedRoleAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const userId = String(formData.get("userId") || "");
+  const role = String(formData.get("suggestedRole") || "") as SuggestedRole;
+  if (!(role in SUGGESTED_ROLE_PERMISSIONS)) throw new Error("Unknown suggested role");
+  const membership = await getMembership(admin.tenantId, userId);
+  if (!membership) throw new Error("User is not a member of your organisation");
+  const user = await getUser(userId);
+  if (!user) throw new Error("User not found");
+
+  const next: Permission[] = applySuggestedRole(role);
+  await setMemberCapabilities(admin.tenantId, userId, next);
+  await logAction(admin, "user.capabilities_preset", {
+    targetType: "user",
+    targetId: userId,
+    detail: `${user.email} → ${role} [${next.join(", ")}]`,
   });
   revalidatePath("/users");
 }

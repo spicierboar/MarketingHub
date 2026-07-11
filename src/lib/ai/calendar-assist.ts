@@ -7,6 +7,7 @@ import {
   createCalendarAssistSuggestion,
   createContent,
   getCompany,
+  getContent,
   listAdCampaigns,
   listCalendarAssistSuggestions,
   listCompanies,
@@ -408,4 +409,41 @@ export async function listOpenCalendarAssistForTenant(
 ): Promise<CalendarAssistSuggestion[]> {
   const open = await listCalendarAssistSuggestions(tenantId, companyIds, "open");
   return open.slice(0, limit);
+}
+
+/** Accepted assist drafts that are approved and not yet scheduled — eligible for "Schedule at best time". */
+export async function listAssistReadyToSchedule(
+  tenantId: string,
+  companyIds?: string[],
+  limit = 8,
+): Promise<
+  {
+    suggestion: CalendarAssistSuggestion;
+    contentId: string;
+    contentTitle: string;
+    platform: string;
+  }[]
+> {
+  const accepted = await listCalendarAssistSuggestions(tenantId, companyIds, "accepted");
+  const ready: {
+    suggestion: CalendarAssistSuggestion;
+    contentId: string;
+    contentTitle: string;
+    platform: string;
+  }[] = [];
+
+  for (const suggestion of accepted) {
+    if (!suggestion.resultContentId) continue;
+    const content = await getContent(suggestion.resultContentId);
+    if (!content || content.status !== "approved") continue;
+    if (!(await assistAcceptedContentNotScheduled(tenantId, content.id))) continue;
+    ready.push({
+      suggestion,
+      contentId: content.id,
+      contentTitle: content.title,
+      platform: suggestion.platform,
+    });
+    if (ready.length >= limit) break;
+  }
+  return ready;
 }

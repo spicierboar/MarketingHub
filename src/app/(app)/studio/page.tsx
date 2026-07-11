@@ -38,7 +38,11 @@ const TONES: [string, string][] = [
 export default async function StudioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ template?: string; repurposeFrom?: string }>;
+  searchParams: Promise<{
+    template?: string;
+    repurposeFrom?: string;
+    company?: string;
+  }>;
 }) {
   const user = await requireUser();
   const companies = (await visibleCompanies(user)).filter(
@@ -51,7 +55,13 @@ export default async function StudioPage({
   const allContent = (await visibleContent(user)).filter(
     (c) => companyIds.has(c.companyId) && canRepurposeSource(c),
   );
-  const { template: templateId, repurposeFrom } = await searchParams;
+  const {
+    template: templateId,
+    repurposeFrom,
+    company: companyParam,
+  } = await searchParams;
+  const contextCompanyId =
+    companyParam && companyIds.has(companyParam) ? companyParam : undefined;
   const preset = templateId ? await getPromptTemplate(templateId) : undefined;
   const repurposePreset = repurposeFrom ? await getContent(repurposeFrom) : undefined;
   const repurposeSource =
@@ -65,6 +75,10 @@ export default async function StudioPage({
     preset && (preset.companyId === null || companyIds.has(preset.companyId))
       ? preset
       : undefined;
+  const companyDefault =
+    (prefill?.companyId && companyIds.has(prefill.companyId)
+      ? prefill.companyId
+      : undefined) ?? contextCompanyId;
 
   return (
     <div>
@@ -91,7 +105,7 @@ export default async function StudioPage({
                         id="companyId"
                         name="companyId"
                         required
-                        defaultValue={prefill?.companyId ?? undefined}
+                        defaultValue={companyDefault}
                       >
                         {companies.map((c) => (
                           <option key={c.id} value={c.id}>

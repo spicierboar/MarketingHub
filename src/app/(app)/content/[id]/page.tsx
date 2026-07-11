@@ -16,6 +16,7 @@ import { Select } from "@/components/ui/form";
 import { now } from "@/lib/utils";
 import {
   cancelScheduleAction,
+  scheduleAtOptimalWindowAction,
   schedulePostAction,
 } from "../../calendar/actions";
 import { PageHeader } from "@/components/page-header";
@@ -54,10 +55,13 @@ const REPURPOSE_TYPES: [string, string][] = [
 
 export default async function ContentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ scheduleError?: string; scheduledAt?: string }>;
 }) {
   const { id } = await params;
+  const qs = searchParams ? await searchParams : {};
   const user = await requireUser();
   const content = await getContent(id);
   if (!content || !(await canAccessCompany(user, content.companyId))) notFound();
@@ -73,6 +77,7 @@ export default async function ContentDetailPage({
     content.status,
   );
   const awaitingApproval = content.status === "pending_approval";
+  const canScheduleAtBestTime = content.status === "approved";
   const c = content.compliance;
   // Phase 5: draft-comparison variants and repurposing lineage.
   const variants = content.variantGroupId
@@ -128,6 +133,16 @@ export default async function ContentDetailPage({
 
       <div className="grid gap-6 p-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {qs.scheduleError && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {qs.scheduleError}
+            </div>
+          )}
+          {qs.scheduledAt && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              Scheduled at best time: {qs.scheduledAt}
+            </div>
+          )}
           {content.duplicateWarning && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               ⚠ {content.duplicateWarning}
@@ -658,6 +673,19 @@ export default async function ContentDetailPage({
                     Schedule post
                   </Button>
                 </form>
+                {canScheduleAtBestTime && (
+                  <form action={scheduleAtOptimalWindowAction} className="mt-2 space-y-2">
+                    <input type="hidden" name="contentId" value={content.id} />
+                    <Input name="platform" placeholder="Platform (optional)" defaultValue="Facebook" />
+                    <Button type="submit" variant="outline" size="sm" className="w-full">
+                      Schedule at best time
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Uses the next analytics-informed optimal window for this company/platform.
+                      Pre-publish critique still runs — blocks are shown above.
+                    </p>
+                  </form>
+                )}
                 <Link
                   href="/calendar"
                   className="mt-3 inline-block text-sm text-primary hover:underline"

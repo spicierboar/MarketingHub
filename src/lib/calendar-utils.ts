@@ -99,3 +99,21 @@ export function dayConflicts(entries: CalendarEntry[]): string[] {
   }
   return [...new Set(warnings)];
 }
+
+/** Soft conflict preview for drag-drop: same company + platform already on target day. */
+export function previewSameDayPlatformConflict(
+  dayEntries: CalendarEntry[],
+  moving: Pick<CalendarEntry, "companyId" | "platform" | "scheduledPostId" | "companyName">,
+): string | null {
+  const platform = moving.platform.toLowerCase();
+  const clash = dayEntries.find(
+    (e) =>
+      e.kind === "post" &&
+      e.status === "scheduled" &&
+      e.companyId === moving.companyId &&
+      e.platform.toLowerCase() === platform &&
+      e.scheduledPostId !== moving.scheduledPostId,
+  );
+  if (!clash) return null;
+  return `${moving.companyName}: another ${moving.platform} post already on this day`;
+}
