@@ -10,10 +10,10 @@ npm install
 npm run dev   # http://localhost:3000
 ```
 
-Runs with **no external accounts** — seeded in-memory data (a fictional group of
-IGA supermarkets, a motel and a cafe), template AI fallback. Sign in with a demo
-email (no password): `admin@wattlegroup.dev` (super admin), `tom@millbrookiga.dev`
-(scoped user), and others listed on the login screen.
+Runs with **no external accounts** — seeded in-memory data. Sign in with the
+two demo personas (no password): **Agency** `sasha@brightspark.dev`, **Client**
+`liam@brightspark.dev` (portal). Prefer `/dev` quick login on port 3002 with
+`CC_LOCAL_DEMO=true`.
 
 ## Status
 

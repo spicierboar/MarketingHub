@@ -29,7 +29,7 @@
 >
 > **Still untracked (do not commit):** `scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`
 >
-> **Local demo:** `npx next dev -p 3002` · `/dev` + `admin@wattlegroup.dev`
+> **Local demo:** `npx next dev -p 3002` · `/dev` → **Agency** `sasha@brightspark.dev` · **Client** `liam@brightspark.dev`
 >
 > **NEXT:**
 > 1. Park live cutover until Google GO — see `docs/MANAGED-SERVICE-PENDING.md`

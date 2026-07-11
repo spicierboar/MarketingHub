@@ -369,7 +369,13 @@ function seed(): DataStore {
     { tenantId: "t_wattle", userId: "u_marco", role: "member", createdAt: t },
     { tenantId: "t_wattle", userId: "u_deb", role: "member", createdAt: t },
     { tenantId: "t_bright", userId: "u_sasha", role: "owner", createdAt: t },
-    { tenantId: "t_bright", userId: "u_liam", role: "member", createdAt: t },
+    {
+      tenantId: "t_bright",
+      userId: "u_liam",
+      role: "member",
+      portalOnly: true,
+      createdAt: t,
+    },
     // Jordan: a member of both tenants (different company in each).
     { tenantId: "t_wattle", userId: "u_jordan", role: "member", createdAt: t },
     { tenantId: "t_bright", userId: "u_jordan", role: "admin", createdAt: t },

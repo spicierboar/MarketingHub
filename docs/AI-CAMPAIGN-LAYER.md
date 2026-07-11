@@ -105,7 +105,7 @@ Parallel `0036_*` files are independent modules (same pattern as W5).
 ## Demo steps
 
 1. Ensure local demo env and `npx next dev -p 3002`.
-2. Sign in as an admin with company access (e.g. seed `admin@wattlegroup.dev`).
+2. Sign in as the agency operator (seed `sasha@brightspark.dev`) or client portal (`liam@brightspark.dev`).
 3. Open `/campaigns/new` — confirm **Structured plan output** sections under Build from goal.
 4. Enter a goal → **Build with AI layer review** (admin) → lands on campaign detail in **draft**.
 5. On detail: confirm **AI layer plan review** sections + pending recommendation; **Accept** / **Reject** (reject creates no posts).

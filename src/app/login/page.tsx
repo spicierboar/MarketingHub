@@ -2,30 +2,13 @@ import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 import { LoginAuthError } from "./login-auth-error";
 
-// Two demo tenants prove multi-tenant isolation: a business group and a
-// marketing agency. Sign in to one and you can never see the other.
+// Managed service: two personas only — Agency (delivers) and Client (reviews).
 const DEMO_TENANTS: { tenant: string; accounts: { email: string; role: string }[] }[] = [
   {
-    tenant: "Wattle Group (business group)",
+    tenant: "BrightSpark Marketing",
     accounts: [
-      { email: "admin@wattlegroup.dev", role: "Owner (+ platform admin)" },
-      { email: "priya@millbrookiga.dev", role: "Tenant admin" },
-      { email: "tom@millbrookiga.dev", role: "Member — Millbrook IGA" },
-      { email: "marco@westgateiga.dev", role: "Member — Westgate IGA Xpress" },
-      { email: "deb@goldenwattlemotel.dev", role: "Member — Golden Wattle Motel" },
-    ],
-  },
-  {
-    tenant: "BrightSpark Marketing (agency)",
-    accounts: [
-      { email: "sasha@brightspark.dev", role: "Owner — 2 client companies" },
-      { email: "liam@brightspark.dev", role: "Member — Harbour View Dental" },
-    ],
-  },
-  {
-    tenant: "Belongs to BOTH (tenant switcher)",
-    accounts: [
-      { email: "jordan@freelance.dev", role: "Consultant — switch between workspaces" },
+      { email: "sasha@brightspark.dev", role: "Agency — run delivery for clients" },
+      { email: "liam@brightspark.dev", role: "Client — Harbour View Dental portal" },
     ],
   },
 ];
@@ -42,7 +25,7 @@ export default function LoginPage() {
             Marketing Command Centre
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            AI drafts · you review · admins approve
+            Managed marketing — we deliver, you approve
           </p>
         </div>
 
@@ -53,7 +36,7 @@ export default function LoginPage() {
         <LoginForm />
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          Access is by invitation only. Contact your agency administrator if you need an account.
+          Two roles: your agency runs the service; you review and approve as the client.
         </p>
 
         <p className="mt-2 text-center text-xs text-muted-foreground">
@@ -65,7 +48,7 @@ export default function LoginPage() {
 
         <div className="mt-6 rounded-lg border border-dashed border-border bg-card p-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Demo accounts (isolated tenants)
+            Demo accounts (2 users)
           </p>
           {DEMO_TENANTS.map((group) => (
             <div key={group.tenant} className="mb-3 last:mb-0">

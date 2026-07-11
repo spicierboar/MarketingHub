@@ -14,11 +14,8 @@ import {
 export const dynamic = "force-dynamic";
 
 const DEMO_LOGINS = [
-  { email: "admin@wattlegroup.dev", label: "Wattle owner (+ platform admin)" },
-  { email: "priya@millbrookiga.dev", label: "Millbrook tenant admin" },
-  { email: "tom@millbrookiga.dev", label: "Millbrook client portal (member)" },
-  { email: "sasha@brightspark.dev", label: "BrightSpark agency owner" },
-  { email: "jordan@freelance.dev", label: "Multi-tenant consultant" },
+  { email: "sasha@brightspark.dev", label: "Agency — operates the service" },
+  { email: "liam@brightspark.dev", label: "Client — review & approve only" },
 ] as const;
 
 export default async function DevToolsPage() {
