@@ -80,35 +80,35 @@ function buildTools(
 
   const primary: ToolLink[] = [
     { href: base, label: "Overview", match: "exact" },
-    { href: `${base}/brand-brain`, label: "Brand Brain", match: "prefix" },
-    { href: `/campaigns?${q}`, label: "Campaigns" },
-    { href: `/studio?${q}`, label: "Studio" },
     { href: `/calendar?${q}`, label: "Calendar" },
     { href: `/inbox?${q}`, label: "Inbox" },
-    { href: `/crm?${q}`, label: "CRM" },
-    { href: `/ads?${q}`, label: "Paid ads" },
     { href: `/analytics?${q}`, label: "Analytics" },
+    { href: `/ads?${q}`, label: "Paid ads" },
   ];
 
   const more: ToolGroup[] = [
     {
-      id: "profile",
-      label: "Profile",
+      id: "delivery",
+      label: "Delivery tools",
       items: [
+        { href: `/campaigns?${q}`, label: "Campaigns" },
+        { href: `/studio?${q}`, label: "Studio" },
+        { href: `/content?${q}`, label: "Content" },
+        { href: `/publishing?${q}`, label: "Publishing" },
+        { href: `/assets?${q}`, label: "Assets" },
+        { href: `/library?${q}`, label: "Reuse library" },
+      ],
+    },
+    {
+      id: "profile",
+      label: "Setup & profile",
+      items: [
+        { href: `${base}/brand-brain`, label: "Brand Brain", match: "prefix" },
         { href: `${base}/services`, label: "Services", match: "prefix" },
         { href: `${base}/offers`, label: "Offers", match: "prefix" },
         { href: `${base}/governance`, label: "Governance", match: "prefix" },
         { href: `${base}/local-seo`, label: "Local SEO", match: "prefix" },
-      ],
-    },
-    {
-      id: "create",
-      label: "Create",
-      items: [
-        { href: `/publishing?${q}`, label: "Publishing" },
-        { href: `/content?${q}`, label: "Content" },
-        { href: `/assets?${q}`, label: "Assets" },
-        { href: `/library?${q}`, label: "Reuse library" },
+        { href: `/crm?${q}`, label: "CRM" },
       ],
     },
     {
@@ -213,7 +213,7 @@ export function CompanyToolsNav({
             {companyName}
           </h1>
           <p className="text-xs text-muted-foreground">
-            Tools for this client only
+            Tools for this client — monitoring first; create tools under More
           </p>
         </div>
         <StatusBadge status={status} />

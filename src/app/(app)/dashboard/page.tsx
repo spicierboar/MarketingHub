@@ -29,25 +29,18 @@ type AttentionItem = {
 function verbTitleForAlert(alert: AgencyAlert): string {
   switch (alert.kind) {
     case "overdue_approval":
-      return `Approve overdue content — ${alert.companyName}`;
+      return `Approval overdue — ${alert.companyName}`;
     case "overdue_client_review":
-      return `Chase client review — ${alert.companyName}`;
+      return `Client review waiting — ${alert.companyName}`;
     case "health_attention":
-      return `Fix marketing health — ${alert.companyName}`;
+      return `Health risk — ${alert.companyName}`;
     default:
       return alert.title;
   }
 }
 
 function verbTitleForAiMos(opp: AiMosOpportunity, companyName: string): string {
-  const action = opp.suggestedAction;
-  if (action.kind === "campaign") {
-    return `Draft campaign — ${companyName}`;
-  }
-  if (action.kind === "content_request") {
-    return `Open content request — ${companyName}`;
-  }
-  return `Act on opportunity — ${companyName}`;
+  return `Opportunity signal — ${companyName}`;
 }
 
 function nextSpielStep(company: Company | undefined, admin: boolean): {
@@ -60,7 +53,7 @@ function nextSpielStep(company: Company | undefined, admin: boolean): {
     return admin
       ? {
           title: "Add your first company",
-          detail: "You need a client profile before AI can draft a marketing spiel.",
+          detail: "Onboard a client so managed delivery can start.",
           href: "/companies",
           cta: "Open companies",
         }
@@ -69,10 +62,10 @@ function nextSpielStep(company: Company | undefined, admin: boolean): {
   const { score, missing } = onboardingScore(company);
   if (score >= 100) return null;
   return {
-    title: `Finish ${company.name} profile`,
-    detail: `Still missing: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}. AI drafts stay weak until this is filled.`,
+    title: `Setup incomplete — ${company.name}`,
+    detail: `Missing: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}. Delivery quality improves once this is filled.`,
     href: `/companies/${company.id}`,
-    cta: "Complete profile",
+    cta: "Complete setup",
   };
 }
 
@@ -159,27 +152,27 @@ export default async function DashboardPage() {
         title={`Welcome back, ${user.name.split(" ")[0]}`}
         description={
           admin
-            ? "Do the next marketing step — then clear anything that needs you."
-            : "Your assigned companies and what needs you next."
+            ? "Managed delivery runs for your clients. Step in only when something is blocked or needs a human decision."
+            : "Exceptions and status for your assigned clients."
         }
       >
-        <Link href="/studio" className={buttonClasses()}>
-          Create marketing spiel
+        <Link href="/approvals" className={buttonClasses()}>
+          Review exceptions
         </Link>
         <Link
-          href="/requests/new"
+          href="/companies"
           className="text-sm text-muted-foreground hover:text-foreground hover:underline"
         >
-          New support request
+          Portfolio
         </Link>
       </PageHeader>
 
       <div className="mx-auto max-w-3xl space-y-8 p-6">
         {nextUp && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/30 bg-accent/40 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-4 py-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                Next up
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Setup
               </p>
               <p className="font-medium">{nextUp.title}</p>
               <p className="text-sm text-muted-foreground">{nextUp.detail}</p>
@@ -193,20 +186,20 @@ export default async function DashboardPage() {
         <section>
           <div className="mb-3 flex items-end justify-between gap-3">
             <div>
-              <h2 className="font-semibold">Needs attention</h2>
+              <h2 className="font-semibold">Exceptions</h2>
               <p className="text-sm text-muted-foreground">
-                Actionable next steps — open one, finish it, come back.
+                Only items that need a human — approvals, stuck reviews, health risks.
               </p>
             </div>
-            {admin && aiMosOpen.length > 0 && (
-              <Link href="/ai-mos" className="text-sm text-primary hover:underline">
-                View AI-MOS
+            {admin && (
+              <Link href="/approvals" className="text-sm text-primary hover:underline">
+                Approvals queue
               </Link>
             )}
           </div>
           {attention.length === 0 ? (
             <p className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-              Nothing urgent. Create a marketing spiel when you&apos;re ready.
+              Delivery is on track — no exceptions right now.
             </p>
           ) : admin ? (
             <AgencyAlertsList
@@ -214,16 +207,7 @@ export default async function DashboardPage() {
                 ...a,
                 title: verbTitleForAlert(a),
               }))}
-              extras={aiMosOpen.slice(0, Math.max(0, 6 - (agencyOps?.alerts.length ?? 0))).map((opp) => {
-                const name = companyNames.get(opp.companyId) ?? "Client";
-                return {
-                  id: `aimos-${opp.id}`,
-                  title: verbTitleForAiMos(opp, name),
-                  detail: opp.diagnosis.slice(0, 140),
-                  href: "/ai-mos",
-                  companyName: name,
-                };
-              })}
+              extras={[]}
             />
           ) : (
             <ul className="space-y-2">
@@ -244,6 +228,43 @@ export default async function DashboardPage() {
             </ul>
           )}
         </section>
+
+        {admin && aiMosOpen.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Signals</h2>
+                <p className="text-sm text-muted-foreground">
+                  Optional opportunities — not required to keep delivery moving.
+                </p>
+              </div>
+              <Link href="/ai-mos" className="text-sm text-primary hover:underline">
+                View signals
+              </Link>
+            </div>
+            <ul className="space-y-2">
+              {aiMosOpen.slice(0, 4).map((opp) => {
+                const name = companyNames.get(opp.companyId) ?? "Client";
+                return (
+                  <li key={opp.id}>
+                    <Link
+                      href="/ai-mos"
+                      className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5 text-sm hover:bg-muted"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium">{verbTitleForAiMos(opp, name)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {opp.diagnosis.slice(0, 140)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs text-muted-foreground">review →</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
         {!admin && local && (local.upcoming.length > 0 || local.missingOnboarding.length > 0) && (
           <section>
@@ -267,7 +288,7 @@ export default async function DashboardPage() {
 
         <section>
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="font-semibold">Recent requests</h2>
+            <h2 className="font-semibold">Client asks</h2>
             <Link href="/requests" className="text-sm text-primary hover:underline">
               View all
             </Link>
@@ -292,11 +313,7 @@ export default async function DashboardPage() {
               ))}
               {recentRequests.length === 0 && (
                 <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-                  No requests yet.{" "}
-                  <Link href="/requests/new" className="text-primary hover:underline">
-                    Create one
-                  </Link>
-                  .
+                  No client asks right now.
                 </p>
               )}
             </div>
@@ -306,7 +323,7 @@ export default async function DashboardPage() {
         {recentContent.length > 0 && (
           <section>
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="font-semibold">Recent content</h2>
+              <h2 className="font-semibold">Recent delivery</h2>
               <Link href="/content" className="text-sm text-primary hover:underline">
                 View all
               </Link>

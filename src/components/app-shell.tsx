@@ -58,36 +58,36 @@ interface NavGroup {
  */
 const NAV_GROUPS: NavGroup[] = [
   {
-    id: "today",
-    label: "Today",
+    id: "exceptions",
+    label: "Exceptions",
     pinned: true,
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/tasks", label: "Tasks", icon: ListTodo },
       { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
+    ],
+  },
+  {
+    id: "monitor",
+    label: "Monitor",
+    pinned: true,
+    adminOnly: true,
+    items: [
+      { href: "/companies", label: "Companies", icon: Building2, adminOnly: true },
+      { href: "/executive", label: "Executive", icon: Landmark, adminOnly: true },
+      { href: "/ai-mos", label: "Signals", icon: Radar, adminOnly: true },
       { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
+      { href: "/tasks", label: "Tasks", icon: ListTodo },
     ],
   },
   {
     id: "create-member",
-    label: "Delivery",
+    label: "Client work",
     pinned: true,
     items: [
       { href: "/campaigns", label: "Campaigns", icon: Megaphone, memberOnly: true },
       { href: "/studio", label: "Content Studio", icon: Sparkles, memberOnly: true },
       { href: "/calendar", label: "Calendar", icon: CalendarDays, memberOnly: true },
       { href: "/content", label: "Content library", icon: FileText, memberOnly: true },
-    ],
-  },
-  {
-    id: "portfolio",
-    label: "Portfolio",
-    pinned: true,
-    adminOnly: true,
-    items: [
-      { href: "/companies", label: "Companies", icon: Building2, adminOnly: true },
-      { href: "/executive", label: "Executive", icon: Landmark, adminOnly: true },
-      { href: "/ai-mos", label: "AI-MOS", icon: Radar, adminOnly: true },
     ],
   },
   {
