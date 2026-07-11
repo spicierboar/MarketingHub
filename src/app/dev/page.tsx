@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 const DEMO_LOGINS = [
   { email: "admin@wattlegroup.dev", label: "Wattle owner (+ platform admin)" },
   { email: "priya@millbrookiga.dev", label: "Millbrook tenant admin" },
+  { email: "tom@millbrookiga.dev", label: "Millbrook client portal (member)" },
   { email: "sasha@brightspark.dev", label: "BrightSpark agency owner" },
   { email: "jordan@freelance.dev", label: "Multi-tenant consultant" },
 ] as const;
