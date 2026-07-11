@@ -6,12 +6,16 @@ const ALERT_TONE: Record<AgencyAlert["kind"], "warning" | "danger" | "info"> = {
   overdue_approval: "danger",
   overdue_client_review: "warning",
   health_attention: "info",
+  credit_low: "danger",
+  reconnect_needed: "warning",
 };
 
 const ALERT_LABEL: Record<AgencyAlert["kind"], string> = {
   overdue_approval: "Approve",
   overdue_client_review: "Review",
   health_attention: "Health",
+  credit_low: "Top up",
+  reconnect_needed: "Reconnect",
 };
 
 export type AttentionExtra = {

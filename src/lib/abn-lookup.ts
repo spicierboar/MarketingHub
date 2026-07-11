@@ -1,6 +1,10 @@
 // ABN lookup (AU) — env-gated ABR-style lookup for onboarding pre-fill.
 // Deterministic simulation when ABN_LOOKUP_GUID is unset; never throws on
 // network failure (falls back to simulated or returns null).
+//
+// INVARIANT: ABN is never a primary key or unique company index. One legal
+// entity (ABN) may operate multiple Company records (sites/brands). Lookups
+// only pre-fill profile.abn + legalName on the *current* company.
 
 import { appEnv } from "@/lib/env";
 import type { CompanyProfile } from "@/lib/types";
@@ -245,7 +249,8 @@ export async function lookupAbn(abnOrName: string): Promise<AbnLookupResult | nu
   return simulateLookup(trimmed);
 }
 
-/** Map an ABN lookup result into company profile fields for apply. */
+/** Map an ABN lookup result into company profile fields for apply.
+ * Does not identify or upsert a company — caller already has companyId. */
 export function abnResultToProfilePatch(result: AbnLookupResult): Partial<CompanyProfile> {
   return {
     abn: result.abn,

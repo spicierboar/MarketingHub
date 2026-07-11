@@ -33,6 +33,7 @@ import { toDomain, toRow, type Row } from "@/lib/db/mapper";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { now } from "@/lib/utils";
 import { randomUUID } from "node:crypto";
+import { chunkIds, COMPANY_ID_IN_CHUNK } from "@/lib/db/chunk-ids";
 import type {
   AdAccount, AdBudget, AdCampaign, AdPlatform, AddonId, AudienceSegment,
   AiRun, AiMosOpportunity, AiMosSignalRun, CalendarAssistSuggestion, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
@@ -132,6 +133,27 @@ const many = <T>(rows: Row[] | null, ov?: Record<string, string>): T[] =>
 async function companyIds(sb: SupabaseClient, tenantId: string): Promise<string[]> {
   const { data } = await sb.from("companies").select("id").eq("tenant_id", tenantId);
   return (data ?? []).map((r) => (r as Row).id as string);
+}
+
+/** PostgREST URL length guard — fan out `.in()` across id chunks. */
+async function selectInCompanyIdChunks(
+  sb: SupabaseClient,
+  table: string,
+  ids: string[],
+  orderCol?: string,
+  ascending = false,
+): Promise<Row[]> {
+  if (ids.length === 0) return [];
+  const chunks = chunkIds(ids, COMPANY_ID_IN_CHUNK);
+  const parts = await Promise.all(
+    chunks.map(async (chunk) => {
+      let q = sb.from(table).select("*").in("company_id", chunk);
+      if (orderCol) q = q.order(orderCol, { ascending });
+      const { data } = await q;
+      return (data ?? []) as Row[];
+    }),
+  );
+  return parts.flat();
 }
 
 export const supabaseRepo = {
@@ -405,7 +427,14 @@ export const supabaseRepo = {
   // ============================ Content (RLS) ============================
   async listContent(tenantId: string): Promise<ContentItem[]> {
     const sb = await usr(); if (!sb) return [];
-    const { data } = await sb.from("content_items").select("*").in("company_id", await companyIds(sb, tenantId)).order("created_at", { ascending: false });
+    const ids = await companyIds(sb, tenantId);
+    const data = await selectInCompanyIdChunks(
+      sb,
+      "content_items",
+      ids,
+      "created_at",
+      false,
+    );
     return many<ContentItem>(data);
   },
   async getContent(contentId: string): Promise<ContentItem | undefined> {
@@ -926,7 +955,14 @@ export const supabaseRepo = {
   // ============================ Campaigns + offers (RLS) ===================
   async listCampaigns(tenantId: string): Promise<Campaign[]> {
     const sb = await usr(); if (!sb) return [];
-    const { data } = await sb.from("campaigns").select("*").in("company_id", await companyIds(sb, tenantId)).order("created_at", { ascending: false });
+    const ids = await companyIds(sb, tenantId);
+    const data = await selectInCompanyIdChunks(
+      sb,
+      "campaigns",
+      ids,
+      "created_at",
+      false,
+    );
     return many<Campaign>(data).map(normaliseCampaign);
   },
   async getCampaign(campaignId: string): Promise<Campaign | undefined> {
@@ -992,7 +1028,14 @@ export const supabaseRepo = {
   // ============================ Scheduled posts (RLS) ======================
   async listScheduledPosts(tenantId: string): Promise<ScheduledPost[]> {
     const sb = await usr(); if (!sb) return [];
-    const { data } = await sb.from("scheduled_posts").select("*").in("company_id", await companyIds(sb, tenantId)).order("scheduled_date");
+    const ids = await companyIds(sb, tenantId);
+    const data = await selectInCompanyIdChunks(
+      sb,
+      "scheduled_posts",
+      ids,
+      "scheduled_date",
+      true,
+    );
     return many<ScheduledPost>(data);
   },
   async getScheduledPost(postId: string): Promise<ScheduledPost | undefined> {
@@ -2766,6 +2809,8 @@ export const supabaseRepo = {
         | "topUpAmountUsd"
         | "maxTopUpAmountUsd"
         | "maxTopUpPerDay"
+        | "stripeCustomerId"
+        | "stripePaymentMethodId"
       >
     >,
   ): Promise<CompanyCreditWallet | undefined> {

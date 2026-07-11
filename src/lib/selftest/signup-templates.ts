@@ -47,6 +47,7 @@ export function checkSignupDefaultsCoverage(): { ok: boolean; detail: string } {
       !d.postingCadence.trim() ||
       !d.audienceBlurb.trim() ||
       d.platformLabels.length < 2 ||
+      d.defaultChannels.length < 2 ||
       d.seasonalHints.length < 2
     ) {
       missing.push(type);

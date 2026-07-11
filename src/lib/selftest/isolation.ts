@@ -245,6 +245,12 @@ import {
   checkSignupPrefillFromExtract,
 } from "@/lib/selftest/signup-templates";
 import {
+  checkChunkIdsSplitsLargeLists,
+  checkExceptionDeepLinks,
+  checkLetterheadHelper,
+  checkVerticalPlaybookChannels,
+} from "@/lib/selftest/platform-improvements";
+import {
   checkInjectionPatternsStripped,
   checkImpersonationFailClosed,
   checkIntegrationHealthAlertsThreshold,
@@ -291,6 +297,11 @@ import {
   checkTopUpIssuesTaxInvoice,
   checkTopUpStripeSessionIdempotent,
 } from "@/lib/selftest/tax-invoices";
+import {
+  checkAbnNotUniqueAcrossCompanies,
+  checkClientProfileFormIgnoresAbn,
+  checkClientProfileLocksAbnAndLegalName,
+} from "@/lib/selftest/client-profile";
 import {
   checkLogRecordsDedupeKey,
   checkRetrySkipsWhenAlreadyPublished,
@@ -1066,6 +1077,13 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
       checkSignupPrefillFromExtract(),
     );
 
+    await expect("platform.chunkIds", () => checkChunkIdsSplitsLargeLists());
+    await expect("platform.exceptionDeepLinks", () => checkExceptionDeepLinks());
+    await expect("platform.verticalPlaybook", () =>
+      checkVerticalPlaybookChannels(),
+    );
+    await expect("platform.letterheadHelper", () => checkLetterheadHelper());
+
     await expect("abnPlaces.abnSimulatedWhenUnconfigured", () =>
       checkAbnSimulatedWhenUnconfigured(),
     );
@@ -1149,6 +1167,15 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
     await expect("taxInvoice.creditNote", () => checkTaxInvoiceCreditNote());
     await expect("taxInvoice.void", () => checkTaxInvoiceVoid());
+    await expect("clientProfile.locksAbnAndLegalName", () =>
+      checkClientProfileLocksAbnAndLegalName(),
+    );
+    await expect("clientProfile.formIgnoresAbn", () =>
+      checkClientProfileFormIgnoresAbn(),
+    );
+    await expect("clientProfile.abnNotUniqueAcrossCompanies", () =>
+      checkAbnNotUniqueAcrossCompanies(),
+    );
 
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());
 

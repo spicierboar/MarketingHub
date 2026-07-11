@@ -158,6 +158,28 @@ async function onCreditTopUpCheckout(session: StripeObject): Promise<void> {
       stripeCheckoutSessionId: sessionId,
       stripePaymentIntentId: piId,
     });
+    // Persist saved card for off-session auto top-up when Checkout used setup_future_usage.
+    if (piId) {
+      const { paymentMethodFromPaymentIntent } = await import("@/lib/billing");
+      const { getOrCreateCreditWallet } = await import("@/lib/credit-wallet");
+      const { updateCompanyCreditWallet } = await import("@/lib/db");
+      const pm = await paymentMethodFromPaymentIntent(piId);
+      const customerFromSession = str(session.customer);
+      if (pm?.paymentMethodId || customerFromSession || pm?.customerId) {
+        const wallet = await getOrCreateCreditWallet(companyId);
+        await updateCompanyCreditWallet(wallet.id, {
+          ...(pm?.paymentMethodId
+            ? { stripePaymentMethodId: pm.paymentMethodId }
+            : {}),
+          ...(customerFromSession || pm?.customerId
+            ? {
+                stripeCustomerId:
+                  customerFromSession ?? pm?.customerId,
+              }
+            : {}),
+        });
+      }
+    }
   });
 }
 

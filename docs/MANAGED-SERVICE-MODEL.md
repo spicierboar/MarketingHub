@@ -58,9 +58,10 @@ Parked showstoppers and deferred product work: [`MANAGED-SERVICE-PENDING.md`](./
 3. Calendar  
 4. Results  
 5. Files  
-6. Billing  
-7. Ask us  
-8. Help  
+6. Business profile (editable changeable fields only — ABN / legal name locked)  
+7. Billing  
+8. Ask us  
+9. Help  
 
 Nav is review-first. No self-serve publish console in the client portal.
 

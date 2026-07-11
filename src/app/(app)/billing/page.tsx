@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireTenantOwner } from "@/lib/auth/rbac";
 import { getTenant, listCompanies, listTaxInvoices } from "@/lib/db";
 import { stripeConfigured, tenantUsage } from "@/lib/billing";
+import { taxInvoiceLetterheadConfigured } from "@/lib/tax-invoices";
 import { tenantAddonSummary } from "@/lib/entitlements";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
 import { ADDONS, ADDON_ORDER } from "@/lib/addons";
@@ -64,6 +65,7 @@ export default async function BillingPage({
     listTaxInvoices(user.tenantId),
   ]);
   const live = stripeConfigured();
+  const letterheadOk = taxInvoiceLetterheadConfigured();
   const companyName = new Map(companies.map((c) => [c.id, c.name]));
 
   // Which add-ons are active for each company (built once from the tenant roll-up
@@ -338,8 +340,15 @@ export default async function BillingPage({
                 <p className="text-sm text-muted-foreground">
                   No tax invoices yet. Client credit top-ups and management-fee
                   runs issue GST tax invoices here (print to PDF from the detail
-                  page). Seller letterhead uses the workspace name until
-                  letterhead env is configured (parked).
+                  page). Seller letterhead:{" "}
+                  {letterheadOk ? (
+                    <span className="text-foreground">configured via TAX_INVOICE_SELLER_*</span>
+                  ) : (
+                    <span>
+                      set TAX_INVOICE_SELLER_NAME, _ABN, _ADDRESS, _EMAIL (falls
+                      back to workspace name until then).
+                    </span>
+                  )}
                 </p>
               ) : (
                 <ul className="divide-y divide-border rounded-md border border-border">

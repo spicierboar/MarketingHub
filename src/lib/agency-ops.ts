@@ -7,10 +7,13 @@
 import {
   listCompanies,
   listContent,
+  listIntegrations,
   listPromptTemplates,
   listRequests,
+  getCompanyCreditWallet,
   getTenant,
 } from "@/lib/db";
+import { MIN_CREDIT_FLOOR_USD } from "@/lib/credit-wallet";
 import {
   buildTenantHealthScores,
   companiesNeedingAttention,
@@ -33,7 +36,9 @@ export const DEFAULT_OVERDUE_CLIENT_REVIEW_DAYS = 5;
 export type AgencyAlertKind =
   | "overdue_approval"
   | "overdue_client_review"
-  | "health_attention";
+  | "health_attention"
+  | "credit_low"
+  | "reconnect_needed";
 
 export type AgencyAlertSeverity = "warning" | "danger";
 
@@ -243,8 +248,8 @@ export function healthAttentionAlerts(
         : `Marketing health score ${h.score}/100 — review publishing, paid, and lead signals.`;
     return {
       id: `health-attention:${h.companyId}`,
-      kind: "health_attention",
-      severity: h.score < 45 ? "danger" : "warning",
+      kind: "health_attention" as const,
+      severity: (h.score < 45 ? "danger" : "warning") as AgencyAlertSeverity,
       companyId: h.companyId,
       companyName: h.companyName,
       title: `${h.companyName} needs attention`,
@@ -255,12 +260,58 @@ export function healthAttentionAlerts(
   });
 }
 
+/** Credit below floor → deep-link to company ads / client payments path. */
+export function creditLowAlerts(
+  rows: { companyId: string; companyName: string; balanceUsd: number; minFloorUsd: number }[],
+): AgencyAlert[] {
+  return rows
+    .filter((r) => r.balanceUsd < r.minFloorUsd)
+    .map((r) => ({
+      id: `credit-low:${r.companyId}`,
+      kind: "credit_low" as const,
+      severity: "danger" as AgencyAlertSeverity,
+      companyId: r.companyId,
+      companyName: r.companyName,
+      title: "Prepaid credit below floor",
+      detail: `Balance $${r.balanceUsd.toFixed(0)} is under the $${r.minFloorUsd} minimum — top up before paid ads can run.`,
+      href: `/ads?company=${r.companyId}`,
+      daysOverdue: 1,
+    }));
+}
+
+/** Expired/error OAuth integrations → Publishing reconnect. */
+export function reconnectNeededAlerts(
+  rows: { companyId: string; companyName: string; platform: string; status: string }[],
+): AgencyAlert[] {
+  const bad = new Set(["token_expired", "disconnected"]);
+  const byCompany = new Map<string, { companyName: string; platforms: string[] }>();
+  for (const r of rows) {
+    if (!bad.has(r.status)) continue;
+    const cur = byCompany.get(r.companyId) ?? {
+      companyName: r.companyName,
+      platforms: [],
+    };
+    if (!cur.platforms.includes(r.platform)) cur.platforms.push(r.platform);
+    byCompany.set(r.companyId, cur);
+  }
+  return [...byCompany.entries()].map(([companyId, v]) => ({
+    id: `reconnect:${companyId}`,
+    kind: "reconnect_needed" as const,
+    severity: "warning" as AgencyAlertSeverity,
+    companyId,
+    companyName: v.companyName,
+    title: "Reconnect social account",
+    detail: `${v.platforms.join(", ")} needs OAuth reconnect before publishing.`,
+    href: `/publishing?company=${companyId}`,
+    daysOverdue: 1,
+  }));
+}
+
 export function mergeAgencyAlerts(
-  overdue: AgencyAlert[],
-  health: AgencyAlert[],
+  groups: AgencyAlert[][],
   opts?: { limit?: number },
 ): AgencyAlert[] {
-  const merged = [...overdue, ...health].sort(
+  const merged = groups.flat().sort(
     (a, b) =>
       (b.severity === "danger" ? 1 : 0) - (a.severity === "danger" ? 1 : 0) ||
       b.daysOverdue - a.daysOverdue ||
@@ -332,13 +383,15 @@ export async function buildAgencyOpsBundle(
 ): Promise<AgencyOpsBundle> {
   const tenant = await getTenant(tenantId);
   const clock = resolveQueueClock(tenant);
-  const [companies, content, requests, templates, healthScores] = await Promise.all([
-    listCompanies(tenantId),
-    listContent(tenantId),
-    listRequests(tenantId),
-    listPromptTemplates(tenantId),
-    buildTenantHealthScores(tenantId),
-  ]);
+  const [companies, content, requests, templates, healthScores, integrations] =
+    await Promise.all([
+      listCompanies(tenantId),
+      listContent(tenantId),
+      listRequests(tenantId),
+      listPromptTemplates(tenantId),
+      buildTenantHealthScores(tenantId),
+      listIntegrations(tenantId),
+    ]);
 
   const companiesById = new Map(companies.map((c) => [c.id, c]));
   const needsAttention = companiesNeedingAttention(healthScores, {
@@ -349,9 +402,39 @@ export async function buildAgencyOpsBundle(
     companiesById,
     todayIso: clock.today,
   });
+
+  const wallets = await Promise.all(
+    companies.map(async (c) => {
+      const w = await getCompanyCreditWallet(c.id);
+      return {
+        companyId: c.id,
+        companyName: c.name,
+        balanceUsd: w?.balanceUsd ?? 0,
+        minFloorUsd: w?.minFloorUsd ?? MIN_CREDIT_FLOOR_USD,
+        // Only alert when a wallet exists and is below floor (skip never-funded)
+        hasWallet: !!w,
+      };
+    }),
+  );
+  const creditAlerts = creditLowAlerts(
+    wallets.filter((w) => w.hasWallet).map(({ hasWallet: _, ...r }) => r),
+  );
+  const reconnectAlerts = reconnectNeededAlerts(
+    integrations.map((i) => ({
+      companyId: i.companyId,
+      companyName: companiesById.get(i.companyId)?.name ?? "Company",
+      platform: i.platform,
+      status: i.status,
+    })),
+  );
+
   const alerts = mergeAgencyAlerts(
-    overdueAlerts,
-    healthAttentionAlerts(needsAttention),
+    [
+      overdueAlerts,
+      healthAttentionAlerts(needsAttention),
+      creditAlerts,
+      reconnectAlerts,
+    ],
     { limit: opts?.alertLimit ?? 12 },
   );
   const workload = buildWorkloadSummary({

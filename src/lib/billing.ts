@@ -139,6 +139,28 @@ async function stripePost(
   }
 }
 
+async function stripeGet(
+  path: string,
+): Promise<Record<string, unknown> | null> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch(`https://api.stripe.com/v1/${path}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error(`[billing] Stripe GET ${path} failed (${res.status}):`, body);
+      return null;
+    }
+    return body;
+  } catch (err) {
+    console.error(`[billing] Stripe GET ${path} request error:`, err);
+    return null;
+  }
+}
+
 // Subscription Checkout for a plan change. Returns the hosted checkout URL,
 // or null when Stripe is unconfigured / the call fails.
 export async function createCheckoutSession(
@@ -317,7 +339,7 @@ export async function createCreditTopUpCheckoutSession(
   companyId: string,
   amountUsd: number,
   origin: string,
-  opts?: { successPath?: string; cancelPath?: string },
+  opts?: { successPath?: string; cancelPath?: string; stripeCustomerId?: string },
 ): Promise<string | null> {
   if (!stripeConfigured()) return null;
   const cents = Math.round(amountUsd * 100);
@@ -343,12 +365,87 @@ export async function createCreditTopUpCheckoutSession(
     "payment_intent_data[metadata][tenantId]": tenant.id,
     "payment_intent_data[metadata][companyId]": companyId,
     "payment_intent_data[metadata][amountUsd]": amountStr,
+    // Save card for later off-session auto top-up (never auto-publishes ads).
+    "payment_intent_data[setup_future_usage]": "off_session",
     success_url: `${origin}${successPath}`,
     cancel_url: `${origin}${cancelPath}`,
   };
-  if (tenant.stripeCustomerId) params.customer = tenant.stripeCustomerId;
+  if (opts?.stripeCustomerId || tenant.stripeCustomerId) {
+    params.customer = opts?.stripeCustomerId ?? tenant.stripeCustomerId!;
+  }
   const session = await stripePost("checkout/sessions", params);
   return typeof session?.url === "string" ? session.url : null;
+}
+
+/**
+ * Off-session PaymentIntent for auto top-up when a saved payment method exists.
+ * Returns payment_intent id on success, null when Stripe unconfigured / charge fails.
+ */
+export async function chargeOffSessionCreditTopUp(input: {
+  customerId: string;
+  paymentMethodId: string;
+  amountUsd: number;
+  tenantId: string;
+  companyId: string;
+}): Promise<{ paymentIntentId: string } | null> {
+  if (!stripeConfigured()) return null;
+  const cents = Math.round(input.amountUsd * 100);
+  if (!(cents > 0)) return null;
+  const amountStr = String(input.amountUsd);
+  const pi = await stripePost("payment_intents", {
+    amount: String(cents),
+    currency: "usd",
+    customer: input.customerId,
+    payment_method: input.paymentMethodId,
+    confirm: "true",
+    off_session: "true",
+    "metadata[kind]": "credit_auto_top_up",
+    "metadata[tenantId]": input.tenantId,
+    "metadata[companyId]": input.companyId,
+    "metadata[amountUsd]": amountStr,
+  });
+  if (!pi || typeof pi.id !== "string") return null;
+  const status = typeof pi.status === "string" ? pi.status : "";
+  if (status !== "succeeded" && status !== "processing") return null;
+  return { paymentIntentId: pi.id };
+}
+
+/** Client portal Billing Portal session (payment methods / invoices). */
+export async function createClientBillingPortalSession(
+  customerId: string,
+  origin: string,
+  returnPath = "/client/payments",
+): Promise<string | null> {
+  if (!stripeConfigured() || !customerId) return null;
+  const session = await stripePost("billing_portal/sessions", {
+    customer: customerId,
+    return_url: `${origin}${returnPath}`,
+  });
+  return typeof session?.url === "string" ? session.url : null;
+}
+
+/** Load payment_method id from a PaymentIntent (Checkout completion). */
+export async function paymentMethodFromPaymentIntent(
+  paymentIntentId: string,
+): Promise<{ customerId?: string; paymentMethodId?: string } | null> {
+  if (!stripeConfigured() || !paymentIntentId) return null;
+  const pi = await stripeGet(
+    `payment_intents/${encodeURIComponent(paymentIntentId)}`,
+  );
+  if (!pi) return null;
+  const customerId =
+    typeof pi.customer === "string"
+      ? pi.customer
+      : typeof (pi.customer as { id?: string } | null)?.id === "string"
+        ? (pi.customer as { id: string }).id
+        : undefined;
+  const paymentMethodId =
+    typeof pi.payment_method === "string"
+      ? pi.payment_method
+      : typeof (pi.payment_method as { id?: string } | null)?.id === "string"
+        ? (pi.payment_method as { id: string }).id
+        : undefined;
+  return { customerId, paymentMethodId };
 }
 
 // ---- Webhook signature (Stripe-Signature: t=...,v1=...) -------------------------

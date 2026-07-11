@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   Menu,
   X,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/client/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/client/reports", label: "Results", icon: BarChart3 },
   { href: "/client/assets", label: "Files", icon: Image },
+  { href: "/client/profile", label: "Business", icon: Building2 },
   { href: "/client/payments", label: "Billing", icon: CreditCard },
   { href: "/client/requests", label: "Ask us", icon: Inbox },
   { href: "/client/help", label: "Help", icon: LifeBuoy },

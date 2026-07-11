@@ -4004,6 +4004,8 @@ export async function updateCompanyCreditWallet(
       | "topUpAmountUsd"
       | "maxTopUpAmountUsd"
       | "maxTopUpPerDay"
+      | "stripeCustomerId"
+      | "stripePaymentMethodId"
     >
   >,
 ): Promise<CompanyCreditWallet | undefined> {

@@ -31,6 +31,16 @@ export function splitGstInclusive(totalIncGst: number): {
   return { subtotalExGst, gstAmount, totalIncGst: total };
 }
 
+/** True when all TAX_INVOICE_SELLER_* letterhead env vars are set. */
+export function taxInvoiceLetterheadConfigured(): boolean {
+  return !!(
+    process.env.TAX_INVOICE_SELLER_NAME?.trim() &&
+    process.env.TAX_INVOICE_SELLER_ABN?.trim() &&
+    process.env.TAX_INVOICE_SELLER_ADDRESS?.trim() &&
+    process.env.TAX_INVOICE_SELLER_EMAIL?.trim()
+  );
+}
+
 function sellerFromEnv(tenantName: string): TaxInvoiceParty {
   return {
     name:

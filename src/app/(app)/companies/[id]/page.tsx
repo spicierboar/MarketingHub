@@ -61,12 +61,16 @@ export default async function CompanyOnboardingPage({
     getLocalProfile(company.id),
   ]);
   const companyContent = allContent.filter((c) => c.companyId === company.id);
+  const serviceLevelSet = !!p.managedService?.serviceLevel;
+  const hasCampaign = companyContent.some((c) => !!c.campaignId);
   const steps: { label: string; done: boolean; href: string; cta: string }[] = [
     { label: "Complete the company profile", done: score === 100, href: `/companies/${company.id}`, cta: "Fill in the profile" },
+    { label: "Set managed service level", done: serviceLevelSet, href: `/companies/${company.id}#service-level`, cta: "Choose level" },
     { label: "Add social profile links", done: (p.socialLinks?.length ?? 0) > 0, href: `/companies/${company.id}`, cta: "Add profiles" },
     { label: "Connect a social account (OAuth)", done: integrations.some((i) => i.status === "connected"), href: `/publishing?company=${company.id}`, cta: "Connect or send client link" },
+    { label: "Mark the company AI-ready", done: company.status === "ai_ready" || company.status === "approved", href: `/companies/${company.id}`, cta: "Review status" },
+    { label: "Plan the first campaign", done: hasCampaign, href: `/campaigns/new?company=${company.id}`, cta: "Build from goal" },
     { label: "Approve your first content", done: companyContent.some((c) => ["approved", "scheduled", "published"].includes(c.status)), href: `/studio?company=${company.id}`, cta: "Create content" },
-    { label: "Mark the company AI-ready", done: company.status === "ai_ready", href: `/companies/${company.id}`, cta: "Review status" },
   ];
   const doneCount = steps.filter((s) => s.done).length;
   const nextStep = steps.find((s) => !s.done);
@@ -204,8 +208,6 @@ export default async function CompanyOnboardingPage({
               </CardContent>
             </Card>
 
-            <LocalIntelPanel companyId={company.id} local={localProfile} />
-
             <Card>
               <CardContent className="space-y-5 p-6">
                 <h2 className="font-semibold">Brand & compliance</h2>
@@ -285,10 +287,13 @@ export default async function CompanyOnboardingPage({
               <Button type="submit">Save onboarding</Button>
             </div>
           </form>
+
+          {/* Outside company-profile-form — nested <form> breaks hydration/submit */}
+          <LocalIntelPanel companyId={company.id} local={localProfile} />
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <Card id="service-level">
             <CardContent className="space-y-4 p-6">
               <h2 className="font-semibold">Managed service level</h2>
               <p className="text-sm text-muted-foreground">

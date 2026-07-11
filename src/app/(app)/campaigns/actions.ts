@@ -35,9 +35,17 @@ import { recordAiUsage } from "@/lib/ai/metering";
 import { assertAiRateLimit } from "@/lib/ratelimit";
 import { now } from "@/lib/utils";
 import type { GroundingLabel } from "@/lib/types";
+import { headers } from "next/headers";
+import { resolveOrigin } from "@/lib/origin";
+import { shareCampaignPackForClient } from "@/lib/campaign-client-pack";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
+}
+
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  return resolveOrigin((k) => h.get(k));
 }
 
 async function buildCampaign(args: {
@@ -336,6 +344,24 @@ export async function submitCampaignAction(formData: FormData) {
     companyId: campaign.companyId,
   });
   revalidatePath(`/campaigns/${campaignId}`);
+}
+
+/** Push drafted campaign content into the client Approvals queue (no publish). */
+export async function shareCampaignPackAction(formData: FormData) {
+  const campaignId = text(formData, "campaignId");
+  const campaign = await getCampaign(campaignId);
+  if (!campaign) throw new Error("Campaign not found");
+  const user = await assertCompanyAccess(campaign.companyId);
+  const clientEmail = text(formData, "clientEmail") || undefined;
+  await shareCampaignPackForClient({
+    campaignId,
+    user,
+    clientEmail,
+    origin: await requestOrigin(),
+  });
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/client/approvals");
+  revalidatePath("/approvals");
 }
 
 export async function approveCampaignAction(formData: FormData) {

@@ -101,6 +101,8 @@ export interface SignupDefaults {
   postingCadence: string;
   audienceBlurb: string;
   platformLabels: string[];
+  /** Default organic channels for the campaign builder (subset of platformLabels). */
+  defaultChannels: string[];
   seasonalHints: string[];
   /** Claim/regulatory caution one-liner where relevant; omitted for generic businesses. */
   regulatoryCaution?: string;
@@ -154,6 +156,7 @@ export const SIGNUP_DEFAULTS: Record<BusinessType, SignupDefaults> = {
     audienceBlurb:
       "Locals, visitors, and food lovers in your service area who dine in, order takeaway, or book for occasions.",
     platformLabels: ["Instagram", "Facebook", "Google Business Profile", "TikTok"],
+    defaultChannels: ["Instagram", "Facebook", "Google Business Profile"],
     seasonalHints: [
       "Mother's Day & Father's Day brunch",
       "Winter comfort menu",
@@ -175,6 +178,7 @@ export const SIGNUP_DEFAULTS: Record<BusinessType, SignupDefaults> = {
     audienceBlurb:
       "Households and locals who shop for groceries, gifts, and everyday essentials in your catchment.",
     platformLabels: ["Facebook", "Instagram", "Email", "Google Business Profile"],
+    defaultChannels: ["Facebook", "Instagram", "Google Business Profile"],
     seasonalHints: [
       "Catalogue Wednesday",
       "Back to school",
@@ -195,6 +199,7 @@ export const SIGNUP_DEFAULTS: Record<BusinessType, SignupDefaults> = {
     audienceBlurb:
       "Weekend visitors, business travellers, and families planning stays in your region.",
     platformLabels: ["Instagram", "Facebook", "Google Business Profile", "Email"],
+    defaultChannels: ["Instagram", "Facebook", "Google Business Profile"],
     seasonalHints: [
       "School holidays",
       "Event & festival weekends",
@@ -216,6 +221,7 @@ export const SIGNUP_DEFAULTS: Record<BusinessType, SignupDefaults> = {
     audienceBlurb:
       "Local patients, clients, and families seeking trusted professional services in your area.",
     platformLabels: ["Facebook", "Google Business Profile", "LinkedIn", "Email"],
+    defaultChannels: ["Facebook", "Instagram", "Google Business Profile"],
     seasonalHints: [
       "New-year health goals",
       "Tax-season reminders",
@@ -236,11 +242,17 @@ export const SIGNUP_DEFAULTS: Record<BusinessType, SignupDefaults> = {
     audienceBlurb:
       "Locals and customers in your service area who benefit from what you offer.",
     platformLabels: ["Facebook", "Instagram", "Google Business Profile"],
+    defaultChannels: ["Facebook", "Instagram", "Google Business Profile"],
     seasonalHints: ["Local events", "Holiday periods", "Seasonal offers"],
     regulatoryCaution:
       "Use only approved claims — never invent testimonials or guarantees.",
   },
 };
+
+/** Alias — vertical playbook = signup defaults (cadence, channels, claim caution). */
+export function verticalPlaybook(businessType: BusinessType): SignupDefaults {
+  return suggestSignupDefaults(businessType);
+}
 
 /** Infer business type from explicit field or legacy industry string. */
 export function resolveBusinessType(company: Company): BusinessType {

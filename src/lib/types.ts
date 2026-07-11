@@ -312,7 +312,12 @@ export interface CompanyProfile {
   requiredDisclaimers: string[];
   currentOffers?: string;
   localMarketNotes?: string;
-  /** AU business identifier — signup pre-fill (ABR lookup). */
+  /**
+   * AU business number (ABR) — optional attribute for tax/legal display only.
+   * NEVER a primary key or uniqueness constraint: one ABN can cover many
+   * company records (locations, brands, trading names under the same entity).
+   * Identity is always `Company.id`.
+   */
   abn?: string;
   /** Read-only Google Places match for onboarding enrichment. */
   googlePlaceId?: string;
@@ -3254,6 +3259,10 @@ export interface CompanyCreditWallet {
   topUpAmountUsd: number; // e.g. 100
   maxTopUpAmountUsd: number;
   maxTopUpPerDay: number;
+  /** Stripe customer used for credit top-ups / off-session auto top-up. */
+  stripeCustomerId?: string;
+  /** Saved card for off-session auto top-up (from Checkout setup_future_usage). */
+  stripePaymentMethodId?: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -3288,6 +3297,7 @@ export type TaxInvoiceStatus = "issued" | "void" | "credited";
 
 export interface TaxInvoiceParty {
   name: string;
+  /** Display only — never used as a record key. */
   abn?: string;
   email?: string;
   address?: string;

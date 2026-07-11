@@ -5,11 +5,15 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import {
+  createClientBillingPortalSession,
   createCreditTopUpCheckoutSession,
   stripeConfigured,
 } from "@/lib/billing";
 import { applyPaidCreditTopUp } from "@/lib/credit-top-up";
-import { updateCreditAutoTopUpSettings } from "@/lib/credit-wallet";
+import {
+  getOrCreateCreditWallet,
+  updateCreditAutoTopUpSettings,
+} from "@/lib/credit-wallet";
 import { getTenant } from "@/lib/db";
 import { resolveOrigin } from "@/lib/origin";
 
@@ -52,11 +56,16 @@ export async function topUpClientCreditAction(formData: FormData) {
   if (stripeConfigured()) {
     const tenant = await getTenant(user.tenantId);
     if (!tenant) throw new Error("Workspace not found");
+    const wallet = await getOrCreateCreditWallet(companyId);
     const url = await createCreditTopUpCheckoutSession(
       tenant,
       companyId,
       amountUsd,
       await requestOrigin(),
+      {
+        stripeCustomerId:
+          wallet.stripeCustomerId ?? tenant.stripeCustomerId,
+      },
     );
     if (!url) {
       throw new Error(
@@ -99,4 +108,33 @@ export async function saveClientAutoTopUpAction(formData: FormData) {
   });
 
   revalidateBilling();
+}
+
+/** Open Stripe Customer Portal for the company's saved credit customer. */
+export async function openClientBillingPortalAction(formData: FormData) {
+  const { user, companyId: portalCompanyId } = await requirePortalUser();
+  const companyId = text(formData, "companyId");
+  if (!companyId || companyId !== portalCompanyId) {
+    throw new Error("Forbidden: no access to this company");
+  }
+  if (!stripeConfigured()) {
+    throw new Error(
+      "Card portal is unavailable in demo mode (Stripe not configured).",
+    );
+  }
+  const wallet = await getOrCreateCreditWallet(companyId);
+  const tenant = await getTenant(user.tenantId);
+  const customerId =
+    wallet.stripeCustomerId ?? tenant?.stripeCustomerId ?? "";
+  if (!customerId) {
+    throw new Error(
+      "No card on file yet — complete a credit top-up first, then manage payment methods here.",
+    );
+  }
+  const url = await createClientBillingPortalSession(
+    customerId,
+    await requestOrigin(),
+  );
+  if (!url) throw new Error("Could not open billing portal.");
+  redirect(url);
 }

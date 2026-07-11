@@ -20,6 +20,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 import Link from "next/link";
 import {
+  openClientBillingPortalAction,
   saveClientAutoTopUpAction,
   topUpClientCreditAction,
 } from "./actions";
@@ -124,6 +125,23 @@ export default async function ClientPaymentsPage() {
                 </form>
               </div>
 
+              {liveCard && (
+                <div className="rounded-md border border-border p-4">
+                  <p className="mb-2 text-sm font-medium">Payment methods</p>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {wallet.stripePaymentMethodId
+                      ? "A card is saved for auto top-up. Manage it in the Stripe portal."
+                      : "After your first card top-up, you can manage payment methods here."}
+                  </p>
+                  <form action={openClientBillingPortalAction}>
+                    <input type="hidden" name="companyId" value={companyId} />
+                    <Button type="submit" size="sm" variant="outline">
+                      Open card portal
+                    </Button>
+                  </form>
+                </div>
+              )}
+
               <div className="rounded-md border border-border p-4">
                 <p className="mb-3 text-sm font-medium">Auto top-up</p>
                 <form action={saveClientAutoTopUpAction} className="space-y-4">
@@ -138,6 +156,13 @@ export default async function ClientPaymentsPage() {
                     />
                     Enable auto top-up when balance is low
                   </label>
+                  <p className="text-xs text-muted-foreground">
+                    {liveCard
+                      ? wallet.stripePaymentMethodId
+                        ? "When balance hits the trigger, we charge your saved card off-session and credit the wallet."
+                        : "Complete a card top-up first so a payment method is saved; until then demo mode simulates the credit."
+                      : "Demo mode simulates ledger credit only — no card is charged."}
+                  </p>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Field label="Trigger balance (USD)" htmlFor="triggerBal">
                       <Input

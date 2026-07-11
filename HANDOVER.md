@@ -1,6 +1,6 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **SIGNUP PRE-FILL + C2** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **PLATFORM IMPROVEMENTS WAVE** · **W6 WAITING ON GOOGLE**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` · live flags **OFF**
 >
@@ -8,27 +8,27 @@
 > |------|--------|-------|
 > | W0–W5 + W7 | DONE | - |
 > | **Managed service** | **SHIPPED** | foundation → wave 3 + agency exception desk + 2-user demo |
-> | **C2 credit** | **SHIPPED** | $50 floor · Stripe Checkout top-up · tax invoices · simulated demo path |
-> | **Signup pre-fill** | **SHIPPED** | scrape deepen · templates · ABN/Places · Looks-correct (`docs/SIGNUP-PREFILL-WAVE.md`) |
+> | **C2 credit** | **SHIPPED** | $50 floor · Stripe Checkout top-up · tax invoices · off-session auto top-up path |
+> | **Signup pre-fill** | **SHIPPED** | scrape deepen · templates · ABN/Places · Looks-correct |
+> | **Platform improvements** | **SHIPPED** | client pack · exception deep-links · portal · ROI · playbooks · chunked `.in()` |
 > | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **Pending:** `docs/MANAGED-SERVICE-PENDING.md`
 >
-> **Fixtures:** self-test **291/291** · queue-test **20/20**
+> **Fixtures:** self-test **295+/291+** (+4 platform checks) · queue-test **20/20**
 >
-> **Owner migrations PASTED:** … + **0038**. **NEW — paste:**  
-> `notepad F:\MarketingHub\command-centre\supabase\migrations\0039_prepaid_credit.sql`  
-> `notepad F:\MarketingHub\command-centre\supabase\migrations\0040_tax_invoices.sql`
+> **Owner migrations PASTED:** … + **0038–0040**. **NEW — paste:**  
+> `notepad F:\MarketingHub\command-centre\supabase\migrations\0041_credit_wallet_stripe_pm.sql`
 >
 > **Hard locks:** Do **NOT** flip `*_LIVE` until W6 GO. Critique gate untouched. AI never auto-publishes / auto-spends.
 >
 > **Local demo:** `/dev` → **Agency** `sasha@brightspark.dev` · **Client** `liam@brightspark.dev` (Dental seed credit $200)
 >
 > **NEXT:**
-> 1. Owner paste **0039** + **0040** (if not done)
-> 2. Demo signup pre-fill: company → Auto-onboarding scrape → Looks correct (+ optional ABN/Places)
-> 3. Park live cutover until Google GO
-> 4. Deferred: off-session auto top-up · portal Stripe deep-link · letterhead env · full self-serve payment funnel
+> 1. Owner paste **0041** (Stripe PM columns on credit wallets)
+> 2. Optional: set `TAX_INVOICE_SELLER_*` letterhead env
+> 3. Demo: campaign → **Send pack to client Approvals** → Liam `/client/approvals`
+> 4. Park live cutover until Google GO
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
@@ -43,9 +43,9 @@
 >
 > ---
 >
-> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, **C2 CREDIT $50** · **W6 WAITING ON GOOGLE**) — archived
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, **SIGNUP PRE-FILL + C2** · **W6 WAITING ON GOOGLE**) — archived
 >
-> C2 wallet shipped ($50 floor · simulated top-up); Stripe charge + tax-invoice suite deferred → now shipped above.
+> Signup pre-fill + C2 credit/tax invoices shipped; platform improvements follow above.
 >
 > ---
 >

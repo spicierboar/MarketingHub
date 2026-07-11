@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { BusinessType } from "@/lib/types";
-import { CAMPAIGN_GOALS } from "@/lib/business-profiles";
+import { CAMPAIGN_GOALS, suggestSignupDefaults } from "@/lib/business-profiles";
 
 const CHANNEL_OPTIONS = [
   "Facebook",
@@ -96,6 +96,10 @@ export function CampaignBuilderPanel({
   }, []);
 
   const verticalGoals = goalsByCompany.get(companyId) ?? [];
+  const playbook = suggestSignupDefaults(
+    companies.find((c) => c.id === companyId)?.businessType ?? "other",
+  );
+  const defaultChecked = new Set(playbook.defaultChannels);
 
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
@@ -103,6 +107,12 @@ export function CampaignBuilderPanel({
       <p className="mt-1 text-xs text-muted-foreground">
         Describe what you want in plain language — the AI drafts strategy, channel plan,
         KPIs, calendar items, and governed content drafts. Nothing schedules until you approve.
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Playbook: {playbook.postingCadence}
+        {playbook.regulatoryCaution
+          ? ` · ${playbook.regulatoryCaution}`
+          : ""}
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -158,7 +168,7 @@ export function CampaignBuilderPanel({
                 type="checkbox"
                 name="channels"
                 value={ch}
-                defaultChecked={["Facebook", "Instagram", "Google Business Profile"].includes(ch)}
+                defaultChecked={defaultChecked.has(ch)}
                 className="rounded border-border"
               />
               {ch}

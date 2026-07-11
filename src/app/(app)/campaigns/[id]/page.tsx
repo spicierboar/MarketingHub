@@ -22,9 +22,11 @@ import {
   approveCampaignAction,
   cancelCampaignAction,
   generateItemDraftAction,
+  shareCampaignPackAction,
   skipItemAction,
   submitCampaignAction,
 } from "../actions";
+import { Input } from "@/components/ui/form";
 import { optimiseCampaignAction } from "../ai-layer-actions";
 import { bulkScheduleCampaignAction } from "../../calendar/actions";
 import { unpackKeyMessage } from "@/lib/ai/campaign-builder";
@@ -175,6 +177,23 @@ export default async function CampaignDetailPage({
                   <Button type="submit" className="w-full">
                     Submit for approval
                   </Button>
+                </form>
+              )}
+              {items.some((i) => i.contentId) && (
+                <form action={shareCampaignPackAction} className="space-y-2">
+                  <input type="hidden" name="campaignId" value={campaign.id} />
+                  <Input
+                    name="clientEmail"
+                    type="email"
+                    placeholder="Client email (optional if approval contact is an email)"
+                    className="text-sm"
+                  />
+                  <Button type="submit" variant="subtle" className="w-full">
+                    Send pack to client Approvals
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Submits drafted items for client review — nothing publishes or spends.
+                  </p>
                 </form>
               )}
               {admin && campaign.status === "pending_approval" && (

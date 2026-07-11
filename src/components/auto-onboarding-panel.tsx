@@ -371,7 +371,8 @@ function EnrichmentSection({
         <h3 className="text-sm font-medium">Optional enrichment (AU)</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           ABN registry and Google Places (simulated when API keys are unset). Results join
-          the review list below — nothing is saved until you apply.
+          the review list below — nothing is saved until you apply. ABN pre-fills this
+          company only; the same ABN may already exist on other companies.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

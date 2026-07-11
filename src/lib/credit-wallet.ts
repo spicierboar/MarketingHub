@@ -1,6 +1,7 @@
 // Prepaid company credit wallet (C2).
-// $50 minimum floor. Manual top-ups use Stripe Checkout when configured;
-// auto top-up remains ledger-simulated until off-session card charge ships.
+// $50 minimum floor. Manual top-ups use Stripe Checkout when configured
+// (setup_future_usage saves the card). Auto top-up charges off-session when a
+// payment method is saved; otherwise ledger-simulates in demo.
 // Does not flip ADS_LIVE or bypass spend-approval human gates.
 
 import { logAction } from "@/lib/audit";
@@ -194,10 +195,10 @@ export async function updateCreditAutoTopUpSettings(
 }
 
 /**
- * If auto top-up is enabled and balance <= trigger, add topUpAmount
- * capped by maxTopUpAmount and maxTopUpPerDay (count today's auto_top_up entries).
- * Ledger-simulated only — live off-session card charge needs a saved payment
- * method (deferred). Manual top-ups use Stripe Checkout when configured.
+ * If auto top-up is enabled and balance <= trigger, charge topUpAmount
+ * capped by maxTopUpAmount and maxTopUpPerDay.
+ * With Stripe + saved payment method → off-session PaymentIntent then ledger.
+ * Without → ledger-simulated (demo path).
  */
 export async function maybeAutoTopUp(
   companyId: string,
@@ -218,12 +219,41 @@ export async function maybeAutoTopUp(
   const amountUsd = Math.min(wallet.topUpAmountUsd, wallet.maxTopUpAmountUsd);
   if (!(amountUsd > 0)) return null;
 
+  const { chargeOffSessionCreditTopUp, stripeConfigured } = await import(
+    "@/lib/billing"
+  );
+  const { applyPaidCreditTopUp } = await import("@/lib/credit-top-up");
+
+  if (
+    stripeConfigured() &&
+    wallet.stripeCustomerId &&
+    wallet.stripePaymentMethodId
+  ) {
+    const charged = await chargeOffSessionCreditTopUp({
+      customerId: wallet.stripeCustomerId,
+      paymentMethodId: wallet.stripePaymentMethodId,
+      amountUsd,
+      tenantId: wallet.tenantId,
+      companyId,
+    });
+    if (!charged) return null;
+    await applyPaidCreditTopUp({
+      companyId,
+      amountUsd,
+      user,
+      reason: "Off-session auto top-up",
+      stripePaymentIntentId: charged.paymentIntentId,
+      kind: "auto_top_up",
+    });
+    return getOrCreateCreditWallet(companyId);
+  }
+
   return topUpCredit({
     companyId,
     amountUsd,
     user,
     kind: "auto_top_up",
-    reason: "Simulated auto top-up (off-session card charge deferred)",
+    reason: "Simulated auto top-up (no saved card — demo path)",
   });
 }
 
