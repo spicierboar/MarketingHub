@@ -257,6 +257,10 @@ import {
   checkManagedExceptionNotifyNoThrow,
 } from "@/lib/selftest/managed-delivery";
 import {
+  checkAutoProgressSkipsApprovalLevel,
+  checkScheduleApprovedAuthorityOnlyFullyManaged,
+} from "@/lib/selftest/managed-auto-progress";
+import {
   checkRollingCalendarMaintainAddsSuggestionsOnly,
   checkRollingCalendarNeedsTopUpWhenEmpty,
 } from "@/lib/selftest/rolling-calendar";
@@ -1058,6 +1062,13 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
     await expect("rollingCalendar.maintainAddsSuggestionsOnly", () =>
       checkRollingCalendarMaintainAddsSuggestionsOnly(),
+    );
+
+    await expect("managedAutoProgress.scheduleApprovedAuthority", () =>
+      checkScheduleApprovedAuthorityOnlyFullyManaged(),
+    );
+    await expect("managedAutoProgress.skipsApprovalLevel", () =>
+      checkAutoProgressSkipsApprovalLevel(),
     );
 
     await expect("spendApproval.applyRequiresAccept", () => checkSpendApplyRequiresApproval());

@@ -2,8 +2,10 @@
 //
 // Publish / spend / promotion activation ALWAYS require the existing human path
 // (critique via scheduleOne, approval policies, spend gates) — even at
-// fully_managed. These helpers only describe which *low-risk draft* work the
-// delivery runner may create without an extra client click.
+// fully_managed. These helpers describe which *low-risk* work the delivery
+// runner may create without an extra client click, plus schedule_approved:
+// calling scheduleOne on already-approved content under pre-granted authority
+// (critique still runs inside scheduleOne).
 
 import type { ManagedServiceLevel } from "@/lib/types";
 
@@ -11,6 +13,7 @@ export type ManagedAuthorityKind =
   | "draft_content"
   | "calendar_suggest"
   | "rolling_plan"
+  | "schedule_approved"
   | "publish"
   | "spend"
   | "promotion_activate";
@@ -32,9 +35,15 @@ export function defaultServiceLevel(): ManagedServiceLevel {
 }
 
 /**
- * Whether the delivery runner may auto-create low-risk drafts/suggestions.
+ * Whether the delivery runner may auto-create low-risk drafts/suggestions, or
+ * (fully_managed only) call scheduleOne on already-approved content.
+ *
  * Always false for publish | spend | promotion_activate — those still need
  * scheduleOne critique + existing approval / spend policies.
+ *
+ * schedule_approved: true ONLY at fully_managed. Means call scheduleOne on
+ * pre-approved content under pre-granted authority; critique still runs inside
+ * scheduleOne — never bypassed.
  */
 export function canAutoExecuteLowRisk(
   level: ManagedServiceLevel,
@@ -43,21 +52,26 @@ export function canAutoExecuteLowRisk(
   if (MATERIAL.has(kind) || kind === "publish" || kind === "spend" || kind === "promotion_activate") {
     return false;
   }
+  if (kind === "schedule_approved") {
+    return level === "fully_managed";
+  }
   if (!LOW_RISK.has(kind)) return false;
   return level === "fully_managed" || level === "managed_exceptions";
 }
 
 /**
  * Whether a client (or admin) approval is required before the kind proceeds.
- * Inverse of canAutoExecuteLowRisk for material kinds; always true for publish/spend/promotion.
+ * Inverse of canAutoExecuteLowRisk for low-risk / schedule_approved kinds;
+ * always true for publish/spend/promotion.
  */
 export function requiresClientApproval(
   level: ManagedServiceLevel,
   kind: ManagedAuthorityKind,
 ): boolean {
   if (MATERIAL.has(kind)) return true;
-  if (LOW_RISK.has(kind)) {
-    // approval level: everything needs a human; managed levels may draft without a click
+  if (kind === "schedule_approved" || LOW_RISK.has(kind)) {
+    // approval level: everything needs a human; managed levels may draft without
+    // a click; schedule_approved only at fully_managed.
     return !canAutoExecuteLowRisk(level, kind);
   }
   return true;

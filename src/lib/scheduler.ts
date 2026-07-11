@@ -21,6 +21,7 @@ import { planIncludesAutomations } from "@/lib/billing";
 import { emptyQueueCounts, publishDuePosts } from "@/lib/publish-queue";
 import { runAutomations } from "@/lib/automation";
 import { runScheduledClientReports } from "@/lib/client-reports";
+import { progressManagedSchedulesForTenant } from "@/lib/managed-service/auto-progress";
 import { processDueManagedDeliveries } from "@/lib/managed-service/delivery-runner";
 import { maintainRollingCalendarsForTenant } from "@/lib/managed-service/rolling-calendar";
 import type { ActingUser } from "@/lib/types";
@@ -51,6 +52,7 @@ export interface TenantTickResult {
   clientReportsSent: number;
   managedDeliveryProcessed?: number;
   rollingCalendarSuggestions?: number;
+  managedAutoScheduled?: number;
 }
 
 export async function runScheduledTick(): Promise<TenantTickResult[]> {
@@ -96,12 +98,20 @@ export async function runScheduledTick(): Promise<TenantTickResult[]> {
         /* rolling calendar top-up failure must not abort the tick */
       }
 
+      let managedAutoScheduled = 0;
+      try {
+        managedAutoScheduled = await progressManagedSchedulesForTenant(actor, tenant.id);
+      } catch {
+        /* managed auto-schedule failure must not abort the tick */
+      }
+
       return {
         ...pub,
         automationOutcomes,
         clientReportsSent: 0,
         managedDeliveryProcessed,
         rollingCalendarSuggestions,
+        managedAutoScheduled,
       };
     });
     results.push({ tenantId: tenant.id, ...tick });

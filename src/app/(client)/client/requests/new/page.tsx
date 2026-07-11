@@ -26,7 +26,10 @@ export default async function ClientNewRequestPage() {
 
   return (
     <div>
-      <PageHeader title="New marketing request" description={`For ${company?.name ?? "your business"}.`} />
+      <PageHeader
+        title="New marketing request"
+        description={`For ${company?.name ?? "your business"}. We'll already have your company details — just tell us what you need.`}
+      />
       <div className="mx-auto max-w-3xl p-6">
         <form action={createClientRequestAction}>
           <Card>

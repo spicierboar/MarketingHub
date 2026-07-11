@@ -11,6 +11,7 @@ import {
   CalendarDays,
   CreditCard,
   Image,
+  LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -23,6 +24,7 @@ const NAV = [
   { href: "/client/assets", label: "Assets", icon: Image },
   { href: "/client/payments", label: "Payments", icon: CreditCard },
   { href: "/client/reports", label: "Reports", icon: BarChart3 },
+  { href: "/client/help", label: "Help", icon: LifeBuoy },
 ] as const;
 
 export function ClientShell({
