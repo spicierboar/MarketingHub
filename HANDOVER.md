@@ -2,30 +2,22 @@
 
 > ## ▶ NEXT SESSION — START HERE (2026-07-11, **AGENCY/CLIENT SURFACES + CALENDAR CONTEXT** · **partial uncommitted** · **W6 WAITING ON GOOGLE**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 2**; calendar/context polish **uncommitted**) · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 3**) · live flags **OFF**
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
 > | W0–W5 + W7 · managed · C2 · signup · platform | SHIPPED | - |
 > | **Promo + onboarding scrape/AI + UX declutter** | **COMMITTED** `294611e` | promo catalog · create scrape+enrich · setup overview · tools menu |
-> | **Agency vs client surfaces + calendar context** | **CODE DONE · uncommitted** | seasonal date bug · delivery vs planning · `?company=` scope for assist |
+> | **Agency vs client surfaces + calendar context** | **COMMITTED** `2e55e78` | seasonal date bug · delivery vs planning · `?company=` scope |
 > | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
 >
-> ### Shipped @ `294611e` (do not redo)
-> - Add client: website + consent → `scrapeAndApplyInitialProfile` + AI/template enrich (`src/lib/ai/onboarding-enrich.ts`)
-> - Profile: `businessAddress` / `phone` / `email`; setup-focus company overview
-> - Promo catalog (30 packs) + `/promo-catalog` + client promos · migration **0042**
-> - Company tools nav: primary strip + **More tools** dropdown (not wall of links)
-> - AUD / modals / compressed clients list
+> ### Shipped @ `294611e` + `2e55e78` (do not redo)
+> - Add client: website + consent → scrape + AI/template enrich · setup overview · promo catalog · tools dropdown
+> - Calendar: seasonal MM-DD bug fixed · agency delivery-first when `?company=` · assist/campaigns scoped · context bar **Agency tools**
+> - Rule: **AI/planning = agency; review = client portal** (`docs/MANAGED-SERVICE-MODEL.md`)
 >
-> ### Just finished (this session — uncommitted)
-> - **Seasonal bug:** MM-DD events were remapped onto every viewed month → fixed in `calendar-intelligence.ts`
-> - **Agency vs client:** `docs/MANAGED-SERVICE-MODEL.md` matrix; agency calendar = delivery first when `?company=`; planning under collapsed **Agency planning**; client portal stays posts-only
-> - **Context leak:** assist/ready-to-schedule/campaigns now scoped to `?company=`; scan locked; context bar = `{Client} / module · Agency tools`
-> - Key files: `src/app/(app)/calendar/page.tsx` · `calendar-assist-panel.tsx` · `calendar-intelligence*.ts(x)` · `company-context-bar.tsx` · `company-tools-nav.tsx`
->
-> ### Product rule (keep)
-> **AI/planning = agency. Review = client portal.** Seasonal prompts, AI assist, optimal windows never on `/client/*`. With `?company=`, no other-client data leak.
+> ### Just finished (this session)
+> - Committed calendar/context polish as `2e55e78`
 >
 > **Demo scrape:** `harbourroasters.example` + consent
 >
@@ -40,11 +32,10 @@
 > **Local demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · `/dev` → Agency `sasha@brightspark.dev` · Client `liam@brightspark.dev`
 >
 > **NEXT (priority):**
-> 1. **Commit** uncommitted calendar/context/tools polish when owner asks (exclude `_owner_paste_*`, `scripts/*`, `temp-route-ours.ts`)
-> 2. Verify: Clients → open client → Calendar — delivery first; Agency planning collapsed; assist only that client; July ≠ Valentine’s/Christmas
-> 3. Owner paste **0041** + **0042**
-> 4. Optional: sales wizard website field; push `main` when asked
-> 5. Park live cutover until Google GO
+> 1. Verify: Clients → client → Calendar — delivery first; Agency planning collapsed; July seasons correct; assist scoped
+> 2. Owner paste **0041** + **0042**
+> 3. Optional: sales wizard website field; push `main` when asked
+> 4. Park live cutover until Google GO
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
