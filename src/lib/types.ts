@@ -312,6 +312,12 @@ export interface CompanyProfile {
   requiredDisclaimers: string[];
   currentOffers?: string;
   localMarketNotes?: string;
+  /** AU business identifier — signup pre-fill (ABR lookup). */
+  abn?: string;
+  /** Read-only Google Places match for onboarding enrichment. */
+  googlePlaceId?: string;
+  /** Trading hours text (e.g. from Places opening_hours). */
+  tradingHours?: string;
   // Vertical slices (V1 module 2 — stored in profile jsonb):
   retail?: RetailProfileFields;
   hotel?: HotelProfileFields;

@@ -95,37 +95,158 @@ const EMPTY_RESTAURANT: RestaurantProfileFields = {
   peakServicePeriods: [],
 };
 
-/** Infer business type from explicit field or legacy industry string. */
-export function resolveBusinessType(company: Company): BusinessType {
-  const bt = company.profile.businessType;
-  if (bt) return bt;
+/** Onboarding suggestion defaults per business type — never auto-schedules or publishes. */
+export interface SignupDefaults {
+  contentPillars: string[];
+  postingCadence: string;
+  audienceBlurb: string;
+  platformLabels: string[];
+  seasonalHints: string[];
+  /** Claim/regulatory caution one-liner where relevant; omitted for generic businesses. */
+  regulatoryCaution?: string;
+}
 
-  const industry = (company.profile.industry ?? "").toLowerCase();
+/** Deterministic keyword map from scraped or manual industry text → business type. */
+export function inferBusinessTypeFromIndustry(industry?: string): BusinessType {
+  const text = (industry ?? "").toLowerCase();
   if (
-    /restaurant|cafe|café|food service|hospitality.*dining|bistro|bakery/.test(
-      industry,
+    /restaurant|cafe|café|food service|hospitality.*dining|bistro|bakery|dining|bar\b|pub\b/.test(
+      text,
     )
   ) {
     return "restaurant_cafe";
   }
-  if (/hotel|motel|accommodation|resort|lodging/.test(industry)) {
+  if (/hotel|motel|accommodation|resort|lodging|bnb|bed.?and.?breakfast/.test(text)) {
     return "hotel";
   }
   if (
-    /retail|supermarket|grocery|shop|store|convenience|boutique|florist|flowers/.test(
-      industry,
+    /retail|supermarket|grocery|shop|store|convenience|boutique|florist|flowers|iga\b/.test(
+      text,
     )
   ) {
     return "retail";
   }
   if (
-    /dental|medical|legal|accounting|consulting|professional|clinic/.test(
-      industry,
+    /dental|medical|legal|accounting|consulting|professional|clinic|physio|chiro|lawyer|solicitor/.test(
+      text,
     )
   ) {
     return "professional";
   }
   return "other";
+}
+
+/** Suggestion-only onboarding defaults for a resolved business type. */
+export function suggestSignupDefaults(businessType: BusinessType): SignupDefaults {
+  return SIGNUP_DEFAULTS[businessType];
+}
+
+export const SIGNUP_DEFAULTS: Record<BusinessType, SignupDefaults> = {
+  restaurant_cafe: {
+    contentPillars: [
+      "Menu highlights & chef specials",
+      "Behind the kitchen",
+      "Local dining & community",
+      "Events, functions & seasonal menus",
+    ],
+    postingCadence:
+      "3–4 social posts per week; 1 Google Business update fortnightly",
+    audienceBlurb:
+      "Locals, visitors, and food lovers in your service area who dine in, order takeaway, or book for occasions.",
+    platformLabels: ["Instagram", "Facebook", "Google Business Profile", "TikTok"],
+    seasonalHints: [
+      "Mother's Day & Father's Day brunch",
+      "Winter comfort menu",
+      "Summer outdoor dining",
+      "End-of-year functions",
+    ],
+    regulatoryCaution:
+      "Never claim therapeutic health benefits from food; verify alcohol service and responsible-service wording with venue policies.",
+  },
+  retail: {
+    contentPillars: [
+      "Weekly specials & catalogue lines",
+      "New arrivals & hero products",
+      "Local convenience & community",
+      "Seasonal ranges & gift ideas",
+    ],
+    postingCadence:
+      "4–5 posts per week during catalogue weeks; 2–3 otherwise",
+    audienceBlurb:
+      "Households and locals who shop for groceries, gifts, and everyday essentials in your catchment.",
+    platformLabels: ["Facebook", "Instagram", "Email", "Google Business Profile"],
+    seasonalHints: [
+      "Catalogue Wednesday",
+      "Back to school",
+      "Holiday gift guides",
+      "End-of-financial-year clearance",
+    ],
+    regulatoryCaution:
+      "Use only approved catalogue and pricing language — no unverified savings or competitor comparisons.",
+  },
+  hotel: {
+    contentPillars: [
+      "Direct booking benefits",
+      "Room & package showcases",
+      "Local experiences & itineraries",
+      "Amenity & guest-experience highlights",
+    ],
+    postingCadence: "2–3 posts per week; 1 package email monthly",
+    audienceBlurb:
+      "Weekend visitors, business travellers, and families planning stays in your region.",
+    platformLabels: ["Instagram", "Facebook", "Google Business Profile", "Email"],
+    seasonalHints: [
+      "School holidays",
+      "Event & festival weekends",
+      "Wine-region tourism peaks",
+      "Midweek corporate rates",
+    ],
+    regulatoryCaution:
+      "Use approved rate and availability language only — avoid guaranteeing specific room views or occupancy claims.",
+  },
+  professional: {
+    contentPillars: [
+      "Client education & FAQs",
+      "Team expertise & credentials",
+      "Service explainers",
+      "Trust signals & community involvement",
+    ],
+    postingCadence:
+      "2 posts per week; 1 educational email or newsletter monthly",
+    audienceBlurb:
+      "Local patients, clients, and families seeking trusted professional services in your area.",
+    platformLabels: ["Facebook", "Google Business Profile", "LinkedIn", "Email"],
+    seasonalHints: [
+      "New-year health goals",
+      "Tax-season reminders",
+      "Winter wellness checks",
+      "Back-to-school health",
+    ],
+    regulatoryCaution:
+      "No medical, legal, or financial advice claims — educational content only with required disclaimers.",
+  },
+  other: {
+    contentPillars: [
+      "Local awareness",
+      "Customer stories & community",
+      "Offers & service updates",
+      "Behind-the-scenes",
+    ],
+    postingCadence: "2–3 posts per week",
+    audienceBlurb:
+      "Locals and customers in your service area who benefit from what you offer.",
+    platformLabels: ["Facebook", "Instagram", "Google Business Profile"],
+    seasonalHints: ["Local events", "Holiday periods", "Seasonal offers"],
+    regulatoryCaution:
+      "Use only approved claims — never invent testimonials or guarantees.",
+  },
+};
+
+/** Infer business type from explicit field or legacy industry string. */
+export function resolveBusinessType(company: Company): BusinessType {
+  const bt = company.profile.businessType;
+  if (bt) return bt;
+  return inferBusinessTypeFromIndustry(company.profile.industry);
 }
 
 export function normaliseVerticalProfile(

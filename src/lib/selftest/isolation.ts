@@ -228,8 +228,22 @@ import {
 import {
   checkApplyPrefillsProfile,
   checkConsentRequired,
+  checkSchemaOrgExtraction,
+  checkSchemaSimulatedScrape,
   checkSimulatedWhenLiveOff,
+  checkSocialSameAsDetection,
 } from "@/lib/selftest/auto-onboarding";
+import {
+  checkAbnResultToProfilePatch,
+  checkAbnSimulatedWhenUnconfigured,
+  checkPlaceMatchToExtractedHints,
+  checkPlaceSimulatedWhenUnconfigured,
+} from "@/lib/selftest/abn-places";
+import {
+  checkInferBusinessTypeFromIndustry,
+  checkSignupDefaultsCoverage,
+  checkSignupPrefillFromExtract,
+} from "@/lib/selftest/signup-templates";
 import {
   checkInjectionPatternsStripped,
   checkImpersonationFailClosed,
@@ -1028,6 +1042,44 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("autoOnboarding.applyPrefillsProfile", () =>
       checkApplyPrefillsProfile(),
+    );
+
+    await expect("autoOnboarding.schemaOrgExtraction", () => checkSchemaOrgExtraction());
+
+    await expect("autoOnboarding.socialSameAsDetection", () =>
+      checkSocialSameAsDetection(),
+    );
+
+    await expect("autoOnboarding.schemaSimulatedScrape", () =>
+      checkSchemaSimulatedScrape(),
+    );
+
+    await expect("signupTemplates.inferBusinessType", () =>
+      checkInferBusinessTypeFromIndustry(),
+    );
+
+    await expect("signupTemplates.defaultsCoverage", () =>
+      checkSignupDefaultsCoverage(),
+    );
+
+    await expect("signupTemplates.prefillFromExtract", () =>
+      checkSignupPrefillFromExtract(),
+    );
+
+    await expect("abnPlaces.abnSimulatedWhenUnconfigured", () =>
+      checkAbnSimulatedWhenUnconfigured(),
+    );
+
+    await expect("abnPlaces.abnResultToProfilePatch", () =>
+      checkAbnResultToProfilePatch(),
+    );
+
+    await expect("abnPlaces.placeSimulatedWhenUnconfigured", () =>
+      checkPlaceSimulatedWhenUnconfigured(),
+    );
+
+    await expect("abnPlaces.placeMatchToExtractedHints", () =>
+      checkPlaceMatchToExtractedHints(),
     );
 
     await expect("securitySlice.injectionPatternsStripped", () => checkInjectionPatternsStripped());

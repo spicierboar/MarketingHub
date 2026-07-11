@@ -1,6 +1,6 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **C2 TOP-UP + TAX INVOICES** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **SIGNUP PRE-FILL + C2** · **W6 WAITING ON GOOGLE**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` · live flags **OFF**
 >
@@ -9,11 +9,12 @@
 > | W0–W5 + W7 | DONE | - |
 > | **Managed service** | **SHIPPED** | foundation → wave 3 + agency exception desk + 2-user demo |
 > | **C2 credit** | **SHIPPED** | $50 floor · Stripe Checkout top-up · tax invoices · simulated demo path |
+> | **Signup pre-fill** | **SHIPPED** | scrape deepen · templates · ABN/Places · Looks-correct (`docs/SIGNUP-PREFILL-WAVE.md`) |
 > | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **Pending:** `docs/MANAGED-SERVICE-PENDING.md`
 >
-> **Fixtures:** self-test **281/281** · queue-test **20/20**
+> **Fixtures:** self-test **291/291** · queue-test **20/20**
 >
 > **Owner migrations PASTED:** … + **0038**. **NEW — paste:**  
 > `notepad F:\MarketingHub\command-centre\supabase\migrations\0039_prepaid_credit.sql`  
@@ -24,10 +25,10 @@
 > **Local demo:** `/dev` → **Agency** `sasha@brightspark.dev` · **Client** `liam@brightspark.dev` (Dental seed credit $200)
 >
 > **NEXT:**
-> 1. Owner paste **0039** + **0040**
-> 2. Optional: set `TAX_INVOICE_SELLER_ABN` (+ name/address/email) for invoice letterhead
+> 1. Owner paste **0039** + **0040** (if not done)
+> 2. Demo signup pre-fill: company → Auto-onboarding scrape → Looks correct (+ optional ABN/Places)
 > 3. Park live cutover until Google GO
-> 4. Deferred: off-session auto top-up card charge · portal Stripe deep-link
+> 4. Deferred: off-session auto top-up · portal Stripe deep-link · letterhead env · full self-serve payment funnel
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >

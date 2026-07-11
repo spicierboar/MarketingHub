@@ -4,6 +4,7 @@
 // appEnv() + AUTO_ONBOARDING_LIVE + AUTO_ONBOARDING_FETCH_KEY.
 
 import { appEnv } from "@/lib/env";
+import { enrichExtractedWithBusinessType } from "@/lib/signup-prefill-templates";
 import type { Company, CompanyProfile, SocialLink } from "@/lib/types";
 
 // ---- types -------------------------------------------------------------------
@@ -172,6 +173,27 @@ function detectSocialPlatform(url: string): string | undefined {
   return undefined;
 }
 
+/** Structured signals parsed from page HTML (schema.org, meta, links). */
+export interface OnboardingHtmlExtract {
+  meta: Record<string, string>;
+  schemaName?: string;
+  schemaLegalName?: string;
+  schemaDescription?: string;
+  schemaTelephone?: string;
+  schemaEmail?: string;
+  schemaLocality?: string;
+  schemaRegion?: string;
+  schemaOpeningHours?: string[];
+  schemaSameAs: string[];
+  schemaTypes: string[];
+  logoUrl?: string;
+  telHrefs: string[];
+  mailtoHrefs: string[];
+  socialLinks: SocialLink[];
+  navServices: string[];
+  notes: string[];
+}
+
 interface PageContent {
   url: string;
   kind: "website" | "social";
@@ -179,9 +201,82 @@ interface PageContent {
   title: string;
   description: string;
   body: string;
+  htmlExtract?: OnboardingHtmlExtract;
+}
+
+interface FieldExtractHint {
+  confidence: "high" | "medium" | "low";
+  sourceUrl?: string;
+}
+
+interface MergeResult {
+  fields: AutoOnboardingExtractedFields;
+  hints: Partial<Record<AutoOnboardingFieldKey, FieldExtractHint>>;
+}
+
+/** Demo hosts that return schema-rich HTML in simulated mode (no network). */
+const SCHEMA_DEMO_HOSTS = new Set(["harbourroasters.example"]);
+
+function simulatedDemoHtml(url: string): string | undefined {
+  const host = new URL(url).hostname.toLowerCase().replace(/^www\./i, "");
+  if (!SCHEMA_DEMO_HOSTS.has(host)) return undefined;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta property="og:site_name" content="Harbour Roasters">
+  <meta property="og:title" content="Harbour Roasters — Cafe &amp; Restaurant">
+  <meta property="og:description" content="Specialty coffee and brunch in Harbour precinct.">
+  <meta property="og:image" content="https://harbourroasters.example/assets/logo.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Harbour Roasters">
+  <meta name="twitter:description" content="Specialty coffee and brunch in Harbour precinct.">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Harbour Roasters",
+    "description": "Specialty coffee roastery and cafe serving Harbour precinct.",
+    "telephone": "+61 2 5555 0100",
+    "email": "hello@harbourroasters.example",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "12 Wharf St",
+      "addressLocality": "Harbour precinct",
+      "addressRegion": "NSW"
+    },
+    "openingHours": "Mo-Fr 07:00-16:00",
+    "sameAs": [
+      "https://instagram.com/harbourroasters",
+      "https://facebook.com/harbourroasters"
+    ]
+  }
+  </script>
+</head>
+<body>
+  <img class="site-logo" src="https://harbourroasters.example/assets/logo.png" alt="Harbour Roasters logo">
+  <nav class="main-menu">
+    <a href="/espresso">Espresso</a>
+    <a href="/brunch">Weekend Brunch</a>
+    <a href="/catering">Corporate Catering</a>
+  </nav>
+  <p>Target customers: locals and visitors in Harbour precinct. Brand voice: warm, approachable, expert.</p>
+  <p>CTA: Book now · Call us · Visit Harbour precinct</p>
+  <p>Special: 15% off weekday lunch — terms apply.</p>
+  <footer class="site-footer">
+    <a href="https://instagram.com/harbourroasters">Instagram</a>
+    <a href="https://facebook.com/harbourroasters">Facebook</a>
+    <a href="tel:+61255550100">Call us</a>
+    <a href="mailto:hello@harbourroasters.example">Email</a>
+  </footer>
+</body>
+</html>`;
 }
 
 function simulatePageContent(url: string): PageContent {
+  const demoHtml = simulatedDemoHtml(url);
+  if (demoHtml) return pageContentFromHtml(url, demoHtml);
+
   const parsed = new URL(url);
   const h = simpleHash(url);
   const platform = detectSocialPlatform(url);
@@ -226,28 +321,53 @@ function simulatePageContent(url: string): PageContent {
     .filter(Boolean)
     .join(" ");
 
-  return {
-    url,
-    kind,
-    platform,
-    title,
-    description,
-    body,
-  };
+  const wrappedHtml = `<!DOCTYPE html><html><head>
+<meta property="og:site_name" content="${trading}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${description}">
+<title>${title}</title>
+</head><body><p>${body}</p></body></html>`;
+
+  return pageContentFromHtml(url, wrappedHtml);
 }
 
-// ---- live fetch (meta-tag extraction) ----------------------------------------
+// ---- HTML parsing (schema.org, meta, links) ----------------------------------
 
 const META_TAG_RE =
-  /<meta\s+(?:[^>]*?\s)?(?:name|property)=["']([^"']+)["'][^>]*?\scontent=["']([^"']*)["'][^>]*>/gi;
+  /<meta\s+[^>]*?(?:name|property)=["']([^"']+)["'][^>]*?content=["']([^"']*)["'][^>]*>|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:name|property)=["']([^"']+)["'][^>]*>/gi;
 const TITLE_RE = /<title[^>]*>([^<]*)<\/title>/i;
+const JSON_LD_RE =
+  /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+const NAV_BLOCK_RE =
+  /<(?:nav|div)[^>]*(?:class|id|role)=["'][^"']*(?:nav|menu|navigation)[^"']*["'][^>]*>[\s\S]*?<\/(?:nav|div)>/gi;
+const FOOTER_BLOCK_RE =
+  /<(?:footer|div)[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>[\s\S]*?<\/(?:footer|div)>/gi;
+const ANCHOR_RE = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+const IMG_TAG_RE = /<img[^>]*>/gi;
+const SKIP_NAV_LABELS = new Set([
+  "home",
+  "about",
+  "contact",
+  "blog",
+  "news",
+  "login",
+  "sign in",
+  "privacy",
+  "terms",
+  "faq",
+  "careers",
+]);
 
 function extractMetaTags(html: string): Record<string, string> {
   const out: Record<string, string> = {};
   let m: RegExpExecArray | null;
   META_TAG_RE.lastIndex = 0;
   while ((m = META_TAG_RE.exec(html)) !== null) {
-    out[m[1].toLowerCase()] = m[2].trim();
+    const key = (m[1] ?? m[4] ?? "").toLowerCase();
+    const value = (m[2] ?? m[3] ?? "").trim();
+    if (key && value) out[key] = value;
   }
   const titleMatch = html.match(TITLE_RE);
   if (titleMatch?.[1]) out.title = titleMatch[1].trim();
@@ -262,6 +382,297 @@ function stripHtml(html: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 4000);
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function flattenJsonLd(node: unknown): Record<string, unknown>[] {
+  if (!node || typeof node !== "object") return [];
+  if (Array.isArray(node)) return node.flatMap((item) => flattenJsonLd(item));
+  const obj = node as Record<string, unknown>;
+  if (Array.isArray(obj["@graph"])) {
+    return (obj["@graph"] as unknown[]).flatMap((item) => flattenJsonLd(item));
+  }
+  return [obj];
+}
+
+function schemaTypeMatches(type: unknown, ...names: string[]): boolean {
+  const norm = (t: string) => t.toLowerCase().replace(/^.*\//, "");
+  if (typeof type === "string") {
+    const base = norm(type);
+    return names.some((n) => base.includes(n.toLowerCase()));
+  }
+  if (Array.isArray(type)) return type.some((t) => schemaTypeMatches(t, ...names));
+  return false;
+}
+
+function readPostalAddress(
+  addr: unknown,
+): { locality?: string; region?: string } | undefined {
+  if (!addr || typeof addr !== "object") return undefined;
+  const a = addr as Record<string, unknown>;
+  const locality =
+    typeof a.addressLocality === "string" ? a.addressLocality.trim() : undefined;
+  const region =
+    typeof a.addressRegion === "string" ? a.addressRegion.trim() : undefined;
+  if (!locality && !region) return undefined;
+  return { locality, region };
+}
+
+function extractSchemaOrg(html: string): Partial<OnboardingHtmlExtract> {
+  const out: Partial<OnboardingHtmlExtract> = {
+    schemaSameAs: [],
+    schemaTypes: [],
+    schemaOpeningHours: [],
+  };
+  const blocks: unknown[] = [];
+  let m: RegExpExecArray | null;
+  JSON_LD_RE.lastIndex = 0;
+  while ((m = JSON_LD_RE.exec(html)) !== null) {
+    try {
+      blocks.push(JSON.parse(m[1].trim()));
+    } catch {
+      /* skip malformed JSON-LD */
+    }
+  }
+
+  for (const node of blocks.flatMap((b) => flattenJsonLd(b))) {
+    const type = node["@type"];
+    const isBusiness =
+      schemaTypeMatches(type, "LocalBusiness", "Organization", "Store", "Restaurant") ||
+      schemaTypeMatches(node["@type"], "PostalAddress");
+    if (!isBusiness && !schemaTypeMatches(type, "PostalAddress")) continue;
+
+    if (schemaTypeMatches(type, "LocalBusiness", "Organization", "Store", "Restaurant")) {
+      for (const t of Array.isArray(type) ? type : [type]) {
+        if (typeof t === "string") out.schemaTypes!.push(t.replace(/^.*\//, ""));
+      }
+      if (!out.schemaName && typeof node.name === "string") {
+        out.schemaName = node.name.trim();
+      }
+      if (!out.schemaLegalName && typeof node.legalName === "string") {
+        out.schemaLegalName = node.legalName.trim();
+      }
+      if (!out.schemaDescription && typeof node.description === "string") {
+        out.schemaDescription = node.description.trim();
+      }
+      if (!out.schemaTelephone && typeof node.telephone === "string") {
+        out.schemaTelephone = node.telephone.trim();
+      }
+      if (!out.schemaEmail && typeof node.email === "string") {
+        out.schemaEmail = node.email.trim();
+      }
+      const addr = readPostalAddress(node.address);
+      if (addr?.locality && !out.schemaLocality) out.schemaLocality = addr.locality;
+      if (addr?.region && !out.schemaRegion) out.schemaRegion = addr.region;
+      if (typeof node.openingHours === "string") {
+        out.schemaOpeningHours!.push(node.openingHours.trim());
+      } else if (Array.isArray(node.openingHours)) {
+        for (const oh of node.openingHours) {
+          if (typeof oh === "string") out.schemaOpeningHours!.push(oh.trim());
+        }
+      }
+      if (Array.isArray(node.sameAs)) {
+        for (const link of node.sameAs) {
+          if (typeof link === "string") out.schemaSameAs!.push(link.trim());
+        }
+      } else if (typeof node.sameAs === "string") {
+        out.schemaSameAs!.push(node.sameAs.trim());
+      }
+      if (!out.logoUrl && typeof node.logo === "string") out.logoUrl = node.logo.trim();
+      if (!out.logoUrl && node.logo && typeof node.logo === "object") {
+        const logoObj = node.logo as Record<string, unknown>;
+        if (typeof logoObj.url === "string") out.logoUrl = logoObj.url.trim();
+      }
+    }
+
+    if (schemaTypeMatches(type, "PostalAddress")) {
+      const addr = readPostalAddress(node);
+      if (addr?.locality && !out.schemaLocality) out.schemaLocality = addr.locality;
+      if (addr?.region && !out.schemaRegion) out.schemaRegion = addr.region;
+    }
+  }
+
+  return out;
+}
+
+function extractHrefLinks(
+  html: string,
+  blocks: RegExp,
+): { href: string; text: string }[] {
+  const links: { href: string; text: string }[] = [];
+  let block: RegExpExecArray | null;
+  blocks.lastIndex = 0;
+  while ((block = blocks.exec(html)) !== null) {
+    const segment = block[0];
+    let m: RegExpExecArray | null;
+    ANCHOR_RE.lastIndex = 0;
+    while ((m = ANCHOR_RE.exec(segment)) !== null) {
+      const href = decodeHtmlEntities(m[1].trim());
+      const text = decodeHtmlEntities(stripHtml(m[2]).trim());
+      if (href) links.push({ href, text });
+    }
+  }
+  return links;
+}
+
+function socialLinkFromUrl(url: string): SocialLink | undefined {
+  const normalised = normaliseHttpUrl(url);
+  if (!normalised) return undefined;
+  const platform = detectSocialPlatform(normalised);
+  if (!platform) return undefined;
+  return { platform, url: normalised };
+}
+
+function mergeSocialLinks(...groups: SocialLink[][]): SocialLink[] {
+  const merged: SocialLink[] = [];
+  for (const group of groups) {
+    for (const link of group) {
+      if (!link.platform || !link.url) continue;
+      const idx = merged.findIndex((l) => l.platform === link.platform);
+      if (idx >= 0) merged[idx] = link;
+      else merged.push(link);
+    }
+  }
+  return merged;
+}
+
+function extractLogoUrl(html: string, meta: Record<string, string>): string | undefined {
+  if (meta["og:image"]?.trim()) return meta["og:image"].trim();
+  if (meta["twitter:image"]?.trim()) return meta["twitter:image"].trim();
+
+  let m: RegExpExecArray | null;
+  IMG_TAG_RE.lastIndex = 0;
+  while ((m = IMG_TAG_RE.exec(html)) !== null) {
+    const tag = m[0];
+    if (!/logo/i.test(tag)) continue;
+    const srcMatch = tag.match(/\bsrc=["']([^"']+)["']/i);
+    if (srcMatch?.[1]) return decodeHtmlEntities(srcMatch[1].trim());
+  }
+  return undefined;
+}
+
+function extractNavServices(html: string): string[] {
+  const services: string[] = [];
+  const links = extractHrefLinks(html, NAV_BLOCK_RE);
+  for (const { text } of links) {
+    const label = text.trim();
+    if (!label || label.length > 48) continue;
+    if (SKIP_NAV_LABELS.has(label.toLowerCase())) continue;
+    if (!services.some((s) => s.toLowerCase() === label.toLowerCase())) {
+      services.push(label);
+    }
+  }
+  return services.slice(0, 8);
+}
+
+function extractTelMailto(html: string): { tel: string[]; mailto: string[] } {
+  const tel: string[] = [];
+  const mailto: string[] = [];
+  let m: RegExpExecArray | null;
+  ANCHOR_RE.lastIndex = 0;
+  while ((m = ANCHOR_RE.exec(html)) !== null) {
+    const href = decodeHtmlEntities(m[1].trim());
+    if (href.startsWith("tel:")) {
+      const num = href.slice(4).trim();
+      if (num && !tel.includes(num)) tel.push(num);
+    } else if (href.startsWith("mailto:")) {
+      const addr = href.slice(7).split("?")[0].trim();
+      if (addr && !mailto.includes(addr)) mailto.push(addr);
+    }
+  }
+  return { tel, mailto };
+}
+
+function extractFooterSocialLinks(html: string): SocialLink[] {
+  const links: SocialLink[] = [];
+  const footerLinks = extractHrefLinks(html, FOOTER_BLOCK_RE);
+  for (const { href } of footerLinks) {
+    const social = socialLinkFromUrl(href);
+    if (social) links.push(social);
+  }
+  return links;
+}
+
+/** Parse onboarding-relevant signals from raw HTML (exported for self-tests). */
+export function parseHtmlForOnboarding(html: string, pageUrl: string): OnboardingHtmlExtract {
+  const meta = extractMetaTags(html);
+  const schema = extractSchemaOrg(html);
+  const { tel, mailto } = extractTelMailto(html);
+  const navServices = extractNavServices(html);
+  const footerSocial = extractFooterSocialLinks(html);
+  const schemaSocial = (schema.schemaSameAs ?? [])
+    .map((u) => socialLinkFromUrl(u))
+    .filter((l): l is SocialLink => l !== undefined);
+  const logoUrl = extractLogoUrl(html, meta) ?? schema.logoUrl;
+
+  const notes: string[] = [];
+  if (logoUrl) notes.push(`Logo URL: ${logoUrl}`);
+  if (schema.schemaTelephone) notes.push(`Telephone: ${schema.schemaTelephone}`);
+  if (schema.schemaEmail) notes.push(`Email: ${schema.schemaEmail}`);
+  if (schema.schemaOpeningHours?.length) {
+    notes.push(`Opening hours: ${schema.schemaOpeningHours.join("; ")}`);
+  }
+  if (tel.length) notes.push(`tel: ${tel.join(", ")}`);
+  if (mailto.length) notes.push(`mailto: ${mailto.join(", ")}`);
+
+  return {
+    meta,
+    schemaName: schema.schemaName,
+    schemaLegalName: schema.schemaLegalName,
+    schemaDescription: schema.schemaDescription,
+    schemaTelephone: schema.schemaTelephone,
+    schemaEmail: schema.schemaEmail,
+    schemaLocality: schema.schemaLocality,
+    schemaRegion: schema.schemaRegion,
+    schemaOpeningHours: schema.schemaOpeningHours ?? [],
+    schemaSameAs: schema.schemaSameAs ?? [],
+    schemaTypes: schema.schemaTypes ?? [],
+    logoUrl,
+    telHrefs: tel,
+    mailtoHrefs: mailto,
+    socialLinks: mergeSocialLinks(schemaSocial, footerSocial),
+    navServices,
+    notes,
+  };
+}
+
+function pageContentFromHtml(url: string, html: string): PageContent {
+  const extract = parseHtmlForOnboarding(html, url);
+  const platform = detectSocialPlatform(url);
+  const meta = extract.meta;
+  const title =
+    meta["og:title"] ||
+    meta["twitter:title"] ||
+    extract.schemaName ||
+    meta["og:site_name"] ||
+    meta.title ||
+    titleFromHostname(new URL(url).hostname);
+  const description =
+    meta["og:description"] ||
+    meta["twitter:description"] ||
+    extract.schemaDescription ||
+    meta.description ||
+    "";
+  const bodyText = stripHtml(html);
+  const body = bodyText || description || title;
+
+  return {
+    url,
+    kind: platform ? "social" : "website",
+    platform,
+    title,
+    description: description || body.slice(0, 280),
+    body: body || title,
+    htmlExtract: extract,
+  };
 }
 
 async function fetchLivePageContent(url: string): Promise<PageContent> {
@@ -280,28 +691,7 @@ async function fetchLivePageContent(url: string): Promise<PageContent> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
-    const meta = extractMetaTags(html);
-    const platform = detectSocialPlatform(url);
-    const title =
-      meta["og:title"] ||
-      meta["twitter:title"] ||
-      meta.title ||
-      titleFromHostname(new URL(url).hostname);
-    const description =
-      meta["og:description"] ||
-      meta["twitter:description"] ||
-      meta.description ||
-      meta["description"] ||
-      "";
-    const body = description || stripHtml(html).slice(0, 1500);
-    return {
-      url,
-      kind: platform ? "social" : "website",
-      platform,
-      title,
-      description: description || body.slice(0, 280),
-      body: body || title,
-    };
+    return pageContentFromHtml(url, html);
   } finally {
     clearTimeout(timer);
   }
@@ -375,40 +765,137 @@ function extractOffer(text: string): string | undefined {
   return m?.[1]?.trim();
 }
 
+function industryFromTitle(title: string): string | undefined {
+  const m = title.match(/[—–-]\s*(.+)$/);
+  return m?.[1]?.trim();
+}
+
+function titleTradingName(title: string): string {
+  return title.replace(/\s+—.+$/, "").replace(/\s+on\s+\w+$/i, "").trim();
+}
+
 function mergeExtracted(
   pages: PageContent[],
   companyName: string,
   urls: AutoOnboardingUrls,
-): AutoOnboardingExtractedFields {
+): MergeResult {
   const websitePage = pages.find((p) => p.kind === "website") ?? pages[0];
   const socialPages = pages.filter((p) => p.kind === "social");
   const combined = pages.map((p) => p.body).join(" ");
+  const web = websitePage?.htmlExtract;
+  const webUrl = websitePage?.url;
+  const hints: Partial<Record<AutoOnboardingFieldKey, FieldExtractHint>> = {};
 
+  const setHint = (
+    key: AutoOnboardingFieldKey,
+    confidence: FieldExtractHint["confidence"],
+    sourceUrl?: string,
+  ) => {
+    hints[key] = { confidence, sourceUrl: sourceUrl ?? webUrl };
+  };
+
+  const meta = web?.meta ?? {};
   const trading =
-    websitePage?.title.replace(/\s+—.+$/, "").replace(/\s+on\s+\w+$/i, "").trim() ||
+    web?.schemaName ||
+    meta["og:site_name"] ||
+    titleTradingName(websitePage?.title ?? "") ||
     companyName;
-  const area = extractArea(combined) ?? "Local area";
 
-  const socialLinks: SocialLink[] = [...urls.socialLinks];
-  for (const p of socialPages) {
-    if (p.platform && !socialLinks.some((l) => l.platform === p.platform)) {
-      socialLinks.push({ platform: p.platform, url: p.url });
-    }
-  }
+  if (web?.schemaName) setHint("tradingNames", "high", webUrl);
+  else if (meta["og:site_name"]) setHint("tradingNames", "high", webUrl);
+  else setHint("tradingNames", "medium", webUrl);
+
+  const legalName = web?.schemaLegalName ?? `${trading} Pty Ltd`;
+  setHint(
+    "legalName",
+    web?.schemaLegalName ? "medium" : "low",
+    webUrl,
+  );
+
+  const industry =
+    industryFromTitle(meta["og:title"] ?? websitePage?.title ?? "") ||
+    industryFromTitle(websitePage?.title ?? "") ||
+    web?.schemaTypes?.find((t) => /business|restaurant|store/i.test(t)) ||
+    websitePage?.description.split(" ").slice(0, 3).join(" ") ||
+    "Local business";
+  if (industryFromTitle(meta["og:title"] ?? "")) setHint("industry", "high", webUrl);
+  else if (web?.schemaTypes?.length) setHint("industry", "medium", webUrl);
+  else setHint("industry", "medium", webUrl);
+
+  const natureOfBusiness =
+    web?.schemaDescription ||
+    meta["og:description"] ||
+    meta["twitter:description"] ||
+    websitePage?.description ||
+    combined.slice(0, 200);
+  if (web?.schemaDescription) setHint("natureOfBusiness", "high", webUrl);
+  else if (meta["og:description"]) setHint("natureOfBusiness", "medium", webUrl);
+  else setHint("natureOfBusiness", "medium", webUrl);
+
+  const area =
+    web?.schemaLocality ||
+    extractArea(combined) ||
+    "Local area";
+  if (web?.schemaLocality) setHint("serviceAreas", "high", webUrl);
+  else setHint("serviceAreas", "medium", webUrl);
+
+  const navServices = web?.navServices ?? [];
+  const textServices = extractServices(combined);
+  const services = navServices.length > 0 ? navServices : textServices;
+  if (navServices.length > 0) setHint("services", "medium", webUrl);
+  else setHint("services", "medium", webUrl);
+
+  const targetCustomers =
+    extractTargetCustomers(combined) ?? `Locals and visitors in ${area}`;
+  setHint("targetCustomers", "medium", webUrl);
+
+  const brandVoice =
+    extractBrandVoice(combined) ?? "Warm, professional, approachable";
+  setHint("brandVoice", "medium", webUrl);
+
+  const telCtas =
+    web?.telHrefs?.map((t) => `Call ${t}`) ??
+    (web?.schemaTelephone ? [`Call ${web.schemaTelephone}`] : []);
+  const mailCtas = web?.mailtoHrefs?.map(() => "Email us") ?? [];
+  const textCtas = extractCtas(combined);
+  const callsToAction = [...new Set([...textCtas, ...telCtas, ...mailCtas])].slice(0, 6);
+  if (telCtas.length || web?.schemaTelephone) setHint("callsToAction", "high", webUrl);
+  else setHint("callsToAction", "medium", webUrl);
+
+  const currentOffers = extractOffer(combined);
+  if (currentOffers) setHint("currentOffers", "low", webUrl);
+
+  const socialLinks: SocialLink[] = mergeSocialLinks(
+    urls.socialLinks,
+    web?.socialLinks ?? [],
+    socialPages
+      .filter((p) => p.platform)
+      .map((p) => ({ platform: p.platform!, url: p.url })),
+  );
+  const socialSource =
+    web?.schemaSameAs?.length || (web?.socialLinks?.length ?? 0) > 0
+      ? webUrl
+      : socialPages[0]?.url;
+  setHint("socialLinks", web?.schemaSameAs?.length ? "high" : "high", socialSource);
+
+  setHint("website", "high", urls.website);
 
   return {
-    legalName: `${trading} Pty Ltd`,
-    tradingNames: trading,
-    industry: websitePage?.description.split(" ").slice(0, 3).join(" ") || "Local business",
-    website: urls.website,
-    natureOfBusiness: websitePage?.description || combined.slice(0, 200),
-    serviceAreas: [area],
-    services: extractServices(combined),
-    targetCustomers: extractTargetCustomers(combined) ?? `Locals and visitors in ${area}`,
-    brandVoice: extractBrandVoice(combined) ?? "Warm, professional, approachable",
-    callsToAction: extractCtas(combined),
-    currentOffers: extractOffer(combined),
-    socialLinks,
+    fields: {
+      legalName,
+      tradingNames: trading,
+      industry,
+      website: urls.website,
+      natureOfBusiness,
+      serviceAreas: [area],
+      services,
+      targetCustomers,
+      brandVoice,
+      callsToAction,
+      currentOffers,
+      socialLinks,
+    },
+    hints,
   };
 }
 
@@ -467,6 +954,7 @@ function buildFieldPreviews(
   extracted: AutoOnboardingExtractedFields,
   profile: CompanyProfile,
   sources: AutoOnboardingSourceSnippet[],
+  hints: Partial<Record<AutoOnboardingFieldKey, FieldExtractHint>> = {},
 ): AutoOnboardingFieldPreview[] {
   const websiteSource = sources.find((s) => s.kind === "website")?.url;
   const socialSource = sources.find((s) => s.kind === "social")?.url;
@@ -476,23 +964,26 @@ function buildFieldPreviews(
   for (const key of keys) {
     const value = formatFieldValue(key, extracted);
     if (!value) continue;
+    const hint = hints[key];
     const confidence: AutoOnboardingFieldPreview["confidence"] =
-      key === "website" || key === "socialLinks"
+      hint?.confidence ??
+      (key === "website" || key === "socialLinks"
         ? "high"
         : key === "legalName"
           ? "low"
-          : "medium";
+          : "medium");
     out.push({
       key,
       label: FIELD_LABELS[key],
       value,
       confidence,
       sourceUrl:
-        key === "socialLinks"
+        hint?.sourceUrl ??
+        (key === "socialLinks"
           ? socialSource
           : key === "website"
             ? websiteSource
-            : websiteSource ?? socialSource,
+            : websiteSource ?? socialSource),
       alreadySet: profileHasValue(profile, key),
     });
   }
@@ -514,16 +1005,30 @@ export async function scrapeForOnboardingPreview(
   ];
 
   const pages = await Promise.all(urlsToFetch.map((u) => loadPageContent(u)));
-  const sources: AutoOnboardingSourceSnippet[] = pages.map((p) => ({
-    url: p.url,
-    kind: p.kind,
-    platform: p.platform,
-    title: p.title,
-    snippet: p.description || p.body.slice(0, 200),
-  }));
+  const sources: AutoOnboardingSourceSnippet[] = pages.map((p) => {
+    const notes = p.htmlExtract?.notes?.length
+      ? ` ${p.htmlExtract.notes.join(" · ")}`
+      : "";
+    return {
+      url: p.url,
+      kind: p.kind,
+      platform: p.platform,
+      title: p.title,
+      snippet: (p.description || p.body.slice(0, 200)) + notes,
+    };
+  });
 
-  const extracted = mergeExtracted(pages, input.company.name, input.urls);
-  const fields = buildFieldPreviews(extracted, input.company.profile, sources);
+  const { fields: extracted, hints } = mergeExtracted(
+    pages,
+    input.company.name,
+    input.urls,
+  );
+  const fieldPreviews = buildFieldPreviews(
+    extracted,
+    input.company.profile,
+    sources,
+    hints,
+  );
 
   return {
     companyId: input.company.id,
@@ -531,7 +1036,7 @@ export async function scrapeForOnboardingPreview(
     mode: autoOnboardingLive() ? "live" : "simulated",
     consent: true,
     urls: input.urls,
-    fields,
+    fields: fieldPreviews,
     sources,
   };
 }
@@ -591,6 +1096,13 @@ export function applyExtractedFields(
       }
     }
     next.socialLinks = merged;
+  }
+
+  if (!next.businessType) {
+    const { businessType } = enrichExtractedWithBusinessType({
+      industry: next.industry ?? extracted.industry,
+    });
+    next.businessType = businessType;
   }
 
   return next;

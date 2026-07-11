@@ -338,9 +338,8 @@ export default async function BillingPage({
                 <p className="text-sm text-muted-foreground">
                   No tax invoices yet. Client credit top-ups and management-fee
                   runs issue GST tax invoices here (print to PDF from the detail
-                  page). Set{" "}
-                  <code className="text-xs">TAX_INVOICE_SELLER_ABN</code> (and
-                  optional name/address/email) for seller details on invoices.
+                  page). Seller letterhead uses the workspace name until
+                  letterhead env is configured (parked).
                 </p>
               ) : (
                 <ul className="divide-y divide-border rounded-md border border-border">

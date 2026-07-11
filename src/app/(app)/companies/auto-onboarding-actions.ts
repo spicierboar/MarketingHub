@@ -17,6 +17,9 @@ import {
 } from "@/lib/auto-onboarding";
 import { SOCIAL_PLATFORMS } from "@/lib/types";
 
+// TODO(Agent C): optional enrichment apply — merge enrichment patches into preview
+// or extend applyExtractedFields when enrichment-actions.ts ships.
+
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }

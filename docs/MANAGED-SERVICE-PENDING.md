@@ -17,6 +17,8 @@ Showstoppers and deferred product work that are **out of scope for the current m
 - `managed_exceptions` auto-schedule (only `fully_managed` gets `schedule_approved` in wave 3)
 - Photo marketplace webhook settlement gap (if still open)
 - Off-session auto top-up card charge (needs saved payment method; manual Checkout top-up shipped)
+- Tax-invoice seller letterhead env (`TAX_INVOICE_SELLER_ABN` / name / address / email) — falls back to tenant name until set
+- Full client self-serve signup funnel (payment/plan in 90s) — **pre-fill wave shipped** (scrape deepen + templates + ABN/Places + Looks-correct); see `docs/SIGNUP-PREFILL-WAVE.md`
 
 ## Done this arc
 
