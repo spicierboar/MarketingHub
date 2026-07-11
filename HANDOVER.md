@@ -1,32 +1,31 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **W7 DONE** · **AI CAMPAIGN LAYER + DEFERRED READY** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **W7 DONE** · **AI LAYER COMMITTED** · **W6 WAITING ON GOOGLE**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ `ea7bfbf` (company tools by business type) · live flags **OFF** · ahead of origin by **8**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` @ `6360e83` (+ handover refresh) · live flags **OFF** · ahead of origin by **9+**
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
 > | W0–W5 | DONE | `w5_complete=yes` |
-> | **W7** | **DONE** | M50–M55 + M01-FINAL · fixtures **252/252 + 20/20** · `w7_complete=yes` |
+> | **W7** | **DONE** | M50–M55 + M01-FINAL · `w7_complete=yes` |
 > | **W6** | **WAITING** | Owner Google Cloud billing — **do not flip `*_LIVE`** |
 >
 > **Ledger:** `docs/parallel/PROGRESS.md` · **AI layer doc:** `docs/AI-CAMPAIGN-LAYER.md` · **Handoff:** `docs/parallel/M01-FINAL-handoff.md`
 >
-> **Fixtures (M01-FINAL baseline):** self-test **252/252** · queue-test **20/20** (`npx tsx scripts/run-fixtures.mjs`) — plus new suite checks (ai-campaign-layer 5/5, rbac, experiments, privacy, spend) wired into isolation; **re-run full fixtures after commit**
+> **Fixtures (post AI-layer commit):** self-test **265/265** · queue-test **20/20** (`npx tsx scripts/run-fixtures.mjs`) — includes ai-campaign-layer, rbac, experiments, privacy, spend
 >
-> **Owner migrations PASTED:** W2–W5 + `0034_bookings` + `0034_learning` + **`0035_ai_campaign_layer`** + batch **`_owner_paste_0036_0037_batch`** (RBAC capabilities · campaign experiments · privacy DSR)
+> **Owner migrations PASTED:** W2–W5 + `0034_bookings` + `0034_learning` + **`0035_ai_campaign_layer`** + batch **`_owner_paste_0036_0037_batch`** (RBAC · experiments · privacy)
 >
 > **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. Isolation · `appEnv()` · OAuth-only · never force-push main. AI never auto-publishes / auto-spends / activates promotions without human gate.
 >
-> ### UNCOMMITTED (large — commit when owner asks)
+> ### COMMITTED this arc
 >
-> Company IA + AI campaign layer + deferred readiness (exclude integrator temps + `_owner_paste_*`):
-> - **Company workspace IA:** slim agency sidebar · company tools hub (business-type / add-on gated) · vertical lifecycle list on `/companies` · `?company=` filter pass
-> - **AI campaign layer:** orchestrator plan/optimise/decide · structured recs · approval policies · prompt registry · `/campaigns` AI review + optimise · `docs/AI-CAMPAIGN-LAYER.md`
-> - **Deferred (built, flag-safe):** `/ai-prompts` · additive RBAC capabilities · calendar DnD reschedule (critique-gated) · campaign A/B experiments · `/privacy` DSR · connector capability matrix · approval-gated spend (propose→accept→apply)
-> - **Also:** approvals triage assist · email/SMS Draft with AI · schedule-at-best-time
-> - Prefer: `npx next dev -p 3002` · Demo: `/dev` seed + `admin@wattlegroup.dev` (BrightSpark: `sasha@brightspark.dev`)
-> - **Exclude from commit:** `scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`
+> - `ddbda68` / `ea7bfbf` — company-scoped nav + business-type tools
+> - **`6360e83`** — AI campaign layer + deferred suite (prompts, RBAC, calendar DnD, experiments, privacy, connectors, spend gate) + company lifecycle / filters / approvals assist / email-SMS AI / schedule-at-best-time
+>
+> **Still untracked (do not commit):** `scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`
+>
+> **Verified surfaces:** `/ai-prompts` · `/privacy` · calendar DnD → `rescheduleOne` (critique) · campaign experiments panel · `/ads` propose→accept→apply
 >
 > **Local demo:**
 > ```
@@ -39,9 +38,8 @@
 > ```
 >
 > **NEXT:**
-> 1. **Owner:** commit uncommitted AI/IA work (or ask agent to commit) — then optional push
-> 2. **Until Google GO:** park live cutover; optional polish only
-> 3. **When Google billing is GO:** W6 OWNER-OPS (`docs/parallel/M-OWNER-OPS-prompt.md` / `docs/OWNER-LIVE-CUTOVER.md`) → M45 verify → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE` together
+> 1. **Until Google GO:** park live cutover; optional push of ahead commits; optional UI polish only
+> 2. **When Google billing is GO:** W6 OWNER-OPS (`docs/parallel/M-OWNER-OPS-prompt.md` / `docs/OWNER-LIVE-CUTOVER.md`) → M45 verify → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE` together
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
@@ -53,6 +51,12 @@
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, AI CAMPAIGN LAYER + DEFERRED READY · uncommitted) — archived
+>
+> Large uncommitted AI/IA tree; fixtures baseline was 252/252 + 20/20; then committed as `6360e83` → fixtures **265/265 + 20/20**.
 >
 > ---
 >
