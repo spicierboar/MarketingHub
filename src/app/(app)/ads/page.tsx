@@ -14,6 +14,10 @@ import { recommendAllocation } from "@/lib/ai/allocation";
 import { targetingSummary, estimateReach } from "@/lib/targeting";
 import { adsLive } from "@/lib/ad-connectors";
 import { isTenantOwner } from "@/lib/auth/rbac";
+import {
+  MIN_CREDIT_FLOOR_USD,
+  getCreditBalance,
+} from "@/lib/credit-wallet";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -149,6 +153,10 @@ export default async function AdsPage({
       }),
     );
   }
+
+  const creditBalanceUsd = sel ? await getCreditBalance(sel.company.id) : null;
+  const creditBelowFloor =
+    creditBalanceUsd != null && creditBalanceUsd < MIN_CREDIT_FLOOR_USD;
 
   return (
     <div>
@@ -332,6 +340,30 @@ export default async function AdsPage({
               </CardContent>
             </Card>
 
+            {creditBalanceUsd != null && (
+              <Card className={creditBelowFloor ? "border-amber-300" : undefined}>
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Account credit</p>
+                    <p className="mt-0.5 text-xl font-semibold">{money2(creditBalanceUsd)}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge tone={creditBelowFloor ? "warning" : "success"}>
+                      {creditBelowFloor
+                        ? `Below $${MIN_CREDIT_FLOOR_USD} minimum`
+                        : "At or above floor"}
+                    </Badge>
+                    {creditBelowFloor ? (
+                      <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                        Paid ads stay paused until the client tops up in portal Billing
+                        (/client/payments).
+                      </p>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Budget + fee terms */}
               <Card>
@@ -359,7 +391,8 @@ export default async function AdsPage({
                     <Button type="submit" size="sm">Save budget</Button>
                   </form>
                   <p className="mt-3 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-                    We invoice only the management fee via Stripe. The ad spend is charged to the client&apos;s own card by the platform — we never hold it.
+                    We invoice the management fee via Stripe. Prepaid account credit gates paid
+                    activation; platforms may still bill connected ad accounts for delivery.
                   </p>
                 </CardContent>
               </Card>

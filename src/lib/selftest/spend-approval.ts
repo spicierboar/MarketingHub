@@ -15,6 +15,7 @@ import {
   applySpendChange,
   proposeAllocationSpendChange,
 } from "@/lib/spend-approval";
+import { topUpCredit } from "@/lib/credit-wallet";
 import { encryptToken } from "@/lib/crypto";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 import type { ActingUser, User } from "@/lib/types";
@@ -107,6 +108,13 @@ export async function checkSpendApplyRequiresApproval(): Promise<{
     await updateAiCampaignRecommendation(rec.id, {
       humanDecision: "accepted",
       humanDecisionAt: new Date().toISOString(),
+    });
+
+    await topUpCredit({
+      companyId: company.id,
+      amountUsd: 200,
+      user,
+      reason: "Self-test prepaid credit for spend apply",
     });
 
     await applySpendChange({

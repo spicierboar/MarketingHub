@@ -40,7 +40,7 @@ Never without the human path:
 ## Payments (track)
 
 - **C1 (now):** delegated ad spend + SaaS Stripe billing
-- **C2 (deferred):** prepaid credit wallet (e.g. $10) — not in this wave
+- **C2 (shipping):** prepaid company credit wallet with **$50 minimum floor**, ledger, simulated auto top-up (no Stripe charge yet); gates activate/spend paths via `assertPrepaidCredit`
 
 Parked showstoppers and deferred product work: [`MANAGED-SERVICE-PENDING.md`](./MANAGED-SERVICE-PENDING.md).
 

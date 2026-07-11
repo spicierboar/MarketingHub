@@ -1,13 +1,26 @@
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { getAdBudget, getCompany, getTenant, listAdCampaigns } from "@/lib/db";
+import {
+  MIN_CREDIT_FLOOR_USD,
+  getOrCreateCreditWallet,
+} from "@/lib/credit-wallet";
 import { planFor } from "@/lib/plans";
 import { AD_PLATFORMS } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/form";
+import {
+  saveClientAutoTopUpAction,
+  topUpClientCreditAction,
+} from "./actions";
 
 const money = (x: number) =>
   `$${Math.round(x).toLocaleString("en-AU", { maximumFractionDigits: 0 })}`;
+
+const money2 = (x: number) =>
+  `$${x.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const platformLabel = (key: string) =>
   AD_PLATFORMS.find((p) => p.key === key)?.label ?? key;
@@ -18,11 +31,12 @@ function looksLikeEmail(value: string): boolean {
 
 export default async function ClientPaymentsPage() {
   const { user, companyId } = await requirePortalUser();
-  const [tenant, company, budget, campaigns] = await Promise.all([
+  const [tenant, company, budget, campaigns, wallet] = await Promise.all([
     getTenant(user.tenantId),
     getCompany(companyId),
     getAdBudget(companyId),
     listAdCampaigns(user.tenantId, companyId),
+    getOrCreateCreditWallet(companyId),
   ]);
 
   const plan = planFor(tenant?.plan);
@@ -36,16 +50,137 @@ export default async function ClientPaymentsPage() {
   const approvalContact = company?.profile.approvalContact?.trim() ?? "";
   const supportMailto = looksLikeEmail(approvalContact) ? approvalContact : null;
 
+  const balanceOk = wallet.balanceUsd >= MIN_CREDIT_FLOOR_USD;
+
   return (
     <div>
       <PageHeader
         title="Billing"
-        description="Your plan and advertising budget at a glance."
+        description="Account credit, plan overview, and advertising budget."
       />
 
       <div className="space-y-8 p-6">
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Overview</h2>
+          <h2 className="text-lg font-semibold">Account credit</h2>
+          <Card>
+            <CardContent className="space-y-6 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Available balance</p>
+                  <p className="mt-1 text-4xl font-semibold tracking-tight">
+                    {money2(wallet.balanceUsd)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Minimum required: {money2(MIN_CREDIT_FLOOR_USD)}
+                  </p>
+                </div>
+                <Badge tone={balanceOk ? "success" : "danger"}>
+                  {balanceOk ? "OK" : "Below minimum — paid ads paused"}
+                </Badge>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Prepaid credit must stay at or above {money2(MIN_CREDIT_FLOOR_USD)} before paid
+                campaigns can activate. Ad platforms may still bill connected ad accounts for
+                delivery.
+              </p>
+
+              <div className="rounded-md border border-border p-4">
+                <p className="mb-3 text-sm font-medium">Add credit (simulated)</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Demo top-up only — no card is captured here.
+                </p>
+                <form action={topUpClientCreditAction} className="flex flex-wrap items-end gap-3">
+                  <input type="hidden" name="companyId" value={companyId} />
+                  <Field label="Amount (USD)" htmlFor="topUpAmount">
+                    <Input
+                      id="topUpAmount"
+                      name="amountUsd"
+                      type="number"
+                      min="1"
+                      step="1"
+                      defaultValue={100}
+                      className="w-36"
+                      required
+                    />
+                  </Field>
+                  <Button type="submit" size="sm">
+                    Add credit
+                  </Button>
+                </form>
+              </div>
+
+              <div className="rounded-md border border-border p-4">
+                <p className="mb-3 text-sm font-medium">Auto top-up</p>
+                <form action={saveClientAutoTopUpAction} className="space-y-4">
+                  <input type="hidden" name="companyId" value={companyId} />
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="autoTopUpEnabled"
+                      value="on"
+                      defaultChecked={wallet.autoTopUpEnabled}
+                      className="h-4 w-4"
+                    />
+                    Enable auto top-up when balance is low
+                  </label>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Field label="Trigger balance (USD)" htmlFor="triggerBal">
+                      <Input
+                        id="triggerBal"
+                        name="topUpTriggerBalanceUsd"
+                        type="number"
+                        min="0"
+                        step="1"
+                        defaultValue={wallet.topUpTriggerBalanceUsd}
+                        required
+                      />
+                    </Field>
+                    <Field label="Top-up amount (USD)" htmlFor="topUpAmt">
+                      <Input
+                        id="topUpAmt"
+                        name="topUpAmountUsd"
+                        type="number"
+                        min="1"
+                        step="1"
+                        defaultValue={wallet.topUpAmountUsd}
+                        required
+                      />
+                    </Field>
+                    <Field label="Max top-up amount (USD)" htmlFor="maxTopUp">
+                      <Input
+                        id="maxTopUp"
+                        name="maxTopUpAmountUsd"
+                        type="number"
+                        min="1"
+                        step="1"
+                        defaultValue={wallet.maxTopUpAmountUsd}
+                        required
+                      />
+                    </Field>
+                    <Field label="Max top-ups per day" htmlFor="maxPerDay">
+                      <Input
+                        id="maxPerDay"
+                        name="maxTopUpPerDay"
+                        type="number"
+                        min="1"
+                        step="1"
+                        defaultValue={wallet.maxTopUpPerDay}
+                        required
+                      />
+                    </Field>
+                  </div>
+                  <Button type="submit" size="sm" variant="outline">
+                    Save auto top-up settings
+                  </Button>
+                </form>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Subscription &amp; plan</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardContent className="p-6">
@@ -58,11 +193,11 @@ export default async function ClientPaymentsPage() {
                   </p>
                 ) : null}
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Your agency manages billing on the {plan.name} plan
+                  Your agency manages SaaS billing on the {plan.name} plan
                   {plan.priceAudMonthly > 0
                     ? ` (from ${money(plan.priceAudMonthly)}/mo).`
                     : "."}{" "}
-                  This portal is read-only for billing.
+                  Plan changes stay agency-managed.
                 </p>
                 <p className="mt-3 text-sm text-muted-foreground">
                   {supportMailto ? (
@@ -94,8 +229,8 @@ export default async function ClientPaymentsPage() {
                       <span className="text-base font-normal text-muted-foreground"> / month</span>
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Your agreed monthly advertising budget. Platforms bill your ad accounts
-                      directly — we don&apos;t hold ad credit here.
+                      Your agreed monthly advertising budget. Prepaid credit gates activation;
+                      platforms may still bill connected ad accounts for delivery.
                     </p>
                     {allocationEntries.length > 0 ? (
                       <ul className="mt-4 space-y-1 text-sm">
@@ -132,7 +267,7 @@ export default async function ClientPaymentsPage() {
             <Card>
               <CardContent className="p-4 text-sm text-muted-foreground">
                 Ask your agency if a payment failed — we don&apos;t show failed-payment details here
-                when billing is agency-managed.
+                when SaaS billing is agency-managed.
               </CardContent>
             </Card>
           ) : null}
@@ -196,7 +331,7 @@ export default async function ClientPaymentsPage() {
               )}
               <p className="text-xs text-muted-foreground">
                 Daily campaign limits are set with your agency. Changes need approval before they go
-                live.
+                live. Balance must stay at or above {money2(MIN_CREDIT_FLOOR_USD)}.
               </p>
             </CardContent>
           </Card>
@@ -208,7 +343,8 @@ export default async function ClientPaymentsPage() {
             <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
               <p>
                 Subscription invoices come from your agency. Ask them for copies — they aren&apos;t
-                listed here. Ad charges appear on your Google Ads / Meta statements.
+                listed here. Platform ad delivery may also appear on your Google Ads / Meta
+                statements.
               </p>
               <p>
                 {supportMailto ? (
@@ -256,7 +392,7 @@ export default async function ClientPaymentsPage() {
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {budget
-                    ? `Based on your monthly ad budget of ${money(budget.monthlyBudgetUsd)}, platforms may bill roughly that amount over the month. This is an estimate only.`
+                    ? `Based on your monthly ad budget of ${money(budget.monthlyBudgetUsd)}, platforms may bill roughly that amount over the month. Prepaid credit is separate and must stay at or above ${money2(MIN_CREDIT_FLOOR_USD)}. This is an estimate only.`
                     : "No monthly ad budget is set, so there is no estimated ad spend to show."}
                 </p>
               </div>

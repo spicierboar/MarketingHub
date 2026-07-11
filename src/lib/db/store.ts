@@ -40,6 +40,8 @@ import type {
   Company,
   PrivacyRequest,
   ManagedDeliveryRun,
+  CompanyCreditWallet,
+  CompanyCreditLedgerEntry,
   CompanyEntitlement,
   MenuDesign,
   OrderMenuItem,
@@ -239,6 +241,9 @@ export interface DataStore {
   privacyRequests: PrivacyRequest[];
   // Managed service delivery (0038)
   managedDeliveryRuns: ManagedDeliveryRun[];
+  // Prepaid credit wallet (0039)
+  companyCreditWallets: CompanyCreditWallet[];
+  companyCreditLedger: CompanyCreditLedgerEntry[];
   tasks: Task[];
   // V1 module 11: AI-MOS opportunities
   aiMosOpportunities: AiMosOpportunity[];
@@ -2041,6 +2046,37 @@ function seed(): DataStore {
     campaignPerformanceSnapshots: [],
     privacyRequests: [],
     managedDeliveryRuns: [],
+    companyCreditWallets: [
+      {
+        id: "cw_dental",
+        tenantId: "t_bright",
+        companyId: "c_dental",
+        balanceUsd: 200,
+        minFloorUsd: 50,
+        autoTopUpEnabled: false,
+        topUpTriggerBalanceUsd: 50,
+        topUpAmountUsd: 100,
+        maxTopUpAmountUsd: 500,
+        maxTopUpPerDay: 3,
+        createdAt: t,
+        updatedAt: t,
+      },
+      {
+        id: "cw_florist",
+        tenantId: "t_bright",
+        companyId: "c_florist",
+        balanceUsd: 0,
+        minFloorUsd: 50,
+        autoTopUpEnabled: false,
+        topUpTriggerBalanceUsd: 50,
+        topUpAmountUsd: 100,
+        maxTopUpAmountUsd: 500,
+        maxTopUpPerDay: 3,
+        createdAt: t,
+        updatedAt: t,
+      },
+    ],
+    companyCreditLedger: [],
     tasks: [],
     aiMosOpportunities: [],
     aiMosSignalRuns: [],

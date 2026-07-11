@@ -40,6 +40,9 @@ import type {
   ApprovalPolicy, AiCampaignRecommendation, AiOrchestrationRun, AiPromptVersion, CampaignPerformanceSnapshot,
   PrivacyRequest,
   ManagedDeliveryRun,
+  CompanyCreditWallet,
+  CompanyCreditLedgerEntry,
+  CreditLedgerKind,
 
   CompanyAccess, CompanyEntitlement, ConsentRecord, ContentComment, ContentItem, EvidenceRecord,
   KnowledgeDocument, KnowledgeGap, Lead, LegalHold, LocalAreaProfile,   MarketingRequest,
@@ -2724,6 +2727,82 @@ export const supabaseRepo = {
       .select("*")
       .maybeSingle();
     return data ? toDomain<ManagedDeliveryRun>(data) : undefined;
+  },
+
+  // ---- Prepaid company credit wallet (0039) ----------------------------------
+  async getCompanyCreditWallet(companyId: string): Promise<CompanyCreditWallet | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("company_credit_wallets")
+      .select("*")
+      .eq("company_id", companyId)
+      .maybeSingle();
+    return data ? toDomain<CompanyCreditWallet>(data) : undefined;
+  },
+  async createCompanyCreditWallet(
+    input: Omit<CompanyCreditWallet, "id" | "createdAt" | "updatedAt">,
+  ): Promise<CompanyCreditWallet> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const existing = await this.getCompanyCreditWallet(input.companyId);
+    if (existing) return existing;
+    const { data, error } = await sb
+      .from("company_credit_wallets")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createCompanyCreditWallet: " + error.message);
+    return toDomain<CompanyCreditWallet>(data);
+  },
+  async updateCompanyCreditWallet(
+    walletId: string,
+    patch: Partial<
+      Pick<
+        CompanyCreditWallet,
+        | "balanceUsd"
+        | "minFloorUsd"
+        | "autoTopUpEnabled"
+        | "topUpTriggerBalanceUsd"
+        | "topUpAmountUsd"
+        | "maxTopUpAmountUsd"
+        | "maxTopUpPerDay"
+      >
+    >,
+  ): Promise<CompanyCreditWallet | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("company_credit_wallets")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", walletId)
+      .select("*")
+      .maybeSingle();
+    return data ? toDomain<CompanyCreditWallet>(data) : undefined;
+  },
+  async createCompanyCreditLedgerEntry(
+    input: Omit<CompanyCreditLedgerEntry, "id" | "createdAt">,
+  ): Promise<CompanyCreditLedgerEntry> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb
+      .from("company_credit_ledger")
+      .insert(toRow(input))
+      .select("*")
+      .single();
+    if (error) throw new Error("createCompanyCreditLedgerEntry: " + error.message);
+    return toDomain<CompanyCreditLedgerEntry>(data);
+  },
+  async listCompanyCreditLedger(
+    companyId: string,
+    opts?: { kind?: CreditLedgerKind; since?: string },
+  ): Promise<CompanyCreditLedgerEntry[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb
+      .from("company_credit_ledger")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false });
+    if (opts?.kind) q = q.eq("kind", opts.kind);
+    if (opts?.since) q = q.gte("created_at", opts.since);
+    const { data } = await q;
+    return many<CompanyCreditLedgerEntry>(data);
   },
 
   // ---- Campaign A/B experiments (0036) ---------------------------------------

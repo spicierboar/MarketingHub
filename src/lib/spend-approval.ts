@@ -14,6 +14,10 @@ import {
   upsertAdBudget,
 } from "@/lib/db";
 import { recommendAllocation } from "@/lib/ai/allocation";
+import {
+  assertPrepaidCredit,
+  maybeAutoTopUp,
+} from "@/lib/credit-wallet";
 import { AD_PLATFORMS } from "@/lib/types";
 import type {
   ActingUser,
@@ -194,6 +198,9 @@ export async function applySpendChange(input: ApplySpendChangeInput): Promise<Ad
       "Spend change blocked: accept an AI recommendation first, or provide dual confirmation. AI cannot move budget without approval.",
     );
   }
+
+  await maybeAutoTopUp(input.companyId, input.user);
+  await assertPrepaidCredit(input.companyId);
 
   const updated = await upsertAdBudget({
     companyId: input.companyId,

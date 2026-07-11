@@ -39,6 +39,10 @@ import {
   proposeAllocationSpendChange,
 } from "@/lib/spend-approval";
 import {
+  assertPrepaidCredit,
+  maybeAutoTopUp,
+} from "@/lib/credit-wallet";
+import {
   adsLive,
   dispatchCampaignSync,
   type CampaignLifecycleOp,
@@ -235,6 +239,8 @@ export async function saveBudgetAction(formData: FormData) {
 
   const existing = await getAdBudget(companyId);
   const allocation = existing?.allocation ?? {};
+  await maybeAutoTopUp(companyId, user);
+  await assertPrepaidCredit(companyId, { user });
   await upsertAdBudget({
     companyId,
     monthlyBudgetUsd,
@@ -397,6 +403,10 @@ export async function updateAdCampaignStatusAction(formData: FormData) {
   if (!campaign) throw new Error("Campaign not found");
   if (!(await canAccessCompany(user, campaign.companyId))) {
     throw new Error("Forbidden: no access to this company");
+  }
+  if (status === "active") {
+    await maybeAutoTopUp(campaign.companyId, user);
+    await assertPrepaidCredit(campaign.companyId, { user });
   }
   const op: CampaignLifecycleOp =
     status === "active"

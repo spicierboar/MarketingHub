@@ -108,6 +108,9 @@ import type {
   PrivacyRequestStatus,
   PrivacyRequestType,
   ManagedDeliveryRun,
+  CompanyCreditWallet,
+  CompanyCreditLedgerEntry,
+  CreditLedgerKind,
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
@@ -773,6 +776,8 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.calendarAssistSuggestions = keepTenant(s.calendarAssistSuggestions);
   s.privacyRequests = keepCompany(s.privacyRequests ?? []);
   s.managedDeliveryRuns = keepCompany(s.managedDeliveryRuns ?? []);
+  s.companyCreditWallets = keepCompany(s.companyCreditWallets ?? []);
+  s.companyCreditLedger = keepCompany(s.companyCreditLedger ?? []);
   s.aiCampaignRecommendations = keepCompany(s.aiCampaignRecommendations ?? []);
   s.aiOrchestrationRuns = keepCompany(s.aiOrchestrationRuns ?? []);
   s.approvalPolicies = keepTenant(s.approvalPolicies ?? []);
@@ -3956,6 +3961,82 @@ export async function updateManagedDeliveryRun(
 }
 
 export type { ManagedDeliveryRun };
+
+// ---- Prepaid company credit wallet (0039) ------------------------------------
+
+export async function getCompanyCreditWallet(
+  companyId: string,
+): Promise<CompanyCreditWallet | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.getCompanyCreditWallet(companyId);
+  return (db().companyCreditWallets ?? []).find((w) => w.companyId === companyId);
+}
+
+export async function createCompanyCreditWallet(
+  input: Omit<CompanyCreditWallet, "id" | "createdAt" | "updatedAt">,
+): Promise<CompanyCreditWallet> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCompanyCreditWallet(input);
+  const existing = (db().companyCreditWallets ?? []).find(
+    (w) => w.companyId === input.companyId,
+  );
+  if (existing) return existing;
+  const t = now();
+  const row: CompanyCreditWallet = {
+    ...input,
+    id: id("cw"),
+    createdAt: t,
+    updatedAt: t,
+  };
+  (db().companyCreditWallets ??= []).push(row);
+  return row;
+}
+
+export async function updateCompanyCreditWallet(
+  walletId: string,
+  patch: Partial<
+    Pick<
+      CompanyCreditWallet,
+      | "balanceUsd"
+      | "minFloorUsd"
+      | "autoTopUpEnabled"
+      | "topUpTriggerBalanceUsd"
+      | "topUpAmountUsd"
+      | "maxTopUpAmountUsd"
+      | "maxTopUpPerDay"
+    >
+  >,
+): Promise<CompanyCreditWallet | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateCompanyCreditWallet(walletId, patch);
+  const row = (db().companyCreditWallets ?? []).find((w) => w.id === walletId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function createCompanyCreditLedgerEntry(
+  input: Omit<CompanyCreditLedgerEntry, "id" | "createdAt">,
+): Promise<CompanyCreditLedgerEntry> {
+  if (isSupabaseConfigured()) return supabaseRepo.createCompanyCreditLedgerEntry(input);
+  const row: CompanyCreditLedgerEntry = {
+    ...input,
+    id: id("cle"),
+    createdAt: now(),
+  };
+  (db().companyCreditLedger ??= []).push(row);
+  return row;
+}
+
+export async function listCompanyCreditLedger(
+  companyId: string,
+  opts?: { kind?: CreditLedgerKind; since?: string },
+): Promise<CompanyCreditLedgerEntry[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listCompanyCreditLedger(companyId, opts);
+  let rows = (db().companyCreditLedger ?? []).filter((e) => e.companyId === companyId);
+  if (opts?.kind) rows = rows.filter((e) => e.kind === opts.kind);
+  if (opts?.since) rows = rows.filter((e) => e.createdAt >= opts.since!);
+  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export type { CompanyCreditWallet, CompanyCreditLedgerEntry, CreditLedgerKind };
 
 // ---- Campaign A/B experiments (0036_campaign_experiments) --------------------
 

@@ -3236,3 +3236,36 @@ export interface ManagedDeliveryRun {
   updatedAt: string;
 }
 
+// ---- Prepaid company credit wallet (C2) --------------------------------------
+export interface CompanyCreditWallet {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  balanceUsd: number;
+  minFloorUsd: number; // default 50
+  autoTopUpEnabled: boolean;
+  topUpTriggerBalanceUsd: number; // e.g. 50
+  topUpAmountUsd: number; // e.g. 100
+  maxTopUpAmountUsd: number;
+  maxTopUpPerDay: number;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export type CreditLedgerKind = "top_up" | "debit" | "adjustment" | "refund" | "auto_top_up";
+
+export interface CompanyCreditLedgerEntry {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  walletId: string;
+  kind: CreditLedgerKind;
+  amountUsd: number; // signed: + credit, - debit
+  balanceAfterUsd: number;
+  reason: string;
+  relatedType?: string;
+  relatedId?: string;
+  createdById?: string;
+  createdAt: string;
+}
+

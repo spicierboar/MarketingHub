@@ -29,6 +29,9 @@ const NUMERIC_COLS = new Set([
   "est_cost_usd", "ai_monthly_cap_usd", "size_bytes", "size",
   // Module 6 paid-advertising money/fraction columns (numeric in Postgres).
   "monthly_budget_usd", "daily_budget_usd", "fee_percent", "fee_flat_usd", "value_usd",
+  // Prepaid credit wallet (0039)
+  "balance_usd", "min_floor_usd", "top_up_trigger_balance_usd", "top_up_amount_usd",
+  "max_top_up_amount_usd", "amount_usd", "balance_after_usd",
   // AI campaign layer (0035) numeric columns.
   "budget_amount", "daily_spend_limit", "discount_amount", "discount_percentage",
   "minimum_purchase_amount", "maximum_discount", "temperature",

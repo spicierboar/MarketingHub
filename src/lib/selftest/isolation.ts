@@ -266,6 +266,11 @@ import {
 } from "@/lib/selftest/rolling-calendar";
 import { checkSpendApplyRequiresApproval } from "@/lib/selftest/spend-approval";
 import {
+  checkCreditAutoTopUpWhenBelowTrigger,
+  checkCreditFloorBlocksBelowMin,
+  checkCreditTopUpThenAssertPasses,
+} from "@/lib/selftest/credit-wallet";
+import {
   checkLogRecordsDedupeKey,
   checkRetrySkipsWhenAlreadyPublished,
   checkStaleClaimSafeRecovery,
@@ -1072,6 +1077,12 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
 
     await expect("spendApproval.applyRequiresAccept", () => checkSpendApplyRequiresApproval());
+
+    await expect("creditWallet.floorBlocksBelowMin", () => checkCreditFloorBlocksBelowMin());
+    await expect("creditWallet.topUpThenAssertPasses", () => checkCreditTopUpThenAssertPasses());
+    await expect("creditWallet.autoTopUpWhenBelowTrigger", () =>
+      checkCreditAutoTopUpWhenBelowTrigger(),
+    );
 
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());
 

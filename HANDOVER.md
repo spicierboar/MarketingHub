@@ -1,39 +1,31 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **MANAGED-SERVICE WAVE 3** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-11, **C2 CREDIT $50** · **W6 WAITING ON GOOGLE**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` · live flags **OFF**
 >
 > | Wave | Status | Notes |
 > |------|--------|-------|
-> | W0–W5 | DONE | `w5_complete=yes` |
-> | **W7** | **DONE** | `w7_complete=yes` |
-> | **Managed service** | **WAVE 3** | Wave 2 + UX polish (Help · Payments C1) · pending doc · fully_managed critique-gated auto-schedule (same wave if landing) |
-> | **W6** | **WAITING** | Owner Google Cloud billing — **do not flip `*_LIVE`** |
+> | W0–W5 + W7 | DONE | - |
+> | **Managed service** | **SHIPPED** | foundation → wave 3 + agency exception desk + 2-user demo |
+> | **C2 credit** | **SHIPPED** | $50 floor · ledger · simulated top-up · gates on activate/spend |
+> | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
 >
-> **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **Pending:** `docs/MANAGED-SERVICE-PENDING.md` · **AI layer:** `docs/AI-CAMPAIGN-LAYER.md`
+> **Ledger:** `docs/parallel/PROGRESS.md` · **Model:** `docs/MANAGED-SERVICE-MODEL.md` · **Pending:** `docs/MANAGED-SERVICE-PENDING.md`
 >
-> **Fixtures:** self-test **273/273** · queue-test **20/20**
+> **Fixtures:** self-test **276/276** · queue-test **20/20**
 >
-> **Owner migrations PASTED:** … + `0035`–`0037` + **`0038_managed_delivery`** (2026-07-11). No new migration this wave (profile jsonb + existing assets).
+> **Owner migrations PASTED:** … + **0038**. **NEW — paste:**  
+> `notepad F:\MarketingHub\command-centre\supabase\migrations\0039_prepaid_credit.sql`
 >
-> **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. AI never auto-publishes / auto-spends. Payments **C1**; prepaid credit **C2 deferred**.
+> **Hard locks:** Do **NOT** flip `*_LIVE` until W6 GO. Critique gate untouched. AI never auto-publishes / auto-spends.
 >
-> ### SHIPPED (managed service)
->
-> - Foundation: model · delivery runner · `/client/calendar` · `/client/payments` · 24h enqueue
-> - Wave 2: rolling calendar maintainer (assist-only) · `/client/assets` · exception email on blocked/failed · admin service-level on `/companies/[id]`
-> - Wave 3: `/client/help` · richer Payments C1 · `fully_managed` critique-gated auto-schedule · `docs/MANAGED-SERVICE-PENDING.md`
-> - UX: client portal review-first nav (Home → Approvals → Calendar → Results → Files → Billing → Ask us → Help); agency “Create” → “Delivery”
-> - Fixtures **273/273**
->
-> **Still untracked (do not commit):** `scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`
->
-> **Local demo:** `npx next dev -p 3002` · `/dev` → **Agency** `sasha@brightspark.dev` · **Client** `liam@brightspark.dev`
+> **Local demo:** `/dev` → **Agency** `sasha@brightspark.dev` · **Client** `liam@brightspark.dev` (Dental seed credit $200)
 >
 > **NEXT:**
-> 1. Park live cutover until Google GO — see `docs/MANAGED-SERVICE-PENDING.md`
-> 2. When Google GO: W6 OWNER-OPS → M45 → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE`
+> 1. Owner paste **0039_prepaid_credit**
+> 2. Park live cutover until Google GO
+> 3. Deferred: Stripe charge for wallet top-up · tax-invoice suite
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
