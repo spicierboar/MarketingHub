@@ -26,7 +26,7 @@ Last updated: 2026-07-11 (**MANAGED-SERVICE FOUNDATION** · **W6 WAITING ON GOOG
 - Payments: **C1** (delegated ads + SaaS Stripe); C2 prepaid credit deferred
 - Delivery runner on cron + onboarding/sales enqueue → draft campaign + calendar suggestions only
 - Client: `/client/calendar`, `/client/payments`, status copy
-- Migration **0038_managed_delivery** — owner paste pending
+- Migration **0038_managed_delivery** — **owner pasted** (2026-07-11)
 - Fixtures: **268/268** + **20/20**
 
 ## Wave 6 — WAITING ON GOOGLE
@@ -39,4 +39,4 @@ When GO → OWNER-OPS + M45 → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS
 
 ## Owner ops
 
-Phases 1-2 done · Phase 3 Google blocked · Phase 4 parked · paste **0038**
+Phases 1-2 done · Phase 3 Google blocked · Phase 4 parked · **0038 pasted**

@@ -15,8 +15,7 @@
 >
 > **Fixtures:** self-test **268/268** · queue-test **20/20** (`npx tsx scripts/run-fixtures.mjs`)
 >
-> **Owner migrations PASTED:** … + `0035`–`0037`. **NEW — paste:**  
-> `notepad F:\MarketingHub\command-centre\supabase\migrations\0038_managed_delivery.sql`
+> **Owner migrations PASTED:** … + `0035`–`0037` + **`0038_managed_delivery`** (2026-07-11).
 >
 > **Hard locks:** Do **NOT** flip any `*_LIVE` until W6 owner GO. Critique gate untouched. AI never auto-publishes / auto-spends. `fully_managed` = pre-authorised low-risk + critique — not unsupervised publish. Payments = **C1** (delegated ads + SaaS Stripe); prepaid credit **C2 deferred**.
 >
@@ -32,10 +31,9 @@
 > **Local demo:** `npx next dev -p 3002` · `/dev` + `admin@wattlegroup.dev`
 >
 > **NEXT:**
-> 1. Owner paste **0038_managed_delivery**
-> 2. Continue: rolling calendar maintainer · client asset upload · exception-only notify · admin service-level UI
-> 3. Until Google GO: park live cutover
-> 4. When Google GO: W6 OWNER-OPS → M45 → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE`
+> 1. Continue managed-service: rolling calendar maintainer · client asset upload · exception-only notify · admin service-level UI
+> 2. Until Google GO: park live cutover
+> 3. When Google GO: W6 OWNER-OPS → M45 → flip `PUBLISHING_LIVE` + `ADS_LIVE` + `ANALYTICS_LIVE`
 >
 > **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
 >
