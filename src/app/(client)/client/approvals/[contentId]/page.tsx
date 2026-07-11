@@ -27,14 +27,14 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
 
   return (
     <div>
-      <PageHeader title={content.title} description="Review before approving" />
+      <PageHeader title={content.title} description="Does this look right to go live?" />
       <div className="mx-auto max-w-3xl p-6">
         <Card>
           <CardContent className="p-6">
             <div className="mb-4 flex items-center justify-between">
               <Badge tone="neutral">{titleCase(content.type)}</Badge>
               <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-primary">
-                <ShieldCheck className="h-3.5 w-3.5" /> Compliance-checked
+                <ShieldCheck className="h-3.5 w-3.5" /> We&apos;ve checked this against your guidelines
               </span>
             </div>
             <article className="whitespace-pre-wrap rounded-md border border-border bg-background p-4 text-sm">{content.body}</article>
@@ -49,11 +49,13 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
             {!pending && (
               <div className="mt-6 rounded-md border border-border p-4 text-sm">
                 {content.status === "approved" || review?.status === "approved" ? (
-                  <p className="font-medium text-emerald-700">You approved this content.</p>
+                  <p className="font-medium text-emerald-700">You said this looks good — we&apos;ll take it from here.</p>
                 ) : review?.status === "changes_requested" ? (
-                  <p className="font-medium text-amber-700">Changes requested.{review.note && ` “${review.note}”`}</p>
+                  <p className="font-medium text-amber-700">
+                    You asked for changes{review.note ? `: “${review.note}”` : "."} We&apos;ll update it and send it back.
+                  </p>
                 ) : (
-                  <p className="text-muted-foreground">No longer awaiting approval.</p>
+                  <p className="text-muted-foreground">This one doesn&apos;t need your review anymore.</p>
                 )}
               </div>
             )}
@@ -61,18 +63,18 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
               <div className="mt-6 space-y-4">
                 <form action={portalApproveContentAction}>
                   <input type="hidden" name="contentId" value={content.id} />
-                  <Button type="submit" className="w-full">Approve this content</Button>
+                  <Button type="submit" className="w-full">Looks good — approve</Button>
                 </form>
                 <form action={portalRequestChangesAction} className="space-y-2">
                   <input type="hidden" name="contentId" value={content.id} />
-                  <Textarea name="note" placeholder="Request changes…" className="min-h-20" />
-                  <Button type="submit" variant="outline" className="w-full">Request changes</Button>
+                  <Textarea name="note" placeholder="What should we change?" className="min-h-20" />
+                  <Button type="submit" variant="outline" className="w-full">Ask for changes</Button>
                 </form>
               </div>
             )}
             {pending && !canApprove && (
               <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Undergoing internal review — you&apos;ll be asked to approve when ready.
+                Your team is still reviewing this internally — we&apos;ll ask you to approve when it&apos;s ready.
               </div>
             )}
           </CardContent>

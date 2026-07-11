@@ -52,13 +52,16 @@ Parked showstoppers and deferred product work: [`MANAGED-SERVICE-PENDING.md`](./
 
 ## Client portal surfaces (only)
 
-1. Approvals  
-2. Calendar  
-3. Payments  
-4. Help  
-5. Assets
+1. Home (status)  
+2. Approvals  
+3. Calendar  
+4. Results  
+5. Files  
+6. Billing  
+7. Ask us  
+8. Help  
 
-No self-serve publish console in the client portal.
+Nav is review-first. No self-serve publish console in the client portal.
 
 ## Hard locks (preserved)
 

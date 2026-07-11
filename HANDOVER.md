@@ -24,6 +24,7 @@
 > - Foundation: model · delivery runner · `/client/calendar` · `/client/payments` · 24h enqueue
 > - Wave 2: rolling calendar maintainer (assist-only) · `/client/assets` · exception email on blocked/failed · admin service-level on `/companies/[id]`
 > - Wave 3: `/client/help` · richer Payments C1 · `fully_managed` critique-gated auto-schedule · `docs/MANAGED-SERVICE-PENDING.md`
+> - UX: client portal review-first nav (Home → Approvals → Calendar → Results → Files → Billing → Ask us → Help); agency “Create” → “Delivery”
 > - Fixtures **273/273**
 >
 > **Still untracked (do not commit):** `scripts/*-isolation*`, `resolve-*.mjs`, `_owner_paste_*`, `temp-route-ours.ts`

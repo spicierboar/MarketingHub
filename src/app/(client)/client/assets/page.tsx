@@ -1,11 +1,12 @@
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany, listAssetsForCompany } from "@/lib/db";
+import { listAssetsForCompany } from "@/lib/db";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { titleCase } from "@/lib/utils";
 import { createClientAssetAction } from "./actions";
 
 const ASSET_TYPES: [string, string][] = [
@@ -16,6 +17,12 @@ const ASSET_TYPES: [string, string][] = [
   ["document", "Document"],
   ["audio", "Audio"],
 ];
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_approval: "Waiting for review",
+  approved: "Approved",
+  rejected: "Not approved",
+};
 
 function formatDate(iso: string): string {
   try {
@@ -29,29 +36,33 @@ function formatDate(iso: string): string {
   }
 }
 
+function statusTone(status: string): "neutral" | "primary" | "success" | "warning" | "danger" | "info" {
+  if (status === "approved") return "success";
+  if (status === "rejected") return "danger";
+  if (status === "pending_approval") return "warning";
+  return "neutral";
+}
+
 export default async function ClientAssetsPage() {
   const { user, companyId } = await requirePortalUser();
-  const [company, assets] = await Promise.all([
-    getCompany(companyId),
-    listAssetsForCompany(companyId),
-  ]);
+  const assets = await listAssetsForCompany(companyId);
   const canStore = storageConfigured();
 
   return (
     <div>
       <PageHeader
-        title="Assets"
-        description={`Photos, logos and files for ${company?.name ?? "your business"}. Uploads go to your agency for review before use.`}
+        title="Your photos & files"
+        description="Share materials for us to use in your marketing."
       />
 
       <div className="space-y-8 p-6">
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Your assets</h2>
+          <h2 className="text-lg font-semibold">Your files</h2>
           {assets.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-sm text-muted-foreground">
-                No assets yet. Upload a photo or logo below — your agency will review it before it
-                appears in marketing.
+                No files yet. Share a photo or logo below — we&apos;ll review it before using it in
+                your marketing.
               </CardContent>
             </Card>
           ) : (
@@ -71,7 +82,9 @@ export default async function ClientAssetsPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <StatusBadge status={a.status} />
+                    <Badge tone={statusTone(a.status)}>
+                      {STATUS_LABEL[a.status] ?? titleCase(a.status)}
+                    </Badge>
                     {a.storedFile ? (
                       <a
                         href={`/api/media/${a.id}`}
@@ -91,80 +104,78 @@ export default async function ClientAssetsPage() {
           )}
         </section>
 
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Upload an asset</h2>
-          <Card>
-            <CardContent className="p-6">
-              {!canStore ? (
-                <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  File storage isn&apos;t configured yet — you can still register an asset name for
-                  your agency, but the file itself can&apos;t be uploaded until storage is set up.
-                </p>
-              ) : null}
-              <form action={createClientAssetAction} className="space-y-5">
-                <input type="hidden" name="companyId" value={companyId} />
-                <Field label="Name" htmlFor="name">
+        <details className="rounded-lg border border-border bg-card">
+          <summary className="cursor-pointer px-6 py-4 text-lg font-semibold">Share a file</summary>
+          <div className="border-t border-border px-6 pb-6 pt-4">
+            {!canStore ? (
+              <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                File storage isn&apos;t set up yet — you can still register a name for us, but the
+                file itself can&apos;t be uploaded until storage is configured.
+              </p>
+            ) : null}
+            <form action={createClientAssetAction} className="space-y-5">
+              <input type="hidden" name="companyId" value={companyId} />
+              <Field label="Name" htmlFor="name">
+                <Input
+                  id="name"
+                  name="name"
+                  required
+                  placeholder="e.g. Shopfront photo"
+                  defaultValue=""
+                />
+              </Field>
+              <Field label="Description" htmlFor="description">
+                <Textarea
+                  id="description"
+                  name="description"
+                  className="min-h-16"
+                  placeholder="Optional notes for your team"
+                />
+              </Field>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Type" htmlFor="assetType">
+                  <Select id="assetType" name="assetType" defaultValue="image">
+                    {ASSET_TYPES.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field
+                  label="File"
+                  htmlFor="file"
+                  hint={canStore ? "Optional — attach the image or document" : "Unavailable until storage is configured"}
+                >
                   <Input
-                    id="name"
-                    name="name"
-                    required
-                    placeholder="e.g. Shopfront photo"
-                    defaultValue=""
+                    id="file"
+                    name="file"
+                    type="file"
+                    disabled={!canStore}
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
                   />
                 </Field>
-                <Field label="Description" htmlFor="description">
-                  <Textarea
-                    id="description"
-                    name="description"
-                    className="min-h-16"
-                    placeholder="Optional notes for your agency"
-                  />
-                </Field>
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Type" htmlFor="assetType">
-                    <Select id="assetType" name="assetType" defaultValue="image">
-                      {ASSET_TYPES.map(([v, l]) => (
-                        <option key={v} value={v}>
-                          {l}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field
-                    label="File"
-                    htmlFor="file"
-                    hint={canStore ? "Optional — attach the image or document" : "Unavailable until storage is configured"}
-                  >
-                    <Input
-                      id="file"
-                      name="file"
-                      type="file"
-                      disabled={!canStore}
-                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                    />
-                  </Field>
-                </div>
-                <label className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    name="consentObtained"
-                    className="mt-0.5 h-4 w-4 rounded border-input"
-                  />
-                  <span>
-                    If people appear in this file, I confirm we have their consent to use it in
-                    marketing.
-                  </span>
-                </label>
-                <div className="flex justify-end">
-                  <Button type="submit">Submit for review</Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Signed in as {user.name}. New uploads stay pending until your agency approves them.
-                </p>
-              </form>
-            </CardContent>
-          </Card>
-        </section>
+              </div>
+              <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  name="consentObtained"
+                  className="mt-0.5 h-4 w-4 rounded border-input"
+                />
+                <span>
+                  If people appear in this file, I confirm we have their consent to use it in
+                  marketing.
+                </span>
+              </label>
+              <div className="flex justify-end">
+                <Button type="submit">Submit for review</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Signed in as {user.name}. New uploads stay pending until we approve them.
+              </p>
+            </form>
+          </div>
+        </details>
       </div>
     </div>
   );

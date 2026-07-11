@@ -15,13 +15,13 @@ export default async function ClientRequestsPage() {
 
   return (
     <div>
-      <PageHeader title="Your requests" description="Marketing support tickets you've submitted.">
-        <Link href="/client/requests/new" className={buttonClasses()}>New request</Link>
+      <PageHeader title="Things you've asked us to handle">
+        <Link href="/client/requests/new" className={buttonClasses()}>Ask for something</Link>
       </PageHeader>
       <div className="p-6">
         {requests.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
-            No requests yet. <Link href="/client/requests/new" className="text-primary hover:underline">Submit one</Link>.
+            Nothing yet. <Link href="/client/requests/new" className="text-primary hover:underline">Ask for something</Link>.
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border bg-card">

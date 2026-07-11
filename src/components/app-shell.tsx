@@ -70,7 +70,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     id: "create-member",
-    label: "Create",
+    label: "Delivery",
     pinned: true,
     items: [
       { href: "/campaigns", label: "Campaigns", icon: Megaphone, memberOnly: true },

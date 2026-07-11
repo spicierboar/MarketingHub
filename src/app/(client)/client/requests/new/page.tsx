@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,14 +20,13 @@ const CONSENT_FIELDS = [
 ] as const;
 
 export default async function ClientNewRequestPage() {
-  const { user, companyId } = await requirePortalUser();
-  const company = await getCompany(companyId);
+  await requirePortalUser();
 
   return (
     <div>
       <PageHeader
-        title="New marketing request"
-        description={`For ${company?.name ?? "your business"}. We'll already have your company details — just tell us what you need.`}
+        title="Ask us for something"
+        description="We'll already have your company details — just tell us what you need."
       />
       <div className="mx-auto max-w-3xl p-6">
         <form action={createClientRequestAction}>
@@ -42,42 +40,66 @@ export default async function ClientNewRequestPage() {
               <Field label="Topic / key message" htmlFor="topic">
                 <Input id="topic" name="topic" required placeholder="e.g. Winter offer" />
               </Field>
-              <Field label="Marketing objective" htmlFor="objective">
-                <Textarea id="objective" name="objective" required placeholder="What should this achieve?" />
+              <Field label="Notes" htmlFor="notes">
+                <Textarea id="notes" name="notes" required placeholder="Tell us what you need…" />
               </Field>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Target audience" htmlFor="targetAudience"><Input id="targetAudience" name="targetAudience" /></Field>
-                <Field label="Platform" htmlFor="platform"><Input id="platform" name="platform" placeholder="Facebook, Instagram…" /></Field>
-                <Field label="Offer" htmlFor="offer"><Input id="offer" name="offer" /></Field>
-                <Field label="Call to action" htmlFor="callToAction"><Input id="callToAction" name="callToAction" /></Field>
-              </div>
+              <input type="hidden" name="objective" value="" />
               <div className="grid gap-5 sm:grid-cols-3">
-                <Field label="Preferred date" htmlFor="preferredDate"><Input id="preferredDate" name="preferredDate" type="date" /></Field>
-                <Field label="Preferred time" htmlFor="preferredTime"><Input id="preferredTime" name="preferredTime" type="time" /></Field>
+                <Field label="Preferred date" htmlFor="preferredDate">
+                  <Input id="preferredDate" name="preferredDate" type="date" />
+                </Field>
+                <Field label="Preferred time" htmlFor="preferredTime">
+                  <Input id="preferredTime" name="preferredTime" type="time" />
+                </Field>
                 <Field label="Urgency" htmlFor="urgency">
                   <Select id="urgency" name="urgency" defaultValue="normal">
-                    <option value="low">Low</option><option value="normal">Normal</option>
-                    <option value="high">High</option><option value="urgent">Urgent</option>
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
                   </Select>
                 </Field>
               </div>
-              <Field label="Notes" htmlFor="notes"><Textarea id="notes" name="notes" /></Field>
-              <Field label="Supporting files" htmlFor="files"><Input id="files" name="files" type="file" multiple /></Field>
-              <fieldset className="rounded-md border border-border p-4">
-                <legend className="px-1 text-sm font-medium">Consent &amp; compliance</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {CONSENT_FIELDS.map(([name, label]) => (
-                    <label key={name} className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <input type="checkbox" name={name} className="h-4 w-4 rounded border-input" />{label}
-                    </label>
-                  ))}
+              <Field label="Supporting files" htmlFor="files">
+                <Input id="files" name="files" type="file" multiple />
+              </Field>
+              <details className="rounded-md border border-border p-4">
+                <summary className="cursor-pointer text-sm font-medium">Add more detail (optional)</summary>
+                <div className="mt-4 space-y-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field label="Target audience" htmlFor="targetAudience">
+                      <Input id="targetAudience" name="targetAudience" />
+                    </Field>
+                    <Field label="Platform" htmlFor="platform">
+                      <Input id="platform" name="platform" placeholder="Facebook, Instagram…" />
+                    </Field>
+                    <Field label="Offer" htmlFor="offer">
+                      <Input id="offer" name="offer" />
+                    </Field>
+                    <Field label="Call to action" htmlFor="callToAction">
+                      <Input id="callToAction" name="callToAction" />
+                    </Field>
+                  </div>
+                  <fieldset className="rounded-md border border-border p-4">
+                    <legend className="px-1 text-sm font-medium">Consent &amp; compliance</legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {CONSENT_FIELDS.map(([name, label]) => (
+                        <label key={name} className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <input type="checkbox" name={name} className="h-4 w-4 rounded border-input" />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
                 </div>
-              </fieldset>
+              </details>
             </CardContent>
           </Card>
           <div className="mt-4 flex items-center justify-end gap-2">
-            <Link href="/client/requests" className="text-sm text-muted-foreground hover:text-foreground">Cancel</Link>
-            <Button type="submit">Submit request</Button>
+            <Link href="/client/requests" className="text-sm text-muted-foreground hover:text-foreground">
+              Cancel
+            </Link>
+            <Button type="submit">Send to your team</Button>
           </div>
         </form>
       </div>

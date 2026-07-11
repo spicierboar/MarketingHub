@@ -100,8 +100,8 @@ export default async function ClientCalendarPage({
   return (
     <div>
       <PageHeader
-        title="Your social media calendar"
-        description="See what's scheduled for your channels. You can move or pause upcoming posts."
+        title="Your calendar"
+        description="What's planned for your social channels. Ask us to move or pause a post if timing needs to change."
       >
         <div className="flex items-center gap-2">
           <Link href={`/client/calendar?month=${prev}`} className={buttonClasses("outline", "sm")}>
@@ -118,7 +118,7 @@ export default async function ClientCalendarPage({
         {dates.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">
-              Nothing scheduled this month. Your agency will add posts as they&apos;re approved.
+              Nothing planned this month yet — we&apos;ll add posts here as they&apos;re ready.
             </CardContent>
           </Card>
         ) : (
@@ -158,13 +158,13 @@ export default async function ClientCalendarPage({
                               />
                             </div>
                             <Button type="submit" size="sm" variant="outline">
-                              Reschedule
+                              Ask to move
                             </Button>
                           </form>
                           <form action={cancelClientScheduleAction}>
                             <input type="hidden" name="postId" value={post.id} />
                             <Button type="submit" size="sm" variant="ghost">
-                              Pause
+                              Pause this post
                             </Button>
                           </form>
                         </div>

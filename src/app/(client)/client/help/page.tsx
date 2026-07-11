@@ -14,21 +14,11 @@ const LINKS = [
   {
     href: "/client/calendar",
     label: "Calendar",
-    blurb: "See what is planned and ask for a reschedule if timing needs to change.",
-  },
-  {
-    href: "/client/assets",
-    label: "Assets",
-    blurb: "Share photos, logos and files for your agency to use.",
-  },
-  {
-    href: "/client/payments",
-    label: "Payments",
-    blurb: "Check your subscription tier and advertising budget at a glance.",
+    blurb: "See what is planned and ask for a move if timing needs to change.",
   },
   {
     href: "/client/requests/new",
-    label: "New request",
+    label: "Ask us",
     blurb: "Tell us what you need — we’ll already have your company context.",
   },
 ] as const;
@@ -87,17 +77,12 @@ export default async function ClientHelpPage() {
           <Card>
             <CardContent className="space-y-4 p-6">
               <p className="text-sm text-muted-foreground">
-                Open a request and we&apos;ll already have your account and company details —
-                just tell us what you need.
+                Send a message — we&apos;ll already know who you are.
               </p>
               <p>
                 <Link href="/client/requests/new" className={buttonClasses()}>
-                  Request assistance
+                  Ask us for something
                 </Link>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Support tickets include your account context automatically so your agency can help
-                without you re-explaining who you are.
               </p>
             </CardContent>
           </Card>

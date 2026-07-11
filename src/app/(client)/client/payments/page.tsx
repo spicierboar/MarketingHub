@@ -5,7 +5,6 @@ import { AD_PLATFORMS } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonClasses } from "@/components/ui/button";
 
 const money = (x: number) =>
   `$${Math.round(x).toLocaleString("en-AU", { maximumFractionDigits: 0 })}`;
@@ -40,25 +39,12 @@ export default async function ClientPaymentsPage() {
   return (
     <div>
       <PageHeader
-        title="Payments & spending"
-        description="Your subscription and advertising budget at a glance. Ad spend is billed by the platforms you advertise on — not as prepaid credit here."
+        title="Billing"
+        description="Your plan and advertising budget at a glance."
       />
 
       <div className="space-y-8 p-6">
-        <nav className="flex flex-wrap gap-3 text-sm">
-          {[
-            { href: "#overview", label: "Overview" },
-            { href: "#spending-limits", label: "Spending limits" },
-            { href: "#tax-invoices", label: "Tax invoices" },
-            { href: "#upcoming", label: "Upcoming" },
-          ].map((a) => (
-            <a key={a.href} href={a.href} className={buttonClasses("outline", "sm")}>
-              {a.label}
-            </a>
-          ))}
-        </nav>
-
-        <section id="overview" className="scroll-mt-6 space-y-4">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold">Overview</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
@@ -74,14 +60,27 @@ export default async function ClientPaymentsPage() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Your agency manages billing on the {plan.name} plan
                   {plan.priceAudMonthly > 0
-                    ? ` (agency pricing from ${money(plan.priceAudMonthly)}/mo).`
+                    ? ` (from ${money(plan.priceAudMonthly)}/mo).`
                     : "."}{" "}
-                  Plan changes and invoices go through them — this portal is read-only for billing.
+                  This portal is read-only for billing.
                 </p>
-                <p className="mt-4 text-sm">
-                  <span className={buttonClasses("outline", "sm")}>
-                    Manage billing with your agency
-                  </span>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {supportMailto ? (
+                    <>
+                      Questions about billing?{" "}
+                      <a
+                        href={`mailto:${supportMailto}`}
+                        className="font-medium text-primary underline"
+                      >
+                        Email {supportMailto}
+                      </a>
+                      .
+                    </>
+                  ) : approvalContact ? (
+                    <>Questions about billing? Contact {approvalContact}.</>
+                  ) : (
+                    <>Questions about billing? Contact your agency.</>
+                  )}
                 </p>
               </CardContent>
             </Card>
@@ -95,13 +94,8 @@ export default async function ClientPaymentsPage() {
                       <span className="text-base font-normal text-muted-foreground"> / month</span>
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      This is your agreed monthly advertising budget. Google, Meta and other
-                      platforms bill your connected ad accounts directly — we never hold ad credit
-                      in a wallet here.
-                    </p>
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      Remaining spend for the month is not tracked in this portal. Check your
-                      platform billing statements, or ask your agency.
+                      Your agreed monthly advertising budget. Platforms bill your ad accounts
+                      directly — we don&apos;t hold ad credit here.
                     </p>
                     {allocationEntries.length > 0 ? (
                       <ul className="mt-4 space-y-1 text-sm">
@@ -125,8 +119,8 @@ export default async function ClientPaymentsPage() {
                   <>
                     <p className="mt-1 text-2xl font-semibold">Not set</p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      No monthly ad budget is configured yet. Ask your agency when you&apos;re ready
-                      to run paid campaigns.
+                      No monthly ad budget yet. Ask your agency when you&apos;re ready to run paid
+                      campaigns.
                     </p>
                   </>
                 )}
@@ -137,14 +131,14 @@ export default async function ClientPaymentsPage() {
           {!hasStripeSub ? (
             <Card>
               <CardContent className="p-4 text-sm text-muted-foreground">
-                Ask your agency if a payment failed — we don&apos;t show failed-payment details in
-                this portal when billing is agency-managed.
+                Ask your agency if a payment failed — we don&apos;t show failed-payment details here
+                when billing is agency-managed.
               </CardContent>
             </Card>
           ) : null}
         </section>
 
-        <section id="spending-limits" className="scroll-mt-6 space-y-4">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold">Spending limits</h2>
           <Card>
             <CardContent className="space-y-4 p-6">
@@ -201,25 +195,20 @@ export default async function ClientPaymentsPage() {
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                Daily campaign limits are set with your agency. Changes require approval before they
-                go live.
+                Daily campaign limits are set with your agency. Changes need approval before they go
+                live.
               </p>
             </CardContent>
           </Card>
         </section>
 
-        <section id="tax-invoices" className="scroll-mt-6 space-y-4">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold">Tax invoices</h2>
           <Card>
             <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
               <p>
-                Subscription invoices are issued by your agency through Stripe. Copies of tax
-                invoices and payment history are not listed in this portal — ask your agency for
-                them.
-              </p>
-              <p>
-                Advertising charges appear on your Google Ads / Meta billing statements for the
-                accounts connected to your business.
+                Subscription invoices come from your agency. Ask them for copies — they aren&apos;t
+                listed here. Ad charges appear on your Google Ads / Meta statements.
               </p>
               <p>
                 {supportMailto ? (
@@ -234,9 +223,7 @@ export default async function ClientPaymentsPage() {
                     .
                   </>
                 ) : approvalContact ? (
-                  <>
-                    Need a copy? Contact {approvalContact}, or ask your agency account manager.
-                  </>
+                  <>Need a copy? Contact {approvalContact}.</>
                 ) : (
                   <>Need a copy? Contact your agency.</>
                 )}
@@ -245,7 +232,7 @@ export default async function ClientPaymentsPage() {
           </Card>
         </section>
 
-        <section id="upcoming" className="scroll-mt-6 space-y-4">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold">Upcoming</h2>
           <Card>
             <CardContent className="space-y-4 p-6">
@@ -257,9 +244,9 @@ export default async function ClientPaymentsPage() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Your {plan.name} subscription is billed via your agency
                   {plan.priceAudMonthly > 0
-                    ? ` (from ${money(plan.priceAudMonthly)}/mo agency pricing)`
+                    ? ` (from ${money(plan.priceAudMonthly)}/mo)`
                     : ""}
-                  . Exact charge dates come from them — we don&apos;t invent a due date here.
+                  . Exact charge dates come from them.
                 </p>
               </div>
               <div className="rounded-md border border-border px-4 py-3">
@@ -269,7 +256,7 @@ export default async function ClientPaymentsPage() {
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {budget
-                    ? `Based on your monthly ad budget of ${money(budget.monthlyBudgetUsd)}, platforms may bill roughly that amount over the month (plus any campaign daily caps). This is an estimate only — actual spend depends on delivery.`
+                    ? `Based on your monthly ad budget of ${money(budget.monthlyBudgetUsd)}, platforms may bill roughly that amount over the month. This is an estimate only.`
                     : "No monthly ad budget is set, so there is no estimated ad spend to show."}
                 </p>
               </div>

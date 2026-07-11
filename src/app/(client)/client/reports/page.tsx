@@ -1,14 +1,11 @@
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany, getTenant } from "@/lib/db";
+import { getTenant } from "@/lib/db";
 import { buildClientRoiReport, buildClientReportSummary } from "@/lib/client-reports";
-import { emailConfigured } from "@/lib/email";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 const n = (x: number) => x.toLocaleString("en-AU");
 const money = (x: number) => `$${Math.round(x).toLocaleString("en-AU")}`;
-const roasFmt = (x: number | null) => (x === null ? "—" : `${x.toFixed(1)}×`);
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -23,45 +20,35 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export default async function ClientReportsPage() {
   const { user, companyId } = await requirePortalUser();
-  const [report, company, tenant, summary] = await Promise.all([
+  const [report, tenant, summary] = await Promise.all([
     buildClientRoiReport(user.tenantId, companyId),
-    getCompany(companyId),
     getTenant(user.tenantId),
     buildClientReportSummary(user.tenantId, companyId),
   ]);
-  const scheduled = company?.profile.clientReports?.scheduledEmail !== false;
 
   return (
     <div>
       <PageHeader
-        title="Performance report"
-        description={`${report.periodLabel} — organic, paid, and leads for ${report.companyName}.`}
-      >
-        <div className="flex gap-2">
-          <Badge tone={scheduled ? "success" : "neutral"}>{scheduled ? "Weekly email on" : "Email off"}</Badge>
-          <Badge tone={emailConfigured() ? "success" : "neutral"}>
-            {emailConfigured() ? "Email live" : "Email simulated"}
-          </Badge>
-        </div>
-      </PageHeader>
+        title="How things are going"
+        description={`${report.periodLabel} for ${report.companyName}.`}
+      />
       <div className="space-y-6 p-6">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Stat label="Total leads" value={n(report.combined.totalLeads)} />
-          <Stat label="Est. revenue" value={money(report.combined.totalEstRevenue)} />
-          <Stat label="Total spend" value={money(report.combined.totalSpend)} />
-          <Stat label="Blended ROAS" value={roasFmt(report.combined.blendedRoas)} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Stat label="Leads" value={n(report.combined.totalLeads)} />
+          <Stat label="Estimated revenue" value={money(report.combined.totalEstRevenue)} />
+          <Stat label="Ad spend" value={money(report.combined.totalSpend)} />
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
           <Card><CardContent className="p-6">
-            <h3 className="mb-3 font-semibold">Organic social</h3>
+            <h3 className="mb-3 font-semibold">Posts &amp; reach</h3>
             <p className="text-sm text-muted-foreground">
               {n(report.organic.publishedPosts)} posts · {n(report.organic.reach)} reach · {n(report.organic.leads)} leads
             </p>
           </CardContent></Card>
           <Card><CardContent className="p-6">
-            <h3 className="mb-3 font-semibold">Paid advertising</h3>
+            <h3 className="mb-3 font-semibold">Ads</h3>
             <p className="text-sm text-muted-foreground">
-              {money(report.paid.spendUsd)} spend · {n(report.paid.leads)} leads · ROAS {roasFmt(report.paid.roas)}
+              {money(report.paid.spendUsd)} spend · {n(report.paid.leads)} leads
             </p>
           </CardContent></Card>
         </div>
