@@ -36,7 +36,7 @@ export function AgencyAlertsList({
   if (alerts.length === 0 && extras.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Nothing urgent — create a marketing spiel when you&apos;re ready.
+        Delivery is on track — no exceptions right now.
       </p>
     );
   }
