@@ -1,33 +1,43 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-12, **c1c30a0 SHIPPED** · **0043+0044 PASTE** · **W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-12, **c1c30a0 SHIPPED · 0043+0044 PASTED** · **W6 WAITING**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 5**) · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 6**) · live flags **OFF**
 >
 > | Item | Status | Notes |
 > |------|--------|-------|
-> | Automation-first + packages + 6h–24h delivery | **COMMITTED** `c1c30a0` | client review-only · agency ops desk · Basic $349 / Pro $649 / Blast $999 / Custom |
-> | **Migrations 0043 + 0044** | **PASTE NEEDED** | batch below |
+> | Automation-first + packages + 6h–24h delivery | **COMMITTED** `c1c30a0` | Basic $349 / Pro $649 / Blast $999 / Custom · ads media always extra |
+> | **Migrations 0043 + 0044** | **PASTED** | `marketing_package_catalog` · delivery eligibleAt / email stamp / enqueue_reason |
 > | W6 | WAITING | do not flip `*_LIVE` |
 >
 > ### Just finished
-> - Committed automation-first + marketing packages wave as `c1c30a0`
+> - Owner pasted `_owner_paste_0043_0044_batch.sql`
 >
-> **Owner paste now (batch):**
-> ```powershell
-> notepad F:\MarketingHub\command-centre\supabase\migrations\_owner_paste_0043_0044_batch.sql
-> ```
+> **Owner migrations:** 0043 + 0044 **done**. Do not re-paste.
 >
 > **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. No commit unless asked. Exclude `_owner_paste_*`.
 >
 > **Demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · Agency Settings → Marketing packages · Client Approvals / Account
 >
 > **NEXT:**
-> 1. Owner paste **0043+0044**
-> 2. Demo proof · push `main` when asked
+> 1. Demo proof (package pick · eligibility window · Agency Home / client review surfaces)
+> 2. Push `main` when asked (ahead by 6)
 > 3. Stripe package products/proration later · park Google
 >
 > **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover
+>
+> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
+>
+> **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
+>
+> **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-12, **c1c30a0 SHIPPED · 0043+0044 PASTE**) — archived
+>
+> Migrations were pending — now pasted (see block above).
+>
 >
 > **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
 >
