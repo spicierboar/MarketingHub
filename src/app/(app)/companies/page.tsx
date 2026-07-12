@@ -33,7 +33,7 @@ export default async function CompaniesPage() {
       <PageHeader
         title="Clients"
         explainerId="clients"
-        explainer="One row per client — lifecycle stages on the right. Open a client to run its workspace. Add client opens a quick form."
+        explainer="One row per client — lifecycle stages on the right. Open a client to run its workspace. Add client opens a quick form (or the full New client wizard if needed)."
       >
         <AddClientModalTrigger />
       </PageHeader>

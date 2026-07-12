@@ -68,6 +68,17 @@ export default async function ClientDashboardPage() {
               : `${needsCount} item${needsCount === 1 ? "" : "s"} need${needsCount === 1 ? "s" : ""} your attention.`}
             {company ? ` · ${company.name}` : null}
           </p>
+          <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium">
+            <Link href="/client/strategy" className="text-primary hover:underline">
+              View strategy →
+            </Link>
+            <Link href="/client/content" className="text-primary hover:underline">
+              Content status →
+            </Link>
+            <Link href="/client/account" className="text-primary hover:underline">
+              Full account →
+            </Link>
+          </p>
         </div>
 
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -193,6 +204,21 @@ export default async function ClientDashboardPage() {
             </div>
           </section>
         )}
+
+        <section>
+          <Link
+            href="/client/account#extra-work"
+            className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2.5 text-sm hover:border-primary/40"
+          >
+            <div>
+              <p className="font-medium">Need an extra promo or custom work?</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Request from Account — we draft, you approve
+              </p>
+            </div>
+            <span className="text-xs text-primary">Account →</span>
+          </Link>
+        </section>
       </div>
     </div>
   );

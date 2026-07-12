@@ -2,9 +2,13 @@
 // Deterministic simulation when ABN_LOOKUP_GUID is unset; never throws on
 // network failure (falls back to simulated or returns null).
 //
-// INVARIANT: ABN is never a primary key or unique company index. One legal
-// entity (ABN) may operate multiple Company records (sites/brands). Lookups
-// only pre-fill profile.abn + legalName on the *current* company.
+// INVARIANT: ABN alone is never a unique company index. One legal entity may
+// operate multiple MCC accounts (one per trading/business name). Account
+// duplicate checks use (business name + ABN) — see company-identity.ts.
+// Lookups only pre-fill profile.abn + legalName on the *current* company.
+//
+// Create/update gate: verifyBusinessNameAgainstAbr — live ABR only for hard
+// blocks; simulated / unconfigured / network fail soft-skips (demos keep working).
 
 import { appEnv } from "@/lib/env";
 import type { CompanyProfile } from "@/lib/types";
@@ -14,11 +18,28 @@ import type { CompanyProfile } from "@/lib/types";
 export interface AbnLookupResult {
   abn: string;
   legalName: string;
+  /** Registered business / trading names from ABR (JSON BusinessName[]). */
+  businessNames?: string[];
   entityType?: string;
   gstRegistered?: boolean;
   status?: string;
   mode: "live" | "simulated";
 }
+
+export type AbrIdentityGateResult =
+  | {
+      ok: true;
+      mode: "live" | "skipped";
+      legalName?: string;
+      matchedAs?: "entity" | "business_name";
+      /** Soft-skip reason when ABR was unavailable — do not hard-block. */
+      warning?: string;
+    }
+  | {
+      ok: false;
+      error: string;
+      code: "invalid_abn" | "cancelled_abn" | "name_mismatch";
+    };
 
 // ---- env gate ----------------------------------------------------------------
 
@@ -31,11 +52,16 @@ export function abnLookupConfigured(): boolean {
   return !!abnLookupGuid();
 }
 
-function abnLookupLive(): boolean {
+/** True when live ABR calls are enabled (GUID + env gate). */
+export function isAbnLookupLive(): boolean {
   if (!abnLookupConfigured()) return false;
   const env = appEnv();
   if (env === "development" || env === "staging") return true;
   return process.env.ABN_LOOKUP_LIVE === "true";
+}
+
+function abnLookupLive(): boolean {
+  return isAbnLookupLive();
 }
 
 // ---- helpers -----------------------------------------------------------------
@@ -66,12 +92,91 @@ function titleCaseName(s: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const LEGAL_SUFFIX_RE =
+  /\b(proprietary limited|pty limited|pty ltd|limited|ltd|incorporated|inc|plc|trust|trustee|as trustee for)\b/gi;
+
+/**
+ * Fuzzy-tolerant name key: case/whitespace/punctuation insensitive,
+ * common AU legal suffixes stripped.
+ */
+export function normalizeNameForAbrMatch(name: string | undefined | null): string {
+  // Punctuation first so "Pty. Ltd." becomes "pty ltd" before suffix strip.
+  let s = String(name ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Strip suffixes repeatedly (e.g. "Foo Pty Ltd Limited").
+  for (let i = 0; i < 3; i++) {
+    const next = s.replace(LEGAL_SUFFIX_RE, " ").replace(/\s+/g, " ").trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
+/**
+ * True when submitted business/trading name matches the ABR entity name or
+ * any known business/trading name (fuzzy-tolerant).
+ */
+export function businessNameMatchesAbrNames(
+  submitted: string,
+  entityName: string,
+  businessNames: string[] = [],
+): { match: boolean; matchedAs?: "entity" | "business_name" } {
+  const sub = normalizeNameForAbrMatch(submitted);
+  if (!sub) return { match: false };
+
+  const entityKey = normalizeNameForAbrMatch(entityName);
+  if (entityKey && abrNameKeysCompatible(sub, entityKey)) {
+    return { match: true, matchedAs: "entity" };
+  }
+
+  for (const bn of businessNames) {
+    const key = normalizeNameForAbrMatch(bn);
+    if (key && abrNameKeysCompatible(sub, key)) {
+      return { match: true, matchedAs: "business_name" };
+    }
+  }
+  return { match: false };
+}
+
+/** Equal after normalize, or near-equal containment (avoids tiny substring hits). */
+function abrNameKeysCompatible(a: string, b: string): boolean {
+  if (a === b) return true;
+  const shorter = a.length <= b.length ? a : b;
+  const longer = a.length <= b.length ? b : a;
+  if (shorter.length < 4) return false;
+  if (!longer.includes(shorter)) return false;
+  // Require the shorter name to cover most of the longer (clear mismatch e.g.
+  // "Cafe" vs "Grinders Coffee House" fails; "Harbour Roasters" vs
+  // "Harbour Roasters Cafe" passes).
+  return shorter.length / longer.length >= 0.7;
+}
+
+function isCancelledStatus(status: string | undefined): boolean {
+  const s = (status ?? "").toLowerCase();
+  return s.includes("cancel");
+}
+
+function collectBusinessNames(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((x) => (typeof x === "string" ? x.trim() : ""))
+      .filter(Boolean);
+  }
+  if (typeof raw === "string" && raw.trim()) return [raw.trim()];
+  return [];
+}
+
 // ---- deterministic simulation ------------------------------------------------
 
 const DEMO_ABNS: Record<string, Omit<AbnLookupResult, "mode">> = {
   "51824753556": {
     abn: "51 824 753 556",
     legalName: "Harbour Roasters Pty Ltd",
+    businessNames: ["Harbour Roasters"],
     entityType: "Australian Private Company",
     gstRegistered: true,
     status: "Active",
@@ -79,6 +184,7 @@ const DEMO_ABNS: Record<string, Omit<AbnLookupResult, "mode">> = {
   "53004085616": {
     abn: "53 004 085 616",
     legalName: "Riverside Kitchen Pty Ltd",
+    businessNames: ["Riverside Kitchen"],
     entityType: "Australian Private Company",
     gstRegistered: true,
     status: "Active",
@@ -86,6 +192,7 @@ const DEMO_ABNS: Record<string, Omit<AbnLookupResult, "mode">> = {
   "74172177893": {
     abn: "74 172 177 893",
     legalName: "Bright Spark Dental Pty Ltd",
+    businessNames: ["Bright Spark Dental"],
     entityType: "Australian Private Company",
     gstRegistered: true,
     status: "Active",
@@ -124,6 +231,7 @@ function simulateByName(name: string): AbnLookupResult {
   return {
     abn: formatAbn(abnDigits),
     legalName: `${trading} Pty Ltd`,
+    businessNames: [trading],
     entityType: "Australian Private Company",
     gstRegistered: true,
     status: "Active",
@@ -150,6 +258,8 @@ interface AbrAbnJson {
   EntityTypeName?: string;
   Gst?: string | null;
   AbnStatus?: string;
+  BusinessName?: string[] | string;
+  Message?: string;
 }
 
 interface AbrNameMatch {
@@ -181,13 +291,39 @@ async function fetchAbrJson(url: string): Promise<unknown | null> {
   }
 }
 
+/** Classify empty ABR payloads: config/network-ish vs invalid ABN. */
+function classifyEmptyAbrPayload(
+  data: AbrAbnJson,
+): "unavailable" | "invalid" {
+  const msg = (data.Message ?? "").toLowerCase();
+  if (
+    msg.includes("guid") ||
+    msg.includes("registered party") ||
+    msg.includes("not recognised")
+  ) {
+    return "unavailable";
+  }
+  if (
+    msg.includes("not a valid") ||
+    msg.includes("no records") ||
+    msg.includes("search text")
+  ) {
+    return "invalid";
+  }
+  // Empty Abn + Message often means bad ABN; empty everything with no message → treat unavailable.
+  if (msg.trim()) return "invalid";
+  return "unavailable";
+}
+
 function mapAbnJson(data: AbrAbnJson): AbnLookupResult | null {
   const abnRaw = data.Abn?.trim();
   const legalName = data.EntityName?.trim();
   if (!abnRaw || !legalName) return null;
+  const businessNames = collectBusinessNames(data.BusinessName);
   return {
     abn: formatAbn(abnRaw),
     legalName,
+    businessNames: businessNames.length ? businessNames : undefined,
     entityType: data.EntityTypeName?.trim(),
     gstRegistered: data.Gst === "Registered" || data.Gst === "true",
     status: data.AbnStatus?.trim(),
@@ -195,13 +331,19 @@ function mapAbnJson(data: AbrAbnJson): AbnLookupResult | null {
   };
 }
 
-async function lookupAbnLive(abnDigits: string): Promise<AbnLookupResult | null> {
+async function lookupAbnLive(abnDigits: string): Promise<{
+  result: AbnLookupResult | null;
+  emptyClass?: "unavailable" | "invalid";
+  raw?: AbrAbnJson;
+}> {
   const guid = abnLookupGuid();
-  if (!guid) return null;
+  if (!guid) return { result: null, emptyClass: "unavailable" };
   const url = `https://abr.business.gov.au/json/AbnDetails.aspx?abn=${encodeURIComponent(abnDigits)}&guid=${encodeURIComponent(guid)}`;
   const data = (await fetchAbrJson(url)) as AbrAbnJson | null;
-  if (!data) return null;
-  return mapAbnJson(data);
+  if (!data) return { result: null, emptyClass: "unavailable" };
+  const mapped = mapAbnJson(data);
+  if (mapped) return { result: mapped, raw: data };
+  return { result: null, emptyClass: classifyEmptyAbrPayload(data), raw: data };
 }
 
 async function lookupNameLive(name: string): Promise<AbnLookupResult | null> {
@@ -216,9 +358,8 @@ async function lookupNameLive(name: string): Promise<AbnLookupResult | null> {
     matches[0];
   if (!best?.Abn) return null;
 
-  const detailUrl = `https://abr.business.gov.au/json/AbnDetails.aspx?abn=${encodeURIComponent(best.Abn)}&guid=${encodeURIComponent(guid)}`;
-  const detail = (await fetchAbrJson(detailUrl)) as AbrAbnJson | null;
-  if (detail) return mapAbnJson(detail);
+  const detail = await lookupAbnLive(normaliseAbnDigits(best.Abn));
+  if (detail.result) return detail.result;
 
   return {
     abn: formatAbn(best.Abn),
@@ -237,16 +378,113 @@ export async function lookupAbn(abnOrName: string): Promise<AbnLookupResult | nu
 
   if (abnLookupLive()) {
     try {
-      const live = isAbnQuery(trimmed)
-        ? await lookupAbnLive(normaliseAbnDigits(trimmed))
-        : await lookupNameLive(trimmed);
-      if (live) return live;
+      if (isAbnQuery(trimmed)) {
+        const live = await lookupAbnLive(normaliseAbnDigits(trimmed));
+        if (live.result) return live.result;
+      } else {
+        const live = await lookupNameLive(trimmed);
+        if (live) return live;
+      }
     } catch {
       /* fall through to simulated */
     }
   }
 
   return simulateLookup(trimmed);
+}
+
+/**
+ * Gate for create / identity update: verify business name + ABN against live ABR.
+ *
+ * Soft-skip (ok + warning) when ABR is not live, GUID missing, or network fails —
+ * demos without GUID keep working; internal (name+ABN) duplicate check still applies.
+ * Hard-block when live ABR returns invalid/cancelled ABN, or a clear name mismatch.
+ */
+export async function verifyBusinessNameAgainstAbr(
+  businessName: string,
+  abn: string,
+): Promise<AbrIdentityGateResult> {
+  const name = businessName.trim();
+  const digits = normaliseAbnDigits(abn);
+  if (!name || digits.length !== 11) {
+    return {
+      ok: false,
+      code: "invalid_abn",
+      error: "ABN must be 11 digits and business name is required for ABR verification.",
+    };
+  }
+
+  if (!abnLookupLive()) {
+    return {
+      ok: true,
+      mode: "skipped",
+      warning:
+        "ABR verification skipped (not live / no GUID) — create allowed; set ABN_LOOKUP_GUID to verify.",
+    };
+  }
+
+  let live: Awaited<ReturnType<typeof lookupAbnLive>>;
+  try {
+    live = await lookupAbnLive(digits);
+  } catch {
+    return {
+      ok: true,
+      mode: "skipped",
+      warning: "ABR verification skipped (lookup failed) — create allowed.",
+    };
+  }
+
+  if (!live.result) {
+    if (live.emptyClass === "invalid") {
+      return {
+        ok: false,
+        code: "invalid_abn",
+        error:
+          "That ABN was not found on the Australian Business Register. Check the number and try again.",
+      };
+    }
+    return {
+      ok: true,
+      mode: "skipped",
+      warning: "ABR verification skipped (lookup unavailable) — create allowed.",
+    };
+  }
+
+  const result = live.result;
+  if (isCancelledStatus(result.status)) {
+    return {
+      ok: false,
+      code: "cancelled_abn",
+      error: `ABN ${result.abn} is cancelled on the ABR and cannot be used for a new client.`,
+    };
+  }
+
+  const match = businessNameMatchesAbrNames(
+    name,
+    result.legalName,
+    result.businessNames ?? [],
+  );
+  if (!match.match) {
+    const known = [result.legalName, ...(result.businessNames ?? [])]
+      .filter(Boolean)
+      .slice(0, 4)
+      .join("; ");
+    return {
+      ok: false,
+      code: "name_mismatch",
+      error:
+        `Business name "${name}" does not match ABR records for ABN ${result.abn}` +
+        (known ? ` (known: ${known})` : "") +
+        `. Use the entity name or a registered business/trading name for this ABN.`,
+    };
+  }
+
+  return {
+    ok: true,
+    mode: "live",
+    legalName: result.legalName,
+    matchedAs: match.matchedAs,
+  };
 }
 
 /** Map an ABN lookup result into company profile fields for apply.

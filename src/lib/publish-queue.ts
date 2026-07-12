@@ -417,10 +417,16 @@ async function deadLetter(
 
 // ---- The tenant tick (what the cron and "Publish due posts now" run) -----------
 
-export async function processPublishQueue(actor: ActingUser): Promise<QueueCounts> {
+export async function processPublishQueue(
+  actor: ActingUser,
+  opts?: { companyId?: string },
+): Promise<QueueCounts> {
   const counts = emptyQueueCounts();
   const { nowIso, today, hhmm } = await queueNowPartsForTenant(actor.tenantId);
-  const posts = await listScheduledPosts(actor.tenantId);
+  let posts = await listScheduledPosts(actor.tenantId);
+  if (opts?.companyId) {
+    posts = posts.filter((p) => p.companyId === opts.companyId);
+  }
 
   // 1. Recover stale in-flight claims (a worker died mid-send). Counted as a
   //    failed attempt — the platform may or may not have received the post, and
@@ -589,6 +595,9 @@ export async function processPublishQueue(actor: ActingUser): Promise<QueueCount
 
 // Back-compat entry point (Publishing Centre "Publish due posts now" + the
 // scheduler tick): the queue IS the due-post publisher now.
-export async function publishDuePosts(actor: ActingUser): Promise<QueueCounts> {
-  return processPublishQueue(actor);
+export async function publishDuePosts(
+  actor: ActingUser,
+  opts?: { companyId?: string },
+): Promise<QueueCounts> {
+  return processPublishQueue(actor, opts);
 }

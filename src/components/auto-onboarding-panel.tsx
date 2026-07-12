@@ -371,8 +371,9 @@ function EnrichmentSection({
         <h3 className="text-sm font-medium">Optional enrichment (AU)</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           ABN registry and Google Places (simulated when API keys are unset). Results join
-          the review list below — nothing is saved until you apply. ABN pre-fills this
-          company only; the same ABN may already exist on other companies.
+          the review list below — nothing is saved until you apply. ABN alone is not unique —
+          another trading name under the same ABN is a separate account; same business name +
+          ABN is blocked as a duplicate.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -419,6 +420,7 @@ export function AutoOnboardingPanel({
   defaultSocial,
   lastScrape,
   compact = false,
+  socialsEditHref,
 }: {
   companyId: string;
   companyName: string;
@@ -431,6 +433,8 @@ export function AutoOnboardingPanel({
   };
   /** Setup mode: website + consent only; extras behind a disclosure. */
   compact?: boolean;
+  /** Where staff edit social URLs (profile / Brand Brain) — scrape does not duplicate fields. */
+  socialsEditHref?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -570,30 +574,49 @@ export function AutoOnboardingPanel({
     );
   }
 
+  const savedSocialEntries = SOCIAL_PLATFORMS.map((s) => ({
+    key: s.key,
+    label: s.label,
+    url: (defaultSocial[s.key] ?? "").trim(),
+  })).filter((s) => s.url.length > 0);
+  const savedSocialCount = savedSocialEntries.length;
+
+  // Scrape imports profile socials as hidden fields — never a second URL stack.
+  const profileSocialHiddens = savedSocialEntries.map((s) => (
+    <input key={s.key} type="hidden" name={`social_${s.key}`} value={s.url} />
+  ));
+
+  const socialsImportNote = (
+    <p className="text-sm text-muted-foreground">
+      {savedSocialCount > 0 ? (
+        <>
+          Also crawling {savedSocialCount} saved social URL
+          {savedSocialCount === 1 ? "" : "s"} from the profile
+          {savedSocialEntries.length <= 4
+            ? ` (${savedSocialEntries.map((s) => s.label).join(", ")})`
+            : ""}
+          .
+        </>
+      ) : (
+        <>No social URLs on the profile yet — website scrape only.</>
+      )}{" "}
+      {socialsEditHref ? (
+        <a href={socialsEditHref} className="text-primary hover:underline">
+          Edit socials
+        </a>
+      ) : (
+        <span>Edit socials in the profile below.</span>
+      )}
+    </p>
+  );
+
   const extras = (
-    <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {SOCIAL_PLATFORMS.map((s) => (
-          <Field key={s.key} label={s.label} htmlFor={`auto_social_${s.key}`}>
-            <Input
-              id={`auto_social_${s.key}`}
-              name={`social_${s.key}`}
-              type="text"
-              inputMode="url"
-              placeholder={s.placeholder}
-              defaultValue={defaultSocial[s.key] ?? ""}
-              disabled={pending}
-            />
-          </Field>
-        ))}
-      </div>
-      <EnrichmentSection
-        companyId={companyId}
-        disabled={pending}
-        pending={pending}
-        onPreviewed={handleEnrichmentPreviewed}
-      />
-    </>
+    <EnrichmentSection
+      companyId={companyId}
+      disabled={pending}
+      pending={pending}
+      onPreviewed={handleEnrichmentPreviewed}
+    />
   );
 
   const reviewBlock =
@@ -729,8 +752,8 @@ export function AutoOnboardingPanel({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {compact
-              ? "Scrape public pages, then AI fills gaps and infers the rest. Nothing publishes automatically."
-              : `With explicit client consent, scrape ${companyName}'s public website and social profile URLs to pre-fill Brand Brain fields.`}
+              ? "Scrape the website (and any socials already saved on the profile). Nothing publishes automatically."
+              : `With explicit client consent, scrape ${companyName}'s public website and saved social profile URLs to pre-fill Brand Brain fields.`}
           </p>
           {!compact && lastScrape?.at && (
             <p className="mt-2 text-xs text-muted-foreground">
@@ -745,6 +768,7 @@ export function AutoOnboardingPanel({
 
         <form action={handlePreview} className="space-y-4">
           <input type="hidden" name="companyId" value={companyId} />
+          {profileSocialHiddens}
 
           <div className={compact ? "flex flex-col gap-3 sm:flex-row sm:items-end" : "space-y-4"}>
             <div className="min-w-0 flex-1">
@@ -796,10 +820,12 @@ export function AutoOnboardingPanel({
             </label>
           ) : null}
 
+          {socialsImportNote}
+
           {compact ? (
             <details className="text-sm">
               <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                Social links &amp; ABN / Places (optional)
+                ABN / Places enrichment (optional)
               </summary>
               <div className="mt-3 space-y-4">{extras}</div>
             </details>

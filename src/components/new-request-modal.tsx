@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { FormModal } from "@/components/form-modal";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { createRequestAction } from "@/app/(app)/requests/actions";
 import { MARKETING_FIELD_HELP } from "@/lib/profile-suggestions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import { cn } from "@/lib/utils";
 
 const REQUEST_TYPES = [
@@ -34,7 +36,7 @@ const CONSENT_FIELDS = [
 export function NewRequestModalTrigger({
   companies,
   defaults,
-  label = "New request",
+  label = "Log for a client",
   linkStyle,
 }: {
   companies: { id: string; name: string }[];
@@ -50,7 +52,11 @@ export function NewRequestModalTrigger({
   linkStyle?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const usable = companies.filter(Boolean);
+  const usable = (
+    defaults?.companyId
+      ? companies.filter((c) => c.id === defaults.companyId)
+      : companies
+  ).filter(Boolean);
 
   if (usable.length === 0) {
     return linkStyle ? (
@@ -80,27 +86,20 @@ export function NewRequestModalTrigger({
 
       {open && (
         <FormModal
-          title="New marketing support request"
-          description="Tell us what you need — the AI drafts it, an approver reviews it."
+          title="Log a request for a client"
+          description="You're filing this for the client — not asking the platform. Capture what they need; AI can draft from it, then an approver reviews."
           onClose={() => setOpen(false)}
           wide
         >
           <form action={createRequestAction} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Client" htmlFor="modal-req-company">
-                <Select
-                  id="modal-req-company"
-                  name="companyId"
-                  required
-                  defaultValue={defaults?.companyId ?? usable[0]?.id}
-                >
-                  {usable.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <LockedCompanyField
+                id="modal-req-company"
+                companies={usable}
+                companyId={defaults?.companyId}
+                locked={Boolean(defaults?.companyId)}
+                hint="Which client's ticket is this?"
+              />
               <Field label="Request type" htmlFor="modal-req-type">
                 <Select
                   id="modal-req-type"
@@ -139,26 +138,57 @@ export function NewRequestModalTrigger({
               />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Target audience" htmlFor="modal-req-audience">
+              <Field
+                label="Target audience"
+                htmlFor="modal-req-audience"
+                hint={MARKETING_FIELD_HELP.targetAudience}
+              >
                 <Input
                   id="modal-req-audience"
                   name="targetAudience"
                   defaultValue={defaults?.audience}
+                  placeholder="e.g. Office workers within 10 minutes at lunch"
                 />
               </Field>
-              <Field label="Platform" htmlFor="modal-req-platform">
-                <Input
+              <Field
+                label="Platform"
+                htmlFor="modal-req-platform"
+                hint={MARKETING_FIELD_HELP.platform}
+              >
+                <Select
                   id="modal-req-platform"
                   name="platform"
-                  defaultValue={defaults?.platform}
-                  placeholder="Facebook, Instagram…"
+                  defaultValue={defaults?.platform ?? ""}
+                >
+                  <option value="">Not specified</option>
+                  {CONTENT_PLATFORM_OPTIONS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label="Offer / promotion"
+                htmlFor="modal-req-offer"
+                hint={MARKETING_FIELD_HELP.offer}
+              >
+                <Input
+                  id="modal-req-offer"
+                  name="offer"
+                  placeholder="e.g. 15% off weekday lunch with code LOCAL15"
                 />
               </Field>
-              <Field label="Offer / promotion" htmlFor="modal-req-offer">
-                <Input id="modal-req-offer" name="offer" />
-              </Field>
-              <Field label="Call to action" htmlFor="modal-req-cta">
-                <Input id="modal-req-cta" name="callToAction" />
+              <Field
+                label="Call to action"
+                htmlFor="modal-req-cta"
+                hint={MARKETING_FIELD_HELP.callToAction}
+              >
+                <Input
+                  id="modal-req-cta"
+                  name="callToAction"
+                  placeholder="e.g. Book a table"
+                />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -177,8 +207,16 @@ export function NewRequestModalTrigger({
                 </Select>
               </Field>
             </div>
-            <Field label="Notes" htmlFor="modal-req-notes">
-              <Textarea id="modal-req-notes" name="notes" />
+            <Field
+              label="Notes"
+              htmlFor="modal-req-notes"
+              hint="Anything the drafting team should know — assets, must-avoid wording, timing"
+            >
+              <Textarea
+                id="modal-req-notes"
+                name="notes"
+                placeholder="e.g. Client wants no stock photos — use their Friday night shots from Drive"
+              />
             </Field>
             <fieldset className={cn("rounded-md border border-border p-3")}>
               <legend className="px-1 text-sm font-medium">Consent &amp; compliance</legend>
@@ -195,7 +233,7 @@ export function NewRequestModalTrigger({
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Submit request</Button>
+              <Button type="submit">Log request</Button>
             </div>
           </form>
         </FormModal>

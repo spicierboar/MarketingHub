@@ -23,6 +23,7 @@ import {
   uploadAssetMediaAction,
 } from "../actions";
 import { storageConfigured } from "@/lib/storage";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 
 const LICENCES: [string, string][] = [
   ["owned", "Owned outright"],
@@ -31,14 +32,12 @@ const LICENCES: [string, string][] = [
   ["user_generated", "User-generated (UGC)"],
   ["unknown", "Unknown"],
 ];
-const CHECK_CHANNELS = [
-  "Facebook",
-  "Instagram",
-  "LinkedIn",
-  "Google Business Profile",
-  "Email",
-  "Website",
+const ASSET_CHANNEL_OPTIONS = [
+  ...CONTENT_PLATFORM_OPTIONS,
+  { value: "Website", label: "Website" },
+  { value: "In-store", label: "In-store" },
 ];
+const CHECK_CHANNELS = ASSET_CHANNEL_OPTIONS.map((c) => c.value);
 
 export default async function AssetDetailPage({
   params,
@@ -284,29 +283,55 @@ export default async function AssetDetailPage({
                 <form action={updateAssetAction} className="space-y-4">
                   <input type="hidden" name="assetId" value={asset.id} />
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Name">
-                      <Input name="name" defaultValue={asset.name} />
+                    <Field label="Name" hint="What the team will search for">
+                      <Input
+                        name="name"
+                        defaultValue={asset.name}
+                        placeholder="e.g. Family room — made up"
+                      />
                     </Field>
-                    <Field label="Folder">
-                      <Input name="folder" defaultValue={asset.folder} />
+                    <Field label="Folder" hint="Optional — e.g. Store photos, Brand">
+                      <Input
+                        name="folder"
+                        defaultValue={asset.folder}
+                        placeholder="e.g. Store photos"
+                      />
                     </Field>
                   </div>
-                  <Field label="Description">
-                    <Textarea name="description" defaultValue={asset.description} className="min-h-14" />
+                  <Field label="Description" hint="Optional context for approvers">
+                    <Textarea
+                      name="description"
+                      defaultValue={asset.description}
+                      className="min-h-14"
+                      placeholder="e.g. Hero shot for winter campaign"
+                    />
                   </Field>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="External reference">
-                      <Input name="externalRef" defaultValue={asset.externalRef} />
+                    <Field label="External reference" hint="Canva/Figma URL or stock id">
+                      <Input
+                        name="externalRef"
+                        defaultValue={asset.externalRef}
+                        placeholder="https://canva.com/design/…"
+                      />
                     </Field>
                     <Field label="Tags" hint="Comma or newline separated">
-                      <Input name="tags" defaultValue={asset.tags.join(", ")} />
+                      <Input
+                        name="tags"
+                        defaultValue={asset.tags.join(", ")}
+                        placeholder="winter, hero, butcher"
+                      />
                     </Field>
                   </div>
                   <hr className="border-border" />
                   <p className="text-sm font-medium">Usage rights</p>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Owner">
-                      <Input name="owner" defaultValue={r.owner} required />
+                    <Field label="Owner" hint="Who owns or supplied it">
+                      <Input
+                        name="owner"
+                        defaultValue={r.owner}
+                        required
+                        placeholder="e.g. Client / Photographer name"
+                      />
                     </Field>
                     <Field label="Licence">
                       <Select name="licenceType" defaultValue={r.licenceType}>
@@ -317,11 +342,22 @@ export default async function AssetDetailPage({
                         ))}
                       </Select>
                     </Field>
-                    <Field label="Licence reference">
-                      <Input name="licenceRef" defaultValue={r.licenceRef} />
+                    <Field label="Licence reference" hint="Contract or stock licence id">
+                      <Input
+                        name="licenceRef"
+                        defaultValue={r.licenceRef}
+                        placeholder="e.g. INV-2041 / Shutterstock #…"
+                      />
                     </Field>
-                    <Field label="Consent reference" hint="Consent Register id — must match a live record">
-                      <Input name="consentRef" defaultValue={r.consentRef} />
+                    <Field
+                      label="Consent reference"
+                      hint="Consent Register id — must match a live record"
+                    >
+                      <Input
+                        name="consentRef"
+                        defaultValue={r.consentRef}
+                        placeholder="e.g. cons_dave"
+                      />
                     </Field>
                   </div>
                   <label className="flex items-center gap-2 text-sm">
@@ -333,19 +369,61 @@ export default async function AssetDetailPage({
                     />
                     Consent obtained
                   </label>
-                  <Field label="Allowed channels" hint="One per line; blank = all channels">
-                    <Textarea
-                      name="allowedChannels"
-                      defaultValue={r.allowedChannels.join("\n")}
-                      className="min-h-14"
-                    />
+                  <Field
+                    label="Allowed channels"
+                    hint="Leave all unchecked to permit every channel"
+                  >
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                      {ASSET_CHANNEL_OPTIONS.map((ch) => (
+                        <label
+                          key={ch.value}
+                          className="inline-flex items-center gap-1.5 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            name="allowedChannels"
+                            value={ch.value}
+                            defaultChecked={r.allowedChannels.includes(ch.value)}
+                            className="h-4 w-4"
+                          />
+                          {ch.label}
+                        </label>
+                      ))}
+                      {r.allowedChannels
+                        .filter(
+                          (c) => !ASSET_CHANNEL_OPTIONS.some((o) => o.value === c),
+                        )
+                        .map((c) => (
+                          <label
+                            key={c}
+                            className="inline-flex items-center gap-1.5 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              name="allowedChannels"
+                              value={c}
+                              defaultChecked
+                              className="h-4 w-4"
+                            />
+                            {c}
+                          </label>
+                        ))}
+                    </div>
                   </Field>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Expiry date">
-                      <Input name="expiryDate" type="date" defaultValue={r.expiryDate} />
+                    <Field label="Expiry date" hint="On/after this date the asset is blocked">
+                      <Input
+                        name="expiryDate"
+                        type="date"
+                        defaultValue={r.expiryDate}
+                      />
                     </Field>
                     <Field label="Restrictions">
-                      <Input name="restrictions" defaultValue={r.restrictions} />
+                      <Input
+                        name="restrictions"
+                        defaultValue={r.restrictions}
+                        placeholder="e.g. Website only; no paid ads"
+                      />
                     </Field>
                   </div>
                   <Button type="submit" variant="outline">

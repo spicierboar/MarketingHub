@@ -88,8 +88,13 @@ export default async function EmailMarketingPage({
             {companyId && (
               <form action={createEmailTemplateAction} className="space-y-3 border-t pt-4">
                 <input type="hidden" name="companyId" value={companyId} />
-                <Field label="Name" htmlFor="tpl-name">
-                  <Input id="tpl-name" name="name" required />
+                <Field label="Name" htmlFor="tpl-name" hint="Internal label for the team">
+                  <Input
+                    id="tpl-name"
+                    name="name"
+                    required
+                    placeholder="e.g. Monthly newsletter"
+                  />
                 </Field>
                 <Field label="Kind" htmlFor="tpl-kind">
                   <Select id="tpl-kind" name="kind" defaultValue="newsletter">
@@ -97,11 +102,26 @@ export default async function EmailMarketingPage({
                     <option value="promotion">Promotion</option>
                   </Select>
                 </Field>
-                <Field label="Subject" htmlFor="tpl-subject">
-                  <Input id="tpl-subject" name="subject" required />
+                <Field label="Subject" htmlFor="tpl-subject" hint="Inbox subject line">
+                  <Input
+                    id="tpl-subject"
+                    name="subject"
+                    required
+                    placeholder="e.g. This week at Harbour Roasters"
+                  />
                 </Field>
-                <Field label="HTML" htmlFor="tpl-body">
-                  <Textarea id="tpl-body" name="htmlBody" required rows={3} placeholder="<p>Hi {{name}}</p>" />
+                <Field
+                  label="HTML"
+                  htmlFor="tpl-body"
+                  hint="Use {{name}} / {{company}} merge tags"
+                >
+                  <Textarea
+                    id="tpl-body"
+                    name="htmlBody"
+                    required
+                    rows={3}
+                    placeholder="<p>Hi {{name}} — here's what's on this week…</p>"
+                  />
                 </Field>
                 <Button type="submit">Add template</Button>
               </form>
@@ -133,10 +153,24 @@ export default async function EmailMarketingPage({
               <form action={createEmailSubscriberAction} className="space-y-3 border-t pt-4">
                 <input type="hidden" name="companyId" value={companyId} />
                 <Field label="Email" htmlFor="sub-email">
-                  <Input id="sub-email" name="email" type="email" required />
+                  <Input
+                    id="sub-email"
+                    name="email"
+                    type="email"
+                    required
+                    placeholder="e.g. jamie@example.com"
+                  />
                 </Field>
-                <Field label="Tags" htmlFor="sub-tags">
-                  <Input id="sub-tags" name="tags" placeholder="newsletter" />
+                <Field
+                  label="Tags"
+                  htmlFor="sub-tags"
+                  hint="Comma-separated segment tags"
+                >
+                  <Input
+                    id="sub-tags"
+                    name="tags"
+                    placeholder="newsletter, vip"
+                  />
                 </Field>
                 <label className="flex gap-2 text-sm">
                   <input type="checkbox" name="marketingConsent" /> Marketing consent

@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { formatDate } from "@/lib/utils";
 import type { AiPromptVersion } from "@/lib/types";
 import {
@@ -16,6 +16,11 @@ import {
   createPromptVersionAction,
   deactivatePromptVersionAction,
 } from "./actions";
+
+const MODEL_PROVIDERS = [
+  { value: "anthropic", label: "Anthropic" },
+  { value: "openai", label: "OpenAI" },
+] as const;
 
 export default async function AiPromptsPage() {
   const user = await requireAdmin();
@@ -47,41 +52,77 @@ export default async function AiPromptsPage() {
           <CardContent className="p-6">
             <h2 className="mb-4 font-semibold">Create version</h2>
             <form action={createPromptVersionAction} className="grid gap-4 sm:grid-cols-2">
-              <Field label="Prompt key" htmlFor="promptKey">
-                <Input
+              <Field
+                label="Prompt key"
+                htmlFor="promptKey"
+                hint="Builtin keys only — versions override the in-code default"
+              >
+                <Select
                   id="promptKey"
                   name="promptKey"
-                  list="builtin-prompt-keys"
                   defaultValue={builtinKeys[0] ?? "campaign_plan"}
                   required
-                  placeholder="campaign_plan"
-                />
-                <datalist id="builtin-prompt-keys">
+                >
                   {builtinKeys.map((k) => (
-                    <option key={k} value={k} />
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
                   ))}
-                </datalist>
+                </Select>
               </Field>
               <Field label="Name" htmlFor="name">
-                <Input id="name" name="name" required placeholder="Campaign plan v2" />
+                <Input id="name" name="name" required placeholder="e.g. Campaign plan v2" />
               </Field>
               <Field label="Model provider" htmlFor="modelProvider">
-                <Input id="modelProvider" name="modelProvider" defaultValue="anthropic" />
+                <Select id="modelProvider" name="modelProvider" defaultValue="anthropic">
+                  {MODEL_PROVIDERS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </Select>
               </Field>
               <Field label="Model name" htmlFor="modelName">
-                <Input id="modelName" name="modelName" placeholder="claude-sonnet" />
+                <Input
+                  id="modelName"
+                  name="modelName"
+                  placeholder="e.g. claude-sonnet"
+                />
               </Field>
-              <Field label="Temperature" htmlFor="temperature">
-                <Input id="temperature" name="temperature" type="number" step="0.1" min="0" max="1" />
+              <Field
+                label="Temperature"
+                htmlFor="temperature"
+                hint="0 = deterministic, 1 = more varied (optional)"
+              >
+                <Input
+                  id="temperature"
+                  name="temperature"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="1"
+                  placeholder="e.g. 0.3"
+                />
               </Field>
               <div className="sm:col-span-2">
                 <Field label="Purpose" htmlFor="purpose">
-                  <Input id="purpose" name="purpose" required />
+                  <Input
+                    id="purpose"
+                    name="purpose"
+                    required
+                    placeholder="e.g. Convert a natural-language goal into a structured campaign plan"
+                  />
                 </Field>
               </div>
               <div className="sm:col-span-2">
                 <Field label="Prompt text" htmlFor="promptText">
-                  <Textarea id="promptText" name="promptText" rows={6} required />
+                  <Textarea
+                    id="promptText"
+                    name="promptText"
+                    rows={6}
+                    required
+                    placeholder="You are a marketing campaign planner for an Australian multi-tenant agency…"
+                  />
                 </Field>
               </div>
               <label className="flex items-center gap-2 text-sm sm:col-span-2">

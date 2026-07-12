@@ -1,5 +1,5 @@
 import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
-import { listCompanies, listSocialMentions } from "@/lib/db";
+import { listCompanies, listSocialMentions, getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,17 +28,19 @@ export default async function InboxPage({
       allowed.has(m.companyId) &&
       (!companyId || m.companyId === companyId),
   );
+  const scopedCompany = companyId ? await getCompany(companyId) : null;
   const newMentions = scoped.filter((m) => m.status === "new");
   const handled = scoped.filter((m) => m.status !== "new").length;
 
   return (
     <div>
       <PageHeader
-        title="Social Inbox"
+        title={scopedCompany ? `Social inbox · ${scopedCompany.name}` : "Social Inbox"}
         explainerId="inbox"
         explainer="Customer social mentions, comments, and DMs — not client portal messages. Draft a reply; it still needs human approval before sending."
       >
         <form action={checkForMentionsAction}>
+          {companyId && <input type="hidden" name="companyId" value={companyId} />}
           <Button type="submit" variant="outline">Check for new mentions</Button>
         </form>
       </PageHeader>

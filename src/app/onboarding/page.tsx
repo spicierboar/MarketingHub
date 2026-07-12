@@ -115,7 +115,10 @@ export default async function OnboardingPage({
     campaignsPerMonth: p.campaignsPerMonth,
     promosIncludedPerMonth: p.promosIncludedPerMonth,
     adsManagementIncluded: p.adsManagementIncluded,
+    imageQuotaPerMonth: p.imageQuotaPerMonth,
+    videoQuotaPerMonth: p.videoQuotaPerMonth,
     defaultServiceLevel: p.defaultServiceLevel,
+    customModuleRates: p.customModuleRates,
   }));
 
   const backFromTerms = showWorkspace
@@ -139,12 +142,17 @@ export default async function OnboardingPage({
             <form action={saveOnboardingDetailsAction} className="space-y-4">
               <p className="text-sm text-muted-foreground">Tell us about your business.</p>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Business / legal name" htmlFor="companyName">
+                <Field
+                  label="Business / legal name"
+                  htmlFor="companyName"
+                  hint="As it should appear on invoices and the portal"
+                >
                   <Input
                     id="companyName"
                     name="companyName"
                     required
                     defaultValue={tenant.onboarding?.companyName ?? tenant.name}
+                    placeholder="e.g. Harbourview Hospitality Pty Ltd"
                   />
                 </Field>
                 <Field label="Primary contact name" htmlFor="contactName">
@@ -153,6 +161,7 @@ export default async function OnboardingPage({
                     name="contactName"
                     required
                     defaultValue={tenant.onboarding?.contactName ?? user.name}
+                    placeholder="e.g. Sam Nguyen"
                   />
                 </Field>
                 <Field label="Contact email" htmlFor="contactEmail">
@@ -162,6 +171,7 @@ export default async function OnboardingPage({
                     type="email"
                     required
                     defaultValue={tenant.onboarding?.contactEmail ?? user.email}
+                    placeholder="owner@harbourviewcafe.com.au"
                   />
                 </Field>
                 <Field label="Contact phone (optional)" htmlFor="contactPhone">
@@ -169,15 +179,20 @@ export default async function OnboardingPage({
                     id="contactPhone"
                     name="contactPhone"
                     defaultValue={tenant.onboarding?.contactPhone}
+                    placeholder="04xx xxx xxx"
                   />
                 </Field>
               </div>
-              <Field label="Anything we should know? (optional)" htmlFor="notes">
+              <Field
+                label="Anything we should know? (optional)"
+                htmlFor="notes"
+                hint="Industry, goals, number of brands — plain language"
+              >
                 <Input
                   id="notes"
                   name="notes"
                   defaultValue={tenant.onboarding?.notes}
-                  placeholder="Industry, goals, number of brands…"
+                  placeholder="e.g. Café in Bondi — want more weekday lunch trade"
                 />
               </Field>
               <Button type="submit">Continue →</Button>

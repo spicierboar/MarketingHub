@@ -7,18 +7,25 @@ import {
   PROMO_INDUSTRY_OPTIONS,
   getPromoTemplate,
   isPlatformPromoId,
+  promoIndustryOptions,
   type PromoTemplate,
 } from "@/lib/promo-catalog";
 import type {
   ActingUser,
+  AgencyPromoIndustry,
   AgencyPromoPost,
   AgencyPromoTemplate,
   PromoIndustry,
 } from "@/lib/types";
 import { id, now } from "@/lib/utils";
 
-const INDUSTRY_IDS = new Set(PROMO_INDUSTRY_OPTIONS.map((o) => o.id));
+const PLATFORM_INDUSTRY_IDS = new Set(PROMO_INDUSTRY_OPTIONS.map((o) => o.id));
 const CHANNEL_IDS = new Set(PROMO_CHANNEL_OPTIONS.map((c) => c.id));
+const MAX_CUSTOM_INDUSTRIES = 40;
+
+function industryIdSet(custom?: AgencyPromoIndustry[] | null): Set<string> {
+  return new Set(promoIndustryOptions(custom).map((o) => o.id));
+}
 
 export type PromoTemplateFormInput = {
   user: ActingUser;
@@ -75,12 +82,15 @@ function parsePosts(input: {
   return posts;
 }
 
-function parseTemplateBody(input: PromoTemplateFormInput): Omit<
+function parseTemplateBody(
+  input: PromoTemplateFormInput,
+  allowedIndustries: Set<string>,
+): Omit<
   AgencyPromoTemplate,
   "id" | "active" | "source" | "createdById" | "createdAt" | "updatedAt"
 > {
   const industry = input.industry as PromoIndustry;
-  if (!INDUSTRY_IDS.has(industry)) throw new Error("Choose a valid industry.");
+  if (!allowedIndustries.has(industry)) throw new Error("Choose a valid industry.");
 
   const name = input.name.trim().slice(0, 120);
   const promotion = input.promotion.trim().slice(0, 200);
@@ -184,10 +194,10 @@ async function writeCatalog(
 export async function saveAgencyPromoTemplate(
   input: PromoTemplateFormInput,
 ): Promise<AgencyPromoTemplate> {
-  const body = parseTemplateBody(input);
-  const stamp = now();
   const tenant = await getTenant(input.user.tenantId);
   if (!tenant) throw new Error("Workspace not found.");
+  const body = parseTemplateBody(input, industryIdSet(tenant.promoIndustries));
+  const stamp = now();
   const prev = [...(tenant.promoCatalog ?? [])];
 
   const templateId = input.templateId?.trim();
@@ -334,4 +344,59 @@ export async function resetPlatformPromoOverride(input: {
     throw new Error("Only built-in packs can be reset.");
   }
   await deleteAgencyPromoTemplate(input);
+}
+
+function slugifyIndustryId(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_")
+    .slice(0, 40);
+}
+
+/** Add a tenant-scoped industry option for catalog grouping. */
+export async function createAgencyPromoIndustry(input: {
+  user: ActingUser;
+  label: string;
+  /** Optional slug; auto-derived from label when omitted. */
+  id?: string;
+}): Promise<AgencyPromoIndustry> {
+  const label = input.label.trim().slice(0, 80);
+  if (label.length < 2) throw new Error("Industry name must be at least 2 characters.");
+
+  const slug = slugifyIndustryId(input.id?.trim() || label);
+  if (slug.length < 2 || !/^[a-z][a-z0-9_]*$/.test(slug)) {
+    throw new Error("Industry id must be a lowercase slug (letters, numbers, underscores).");
+  }
+  if (PLATFORM_INDUSTRY_IDS.has(slug)) {
+    throw new Error("That industry already exists in the platform catalog.");
+  }
+
+  const tenant = await getTenant(input.user.tenantId);
+  if (!tenant) throw new Error("Workspace not found.");
+  const prev = [...(tenant.promoIndustries ?? [])];
+  if (prev.some((i) => i.id === slug)) {
+    throw new Error("That industry already exists in your catalog.");
+  }
+  if (prev.length >= MAX_CUSTOM_INDUSTRIES) {
+    throw new Error(`Maximum ${MAX_CUSTOM_INDUSTRIES} custom industries.`);
+  }
+
+  const created: AgencyPromoIndustry = {
+    id: slug,
+    label,
+    createdById: input.user.id,
+    createdAt: now(),
+  };
+  await updateTenant(input.user.tenantId, {
+    promoIndustries: [...prev, created].slice(0, MAX_CUSTOM_INDUSTRIES),
+  });
+  await logAction(input.user, "promo.agency_industry_created", {
+    targetType: "tenant",
+    targetId: input.user.tenantId,
+    detail: `${created.label} (${created.id})`,
+  });
+  return created;
 }

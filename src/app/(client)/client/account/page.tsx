@@ -7,9 +7,21 @@ import {
   getOrCreateCreditWallet,
 } from "@/lib/credit-wallet";
 import { resolveCompanyPackage } from "@/lib/marketing-packages";
+import {
+  promoAllowanceSummary,
+  resolveCustomWorkFeeAud,
+  resolvePromoBillingClass,
+} from "@/lib/promo-allowance";
+import { computePromoPricing, templatesForCompany } from "@/lib/promo-catalog";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
 import { ClientAccountLinks } from "@/components/client-account-links";
+import {
+  ClientExtraWorkPanel,
+  type ExtraWorkPromoCard,
+} from "@/components/client-extra-work-panel";
+import { ActivityHubsGrid } from "@/components/activity-hubs-grid";
+import { clientPortalActivityHubs } from "@/lib/client-activity-hubs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -39,16 +51,48 @@ export default async function ClientAccountPage() {
   const hours = company?.profile.tradingHours?.trim();
   const contact = company?.profile.approvalContact?.trim();
 
+  const allowance = company
+    ? promoAllowanceSummary(company, tenant)
+    : { periodKey: "", used: 0, limit: 0, remaining: 0, promosIncludedPerMonth: 0 };
+  const billingClass = company
+    ? resolvePromoBillingClass(company, tenant)
+    : "extra";
+  const templates = company
+    ? templatesForCompany(company, tenant?.promoCatalog, tenant?.promoIndustries)
+    : [];
+  const promoCards: ExtraWorkPromoCard[] = templates.map((template) => {
+    const pricing = computePromoPricing(
+      template.suggestedClientPriceUsd,
+      template.markupPercent,
+    );
+    return {
+      template,
+      billingClass,
+      expectedFeeUsd: billingClass === "included" ? 0 : pricing.totalUsd,
+      totalUsd: pricing.totalUsd,
+      feeUsd: pricing.feeUsd,
+    };
+  });
+  const customWorkFeeAud = company
+    ? resolveCustomWorkFeeAud(company, tenant)
+    : null;
+
   return (
     <div>
       <PageHeader
         title="Account"
         explainerId="client-account"
-        explainer="Billing, messages to us, and optional file drops. Strategy and brand settings stay with your agency."
+        explainer="Billing, strategy, content status, messages to us, and optional file drops — everything for your account in one place."
       />
       <ClientAccountLinks />
 
       <div className="space-y-5 p-4 sm:p-5">
+        <ActivityHubsGrid
+          hubs={clientPortalActivityHubs()}
+          title="Your account"
+          subtitle="Strategy, content, schedule, asks, and billing for your business — the same client account your agency works in."
+        />
+
         {marketingPkg ? (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold">Marketing package</h2>
@@ -57,7 +101,9 @@ export default async function ClientAccountPage() {
                 <div>
                   <p className="text-sm font-medium">{marketingPkg.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    A${marketingPkg.priceAudMonthly}/mo · package changes are agency-managed
+                    A${marketingPkg.priceAudMonthly}/mo · {marketingPkg.imageQuotaPerMonth}{" "}
+                    AI images + {marketingPkg.videoQuotaPerMonth} short videos / mo included ·
+                    package changes are agency-managed
                   </p>
                 </div>
                 <Link href="/client/requests/new" className={buttonClasses("outline", "sm")}>
@@ -66,6 +112,14 @@ export default async function ClientAccountPage() {
               </CardContent>
             </Card>
           </section>
+        ) : null}
+
+        {company ? (
+          <ClientExtraWorkPanel
+            promos={promoCards}
+            allowance={allowance}
+            customWorkFeeAud={customWorkFeeAud}
+          />
         ) : null}
 
         <section className="space-y-3">

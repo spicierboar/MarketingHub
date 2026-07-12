@@ -17,6 +17,7 @@
 // by an admin (recordLeadAction). This mirrors publishingLive()/analyticsLive().
 
 import { decryptToken } from "@/lib/crypto";
+import { liveIntegrationsAllowed } from "@/lib/env";
 import type {
   AdAccount,
   AdCampaign,
@@ -26,7 +27,8 @@ import type {
 } from "@/lib/types";
 
 export function adsLive(): boolean {
-  return process.env.ADS_LIVE === "true";
+  if (process.env.ADS_LIVE !== "true") return false;
+  return liveIntegrationsAllowed();
 }
 
 export function adsPlatformConfigured(): boolean {

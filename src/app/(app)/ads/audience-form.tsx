@@ -135,11 +135,27 @@ export function AudienceForm({
 
       {/* Demographics */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Field label="Age min" htmlFor="af-agemin">
-          <Input id="af-agemin" name="ageMin" type="number" min={13} max={65} defaultValue={targeting?.ageMin ?? 18} />
+        <Field label="Age min" htmlFor="af-agemin" hint="Platform floor is usually 13">
+          <Input
+            id="af-agemin"
+            name="ageMin"
+            type="number"
+            min={13}
+            max={65}
+            defaultValue={targeting?.ageMin ?? 18}
+            placeholder="18"
+          />
         </Field>
         <Field label="Age max" htmlFor="af-agemax">
-          <Input id="af-agemax" name="ageMax" type="number" min={13} max={65} defaultValue={targeting?.ageMax ?? 65} />
+          <Input
+            id="af-agemax"
+            name="ageMax"
+            type="number"
+            min={13}
+            max={65}
+            defaultValue={targeting?.ageMax ?? 65}
+            placeholder="65"
+          />
         </Field>
         <Field label="Gender" htmlFor="af-gender">
           <Select id="af-gender" name="gender" defaultValue={targeting?.gender ?? "all"}>

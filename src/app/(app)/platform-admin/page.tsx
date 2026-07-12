@@ -66,10 +66,16 @@ export default async function PlatformAdminPage() {
               <summary className="cursor-pointer text-sm font-medium">Publish a new version</summary>
               <form action={publishTermsVersionAction} className="mt-3 space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Title" htmlFor="t-title">
-                    <Input id="t-title" name="title" required defaultValue="Terms of Service" />
+                  <Field label="Title" htmlFor="t-title" hint="Shown on the re-acceptance screen">
+                    <Input
+                      id="t-title"
+                      name="title"
+                      required
+                      defaultValue="Terms of Service"
+                      placeholder="e.g. Terms of Service"
+                    />
                   </Field>
-                  <Field label="Effective date" htmlFor="t-eff">
+                  <Field label="Effective date" htmlFor="t-eff" hint="When the new terms take effect">
                     <Input id="t-eff" name="effectiveDate" type="date" required />
                   </Field>
                 </div>
@@ -103,7 +109,7 @@ export default async function PlatformAdminPage() {
             <form action={createClientWorkspaceAction} className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Business name" htmlFor="c-name">
-                  <Input id="c-name" name="companyName" required placeholder="Acme Cafe" />
+                  <Input id="c-name" name="companyName" required placeholder="e.g. Acme Café" />
                 </Field>
                 <Field label="Workspace type" htmlFor="c-kind">
                   <Select id="c-kind" name="kind" defaultValue="business_group">
@@ -112,10 +118,16 @@ export default async function PlatformAdminPage() {
                   </Select>
                 </Field>
                 <Field label="Owner contact name" htmlFor="c-contact">
-                  <Input id="c-contact" name="contactName" required placeholder="Jane Smith" />
+                  <Input id="c-contact" name="contactName" required placeholder="e.g. Jane Smith" />
                 </Field>
                 <Field label="Owner email" htmlFor="c-email">
-                  <Input id="c-email" name="contactEmail" type="email" required placeholder="jane@acme.example" />
+                  <Input
+                    id="c-email"
+                    name="contactEmail"
+                    type="email"
+                    required
+                    placeholder="e.g. jane@acme.example"
+                  />
                 </Field>
                 <Field label="Plan" htmlFor="c-plan">
                   <Select id="c-plan" name="plan" defaultValue="starter">

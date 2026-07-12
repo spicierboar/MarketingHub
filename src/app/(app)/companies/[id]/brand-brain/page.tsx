@@ -131,11 +131,16 @@ export default async function BrandBrainPage({
                       )}
                       <form action={reviseKnowledgeDocAction} className="mt-3 space-y-3">
                         <input type="hidden" name="docId" value={doc.id} />
-                        <Input name="title" defaultValue={doc.title} />
+                        <Input
+                          name="title"
+                          defaultValue={doc.title}
+                          placeholder="e.g. Brand voice guidelines"
+                        />
                         <Textarea
                           name="content"
                           defaultValue={body}
                           className="min-h-40 text-[13px]"
+                          placeholder="Paste or edit approved brand knowledge…"
                         />
                         <div className="flex gap-2">
                           <Button type="submit" variant="outline" size="sm">
@@ -259,7 +264,12 @@ export default async function BrandBrainPage({
                 <input type="hidden" name="companyId" value={company.id} />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Title" htmlFor="title">
-                    <Input id="title" name="title" required />
+                    <Input
+                      id="title"
+                      name="title"
+                      required
+                      placeholder="e.g. Brand voice guidelines 2026"
+                    />
                   </Field>
                   <Field label="Source type" htmlFor="sourceType">
                     <Select id="sourceType" name="sourceType">
@@ -276,7 +286,13 @@ export default async function BrandBrainPage({
                   htmlFor="content"
                   hint="Paste approved text — saved as draft until you approve."
                 >
-                  <Textarea id="content" name="content" required className="min-h-32" />
+                  <Textarea
+                    id="content"
+                    name="content"
+                    required
+                    className="min-h-32"
+                    placeholder="Paste menu items, prices, or brand voice guidelines…"
+                  />
                 </Field>
                 <Button type="submit" variant="outline">
                   Add as draft

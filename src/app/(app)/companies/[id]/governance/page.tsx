@@ -23,11 +23,18 @@ import {
   setResponseActiveAction,
   withdrawConsentAction,
 } from "../../brand-actions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 
 const EVIDENCE_TYPES = [
   "licence", "certification", "award", "pricing", "guarantee_terms",
   "customer_outcome", "comparison", "safety", "other",
 ] as const;
+
+const CHANNEL_OPTIONS = [
+  ...CONTENT_PLATFORM_OPTIONS,
+  { value: "Website", label: "Website" },
+  { value: "In-store", label: "In-store" },
+];
 
 const RESPONSE_CATEGORIES = [
   "compliment_thanks", "complaint_acknowledgement", "review_response",
@@ -113,22 +120,61 @@ export default async function GovernancePage({
               <summary className="cursor-pointer text-sm font-medium">Add consent record</summary>
               <form action={addConsentAction} className="mt-3 space-y-3">
                 <input type="hidden" name="companyId" value={company.id} />
-                <Field label="Person / customer shown" htmlFor="personShown">
-                  <Input id="personShown" name="personShown" required />
+                <Field
+                  label="Person / customer shown"
+                  htmlFor="personShown"
+                  hint="Name as it appears in the asset"
+                >
+                  <Input
+                    id="personShown"
+                    name="personShown"
+                    required
+                    placeholder="e.g. Dave Chen"
+                  />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Consent document" htmlFor="documentName">
-                    <Input id="documentName" name="documentName" placeholder="filename.pdf" />
+                    <Input
+                      id="documentName"
+                      name="documentName"
+                      placeholder="e.g. model-release-dave.pdf"
+                    />
                   </Field>
-                  <Field label="Expiry date" htmlFor="expiryDate">
+                  <Field label="Expiry date" htmlFor="expiryDate" hint="Optional">
                     <Input id="expiryDate" name="expiryDate" type="date" />
                   </Field>
                 </div>
-                <Field label="Permitted channels" htmlFor="permittedChannels" hint="One per line">
-                  <Textarea id="permittedChannels" name="permittedChannels" className="min-h-16" />
+                <Field
+                  label="Permitted channels"
+                  htmlFor="permittedChannels"
+                  hint="Leave all unchecked to permit every channel"
+                >
+                  <div
+                    id="permittedChannels"
+                    className="flex flex-wrap gap-x-4 gap-y-2"
+                  >
+                    {CHANNEL_OPTIONS.map((ch) => (
+                      <label
+                        key={ch.value}
+                        className="inline-flex items-center gap-1.5 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          name="permittedChannels"
+                          value={ch.value}
+                          className="h-4 w-4"
+                        />
+                        {ch.label}
+                      </label>
+                    ))}
+                  </div>
                 </Field>
                 <Field label="Restrictions" htmlFor="restrictions">
-                  <Input id="restrictions" name="restrictions" />
+                  <Input
+                    id="restrictions"
+                    name="restrictions"
+                    placeholder="e.g. No paid ads; face may not be cropped"
+                  />
                 </Field>
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input type="checkbox" name="consentObtained" className="h-4 w-4" defaultChecked />
@@ -173,8 +219,13 @@ export default async function GovernancePage({
               <form action={addEvidenceAction} className="mt-3 space-y-3">
                 <input type="hidden" name="companyId" value={company.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Title" htmlFor="ev-title">
-                    <Input id="ev-title" name="title" required />
+                  <Field label="Title" htmlFor="ev-title" hint="What this proof is">
+                    <Input
+                      id="ev-title"
+                      name="title"
+                      required
+                      placeholder="e.g. Liquor licence 2026"
+                    />
                   </Field>
                   <Field label="Type" htmlFor="evidenceType">
                     <Select id="evidenceType" name="evidenceType">
@@ -184,12 +235,17 @@ export default async function GovernancePage({
                     </Select>
                   </Field>
                 </div>
-                <Field label="Detail" htmlFor="detail">
-                  <Textarea id="detail" name="detail" className="min-h-16" />
+                <Field label="Detail" htmlFor="detail" hint="Key facts an approver should know">
+                  <Textarea
+                    id="detail"
+                    name="detail"
+                    className="min-h-16"
+                    placeholder="e.g. Issued by NSW Fair Trading — covers on-premise only"
+                  />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Document" htmlFor="ev-doc">
-                    <Input id="ev-doc" name="documentName" placeholder="filename.pdf" />
+                    <Input id="ev-doc" name="documentName" placeholder="licence-2026.pdf" />
                   </Field>
                   <Field label="Valid until" htmlFor="validUntil">
                     <Input id="validUntil" name="validUntil" type="date" />
@@ -242,22 +298,51 @@ export default async function GovernancePage({
               <summary className="cursor-pointer text-sm font-medium">Add approved claim</summary>
               <form action={addClaimAction} className="mt-3 space-y-3">
                 <input type="hidden" name="companyId" value={company.id} />
-                <Field label="Approved claim wording" htmlFor="claimText">
-                  <Input id="claimText" name="claimText" required />
+                <Field
+                  label="Approved claim wording"
+                  htmlFor="claimText"
+                  hint="Exact phrase AI may use — word for word"
+                >
+                  <Input
+                    id="claimText"
+                    name="claimText"
+                    required
+                    placeholder='e.g. "Award-winning coffee since 2014"'
+                  />
                 </Field>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Link evidence" htmlFor="evidenceId">
-                    <Select id="evidenceId" name="evidenceId" defaultValue="">
-                      <option value="">— none —</option>
-                      {evidence.map((e) => (
-                        <option key={e.id} value={e.id}>{e.title}</option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Allowed channels" htmlFor="allowedChannels" hint="Blank = all">
-                    <Input id="allowedChannels" name="allowedChannels" />
-                  </Field>
-                </div>
+                <Field label="Link evidence" htmlFor="evidenceId">
+                  <Select id="evidenceId" name="evidenceId" defaultValue="">
+                    <option value="">— none —</option>
+                    {evidence.map((e) => (
+                      <option key={e.id} value={e.id}>{e.title}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field
+                  label="Allowed channels"
+                  htmlFor="allowedChannels"
+                  hint="Leave all unchecked to permit every channel"
+                >
+                  <div
+                    id="allowedChannels"
+                    className="flex flex-wrap gap-x-4 gap-y-2"
+                  >
+                    {CHANNEL_OPTIONS.map((ch) => (
+                      <label
+                        key={ch.value}
+                        className="inline-flex items-center gap-1.5 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          name="allowedChannels"
+                          value={ch.value}
+                          className="h-4 w-4"
+                        />
+                        {ch.label}
+                      </label>
+                    ))}
+                  </div>
+                </Field>
                 <Button type="submit" size="sm">Add claim</Button>
               </form>
             </details>
@@ -299,8 +384,13 @@ export default async function GovernancePage({
               <form action={addResponseAction} className="mt-3 space-y-3">
                 <input type="hidden" name="companyId" value={company.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Title" htmlFor="resp-title">
-                    <Input id="resp-title" name="title" required />
+                  <Field label="Title" htmlFor="resp-title" hint="Internal label">
+                    <Input
+                      id="resp-title"
+                      name="title"
+                      required
+                      placeholder="e.g. Thanks for the review"
+                    />
                   </Field>
                   <Field label="Category" htmlFor="category">
                     <Select id="category" name="category">
@@ -315,7 +405,13 @@ export default async function GovernancePage({
                   htmlFor="responseText"
                   hint="Use {company} as a placeholder for the company name."
                 >
-                  <Textarea id="responseText" name="responseText" required className="min-h-20" />
+                  <Textarea
+                    id="responseText"
+                    name="responseText"
+                    required
+                    className="min-h-20"
+                    placeholder="Thanks for visiting {company} — we'd love to welcome you back soon."
+                  />
                 </Field>
                 <Button type="submit" size="sm">Add response</Button>
               </form>

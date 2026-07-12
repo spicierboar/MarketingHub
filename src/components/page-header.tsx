@@ -24,7 +24,9 @@ export function PageHeader({
   hideExplainer?: boolean;
   children?: React.ReactNode;
 }) {
-  const tip = explainer ?? description;
+  // When the tip is hidden, `description` is the permanent subtitle — don't
+  // treat it as a tip source (otherwise subtitle never renders).
+  const tip = hideExplainer ? explainer : (explainer ?? description);
   const showTip = Boolean(tip) && !hideExplainer;
   const showDescription = Boolean(description) && description !== tip;
 

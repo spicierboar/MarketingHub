@@ -88,11 +88,18 @@ export function CampaignBuilderPanel({
   );
 
   useEffect(() => {
-    const sel = document.getElementById("builderCompanyId") as HTMLSelectElement | null;
-    if (!sel) return;
-    const onChange = () => setCompanyId(sel.value);
-    sel.addEventListener("change", onChange);
-    return () => sel.removeEventListener("change", onChange);
+    const el = document.getElementById("builderCompanyId");
+    if (!el) return;
+    if (el instanceof HTMLSelectElement) {
+      const onChange = () => setCompanyId(el.value);
+      el.addEventListener("change", onChange);
+      return () => el.removeEventListener("change", onChange);
+    }
+    // LockedCompanyField renders a hidden input + read-only label.
+    const hidden = el.parentElement?.querySelector(
+      'input[name="companyId"]',
+    ) as HTMLInputElement | null;
+    if (hidden?.value) setCompanyId(hidden.value);
   }, []);
 
   const verticalGoals = goalsByCompany.get(companyId) ?? [];

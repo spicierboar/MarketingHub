@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** Overlay form dialog — Escape / backdrop click to close. */
+/** Overlay form dialog — Escape / backdrop click to close. Portaled to body so
+ *  ancestors with overflow (e.g. main overflow-x-hidden) cannot clip it. */
 export function FormModal({
   title,
   description,
@@ -21,6 +23,11 @@ export function FormModal({
   className?: string;
 }) {
   const titleId = useId();
+  const [mounted, setMounted] = useState(false);
+
+  useLayoutEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -35,9 +42,11 @@ export function FormModal({
     };
   }, [onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -68,6 +77,7 @@ export function FormModal({
         </div>
         <div className="overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

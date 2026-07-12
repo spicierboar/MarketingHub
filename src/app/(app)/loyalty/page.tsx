@@ -52,44 +52,87 @@ export default async function LoyaltyPage({ searchParams }: { searchParams: Prom
           <div className="grid gap-4 md:grid-cols-2">
             <Card><CardContent className="space-y-3 p-4">
               <h3 className="font-medium">Add tier</h3>
-              <form action={createTierAction}>
+              <form action={createTierAction} className="space-y-3">
                 <input type="hidden" name="companyId" value={companyId} />
-                <Field label="Name"><Input name="name" required placeholder="Gold" /></Field>
-                <Field label="Points threshold"><Input name="thresholdPoints" type="number" defaultValue={500} /></Field>
-                <Field label="Benefits"><Input name="benefits" placeholder="10% off" /></Field>
+                <Field label="Name" hint="Tier label customers see">
+                  <Input name="name" required placeholder="e.g. Gold" />
+                </Field>
+                <Field label="Points threshold" hint="Points needed to unlock">
+                  <Input
+                    name="thresholdPoints"
+                    type="number"
+                    min={0}
+                    defaultValue={500}
+                    placeholder="500"
+                  />
+                </Field>
+                <Field label="Benefits" hint="Short perk summary">
+                  <Input name="benefits" placeholder="e.g. 10% off + free coffee" />
+                </Field>
                 <Button type="submit">Add tier</Button>
               </form>
             </CardContent></Card>
             <Card><CardContent className="space-y-3 p-4">
               <h3 className="font-medium">Enroll member</h3>
-              <form action={enrollMemberAction}>
+              <form action={enrollMemberAction} className="space-y-3">
                 <input type="hidden" name="companyId" value={companyId} />
-                <Field label="Name"><Input name="displayName" required /></Field>
-                <Field label="Email"><Input name="email" type="email" /></Field>
+                <Field label="Name" hint="How they appear in the program">
+                  <Input name="displayName" required placeholder="e.g. Sam Chen" />
+                </Field>
+                <Field label="Email" hint="Optional — for referrals and receipts">
+                  <Input
+                    name="email"
+                    type="email"
+                    placeholder="e.g. sam@example.com"
+                  />
+                </Field>
                 <Button type="submit">Enroll</Button>
               </form>
             </CardContent></Card>
             <Card><CardContent className="space-y-3 p-4">
               <h3 className="font-medium">Create coupon</h3>
-              <form action={createCouponAction}>
+              <form action={createCouponAction} className="space-y-3">
                 <input type="hidden" name="companyId" value={companyId} />
-                <Field label="Code"><Input name="code" required placeholder="SUMMER10" /></Field>
-                <Field label="Name"><Input name="name" required /></Field>
-                <Field label="Segment tag"><Input name="segmentTag" placeholder="vip" /></Field>
-                <Field label="Value"><Input name="value" type="number" defaultValue={10} /></Field>
+                <Field label="Code" hint="What the customer enters">
+                  <Input name="code" required placeholder="SUMMER10" />
+                </Field>
+                <Field label="Name" hint="Internal / receipt label">
+                  <Input name="name" required placeholder="e.g. Summer 10% off" />
+                </Field>
+                <Field label="Segment tag" hint="Blank = all members">
+                  <Input name="segmentTag" placeholder="vip" />
+                </Field>
+                <Field label="Value" hint="Discount amount or percent points">
+                  <Input name="value" type="number" defaultValue={10} placeholder="10" />
+                </Field>
                 <Button type="submit">Create offer</Button>
               </form>
             </CardContent></Card>
             <Card><CardContent className="space-y-3 p-4">
               <h3 className="font-medium">Record referral</h3>
-              <form action={recordReferralAction}>
+              <form action={recordReferralAction} className="space-y-3">
                 <input type="hidden" name="companyId" value={companyId} />
                 <Field label="Referrer member">
                   <Select name="memberId" defaultValue={members[0]?.id}>
-                    {members.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+                    {members.length === 0 ? (
+                      <option value="">Enroll a member first</option>
+                    ) : (
+                      members.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.displayName}
+                        </option>
+                      ))
+                    )}
                   </Select>
                 </Field>
-                <Field label="Referee email"><Input name="refereeEmail" type="email" required /></Field>
+                <Field label="Referee email" hint="Person being referred">
+                  <Input
+                    name="refereeEmail"
+                    type="email"
+                    required
+                    placeholder="e.g. friend@example.com"
+                  />
+                </Field>
                 <Button type="submit">Track referral</Button>
               </form>
             </CardContent></Card>

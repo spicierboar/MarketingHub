@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/utils";
 import {
@@ -39,10 +40,18 @@ export default async function WorkflowsPage({
   const user = await requireAdmin();
   const params = await searchParams;
   const companies = (await listCompanies(user.tenantId)).filter((c) => c.status !== "archived");
-  const selectedId =
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const locked = Boolean(params.company);
+  const contextCompanyId =
     params.company && companies.some((c) => c.id === params.company)
       ? params.company
-      : companies[0]?.id;
+      : undefined;
+  const selectedId = locked
+    ? contextCompanyId
+    : contextCompanyId ?? companies[0]?.id;
+  const scopedCompany = selectedId
+    ? companies.find((c) => c.id === selectedId)
+    : undefined;
 
   const [allWorkflows, agencyTemplates, logs, contacts] = await Promise.all([
     listMarketingWorkflows(user.tenantId, selectedId ? { companyId: selectedId } : undefined),
@@ -54,12 +63,12 @@ export default async function WorkflowsPage({
   const settings = selectedId
     ? (await getMarketingWorkflowSettings(selectedId)) ?? defaultMarketingWorkflowSettings(selectedId)
     : null;
-  const company = companies.find((c) => c.id === selectedId);
+  const company = scopedCompany;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Marketing Workflows"
+        title={scopedCompany ? `Workflows · ${scopedCompany.name}` : "Marketing Workflows"}
         description="Trigger-based email/SMS sequences with quiet hours, frequency caps, and consent checks. Simulated until WORKFLOW_LIVE is enabled."
       />
       <Card>
@@ -72,14 +81,12 @@ export default async function WorkflowsPage({
       </Card>
 
       <form method="get" className="flex flex-wrap items-end gap-3">
-        <Field label="Client">
-          <Select name="company" defaultValue={selectedId ?? ""}>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
-        </Field>
-        <Button type="submit" variant="secondary">View</Button>
+        <LockedCompanyFilter
+          companies={companyOpts}
+          companyId={selectedId}
+          locked={locked && Boolean(selectedId)}
+        />
+        {!locked && <Button type="submit" variant="secondary">View</Button>}
       </form>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -100,16 +107,18 @@ export default async function WorkflowsPage({
         <Card>
           <CardContent className="space-y-4 p-6">
             <h2 className="text-lg font-semibold">Agency templates</h2>
-            <form action={createAgencyTemplateAction} className="flex flex-wrap items-end gap-2">
-              <Field label="Template">
-                <Select name="templateKind" defaultValue="welcome">
-                  {WORKFLOW_TEMPLATE_KINDS.map((k) => (
-                    <option key={k} value={k}>{k.replace(/_/g, " ")}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Button type="submit" variant="secondary">Create template</Button>
-            </form>
+            {!locked && (
+              <form action={createAgencyTemplateAction} className="flex flex-wrap items-end gap-2">
+                <Field label="Template">
+                  <Select name="templateKind" defaultValue="welcome">
+                    {WORKFLOW_TEMPLATE_KINDS.map((k) => (
+                      <option key={k} value={k}>{k.replace(/_/g, " ")}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Button type="submit" variant="secondary">Create template</Button>
+              </form>
+            )}
             <ul className="space-y-2 text-sm">
               {agencyTemplates.map((w) => (
                 <li key={w.id} className="rounded border p-3">
@@ -141,8 +150,12 @@ export default async function WorkflowsPage({
               <h2 className="text-lg font-semibold">Client workflows — {company.name}</h2>
               <form action={createCompanyWorkflowAction} className="flex flex-wrap items-end gap-2">
                 <input type="hidden" name="companyId" value={company.id} />
-                <Field label="Name">
-                  <Input name="name" placeholder="Optional custom name" />
+                <Field label="Name" htmlFor="wf-name" hint="Leave blank to use the template name">
+                  <Input
+                    id="wf-name"
+                    name="name"
+                    placeholder="e.g. Welcome series — Café Blue"
+                  />
                 </Field>
                 <Field label="From template">
                   <Select name="templateKind" defaultValue="welcome">
@@ -212,14 +225,45 @@ export default async function WorkflowsPage({
                 <h2 className="text-lg font-semibold">Settings</h2>
                 <form action={saveWorkflowSettingsAction} className="space-y-3">
                   <input type="hidden" name="companyId" value={company.id} />
-                  <Field label="Quiet hours start (HH:MM)">
-                    <Input name="quietHoursStart" defaultValue={settings.quietHoursStart} />
+                  <Field
+                    label="Quiet hours start"
+                    htmlFor="quietHoursStart"
+                    hint="24h clock — no sends after this until end"
+                  >
+                    <Input
+                      id="quietHoursStart"
+                      name="quietHoursStart"
+                      defaultValue={settings.quietHoursStart}
+                      placeholder="21:00"
+                      pattern="[0-2][0-9]:[0-5][0-9]"
+                    />
                   </Field>
-                  <Field label="Quiet hours end (HH:MM)">
-                    <Input name="quietHoursEnd" defaultValue={settings.quietHoursEnd} />
+                  <Field
+                    label="Quiet hours end"
+                    htmlFor="quietHoursEnd"
+                    hint="24h clock — sends resume at this time"
+                  >
+                    <Input
+                      id="quietHoursEnd"
+                      name="quietHoursEnd"
+                      defaultValue={settings.quietHoursEnd}
+                      placeholder="08:00"
+                      pattern="[0-2][0-9]:[0-5][0-9]"
+                    />
                   </Field>
-                  <Field label="Frequency cap per week">
-                    <Input name="frequencyCapPerWeek" type="number" min={1} defaultValue={settings.frequencyCapPerWeek} />
+                  <Field
+                    label="Frequency cap per week"
+                    htmlFor="frequencyCapPerWeek"
+                    hint="Max automated messages per contact / week"
+                  >
+                    <Input
+                      id="frequencyCapPerWeek"
+                      name="frequencyCapPerWeek"
+                      type="number"
+                      min={1}
+                      defaultValue={settings.frequencyCapPerWeek}
+                      placeholder="e.g. 3"
+                    />
                   </Field>
                   <Button type="submit">Save settings</Button>
                 </form>

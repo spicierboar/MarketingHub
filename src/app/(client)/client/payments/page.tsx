@@ -108,7 +108,11 @@ export default async function ClientPaymentsPage() {
                 </p>
                 <form action={topUpClientCreditAction} className="flex flex-wrap items-end gap-3">
                   <input type="hidden" name="companyId" value={companyId} />
-                  <Field label="Amount (AUD)" htmlFor="topUpAmount">
+                  <Field
+                    label="Amount (AUD)"
+                    htmlFor="topUpAmount"
+                    hint="Typical top-ups are $50–$500"
+                  >
                     <Input
                       id="topUpAmount"
                       name="amountUsd"
@@ -116,6 +120,7 @@ export default async function ClientPaymentsPage() {
                       min="1"
                       step="1"
                       defaultValue={100}
+                      placeholder="e.g. 100"
                       className="w-36"
                       required
                     />
@@ -180,7 +185,11 @@ export default async function ClientPaymentsPage() {
                         : "Complete a card top-up first so a payment method is saved; until then demo mode simulates the credit."
                       : "Demo mode simulates ledger credit only — no card is charged."}
                   </p>
-                  <Field label="Top-up amount (AUD)" htmlFor="topUpAmt">
+                  <Field
+                    label="Top-up amount (AUD)"
+                    htmlFor="topUpAmt"
+                    hint="Charged when balance hits the trigger"
+                  >
                     <Input
                       id="topUpAmt"
                       name="topUpAmountUsd"
@@ -188,6 +197,7 @@ export default async function ClientPaymentsPage() {
                       min="1"
                       step="1"
                       defaultValue={wallet.topUpAmountUsd}
+                      placeholder="100"
                       className="w-36"
                       required
                     />

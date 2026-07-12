@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/utils";
 import type { OrderStatus, RestaurantOrder } from "@/lib/types";
@@ -46,8 +47,14 @@ export default async function OrderingPage({
   const companies = (await listCompanies(user.tenantId)).filter(
     (c) => c.status !== "archived",
   );
-  const companyId = params.company ?? companies[0]?.id;
-  const company = companies.find((c) => c.id === companyId);
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const locked = Boolean(params.company);
+  const contextCompanyId =
+    params.company && companies.some((c) => c.id === params.company)
+      ? params.company
+      : undefined;
+  const companyId = locked ? contextCompanyId : contextCompanyId ?? companies[0]?.id;
+  const company = companyId ? companies.find((c) => c.id === companyId) : undefined;
   const addons = company ? await companyAddonMap(user.tenantId, company.id) : null;
 
   const [menuItems, orders, settingsRow] = companyId
@@ -68,7 +75,7 @@ export default async function OrderingPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Order Now"
+        title={company ? `Order Now · ${company.name}` : "Order Now"}
         description="Direct online ordering for restaurant clients — menu, guest checkout, kitchen queue, Stripe Connect payouts."
       />
 
@@ -86,16 +93,12 @@ export default async function OrderingPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Client" htmlFor="ord-company">
-              <Select id="ord-company" name="company" defaultValue={companyId}>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">View</Button>
+            <LockedCompanyFilter
+              companies={companyOpts}
+              companyId={companyId}
+              locked={locked && Boolean(companyId)}
+            />
+            {!locked && <Button type="submit">View</Button>}
           </form>
           {company && addons && (
             <p className="mt-3 text-sm text-muted-foreground">
@@ -169,10 +172,16 @@ export default async function OrderingPage({
                     step="0.01"
                     min="0"
                     defaultValue={(settings.minOrderCents / 100).toFixed(2)}
+                    placeholder="e.g. 25.00"
                   />
                 </Field>
-                <Field label="Button label" htmlFor="btn-label">
-                  <Input id="btn-label" name="buttonLabel" defaultValue={settings.buttonLabel} />
+                <Field label="Button label" htmlFor="btn-label" hint="Shown on the public order page">
+                  <Input
+                    id="btn-label"
+                    name="buttonLabel"
+                    defaultValue={settings.buttonLabel}
+                    placeholder="e.g. Order online"
+                  />
                 </Field>
                 <Button type="submit" size="sm">
                   Save settings
@@ -195,16 +204,34 @@ export default async function OrderingPage({
               <form action={saveMenuItemAction} className="mb-6 space-y-3 border-b pb-6">
                 <input type="hidden" name="companyId" value={company.id} />
                 <Field label="Item name" htmlFor="mi-name">
-                  <Input id="mi-name" name="name" required />
+                  <Input
+                    id="mi-name"
+                    name="name"
+                    required
+                    placeholder="e.g. Flat white"
+                  />
                 </Field>
                 <Field label="Category" htmlFor="mi-cat">
                   <Input id="mi-cat" name="category" placeholder="Coffee, Food…" />
                 </Field>
                 <Field label="Price (AUD)" htmlFor="mi-price">
-                  <Input id="mi-price" name="priceAud" type="number" step="0.01" min="0.01" required />
+                  <Input
+                    id="mi-price"
+                    name="priceAud"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    placeholder="e.g. 5.50"
+                  />
                 </Field>
                 <Field label="Description" htmlFor="mi-desc">
-                  <Textarea id="mi-desc" name="description" className="min-h-16" />
+                  <Textarea
+                    id="mi-desc"
+                    name="description"
+                    className="min-h-16"
+                    placeholder="Optional — allergens, size, extras"
+                  />
                 </Field>
                 <Button type="submit" size="sm">
                   Add menu item

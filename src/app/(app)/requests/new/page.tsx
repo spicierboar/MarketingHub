@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { createRequestAction } from "../actions";
 import { MARKETING_FIELD_HELP } from "@/lib/profile-suggestions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 
 const REQUEST_TYPES = [
   ["social_post", "Social media post"],
@@ -44,18 +45,24 @@ export default async function NewRequestPage({
   const pf = await searchParams;
   const accessible = new Set(companies.map((c) => c.id));
   const pfCompany = pf.company && accessible.has(pf.company) ? pf.company : undefined;
+  const formCompanies = pfCompany
+    ? companies.filter((c) => c.id === pfCompany)
+    : companies;
   const pfType = REQUEST_TYPES.some(([v]) => v === pf.type) ? pf.type : undefined;
   const pfAudience = pf.audience;
-  const pfPlatform = pf.platform;
+  const pfPlatform = CONTENT_PLATFORM_OPTIONS.some((p) => p.value === pf.platform)
+    ? pf.platform
+    : "";
+  const cancelHref = pfCompany ? `/requests?company=${pfCompany}` : "/requests";
 
   return (
     <div>
       <PageHeader
-        title="New marketing support request"
-        description="Tell us what you need — the AI drafts it, an approver reviews it."
+        title="Log a request for a client"
+        description="You're filing this for the client — not asking the platform. Capture what they need; AI can draft from it, then an approver reviews."
       />
       <div className="mx-auto max-w-3xl p-6">
-        {companies.length === 0 ? (
+        {formCompanies.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">
               You have no companies assigned yet. Ask an admin to assign you.
@@ -66,9 +73,13 @@ export default async function NewRequestPage({
             <Card>
               <CardContent className="space-y-5 p-6">
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Client" htmlFor="companyId">
+                  <Field
+                    label="Client"
+                    htmlFor="companyId"
+                    hint="Which client's ticket is this?"
+                  >
                     <Select id="companyId" name="companyId" required defaultValue={pfCompany}>
-                      {companies.map((c) => (
+                      {formCompanies.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
@@ -132,26 +143,36 @@ export default async function NewRequestPage({
                     htmlFor="platform"
                     hint={MARKETING_FIELD_HELP.platform}
                   >
-                    <Input
-                      id="platform"
-                      name="platform"
-                      placeholder="Facebook, Instagram, Email…"
-                      defaultValue={pfPlatform}
-                    />
+                    <Select id="platform" name="platform" defaultValue={pfPlatform ?? ""}>
+                      <option value="">Not specified</option>
+                      {CONTENT_PLATFORM_OPTIONS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
                   <Field
                     label="Offer / promotion"
                     htmlFor="offer"
                     hint={MARKETING_FIELD_HELP.offer}
                   >
-                    <Input id="offer" name="offer" placeholder="Optional" />
+                    <Input
+                      id="offer"
+                      name="offer"
+                      placeholder="e.g. 15% off weekday lunch with code LOCAL15"
+                    />
                   </Field>
                   <Field
                     label="Call to action"
                     htmlFor="callToAction"
                     hint={MARKETING_FIELD_HELP.callToAction}
                   >
-                    <Input id="callToAction" name="callToAction" placeholder="Book a table" />
+                    <Input
+                      id="callToAction"
+                      name="callToAction"
+                      placeholder="e.g. Book a table"
+                    />
                   </Field>
                 </div>
 
@@ -172,8 +193,16 @@ export default async function NewRequestPage({
                   </Field>
                 </div>
 
-                <Field label="Notes for the marketing team" htmlFor="notes">
-                  <Textarea id="notes" name="notes" />
+                <Field
+                  label="Notes for the marketing team"
+                  htmlFor="notes"
+                  hint="Assets, must-avoid wording, timing constraints"
+                >
+                  <Textarea
+                    id="notes"
+                    name="notes"
+                    placeholder="e.g. Client wants no stock photos — use Friday night shots from Drive"
+                  />
                 </Field>
 
                 <Field
@@ -209,12 +238,12 @@ export default async function NewRequestPage({
 
             <div className="mt-4 flex items-center justify-end gap-2">
               <Link
-                href="/requests"
+                href={cancelHref}
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </Link>
-              <Button type="submit">Submit request</Button>
+              <Button type="submit">Log request</Button>
             </div>
           </form>
         )}

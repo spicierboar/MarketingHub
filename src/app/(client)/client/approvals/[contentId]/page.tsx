@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/form";
+import { Field, Textarea } from "@/components/ui/form";
 import { titleCase } from "@/lib/utils";
 import { ShieldCheck } from "lucide-react";
 import { portalApproveContentAction, portalRequestChangesAction } from "../../../actions";
@@ -71,7 +71,19 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
                 </form>
                 <form action={portalRequestChangesAction} className="space-y-2">
                   <input type="hidden" name="contentId" value={content.id} />
-                  <Textarea name="note" placeholder="What should we change?" className="min-h-20" />
+                  <Field
+                    label="What should we change?"
+                    htmlFor="change-note"
+                    hint="Be specific — tone, offer, photo, spelling, or timing"
+                  >
+                    <Textarea
+                      id="change-note"
+                      name="note"
+                      placeholder="e.g. Soften the discount line and swap the hero photo for the shopfront shot"
+                      className="min-h-20"
+                      required
+                    />
+                  </Field>
                   <Button type="submit" variant="outline" className="w-full">Ask for changes</Button>
                 </form>
               </div>

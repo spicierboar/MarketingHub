@@ -5,6 +5,7 @@
 
 import { resolveBusinessType } from "@/lib/business-profiles";
 import type {
+  AgencyPromoIndustry,
   AgencyPromoTemplate,
   BusinessType,
   CampaignItem,
@@ -22,6 +23,19 @@ export const PROMO_CHANNEL_OPTIONS: { id: string; label: string }[] = [
   { id: "google_business", label: "Google Business" },
   { id: "tiktok", label: "TikTok" },
   { id: "email", label: "Email" },
+];
+
+/**
+ * Display-label platforms for request / content / studio / schedule fields.
+ * Values are stored as human-readable labels (match Publishing PLATFORMS).
+ */
+export const CONTENT_PLATFORM_OPTIONS: { value: string; label: string }[] = [
+  { value: "Facebook", label: "Facebook" },
+  { value: "Instagram", label: "Instagram" },
+  { value: "Google Business Profile", label: "Google Business Profile" },
+  { value: "TikTok", label: "TikTok" },
+  { value: "Email", label: "Email" },
+  { value: "Paid ads", label: "Paid ads" },
 ];
 
 export interface PromoTemplateOutline {
@@ -1600,8 +1614,34 @@ export const PROMO_INDUSTRY_OPTIONS: { id: PromoIndustry; label: string }[] = [
   { id: "other", label: "General / other" },
 ];
 
+const PLATFORM_INDUSTRY_LABELS: Record<string, string> = Object.fromEntries(
+  PROMO_INDUSTRY_OPTIONS.map((o) => [o.id, o.label]),
+);
+
+/** Platform options plus tenant custom industries (deduped by id). */
+export function promoIndustryOptions(
+  custom?: AgencyPromoIndustry[] | { id: string; label: string }[] | null,
+): { id: string; label: string }[] {
+  const seen = new Set(PROMO_INDUSTRY_OPTIONS.map((o) => o.id));
+  const merged: { id: string; label: string }[] = PROMO_INDUSTRY_OPTIONS.map((o) => ({
+    id: o.id,
+    label: o.label,
+  }));
+  for (const c of custom ?? []) {
+    const id = String(c.id ?? "").trim();
+    const label = String(c.label ?? "").trim();
+    if (!id || !label || seen.has(id)) continue;
+    seen.add(id);
+    merged.push({ id, label });
+  }
+  return merged;
+}
+
 /** Map company business type (+ industry text) to promo industries to show. */
-export function promoIndustriesForCompany(company: Company): PromoIndustry[] {
+export function promoIndustriesForCompany(
+  company: Company,
+  customIndustries?: AgencyPromoIndustry[] | null,
+): PromoIndustry[] {
   const bt = resolveBusinessType(company);
   const industry = (company.profile.industry ?? "").toLowerCase();
   const out: PromoIndustry[] = [];
@@ -1617,17 +1657,22 @@ export function promoIndustriesForCompany(company: Company): PromoIndustry[] {
   }
 
   if (bt === "other") {
-    if (out.length > 0) return [...new Set(out)];
-    return [
-      "retail",
-      "restaurant_cafe",
-      "fast_food",
-      "hotel",
-      "fitness",
-      "beauty_salon",
-      "professional",
-      "other",
-    ];
+    if (out.length === 0) {
+      out.push(
+        "retail",
+        "restaurant_cafe",
+        "fast_food",
+        "hotel",
+        "fitness",
+        "beauty_salon",
+        "professional",
+        "other",
+      );
+    }
+    for (const c of customIndustries ?? []) {
+      out.push(c.id);
+    }
+    return [...new Set(out)];
   }
 
   out.push(bt);
@@ -1638,14 +1683,27 @@ export function promoIndustriesForCompany(company: Company): PromoIndustry[] {
     if (!out.includes("fast_food")) out.push("fast_food");
   }
 
+  for (const c of customIndustries ?? []) {
+    const label = c.label.toLowerCase();
+    const slugWords = c.id.replace(/_/g, " ");
+    if (
+      industry.includes(label) ||
+      industry.includes(slugWords) ||
+      industry.includes(c.id)
+    ) {
+      out.push(c.id);
+    }
+  }
+
   return [...new Set(out)];
 }
 
 export function templatesForCompany(
   company: Company,
   agencyCatalog?: AgencyPromoTemplate[],
+  customIndustries?: AgencyPromoIndustry[] | null,
 ): PromoTemplate[] {
-  const industries = new Set(promoIndustriesForCompany(company));
+  const industries = new Set(promoIndustriesForCompany(company, customIndustries));
   return listAllPromoTemplates(agencyCatalog).filter((t) => industries.has(t.industry));
 }
 
@@ -1692,18 +1750,13 @@ export function filterOutlinesForChannels(
   }));
 }
 
-export function industryLabel(industry: PromoIndustry): string {
-  const map: Record<PromoIndustry, string> = {
-    retail: "Retail / e-commerce",
-    restaurant_cafe: "Restaurant / café",
-    fast_food: "Fast food / QSR",
-    hotel: "Hotels / hospitality",
-    fitness: "Fitness / gym",
-    beauty_salon: "Beauty / salon",
-    professional: "Professional services",
-    other: "General",
-  };
-  return map[industry] ?? industry;
+export function industryLabel(
+  industry: string,
+  custom?: AgencyPromoIndustry[] | { id: string; label: string }[] | null,
+): string {
+  const fromCustom = custom?.find((c) => c.id === industry)?.label;
+  if (fromCustom) return fromCustom;
+  return PLATFORM_INDUSTRY_LABELS[industry] ?? industry.replace(/_/g, " ");
 }
 
 export function durationLabel(template: PromoTemplate): string {

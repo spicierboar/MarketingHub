@@ -15,8 +15,10 @@ function text(fd: FormData, key: string): string {
 }
 
 function lines(fd: FormData, key: string): string[] {
-  return String(fd.get(key) || "")
-    .split(/[\n,]/)
+  // Checkboxes (name=key, multiple) or legacy comma/newline text.
+  return fd
+    .getAll(key)
+    .flatMap((v) => String(v).split(/[\n,]/))
     .map((s) => s.trim())
     .filter(Boolean);
 }

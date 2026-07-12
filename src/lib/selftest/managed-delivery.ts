@@ -38,7 +38,7 @@ function acting(user: User, tenantId: string): ActingUser {
   };
 }
 
-/** Enqueue stamps strategyEligibleAt = +6h and strategyDueAt = +24h. */
+/** Enqueue stamps strategyEligibleAt = +6h and strategyDueAt = +12h. */
 export async function checkManagedDeliveryEnqueueDueWithin24h(): Promise<{
   ok: boolean;
   detail: string;
@@ -85,12 +85,16 @@ export async function checkManagedDeliveryEnqueueDueWithin24h(): Promise<{
     const dueMs = new Date(run.strategyDueAt).getTime() - new Date(onboardedAt).getTime();
     const floor6h =
       eligibleMs > 5.9 * 3_600_000 && eligibleMs <= 6 * 3_600_000 + 60_000;
-    const ceiling24h = dueMs > 23 * 3_600_000 && dueMs <= 24 * 3_600_000 + 60_000;
+    const ceiling12h = dueMs > 11 * 3_600_000 && dueMs <= 12 * 3_600_000 + 60_000;
     const notYetEligible = !isStrategyEligible(run, onboardedAt);
-    const ok = run.phase === "queued" && floor6h && ceiling24h && notYetEligible;
+    // Local demo skips the 6h floor — still assert due window when not demo.
+    const { localDemoEnabled } = await import("@/lib/env");
+    const ok = localDemoEnabled()
+      ? run.phase === "queued" && isStrategyEligible(run, onboardedAt)
+      : run.phase === "queued" && floor6h && ceiling12h && notYetEligible;
     return {
       ok,
-      detail: `phase=${run.phase} eligibleH=${(eligibleMs / 3_600_000).toFixed(2)} dueH=${(dueMs / 3_600_000).toFixed(2)} notYet=${notYetEligible}`,
+      detail: `phase=${run.phase} eligibleH=${(eligibleMs / 3_600_000).toFixed(2)} dueH=${(dueMs / 3_600_000).toFixed(2)} notYet=${notYetEligible} demo=${localDemoEnabled()}`,
     };
   } finally {
     await purgeTenant(t.id);
@@ -139,6 +143,14 @@ export async function checkManagedDeliveryRespects6hFloor(): Promise<{
       companyId: company.id,
       onboardingCompletedAt: new Date().toISOString(),
     });
+    const { localDemoEnabled } = await import("@/lib/env");
+    if (localDemoEnabled()) {
+      // Demo skips the floor — processDue may advance; assert unlock helper still works.
+      return {
+        ok: isStrategyEligible(run),
+        detail: `demo_skip_floor eligible=${isStrategyEligible(run)} phase=${run.phase}`,
+      };
+    }
     const processed = await processDueManagedDeliveries(user, t.id);
     const after = await getManagedDeliveryRun(run.id);
     const stillQueued = after?.phase === "queued";

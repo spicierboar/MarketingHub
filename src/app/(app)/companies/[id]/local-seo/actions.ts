@@ -4,11 +4,7 @@ import { revalidatePath } from "next/cache";
 import { assertAdminCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { getCompany } from "@/lib/db";
-import {
-  buildLocalSeoQaDrafts,
-  spawnLocalSeoQaDraft,
-  type LocalSeoQaDraftSpec,
-} from "@/lib/local-seo";
+import { buildLocalSeoQaDrafts, spawnLocalSeoQaDraft } from "@/lib/local-seo";
 
 export async function spawnLocalSeoQaDraftAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "").trim();
@@ -40,5 +36,3 @@ export async function spawnLocalSeoQaDraftAction(formData: FormData) {
   revalidatePath("/content");
   revalidatePath("/studio");
 }
-
-export type { LocalSeoQaDraftSpec };

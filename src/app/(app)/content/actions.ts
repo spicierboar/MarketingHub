@@ -41,12 +41,14 @@ import { assertAiBudget } from "@/lib/ai/budget";
 import { duplicateWarning } from "@/lib/ai/similarity";
 import { recordAiUsage } from "@/lib/ai/metering";
 import { assertAiRateLimit } from "@/lib/ratelimit";
-import { canApproveRoute, ROUTE_LABEL } from "@/lib/routing";
+import { canApproveRoute, ROUTE_LABEL, routeContent } from "@/lib/routing";
 import { governContent } from "@/lib/content-governance";
 import {
   applyQualityRoutingAfterDraft,
   submitHeldContentToClient,
 } from "@/lib/managed-service/quality-routing";
+import { generateVoice, type VoiceStyle } from "@/lib/ai/voicegen";
+import { persistGeneratedAsset } from "@/lib/visuals";
 
 // §54 — content (or its company) under an active legal hold must not be
 // overwritten. Guards every mutation path.
@@ -677,4 +679,100 @@ export async function recheckComplianceAction(formData: FormData) {
     companyId: content.companyId,
   });
   revalidatePath(`/content/${contentId}`);
+}
+
+const VOICE_STYLES: VoiceStyle[] = ["warm", "professional", "energetic", "calm"];
+
+/** Content hub — voiceover script draft + placeholder audio asset (no live TTS yet). */
+export async function generateAiVoiceAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "").trim();
+  const user = await assertCompanyAccess(companyId);
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("Company not found");
+  if (company.status !== "ai_ready" && company.status !== "approved") {
+    throw new Error("Company is not AI-ready. Complete onboarding first.");
+  }
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId);
+
+  const script = String(formData.get("script") || "").trim();
+  if (!script) throw new Error("A voiceover script is required");
+  const topic = String(formData.get("topic") || "").trim() || undefined;
+  const rawStyle = String(formData.get("voiceStyle") || "warm").trim();
+  const voiceStyle = (VOICE_STYLES.includes(rawStyle as VoiceStyle)
+    ? rawStyle
+    : "warm") as VoiceStyle;
+
+  const result = await generateVoice({ company, script, voiceStyle, topic });
+
+  const compliance = await checkCompliance(result.scriptBody, company);
+  const claimAudit = await auditClaims(result.scriptBody, company);
+  const routedTo = routeContent({
+    type: "video_script",
+    compliance,
+    claimAudit,
+  });
+
+  const aiRun = await recordAiUsage({
+    tenantId: user.tenantId,
+    companyId,
+    userId: user.id,
+    kind: "voice_gen",
+    model: result.model,
+    promptSummary: result.prompt.slice(0, 120),
+    outputChars: result.scriptBody.length + result.bytes.length,
+    sourcesUsed: ["Brand Brain: company profile"],
+    contextChars: result.prompt.length + script.length,
+  });
+
+  const content = await createContent({
+    companyId,
+    requestId: null,
+    type: "video_script",
+    title: result.name,
+    body: result.scriptBody,
+    status: "ai_draft",
+    createdById: user.id,
+    compliance,
+    claimAudit,
+    routedTo,
+    groundingLabel: "suggested_by_ai",
+    brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
+    aiModel: result.model,
+    aiPrompt: result.prompt,
+    sourcesUsed: ["Brand Brain: company profile", "Content hub: AI Voice Gen"],
+    aiRunId: aiRun.id,
+    estCostUsd: aiRun.estCostUsd,
+  });
+
+  const asset = await persistGeneratedAsset({
+    tenantId: user.tenantId,
+    companyId,
+    userId: user.id,
+    name: `${result.name} (audio)`,
+    description: result.description,
+    assetType: "audio",
+    mimeType: result.mimeType,
+    bytes: result.bytes,
+    channels: [],
+    targetContentId: content.id,
+    aiModel: result.model,
+    aiPrompt: result.prompt,
+    aiRunId: aiRun.id,
+    estCostUsd: aiRun.estCostUsd,
+    sourcesUsed: ["Content hub: AI Voice Gen"],
+  });
+
+  await updateContent(content.id, {
+    assetIds: [asset.id],
+  });
+
+  await logAction(user, "content.voice_drafted", {
+    targetType: "content",
+    targetId: content.id,
+    companyId,
+    detail: `${voiceStyle} · asset ${asset.id} · placeholder audio`,
+  });
+
+  redirect(`/content/${content.id}`);
 }

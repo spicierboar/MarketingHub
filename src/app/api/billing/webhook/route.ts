@@ -14,17 +14,28 @@ import {
   getRestaurantOrder,
   getTenant,
   getTenantByStripeCustomer,
+  updateCompany,
   updateRestaurantOrder,
   updateTenant,
   upsertCompanyEntitlement,
 } from "@/lib/db";
-import { planForPriceId, stripeConfigured, verifyStripeSignature } from "@/lib/billing";
+import {
+  isMarketingPackageCheckoutKind,
+  planForPriceId,
+  stripeConfigured,
+  verifyStripeSignature,
+} from "@/lib/billing";
 import { applyPaidCreditTopUp } from "@/lib/credit-top-up";
 import { planFor } from "@/lib/plans";
 import { isAddonId } from "@/lib/addons";
 import { runInServiceContext } from "@/lib/db/service-context";
 import { logAction } from "@/lib/audit";
-import type { ActingUser, PlanId, Tenant } from "@/lib/types";
+import type {
+  ActingUser,
+  ManagedServiceSettings,
+  PlanId,
+  Tenant,
+} from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 
 const WEBHOOK_ACTOR = { id: "stripe_webhook", email: "webhooks@stripe.com" };
@@ -50,8 +61,8 @@ function str(v: unknown): string | undefined {
 
 // checkout.session.completed → link the Stripe customer/subscription and set
 // the purchased plan (metadata.planId was stamped when we created the session).
-// An ADD-ON checkout (metadata.kind === "addon") is a different beast — it
-// enables a per-company entitlement, never touches the plan — so it forks first.
+// Kind forks first: addon / order / credit_top_up / marketing_package never
+// touch tenant plan or stripeSubscriptionId.
 async function onCheckoutCompleted(session: StripeObject): Promise<void> {
   const meta = session.metadata as StripeObject | undefined;
   if (str(meta?.kind) === "addon") {
@@ -64,6 +75,10 @@ async function onCheckoutCompleted(session: StripeObject): Promise<void> {
   }
   if (str(meta?.kind) === "credit_top_up") {
     await onCreditTopUpCheckout(session);
+    return;
+  }
+  if (isMarketingPackageCheckoutKind(meta)) {
+    await onMarketingPackageCheckout(session);
     return;
   }
   const tenantId =
@@ -97,6 +112,48 @@ async function onCheckoutCompleted(session: StripeObject): Promise<void> {
     targetType: "tenant",
     targetId: tenantId,
     detail: `Plan set to ${nextPlan} via Stripe Checkout`,
+  });
+}
+
+/**
+ * Company marketing-package Checkout completed → clear
+ * packageChangePendingBilling only. Never writes tenant.plan /
+ * stripeSubscriptionId (those are SaaS plan Checkout fields).
+ */
+async function onMarketingPackageCheckout(session: StripeObject): Promise<void> {
+  const meta = session.metadata as StripeObject | undefined;
+  const tenantId = str(session.client_reference_id) ?? str(meta?.tenantId);
+  const companyId = str(meta?.companyId);
+  const packageId = str(meta?.packageId);
+  if (!tenantId || !companyId) return;
+  const paymentStatus = str(session.payment_status);
+  if (paymentStatus && paymentStatus !== "paid" && paymentStatus !== "no_payment_required") {
+    return;
+  }
+  await runInServiceContext(tenantId, async () => {
+    const company = await getCompany(companyId);
+    if (!company || company.tenantId !== tenantId) return;
+    const prev = company.profile.managedService;
+    if (!prev?.packageChangePendingBilling) return;
+    const nextMs: ManagedServiceSettings = { ...prev };
+    delete nextMs.packageChangePendingBilling;
+    await updateCompany(companyId, {
+      profile: { ...company.profile, managedService: nextMs },
+    });
+    const sessionId = str(session.id);
+    await logAction(WEBHOOK_ACTOR, "company.marketing_package_paid", {
+      tenantId,
+      targetType: "company",
+      targetId: companyId,
+      companyId,
+      detail: [
+        "stripe webhook · packageChangePendingBilling cleared",
+        packageId ? `package=${packageId}` : null,
+        sessionId ? `session=${sessionId}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    });
   });
 }
 
@@ -256,11 +313,11 @@ async function onAddonSubscriptionDeleted(sub: StripeObject): Promise<void> {
 }
 
 // customer.subscription.updated → sync the plan to whatever price is active.
-// Add-on subscriptions carry metadata.kind === "addon" and are NOT plan
-// subscriptions — ignore them here (they have no plan to sync; their lifecycle
-// is enable-on-checkout / cancel-on-delete).
+// Add-on / marketing-package subscriptions carry metadata.kind and are NOT
+// tenant plan subscriptions — ignore them here.
 async function onSubscriptionUpdated(sub: StripeObject): Promise<void> {
-  if (str((sub.metadata as StripeObject | undefined)?.kind) === "addon") return;
+  const kind = str((sub.metadata as StripeObject | undefined)?.kind);
+  if (kind === "addon" || kind === "marketing_package") return;
   const tenant = await tenantForSubscription(sub);
   if (!tenant) return;
   const items = (sub.items as StripeObject | undefined)?.data as
@@ -282,11 +339,14 @@ async function onSubscriptionUpdated(sub: StripeObject): Promise<void> {
 // companies keep working; only NEW company creation is gated by the limit.
 // If the ended subscription is an ADD-ON (not the plan), cancel the entitlement
 // instead — downgrading the plan on an add-on cancellation would be a bug.
+// Marketing-package subs never touch tenant plan either.
 async function onSubscriptionDeleted(sub: StripeObject): Promise<void> {
-  if (str((sub.metadata as StripeObject | undefined)?.kind) === "addon") {
+  const kind = str((sub.metadata as StripeObject | undefined)?.kind);
+  if (kind === "addon") {
     await onAddonSubscriptionDeleted(sub);
     return;
   }
+  if (kind === "marketing_package") return;
   const tenant = await tenantForSubscription(sub);
   if (!tenant || tenant.plan === "starter") return;
   // Only downgrade when the deleted subscription is the tenant's CURRENT plan

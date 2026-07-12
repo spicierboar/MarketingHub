@@ -25,10 +25,15 @@ import {
 } from "@/lib/db";
 import { localDemoEnabled } from "@/lib/env";
 import { planFor, type PlanDef } from "@/lib/plans";
-import type { AddonId, PlanId, Tenant } from "@/lib/types";
+import type { AddonId, MarketingPackageId, PlanId, Tenant } from "@/lib/types";
 
 export function stripeConfigured(): boolean {
   return !!process.env.STRIPE_SECRET_KEY;
+}
+
+/** Prefer mock package checkout in local demo even when Stripe keys exist. */
+export function useMockPackageCheckout(): boolean {
+  return localDemoEnabled() || !stripeConfigured();
 }
 
 // The Stripe Price for each plan (created in the owner's Stripe dashboard).
@@ -294,6 +299,141 @@ export async function createAddonCheckoutSession(
     "subscription_data[metadata][companyId]": companyId,
     success_url: successUrl,
     cancel_url: cancelUrl,
+  };
+  if (tenant.stripeCustomerId) params.customer = tenant.stripeCustomerId;
+  const session = await stripePost("checkout/sessions", params);
+  return typeof session?.url === "string" ? session.url : null;
+}
+
+// ---- Marketing package Checkout (company SKU) --------------------------------
+//
+// Price IDs are optional env stubs. Mock Checkout only when local demo / no
+// Stripe keys / no STRIPE_PRICE_PACKAGE_* — never fall through to mock after a
+// failed live session create. Webhook kind=marketing_package clears
+// packageChangePendingBilling and must NOT touch tenant plan / subscription.
+
+export function stripeMarketingPackagePriceId(
+  packageId: MarketingPackageId,
+): string | undefined {
+  if (packageId === "custom") {
+    return process.env.STRIPE_PRICE_PACKAGE_CUSTOM?.trim() || undefined;
+  }
+  return (
+    {
+      basic: process.env.STRIPE_PRICE_PACKAGE_BASIC,
+      pro: process.env.STRIPE_PRICE_PACKAGE_PRO,
+      blast: process.env.STRIPE_PRICE_PACKAGE_BLAST,
+    }[packageId]?.trim() || undefined
+  );
+}
+
+/** True when Checkout metadata identifies a company marketing-package SKU. */
+export function isMarketingPackageCheckoutKind(
+  meta: Record<string, unknown> | undefined | null,
+): boolean {
+  return typeof meta?.kind === "string" && meta.kind === "marketing_package";
+}
+
+/**
+ * Retrieve a Checkout Session by id (live Stripe only).
+ * Returns null when unconfigured / not found — never invents a paid session.
+ */
+export async function retrieveCheckoutSession(
+  sessionId: string,
+): Promise<Record<string, unknown> | null> {
+  if (!stripeConfigured() || !sessionId.trim()) return null;
+  return stripeGet(`checkout/sessions/${encodeURIComponent(sessionId.trim())}`);
+}
+
+export type MarketingPackageCheckoutVerify =
+  | { ok: true; sessionId: string; companyId: string; tenantId: string; packageId?: string }
+  | { ok: false; reason: string };
+
+/**
+ * Server-side gate before clearing packageChangePendingBilling from a browser
+ * return URL. `?checkout=success` alone must never settle.
+ */
+export function verifyMarketingPackageCheckoutSession(
+  session: Record<string, unknown> | null | undefined,
+  expect: { tenantId: string; companyId: string },
+): MarketingPackageCheckoutVerify {
+  if (!session) return { ok: false, reason: "session_missing" };
+  const sessionId = typeof session.id === "string" ? session.id : "";
+  if (!sessionId) return { ok: false, reason: "session_id_missing" };
+  const meta = session.metadata as Record<string, unknown> | undefined;
+  if (!isMarketingPackageCheckoutKind(meta)) {
+    return { ok: false, reason: "wrong_kind" };
+  }
+  const tenantId =
+    (typeof meta?.tenantId === "string" ? meta.tenantId : undefined) ??
+    (typeof session.client_reference_id === "string"
+      ? session.client_reference_id
+      : undefined);
+  const companyId = typeof meta?.companyId === "string" ? meta.companyId : undefined;
+  if (!tenantId || tenantId !== expect.tenantId) {
+    return { ok: false, reason: "tenant_mismatch" };
+  }
+  if (!companyId || companyId !== expect.companyId) {
+    return { ok: false, reason: "company_mismatch" };
+  }
+  const paymentStatus =
+    typeof session.payment_status === "string" ? session.payment_status : "";
+  const status = typeof session.status === "string" ? session.status : "";
+  // Subscription Checkout may report payment_status=paid or unpaid+complete
+  // (trial / delayed invoice). Accept complete + paid/no_payment_required.
+  const paidOk =
+    paymentStatus === "paid" ||
+    paymentStatus === "no_payment_required" ||
+    (status === "complete" && paymentStatus !== "unpaid");
+  if (!paidOk && status !== "complete") {
+    return { ok: false, reason: `not_complete:${status || "?"}:${paymentStatus || "?"}` };
+  }
+  const packageId =
+    typeof meta?.packageId === "string" ? meta.packageId : undefined;
+  return { ok: true, sessionId, companyId, tenantId, packageId };
+}
+
+function withCheckoutSessionId(url: string): string {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}session_id={CHECKOUT_SESSION_ID}`;
+}
+
+/**
+ * Hosted Stripe Checkout for a company marketing package subscription.
+ * Returns null when demo / keys missing / price unset — caller should mock
+ * only in those cases (never after a failed live create).
+ */
+export async function createMarketingPackageCheckoutSession(
+  tenant: Tenant,
+  companyId: string,
+  packageId: MarketingPackageId,
+  origin: string,
+  returnPaths?: { successPath?: string; cancelPath?: string },
+): Promise<string | null> {
+  if (useMockPackageCheckout()) return null;
+  const price = stripeMarketingPackagePriceId(packageId);
+  if (!price) return null;
+  const successPath = returnPaths?.successPath
+    ? returnPaths.successPath
+    : `/sales/new-client?step=checkout&companyId=${encodeURIComponent(companyId)}&checkout=success`;
+  const cancelPath = returnPaths?.cancelPath
+    ? returnPaths.cancelPath
+    : `/sales/new-client?step=checkout&companyId=${encodeURIComponent(companyId)}&checkout=cancelled`;
+  const params: Record<string, string> = {
+    mode: "subscription",
+    "line_items[0][price]": price,
+    "line_items[0][quantity]": "1",
+    client_reference_id: tenant.id,
+    "metadata[tenantId]": tenant.id,
+    "metadata[kind]": "marketing_package",
+    "metadata[packageId]": packageId,
+    "metadata[companyId]": companyId,
+    "subscription_data[metadata][tenantId]": tenant.id,
+    "subscription_data[metadata][kind]": "marketing_package",
+    "subscription_data[metadata][packageId]": packageId,
+    "subscription_data[metadata][companyId]": companyId,
+    success_url: withCheckoutSessionId(`${origin}${successPath}`),
+    cancel_url: `${origin}${cancelPath}`,
   };
   if (tenant.stripeCustomerId) params.customer = tenant.stripeCustomerId;
   const session = await stripePost("checkout/sessions", params);

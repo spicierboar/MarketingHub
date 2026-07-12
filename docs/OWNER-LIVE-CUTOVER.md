@@ -656,7 +656,8 @@ Update `docs/parallel/PROGRESS.md` owner-ops table when each phase completes.
 
 ## Related docs
 
-- `docs/DEPLOYMENT.md` — staging vs production, `appEnv()` contract
+- `docs/ENVIRONMENTS.md` — **Local · Staging · Live** owner map (start here for three-env setup)
+- `docs/DEPLOYMENT.md` — `appEnv()` contract, Vercel Production vs Preview
 - `docs/PRODUCTION.md` — broader production wiring (code-oriented)
-- `.env.example` — full variable list with comments
+- `.env.example` — Local / Staging / Live variable sections (no secrets)
 - `HANDOVER.md` — current blockers (read only; M00 updates)

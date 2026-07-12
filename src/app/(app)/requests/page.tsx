@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleRequests } from "@/lib/scope";
-import { listCompanies, listUsers } from "@/lib/db";
+import { listCompanies, listUsers, getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -32,14 +32,17 @@ export default async function RequestsPage({
   const userById = new Map((await listUsers(user.tenantId)).map((u) => [u.id, u]));
   const companyOptions = [...companyById.values()]
     .filter((c) => allowed.has(c.id) && c.status !== "archived")
+    .filter((c) => !companyId || c.id === companyId)
     .map((c) => ({ id: c.id, name: c.name }));
+
+  const scopedCompany = companyId ? await getCompany(companyId) : null;
 
   return (
     <div>
       <PageHeader
-        title="Marketing support requests"
-        explainerId="requests"
-        explainer="Messages from clients (Ask us) land here as tickets. Triage, convert to drafts/campaigns, and track status."
+        title={scopedCompany ? `Client asks · ${scopedCompany.name}` : "Client asks"}
+        description="Messages from clients and asks your team logs on their behalf."
+        hideExplainer
       >
         <NewRequestModalTrigger
           companies={companyOptions}
@@ -47,21 +50,16 @@ export default async function RequestsPage({
         />
       </PageHeader>
 
-      <div className="p-6">
-        {requests.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              No requests yet.{" "}
-              <NewRequestModalTrigger
-                companies={companyOptions}
-                defaults={companyId ? { companyId } : undefined}
-                linkStyle
-                label="Submit the first one"
-              />
-              .
-            </p>
-          </div>
-        ) : (
+      {requests.length === 0 ? (
+        <div className="flex min-h-[calc(100vh-12rem)] flex-col items-center justify-center gap-4 px-6 text-center">
+          <p className="text-sm text-muted-foreground">No requests yet…</p>
+          <NewRequestModalTrigger
+            companies={companyOptions}
+            defaults={companyId ? { companyId } : undefined}
+          />
+        </div>
+      ) : (
+        <div className="p-6">
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -111,8 +109,8 @@ export default async function RequestsPage({
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

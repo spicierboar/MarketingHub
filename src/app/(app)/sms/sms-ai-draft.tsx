@@ -55,8 +55,13 @@ export function SmsCampaignAiDraft({ companyId }: { companyId: string }) {
         key={state ? `ai-${state.body.slice(0, 40)}` : "manual"}
       >
         <input type="hidden" name="companyId" value={companyId} />
-        <Field label="Name">
-          <Input name="name" required defaultValue={state?.name ?? ""} />
+        <Field label="Name" hint="Internal campaign label">
+          <Input
+            name="name"
+            required
+            defaultValue={state?.name ?? ""}
+            placeholder="e.g. Weekend special blast"
+          />
         </Field>
         <Field label="Kind">
           <Select name="kind" defaultValue="promotional">
@@ -64,21 +69,26 @@ export function SmsCampaignAiDraft({ companyId }: { companyId: string }) {
             <option value="transactional">Transactional</option>
           </Select>
         </Field>
-        <Field label="Segment tag">
-          <Input name="segmentTag" />
+        <Field label="Segment tag" hint="Only subscribers with this tag — blank = all opted-in">
+          <Input name="segmentTag" placeholder="loyalty" />
         </Field>
-        <Field label="UTM campaign">
-          <Input name="utmCampaign" />
+        <Field label="UTM campaign" hint="Optional analytics tag">
+          <Input name="utmCampaign" placeholder="weekend-special-jul" />
         </Field>
-        <Field label="Short link" className="md:col-span-2">
-          <Input name="shortLink" type="url" />
+        <Field label="Short link" className="md:col-span-2" hint="Optional tracking URL in the message">
+          <Input name="shortLink" type="url" placeholder="https://go.example.com/weekend" />
         </Field>
-        <Field label="Message" className="md:col-span-2" hint="Include STOP for promotional">
+        <Field
+          label="Message"
+          className="md:col-span-2"
+          hint="Include STOP for promotional. Merge {{name}} / {{company}}"
+        >
           <Textarea
             name="body"
             rows={4}
             required
             defaultValue={state?.body ?? DEFAULT_BODY}
+            placeholder={DEFAULT_BODY}
           />
         </Field>
         <div className="md:col-span-2">

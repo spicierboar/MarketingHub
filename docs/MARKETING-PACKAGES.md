@@ -103,11 +103,12 @@ Changes to a company’s package → bill/credit path + **updated implementation
 ## Shared delivery rules
 
 1. Signup → pick package (Custom → module picker).  
-2. **6h–24h** after signup: implementation plan **email** + schedule on **client calendar**.  
-   - `strategyEligibleAt = onboard + 6h` · `strategyDueAt = onboard + 24h`  
+2. **6h–12h** after signup: implementation plan **email** + schedule on **client calendar** + Strategy UI.  
+   - `strategyEligibleAt = onboard + 6h` · `strategyDueAt = onboard + 12h`  
    - Runner does not start until eligible; SLA ceiling remains due.  
+   - Local demo (`CC_LOCAL_DEMO`): eligible immediately so Strategy can unlock without waiting.  
 3. Plan change anytime → payment/credit + refreshed strategy.  
-   - **Unlike signup:** `strategyEligibleAt = now` (no 6h delay) · `strategyDueAt = now + 24h` so the update is not held for 6 hours.  
+   - **Unlike signup:** `strategyEligibleAt = now` (no 6h delay) · `strategyDueAt = now + 12h` so the update is not held for 6 hours.  
    - Clears `implementationPlanEmailedAt` so the full plan email can send again when the run completes.  
    - Immediate client email: “Your implementation plan is being updated for [Package]” (when email configured).  
    - Billing: audit old→new package + prices; stamp `packageChangePendingBilling` until Stripe package Checkout/proration ships (no invented charges).  
@@ -124,6 +125,7 @@ Changes to a company’s package → bill/credit path + **updated implementation
 | Tenant overrides | `Tenant.marketingPackageCatalog` |
 | Company assignment | `ManagedServiceSettings.marketingPackageId` (+ `customModules`) |
 | Agency assign + refresh | `saveMarketingPackageAction` → `enqueueManagedDeliveryForCompany({ reason: "package_change" })` |
+| Strategy UI | Agency `/companies/[id]/strategy` · Client `/client/strategy` |
 | Agency UI | `/marketing-packages` + company overview |
 | Relevance | `src/lib/calendar-intelligence.ts` (+ callers for campaigns/promos) |
 

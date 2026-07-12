@@ -31,13 +31,17 @@ export default async function ClientNewRequestPage() {
               <input type="hidden" name="urgency" value="normal" />
               <input type="hidden" name="objective" value="" />
 
-              <Field label="Message" htmlFor="notes">
+              <Field
+                label="Message"
+                htmlFor="notes"
+                hint="Timing, photos, a correction, or a promo idea — plain language is fine"
+              >
                 <Textarea
                   id="notes"
                   name="notes"
                   required
                   rows={6}
-                  placeholder="What do you need? Timing, photos, a correction — anything."
+                  placeholder="e.g. We need a post about our new Saturday brunch hours starting 19 July — 8am–2pm."
                 />
               </Field>
               <Field

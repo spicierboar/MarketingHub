@@ -1,11 +1,25 @@
 // Auto-onboarding (V1 module 13) — with explicit consent, scrape client website
 // + public social URLs to pre-fill Brand Brain / company profile fields.
-// Deterministic simulation when live fetch keys are off; live fetch gated on
-// appEnv() + AUTO_ONBOARDING_LIVE + AUTO_ONBOARDING_FETCH_KEY.
+// Live HTTP fetch is on by default in development/staging; production opts in via
+// AUTO_ONBOARDING_LIVE=true. AUTO_ONBOARDING_FETCH_KEY is an optional proxy auth
+// header only — it does not gate whether public HTML is fetched.
 
 import { appEnv } from "@/lib/env";
 import { enrichExtractedWithBusinessType } from "@/lib/signup-prefill-templates";
 import type { Company, CompanyProfile, SocialLink } from "@/lib/types";
+import tls from "node:tls";
+
+// On Windows / corporate SSL, Node's default Mozilla CA bundle often fails leaf
+// verification. Prefer the OS trust store for outbound HTML fetches (matches
+// `node --use-system-ca` used by `dev:supabase`). Safe no-op when unavailable.
+try {
+  const systemCerts = tls.getCACertificates?.("system");
+  if (systemCerts?.length) {
+    tls.setDefaultCACertificates?.(systemCerts);
+  }
+} catch {
+  /* older Node or restricted env */
+}
 
 // ---- types -------------------------------------------------------------------
 
@@ -44,11 +58,17 @@ export interface AutoOnboardingExtractedFields {
   natureOfBusiness?: string;
   serviceAreas?: string[];
   services?: string[];
+  /** Retail/grocery nav categories — stored on profile.retail, not Services. */
+  productCategories?: string[];
   targetCustomers?: string;
   brandVoice?: string;
   callsToAction?: string[];
   currentOffers?: string;
   socialLinks?: SocialLink[];
+  /** Real trust lines found on-site (optional). */
+  approvedClaims?: string[];
+  /** Real disclaimer / terms lines found on-site (optional). */
+  requiredDisclaimers?: string[];
 }
 
 export interface AutoOnboardingFieldPreview {
@@ -76,6 +96,12 @@ export interface AutoOnboardingScrapeResult {
     phone?: string;
     email?: string;
     enrichMode?: "claude" | "template";
+    /** Scrape/enrich product categories for retail (applied to profile.retail). */
+    productCategories?: string[];
+    /** Real trust lines found on-site. */
+    approvedClaims?: string[];
+    /** Real disclaimer / terms lines found on-site. */
+    requiredDisclaimers?: string[];
   };
 }
 
@@ -99,11 +125,13 @@ export interface AutoOnboardingScrapeInput {
 
 /** True when outbound HTTP fetches for onboarding scrape are permitted. */
 export function autoOnboardingLive(): boolean {
-  const hasKey = !!process.env.AUTO_ONBOARDING_FETCH_KEY?.trim();
-  if (!hasKey) return false;
+  const flag = (process.env.AUTO_ONBOARDING_LIVE || "").trim().toLowerCase();
+  if (flag === "false" || flag === "0" || flag === "off") return false;
   const env = appEnv();
+  // Non-prod: fetch public HTML by default so New Client scrape works in demos.
   if (env === "development" || env === "staging") return true;
-  return process.env.AUTO_ONBOARDING_LIVE === "true";
+  // Production: explicit opt-in only.
+  return flag === "true" || flag === "1" || flag === "on";
 }
 
 // ---- URL helpers -------------------------------------------------------------
@@ -155,12 +183,6 @@ export function assertScrapeUrls(urls: AutoOnboardingUrls): void {
 
 // ---- deterministic simulation ------------------------------------------------
 
-function simpleHash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-}
-
 function titleFromHostname(hostname: string): string {
   const base = hostname
     .replace(/^www\./i, "")
@@ -169,15 +191,50 @@ function titleFromHostname(hostname: string): string {
   return base.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Share/intent/plugin URLs — never treat as a profile. */
+function isSocialShareOrJunkUrl(url: string): boolean {
+  const u = url.toLowerCase();
+  return (
+    /\/sharer|\/share\.php|\/share\b|\/intent\/|\/dialog\/|\/plugins\/|platform\.twitter|addtoany|buffer\.com\/add|pinterest\.com\/pin\/create/i.test(
+      u,
+    ) ||
+    /facebook\.com\/sharer|twitter\.com\/intent|x\.com\/intent/i.test(u)
+  );
+}
+
 function detectSocialPlatform(url: string): string | undefined {
-  const host = new URL(url).hostname.toLowerCase();
-  if (host.includes("facebook.com")) return "facebook";
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  const path = parsed.pathname.toLowerCase();
+
+  if (host === "fb.com" || host === "fb.me" || host.includes("facebook.com")) {
+    return "facebook";
+  }
   if (host.includes("instagram.com")) return "instagram";
   if (host.includes("linkedin.com")) return "linkedin";
   if (host.includes("tiktok.com")) return "tiktok";
   if (host.includes("youtube.com") || host.includes("youtu.be")) return "youtube";
-  if (host.includes("x.com") || host.includes("twitter.com")) return "x";
-  if (host.includes("google.") || host.includes("g.page")) return "google_business";
+  if (host === "x.com" || host.includes("twitter.com")) return "x";
+  // Google Business / Maps public profile links (not fonts/accounts/etc.)
+  if (
+    host === "g.page" ||
+    host.endsWith(".g.page") ||
+    host === "maps.app.goo.gl" ||
+    (host === "goo.gl" && path.startsWith("/maps")) ||
+    host.includes("business.google.com") ||
+    ((host === "google.com" ||
+      host === "google.com.au" ||
+      host.endsWith(".google.com") ||
+      host.endsWith(".google.com.au")) &&
+      (/\/maps\//.test(path) || path.includes("/place/")))
+  ) {
+    return "google_business";
+  }
   return undefined;
 }
 
@@ -282,62 +339,34 @@ function simulatedDemoHtml(url: string): string | undefined {
 </html>`;
 }
 
+/**
+ * Soft fallback when live fetch is off or failed for a non-demo host.
+ * Hostname-only signals — never invent services / areas / marketing fluff that
+ * looks like a successful scrape (that caused the Viya Imports demo bug).
+ */
 function simulatePageContent(url: string): PageContent {
   const demoHtml = simulatedDemoHtml(url);
   if (demoHtml) return pageContentFromHtml(url, demoHtml);
 
   const parsed = new URL(url);
-  const h = simpleHash(url);
   const platform = detectSocialPlatform(url);
-  const kind: "website" | "social" = platform ? "social" : "website";
   const trading = titleFromHostname(parsed.hostname);
 
-  const industries = [
-    "Cafe & restaurant",
-    "Health & dental",
-    "Retail",
-    "Professional services",
-    "Hospitality",
-  ];
-  const industry = industries[h % industries.length];
-
-  const areas = ["CBD", "Northside", "Harbour precinct", "Inner west"];
-  const area = areas[h % areas.length];
-
-  const services =
-    kind === "social"
-      ? ["Social updates", "Community engagement", "Promotions"]
-      : ["Consultation", "Core service", "Premium package"];
-
   const title =
-    kind === "social"
-      ? `${trading} on ${platform ?? "social"}`
-      : `${trading} — ${industry}`;
-
+    platform != null
+      ? `${trading} on ${platform}`
+      : trading;
   const description =
-    kind === "social"
-      ? `Follow ${trading} for ${area} offers, behind-the-scenes and seasonal menus.`
-      : `${trading} serves ${area} with friendly, professional ${industry.toLowerCase()}. Book online today.`;
-
-  const body = [
-    description,
-    `Services: ${services.join(", ")}.`,
-    `Target customers: locals and visitors in ${area}.`,
-    `Brand voice: warm, approachable, expert.`,
-    `CTA: Book now · Call us · Visit ${area}`,
-    h % 3 === 0 ? "Special: 15% off weekday lunch — terms apply." : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+    platform != null
+      ? `${trading} public ${platform} profile.`
+      : "";
 
   const wrappedHtml = `<!DOCTYPE html><html><head>
 <meta property="og:site_name" content="${trading}">
 <meta property="og:title" content="${title}">
-<meta property="og:description" content="${description}">
-<meta name="twitter:title" content="${title}">
-<meta name="twitter:description" content="${description}">
+${description ? `<meta property="og:description" content="${description}">` : ""}
 <title>${title}</title>
-</head><body><p>${body}</p></body></html>`;
+</head><body><p>${trading}</p></body></html>`;
 
   return pageContentFromHtml(url, wrappedHtml);
 }
@@ -355,19 +384,67 @@ const FOOTER_BLOCK_RE =
   /<(?:footer|div)[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>[\s\S]*?<\/(?:footer|div)>/gi;
 const ANCHOR_RE = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 const IMG_TAG_RE = /<img[^>]*>/gi;
+/** Nav / chrome labels that are never services or product categories. */
 const SKIP_NAV_LABELS = new Set([
   "home",
   "about",
+  "about us",
   "contact",
+  "contact us",
   "blog",
   "news",
   "login",
+  "log in",
   "sign in",
+  "sign up",
+  "signup",
+  "register",
+  "create account",
+  "my account",
+  "account",
+  "cart",
+  "basket",
+  "bag",
+  "checkout",
+  "wishlist",
+  "favourites",
+  "favorites",
   "privacy",
+  "privacy policy",
   "terms",
+  "terms of service",
   "faq",
+  "faqs",
   "careers",
+  "jobs",
+  "search",
+  "menu",
+  "toggle menu",
+  "open menu",
+  "close menu",
+  "skip to content",
+  "skip to main content",
+  "all products",
+  "categories",
+  "shop all",
+  "view all",
+  "sale",
+  "offers",
+  "deals",
+  "help",
+  "support",
+  "track order",
+  "track your order",
+  "order tracking",
+  "returns",
+  "shipping",
+  "delivery info",
 ]);
+
+/** Phrases scraped from mobile headers / a11y chrome — never nature copy. */
+const UI_CHROME_RE =
+  /\b(?:toggle\s+menu|open\s+menu|close\s+menu|skip\s+to\s+(?:main\s+)?content|search\s+for|loading[.…]*|cookie\s+(?:policy|settings|preferences)|accept\s+(?:all\s+)?cookies?)\b/gi;
+const WELCOME_CHROME_RE = /\bwelcome\s+to\s+[^.!?]{1,48}[!]?/gi;
 
 function extractMetaTags(html: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -390,7 +467,7 @@ function stripHtml(html: string): string {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 4000);
+    .slice(0, 8000);
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -537,11 +614,38 @@ function extractHrefLinks(
 }
 
 function socialLinkFromUrl(url: string): SocialLink | undefined {
-  const normalised = normaliseHttpUrl(url);
+  let raw = (url ?? "").trim();
+  if (!raw || raw.startsWith("#") || raw.startsWith("javascript:")) return undefined;
+  if (raw.startsWith("//")) raw = `https:${raw}`;
+  const normalised = normaliseHttpUrl(raw);
   if (!normalised) return undefined;
+  if (isSocialShareOrJunkUrl(normalised)) return undefined;
   const platform = detectSocialPlatform(normalised);
   if (!platform) return undefined;
   return { platform, url: normalised };
+}
+
+/**
+ * Scan the whole page for social profile hrefs (header/footer/icon rows).
+ * Footer-only parsing misses many Shopify / e-commerce themes.
+ */
+function extractPageSocialLinks(html: string): SocialLink[] {
+  const links: SocialLink[] = [];
+  let m: RegExpExecArray | null;
+  ANCHOR_RE.lastIndex = 0;
+  while ((m = ANCHOR_RE.exec(html)) !== null) {
+    const social = socialLinkFromUrl(decodeHtmlEntities(m[1].trim()));
+    if (social) links.push(social);
+  }
+  // <link rel="me" href="…"> (IndieWeb / some themes)
+  const linkMeRe =
+    /<link[^>]+rel=["'][^"']*\bme\b[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>|<link[^>]+href=["']([^"']+)["'][^>]*rel=["'][^"']*\bme\b[^"']*["'][^>]*>/gi;
+  linkMeRe.lastIndex = 0;
+  while ((m = linkMeRe.exec(html)) !== null) {
+    const social = socialLinkFromUrl(decodeHtmlEntities((m[1] ?? m[2] ?? "").trim()));
+    if (social) links.push(social);
+  }
+  return links;
 }
 
 function mergeSocialLinks(...groups: SocialLink[][]): SocialLink[] {
@@ -572,18 +676,187 @@ function extractLogoUrl(html: string, meta: Record<string, string>): string | un
   return undefined;
 }
 
+/** True when a nav/link label is chrome, auth, or account UI — not a service. */
+export function isChromeServiceLabel(label: string): boolean {
+  const t = label.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!t || t.length > 48) return true;
+  if (SKIP_NAV_LABELS.has(t)) return true;
+  if (/^(log\s*in|sign\s*up|sign\s*in|register|cart|wishlist)$/i.test(t)) return true;
+  return false;
+}
+
+/** Drop auth/nav chrome from a scraped services list. */
+export function filterServiceLabels(services: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of services) {
+    const label = raw.trim();
+    if (!label || isChromeServiceLabel(label)) continue;
+    if (!out.some((s) => s.toLowerCase() === label.toLowerCase())) {
+      out.push(label);
+    }
+  }
+  return out.slice(0, 8);
+}
+
+/**
+ * True when context is retail / grocery / wholesale / e-commerce product seller —
+ * nav labels are usually product categories, not services.
+ */
+export function isProductSellerContext(signal?: string): boolean {
+  const t = (signal ?? "").toLowerCase();
+  if (!t.trim()) return false;
+  if (
+    /\b(restaurant|caf[eé]|bistro|brunch|hotel|motel|accommodation|clinic|dental|lawyer|accountant|professional\s+services?)\b/.test(
+      t,
+    )
+  ) {
+    return false;
+  }
+  // Consumer grocery / online store / retail type (incl. "Retail and Wholesale")
+  if (
+    /\b(grocery|supermarket|pantry|online\s+store|online\s+shop|e-?commerce|retail(?:\s+and\s+wholesale)?|florist|boutique)\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  // Product wholesale / food importer ranges (nav = catalogue lines)
+  if (
+    /\b(wholesale|import(?:er|s|ing)?)\b/.test(t) &&
+    /\b(foods?|grocery|pantry|specialty|oils?|pasta|spices?|produce)\b/.test(t)
+  ) {
+    return true;
+  }
+  // Nature already names grocery/product ranges
+  if (/\b(rice|lentils?|snacks?|gravies?|ghee|spices?)\b/.test(t)) return true;
+  if (/\b(shop|store)\b/.test(t) && !/\b(serving\s+retailers?|for\s+retailers?)\b/.test(t)) {
+    return true;
+  }
+  return false;
+}
+
+/** Fulfilment / ops offerings — valid Services for retailers. */
+const TRUE_SERVICE_RE =
+  /\b(delivery|deliver(?:ing|ed)?|shipping|ship(?:ping)?|click\s*[&+]?\s*collect|click\s+and\s+collect|pick\s*[- ]?up|collection|wholesale\s+supply|trade\s+(?:supply|enquir)|online\s+(?:order|ordering|grocery|shopping)|shop\s+online|in[- ]?store\s+shopping|nationwide|national\s+delivery|local\s+delivery|same[- ]?day|next[- ]?day|gift\s+wrapping|installation|assembly|returns?|refunds?|customer\s+support|trade\s+enquir|import\s+sourcing|catalogue|consultation|catering|dine[- ]?in|takeaway|rooms?|packages?|guest\s+parking|follow[- ]?up\s+care|new\s+client\s+enquir)\b/i;
+
+/** True when a label is a real service/fulfilment offering, not a SKU category. */
+export function isTrueServiceLabel(label: string): boolean {
+  const t = label.trim();
+  if (!t || isChromeServiceLabel(t)) return false;
+  return TRUE_SERVICE_RE.test(t);
+}
+
+/**
+ * Short goods/food/category nav labels — product categories for retail sellers.
+ * Conservative: only when product-seller context is already established.
+ */
+export function looksLikeProductCategory(label: string): boolean {
+  const t = label.trim();
+  if (!t || isChromeServiceLabel(t) || isTrueServiceLabel(t)) return false;
+  if (t.length > 48) return false;
+  const words = t.split(/[\s/|&]+/).filter(Boolean);
+  if (words.length === 0 || words.length > 6) return false;
+  // Explicit goods / grocery category vocabulary
+  if (
+    /\b(rice|lentils?|dal|dhal|atta|flour|spices?|masala|snacks?|namkeen|sweets?|mithai|pickles?|chutney|oils?|ghee|butter|gravies?|curry|sauces?|pasta|noodles?|grains?|pulses?|beans?|flour|bread|dairy|frozen|fresh|produce|vegetables?|fruits?|meat|seafood|beverages?|drinks?|tea|coffee|biscuits?|cookies?|chocolate|candy|household|cleaning|personal\s+care|baby|pet|electronics?|apparel|clothing|footwear|accessories|homewares?|kitchen|pantry|ready\s+to\s+use|ready[- ]?meals?|olive\s+oils?)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  // Generic short noun phrases without service verbs → likely category
+  if (
+    words.length <= 4 &&
+    !/\b(and|with|for|our|the|your|free|book|order|enquire|enquir|call|email|visit|learn|get|see|shop|browse)\b/i.test(
+      t,
+    ) &&
+    !TRUE_SERVICE_RE.test(t)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Split scraped labels into true services vs product categories for retail-like
+ * businesses. Non-retail contexts keep all non-chrome labels as services.
+ */
+export function partitionServicesAndProductCategories(
+  labels: string[],
+  contextSignal?: string,
+): { services: string[]; productCategories: string[] } {
+  const cleaned = filterServiceLabels(labels);
+  if (!isProductSellerContext(contextSignal)) {
+    return { services: cleaned, productCategories: [] };
+  }
+  const services: string[] = [];
+  const productCategories: string[] = [];
+  for (const label of cleaned) {
+    if (isTrueServiceLabel(label)) {
+      services.push(label);
+    } else if (looksLikeProductCategory(label) || !isTrueServiceLabel(label)) {
+      // Retail default: leftover nav items are categories, not services
+      productCategories.push(label);
+    }
+  }
+  return {
+    services: services.slice(0, 8),
+    productCategories: productCategories.slice(0, 12),
+  };
+}
+
+/** Infer fulfilment services from nature/title when retail has category-only nav. */
+export function inferRetailServicesFromContext(signal?: string): string[] {
+  const t = (signal ?? "").toLowerCase();
+  if (!isProductSellerContext(t)) return [];
+  const out: string[] = [];
+  if (/\b(deliver|delivery|shipping|nationwide|across\s+australia|all\s+over)\b/.test(t)) {
+    out.push(
+      /\b(australia|nationwide|national|all\s+over)\b/.test(t)
+        ? "National delivery"
+        : "Local delivery",
+    );
+  }
+  if (/\b(online|e-?commerce|web\s*store|shop\s+online)\b/.test(t)) {
+    out.push("Online ordering");
+  }
+  if (/\b(click\s*[&+]?\s*collect|click\s+and\s+collect|pick\s*[- ]?up)\b/.test(t)) {
+    out.push("Click & collect");
+  }
+  if (/\b(wholesale|trade\s+supply|b2b)\b/.test(t)) {
+    out.push("Wholesale supply");
+  }
+  if (/\b(in[- ]?store|physical\s+store|shop\s+front)\b/.test(t) && !out.includes("In-store shopping")) {
+    out.push("In-store shopping");
+  }
+  return filterServiceLabels(out).slice(0, 6);
+}
+
 function extractNavServices(html: string): string[] {
   const services: string[] = [];
   const links = extractHrefLinks(html, NAV_BLOCK_RE);
   for (const { text } of links) {
     const label = text.trim();
-    if (!label || label.length > 48) continue;
-    if (SKIP_NAV_LABELS.has(label.toLowerCase())) continue;
+    if (!label || isChromeServiceLabel(label)) continue;
     if (!services.some((s) => s.toLowerCase() === label.toLowerCase())) {
       services.push(label);
     }
   }
-  return services.slice(0, 8);
+  return filterServiceLabels(services);
+}
+
+/** Strip mobile-nav / welcome mashups from scraped marketing copy. */
+export function stripUiChrome(text: string): string {
+  let t = text.replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  t = t.replace(UI_CHROME_RE, " ");
+  t = t.replace(WELCOME_CHROME_RE, " ");
+  // Repeated brand+tagline glue left by stripHtml of header+hero
+  t = t.replace(/\s*[|·•]\s*/g, " — ");
+  t = t.replace(/\s+/g, " ").trim();
+  // Drop dangling separators
+  t = t.replace(/^[\s\-—–|:]+|[\s\-—–|:]+$/g, "").trim();
+  return t;
 }
 
 function extractTelMailto(html: string): { tel: string[]; mailto: string[] } {
@@ -621,6 +894,7 @@ export function parseHtmlForOnboarding(html: string, pageUrl: string): Onboardin
   const { tel, mailto } = extractTelMailto(html);
   const navServices = extractNavServices(html);
   const footerSocial = extractFooterSocialLinks(html);
+  const pageSocial = extractPageSocialLinks(html);
   const schemaSocial = (schema.schemaSameAs ?? [])
     .map((u) => socialLinkFromUrl(u))
     .filter((l): l is SocialLink => l !== undefined);
@@ -643,6 +917,12 @@ export function parseHtmlForOnboarding(html: string, pageUrl: string): Onboardin
   }
   if (tel.length) notes.push(`tel: ${tel.join(", ")}`);
   if (mailto.length) notes.push(`mailto: ${mailto.join(", ")}`);
+  const socialLinks = mergeSocialLinks(schemaSocial, footerSocial, pageSocial);
+  if (socialLinks.length) {
+    notes.push(
+      `Socials: ${socialLinks.map((l) => `${l.platform}=${l.url}`).join(" · ")}`,
+    );
+  }
 
   return {
     meta,
@@ -660,7 +940,7 @@ export function parseHtmlForOnboarding(html: string, pageUrl: string): Onboardin
     logoUrl,
     telHrefs: tel,
     mailtoHrefs: mailto,
-    socialLinks: mergeSocialLinks(schemaSocial, footerSocial),
+    socialLinks,
     navServices,
     notes,
   };
@@ -705,8 +985,10 @@ async function fetchLivePageContent(url: string): Promise<PageContent> {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "MarketingCommandCentre-AutoOnboard/1.0",
-        Accept: "text/html,application/xhtml+xml",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; MarketingCommandCentre/1.0; +https://github.com/marketing-command-centre)",
+        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-AU,en;q=0.9",
         ...(key ? { Authorization: `Bearer ${key}` } : {}),
       },
       redirect: "follow",
@@ -719,15 +1001,17 @@ async function fetchLivePageContent(url: string): Promise<PageContent> {
   }
 }
 
-async function loadPageContent(url: string): Promise<PageContent> {
+async function loadPageContent(
+  url: string,
+): Promise<{ content: PageContent; fetchedLive: boolean }> {
   if (autoOnboardingLive()) {
     try {
-      return await fetchLivePageContent(url);
+      return { content: await fetchLivePageContent(url), fetchedLive: true };
     } catch {
-      /* fall through to deterministic simulation on fetch failure */
+      /* fall through to soft simulation on fetch failure */
     }
   }
-  return simulatePageContent(url);
+  return { content: simulatePageContent(url), fetchedLive: false };
 }
 
 // ---- field extraction --------------------------------------------------------
@@ -748,13 +1032,22 @@ const FIELD_LABELS: Record<AutoOnboardingFieldKey, string> = {
 };
 
 function extractArea(text: string): string | undefined {
-  const m = text.match(/\b(?:in|serves?|serving)\s+([A-Z][A-Za-z\s]{2,30})/);
-  return m?.[1]?.trim();
+  // Capture 1–3 place-name tokens only — do not swallow "with friendly…" fluff.
+  // e.g. "serves Northside with friendly" → "Northside"
+  //      "in Harbour precinct." → "Harbour precinct"
+  const m = text.match(
+    /\b(?:in|serves?|serving)\s+((?:[A-Z][A-Za-z']+)(?:\s+[A-Z][A-Za-z']+){0,2})\b/,
+  );
+  const area = m?.[1]?.trim();
+  if (!area) return undefined;
+  // Reject connector-like leftovers
+  if (/^(with|for|and|the|our|locals?)$/i.test(area)) return undefined;
+  return area;
 }
 
 function extractCtas(text: string): string[] {
   const m = text.match(/CTA:\s*([^]+?)(?:\.|$)/i);
-  if (!m) return ["Get in touch", "Book online"];
+  if (!m) return [];
   return m[1]
     .split(/[·•|]/)
     .map((s) => s.trim())
@@ -764,12 +1057,20 @@ function extractCtas(text: string): string[] {
 
 function extractServices(text: string): string[] {
   const m = text.match(/Services:\s*([^]+?)\./i);
-  if (!m) return ["Core service", "Consultation"];
-  return m[1]
-    .split(/[,;]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 6);
+  if (!m) return [];
+  return filterServiceLabels(
+    m[1]
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter((s) => {
+        if (!s || s.length > 60) return false;
+        // Never treat known simulation placeholders as real services
+        if (/^(core service|premium package|consultation|enquir(?:y|ies))$/i.test(s)) {
+          return false;
+        }
+        return true;
+      }),
+  ).slice(0, 6);
 }
 
 function extractBrandVoice(text: string): string | undefined {
@@ -779,7 +1080,10 @@ function extractBrandVoice(text: string): string | undefined {
 
 function extractTargetCustomers(text: string): string | undefined {
   const m = text.match(/Target customers:\s*([^]+?)\./i);
-  return m?.[1]?.trim();
+  const v = m?.[1]?.trim();
+  // Simulated fluff — treat as missing so enrich can do better
+  if (v && isWeakTargetCustomers(v)) return undefined;
+  return v;
 }
 
 function extractOffer(text: string): string | undefined {
@@ -787,13 +1091,389 @@ function extractOffer(text: string): string | undefined {
   return m?.[1]?.trim();
 }
 
+/** Pull real disclaimer / terms lines from page copy when present. */
+export function extractDisclaimersFromText(text: string): string[] {
+  const cleaned = stripUiChrome(text);
+  if (!cleaned.trim()) return [];
+  const found: string[] = [];
+  const push = (s: string) => {
+    const t = s.replace(/\s+/g, " ").trim();
+    if (t.length < 12 || t.length > 220) return;
+    if (found.some((x) => x.toLowerCase() === t.toLowerCase())) return;
+    found.push(t);
+  };
+
+  // Explicit labelled disclaimers
+  for (const m of cleaned.matchAll(
+    /(?:disclaimer|important\s+notice|terms\s*(?:&|and)?\s*conditions)\s*[:\-–]\s*([^.!?\n]+[.!?]?)/gi,
+  )) {
+    if (m[1]) push(m[1]);
+  }
+
+  // Common retail / offer legal lines
+  for (const m of cleaned.matchAll(
+    /([^.!?\n]{0,80}\b(?:while\s+stocks?\s+last|subject\s+to\s+availability|terms\s+apply|prices?\s+subject\s+to\s+change|results?\s+may\s+vary)[^.!?\n]{0,80}[.!?]?)/gi,
+  )) {
+    if (m[1]) push(m[1]);
+  }
+
+  return found.slice(0, 4);
+}
+
+/**
+ * Conservative “why choose us” / trust lines — only short factual slogans,
+ * never health outcomes or absolute #1 claims.
+ */
+export function extractApprovedClaimCandidates(text: string): string[] {
+  const cleaned = stripUiChrome(text);
+  if (!cleaned.trim()) return [];
+  const found: string[] = [];
+  const push = (s: string) => {
+    const t = s.replace(/\s+/g, " ").trim().replace(/^[-•*]\s*/, "");
+    if (t.length < 8 || t.length > 100) return;
+    if (/\b(cure|guaranteed|cheapest|#\s*1|best\s+in\s+australia|risk-?free)\b/i.test(t)) {
+      return;
+    }
+    if (found.some((x) => x.toLowerCase() === t.toLowerCase())) return;
+    found.push(t);
+  };
+
+  for (const m of cleaned.matchAll(
+    /(?:why\s+choose\s+us|our\s+promise|we\s+(?:are|offer)|locally\s+owned)[:\s]+([^.!?\n]+)/gi,
+  )) {
+    if (m[1]) push(m[1]);
+  }
+  for (const m of cleaned.matchAll(
+    /\b(locally\s+owned(?:\s+&\s+operated)?|family[- ]owned(?:\s+since\s+\d{4})?|nationwide\s+delivery|same[- ]day\s+delivery)\b/gi,
+  )) {
+    if (m[0]) push(m[0]);
+  }
+
+  return found.slice(0, 4);
+}
+
+/** Prefer a complete about-style sentence from page body over truncated meta fluff. */
+function extractAboutBlurb(body: string, companyName: string): string | undefined {
+  const nameToken = companyName.trim().split(/\s+/)[0];
+  if (!nameToken || nameToken.length < 2) return undefined;
+  const cleanedBody = stripUiChrome(body);
+  const sentences = cleanedBody
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => stripUiChrome(s))
+    .filter(Boolean);
+  const nameRe = new RegExp(`\\b${nameToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i");
+  for (const s of sentences) {
+    if (s.length < 50 || s.length > 360) continue;
+    if (!nameRe.test(s)) continue;
+    // Skip known simulation / template fluff / chrome leftovers
+    if (/with friendly, professional/i.test(s)) continue;
+    if (/book online today/i.test(s) && s.length < 120) continue;
+    if (hasUiChromeResidue(s)) continue;
+    return s.replace(/\s+/g, " ").trim();
+  }
+  // Fall back: first substantial sentence that looks like an about blurb
+  for (const s of sentences) {
+    if (s.length < 80 || s.length > 360) continue;
+    if (/^(copyright|cookie|privacy|menu|home)\b/i.test(s)) continue;
+    if (hasUiChromeResidue(s)) continue;
+    if (/\b(we|our|speciali[sz]e|import|wholesale|supply|provide|offer|grocery|deliver)\b/i.test(s)) {
+      return s.replace(/\s+/g, " ").trim();
+    }
+  }
+  return undefined;
+}
+
+/** True when copy still contains obvious UI chrome after stripping. */
+export function hasUiChromeResidue(text: string): boolean {
+  return /\b(toggle\s+menu|skip\s+to\s+content|welcome\s+to\s+\w+|open\s+menu|close\s+menu)\b/i.test(
+    text,
+  );
+}
+
+/**
+ * Pull an industry/tagline from a page title.
+ * Prefers the front half when the dash suffix is brand/delivery fluff
+ * ("Online Indian Grocery… - Viya Delivering All Over Australia").
+ */
 function industryFromTitle(title: string): string | undefined {
-  const m = title.match(/[—–-]\s*(.+)$/);
-  return m?.[1]?.trim();
+  const cleaned = stripUiChrome(title);
+  if (!cleaned) return undefined;
+  const parts = cleaned.split(/\s*[—–-]\s*/).map((p) => p.trim()).filter(Boolean);
+  const front = parts[0];
+  const suffix = parts.length > 1 ? parts.slice(1).join(" — ") : undefined;
+
+  const looksLikeIndustry = (s: string) =>
+    /\b(grocery|supermarket|retail|cafe|café|restaurant|hotel|motel|accommodation|wholesale|import|clinic|dental|shop|store|foods?|pantry|boutique|florist|services?|professional)\b/i.test(
+      s,
+    );
+  const looksLikeBrandFluff = (s: string) =>
+    /^(delivering|welcome|home|shop\s+now|buy\s+online)\b/i.test(s) ||
+    (!looksLikeIndustry(s) && s.split(/\s+/).length <= 6 && /^[A-Z][a-z]+/.test(s));
+
+  if (suffix && looksLikeIndustry(suffix) && !looksLikeBrandFluff(suffix)) {
+    return suffix;
+  }
+  if (front && looksLikeIndustry(front)) return front;
+  if (suffix && looksLikeIndustry(suffix)) return suffix;
+  return undefined;
+}
+
+function industryFromBody(text: string): string | undefined {
+  const lower = stripUiChrome(text).toLowerCase();
+  if (/\b(indian\s+grocery|online\s+indian\s+grocery)\b/.test(lower)) {
+    return "Indian grocery retail";
+  }
+  if (/\b(grocery|supermarket|butcher|deli)\b/.test(lower)) return "Grocery retail";
+  if (/\b(import(?:er|s|ing)?|wholesale|distributor|trade supply)\b/.test(lower)) {
+    // Consumer grocery store that also imports still maps as grocery retail
+    if (/\b(grocery|supermarket|online\s+store|shop\s+online)\b/.test(lower)) {
+      return "Grocery retail";
+    }
+    return "Wholesale / imports";
+  }
+  if (/\b(cafe|café|restaurant|brunch|coffee)\b/.test(lower)) return "Cafe & restaurant";
+  if (/\b(hotel|motel|accommodation|guest rooms?)\b/.test(lower)) return "Accommodation";
+  if (/\b(dental|medical|physio|clinic|solicitor|lawyer)\b/.test(lower)) {
+    return "Professional services";
+  }
+  if (/\b(retail|boutique|florist|online\s+store)\b/.test(lower)) {
+    return "Retail and Wholesale";
+  }
+  return undefined;
 }
 
 function titleTradingName(title: string): string {
-  return title.replace(/\s+—.+$/, "").replace(/\s+on\s+\w+$/i, "").trim();
+  return stripUiChrome(title)
+    .replace(/\s+[—–-].+$/, "")
+    .replace(/\s+on\s+\w+$/i, "")
+    .trim();
+}
+
+/**
+ * SEO meta titles / taglines must never land in Trading names.
+ * Prefer brand-like short names (schema, og:site_name, company name).
+ */
+export function looksLikeSeoTagline(
+  candidate: string,
+  companyName?: string,
+): boolean {
+  const t = candidate.trim();
+  if (!t) return true;
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length >= 6) return true;
+  if (
+    words.length >= 4 &&
+    /\b(online|store|shop|grocery|supermarket|best|leading|official|home)\b/i.test(t)
+  ) {
+    return true;
+  }
+  if (
+    /\bin\s+(australia|sydney|melbourne|brisbane|perth|adelaide|nsw|vic|qld)\b/i.test(
+      t,
+    ) &&
+    words.length >= 3
+  ) {
+    return true;
+  }
+  if (companyName?.trim()) {
+    const brand = companyName.trim().split(/\s+/)[0] ?? "";
+    if (
+      brand.length >= 3 &&
+      !new RegExp(brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(t) &&
+      words.length >= 4
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Resolve trading name: schema / og:site_name / brand-like title / company name. */
+export function resolveTradingName(input: {
+  schemaName?: string;
+  ogSiteName?: string;
+  pageTitle?: string;
+  companyName: string;
+}): string {
+  const company = input.companyName.trim();
+  if (input.schemaName?.trim() && !looksLikeSeoTagline(input.schemaName, company)) {
+    return input.schemaName.trim();
+  }
+  if (
+    input.ogSiteName?.trim() &&
+    !looksLikeSeoTagline(input.ogSiteName, company)
+  ) {
+    return input.ogSiteName.trim();
+  }
+  const fromTitle = titleTradingName(input.pageTitle ?? "");
+  if (fromTitle && !looksLikeSeoTagline(fromTitle, company)) {
+    return fromTitle;
+  }
+  return company || fromTitle;
+}
+
+function cleanNatureCandidate(text: string | undefined, trading: string): string | undefined {
+  if (!text?.trim()) return undefined;
+  let t = stripUiChrome(text);
+  if (!t) return undefined;
+  const name = trading.trim();
+  if (name.length >= 2) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const dup = new RegExp(`^${escaped}\\s+${escaped}\\b`, "i");
+    t = t.replace(dup, name).trim();
+    const brandFirst = name.split(/\s+/)[0]?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Drop trailing " - Brand Delivering…" mashups after a solid tagline
+    const dashParts = t.split(/\s*[—–-]\s*/);
+    if (dashParts.length > 1) {
+      const head = dashParts[0].trim();
+      const tail = dashParts.slice(1).join(" — ");
+      const tailIsBrandDelivery =
+        /^(delivering|welcome)\b/i.test(tail) ||
+        (brandFirst != null &&
+          brandFirst.length >= 2 &&
+          new RegExp(`^${brandFirst}\\b`, "i").test(tail) &&
+          /\b(delivering|welcome|all\s+over)\b/i.test(tail)) ||
+        new RegExp(`\\b${escaped}\\b`, "i").test(tail);
+      if (
+        head.length >= 24 &&
+        /\b(grocery|store|retail|cafe|restaurant|wholesale|import|clinic|hotel|online)\b/i.test(
+          head,
+        ) &&
+        tailIsBrandDelivery
+      ) {
+        t = head;
+      }
+    }
+  }
+  t = t.replace(/\s+/g, " ").trim();
+  if (hasUiChromeResidue(t)) return undefined;
+  return t || undefined;
+}
+
+/**
+ * Build a clean 1–2 sentence nature from title/meta when scrape blobs are junk.
+ * Exported for verify-scrape-mapping.
+ */
+export function synthesizeNatureOfBusiness(input: {
+  title?: string;
+  metaDescription?: string;
+  schemaDescription?: string;
+  aboutBlurb?: string;
+  tradingName: string;
+  industry?: string;
+}): string | undefined {
+  const trading = input.tradingName.trim();
+  const industry = input.industry?.trim();
+  const title = stripUiChrome(input.title ?? "");
+
+  // When industry already encodes the vertical, prefer crisp synthesized copy
+  // over a raw title mashup (even after chrome strip).
+  if (industry && /\b(grocery|retail|cafe|hotel|wholesale)\b/i.test(industry)) {
+    const au = /\baustralia\b/i.test(`${title} ${industry}`);
+    const indian = /\bindian\b/i.test(`${title} ${industry}`);
+    const online = /\bonline\b/i.test(`${title} ${industry}`);
+    if (indian && /grocery/i.test(industry)) {
+      return online || /online/i.test(title)
+        ? "Online Indian grocery store delivering across Australia."
+        : `Indian grocery retailer serving shoppers${au ? " across Australia" : ""}.`;
+    }
+    if (/grocery/i.test(industry)) {
+      return au
+        ? "Grocery retailer delivering across Australia."
+        : "Grocery retailer serving local shoppers.";
+    }
+  }
+
+  const candidates = [
+    input.schemaDescription,
+    input.metaDescription,
+    input.aboutBlurb,
+    input.title,
+  ];
+  for (const raw of candidates) {
+    const cleaned = cleanNatureCandidate(raw, trading);
+    if (cleaned && !isWeakNatureText(cleaned)) {
+      return /[.!?]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+    }
+  }
+  const fromTitle = cleanNatureCandidate(
+    title.split(/\s*[—–-]\s*/)[0],
+    trading,
+  );
+  if (fromTitle && fromTitle.length >= 28) {
+    return /[.!?]$/.test(fromTitle) ? fromTitle : `${fromTitle}.`;
+  }
+  return undefined;
+}
+
+export function isWeakNatureText(value: string | undefined): boolean {
+  if (!value?.trim()) return true;
+  const v = stripUiChrome(value);
+  if (v.length < 28) return true;
+  if (hasUiChromeResidue(value)) return true;
+  if (/serves \w+ with friendly, professional/i.test(v)) return true;
+  if (/book online today/i.test(v) && v.length < 140) return true;
+  // Truncated mid-phrase (e.g. ends with "with friendly.")
+  if (/\bwith\s+\w+\.$/i.test(v) && v.length < 120) return true;
+  if (/retail retailer/i.test(v)) return true;
+  return false;
+}
+
+/** Tautological / placeholder audience lines that need rewriting. */
+export function isWeakTargetCustomers(value: string | undefined): boolean {
+  if (!value?.trim()) return true;
+  const v = value.trim();
+  if (/^locals and visitors in /i.test(v) && v.length < 80) return true;
+  if (/need what .+ offers\.?$/i.test(v)) return true;
+  if (/people who live,\s*work,\s*or visit/i.test(v)) return true;
+  if (/looking for reliable products and service\.?$/i.test(v) && v.length < 90) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Common-sense audience from industry/nature cues (no LLM required).
+ */
+export function synthesizeTargetCustomers(input: {
+  natureOfBusiness?: string;
+  industry?: string;
+  tradingName?: string;
+  serviceAreas?: string[];
+  title?: string;
+}): string | undefined {
+  const blob = [
+    input.natureOfBusiness,
+    input.industry,
+    input.title,
+    input.tradingName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const lower = blob.toLowerCase();
+  const area =
+    (input.serviceAreas ?? []).map((a) => a.trim()).filter(Boolean)[0] ||
+    (/\baustralia\b/i.test(blob) ? "Australia" : "the local area");
+
+  if (/\bindian\b/.test(lower) && /\b(grocery|supermarket|food|pantry|snacks?)\b/.test(lower)) {
+    return `Indian diaspora households and shoppers seeking Indian groceries across ${area}.`;
+  }
+  if (/\b(grocery|supermarket)\b/.test(lower)) {
+    return `Households and busy locals across ${area} who want convenient grocery shopping and delivery.`;
+  }
+  if (/\b(wholesale|import|distributor|b2b|trade)\b/.test(lower) && !/\bgrocery\b/.test(lower)) {
+    return `Independent retailers, hospitality buyers, and distributors in ${area}.`;
+  }
+  if (/\b(cafe|café|restaurant|brunch)\b/.test(lower)) {
+    return `Locals and visitors in ${area} looking for a meal out, takeaway, or a casual catch-up.`;
+  }
+  if (/\b(hotel|motel|accommodation)\b/.test(lower)) {
+    return `Leisure travellers, couples, and families visiting ${area}, plus midweek business stays.`;
+  }
+  if (/\b(retail|online\s+store|shop)\b/.test(lower)) {
+    return `Households and busy locals in ${area} who want convenient specialty shopping.`;
+  }
+  return undefined;
 }
 
 function mergeExtracted(
@@ -817,63 +1497,123 @@ function mergeExtracted(
   };
 
   const meta = web?.meta ?? {};
-  const trading =
-    web?.schemaName ||
-    meta["og:site_name"] ||
-    titleTradingName(websitePage?.title ?? "") ||
-    companyName;
+  const trading = resolveTradingName({
+    schemaName: web?.schemaName,
+    ogSiteName: meta["og:site_name"],
+    pageTitle: websitePage?.title ?? meta["og:title"] ?? meta.title,
+    companyName,
+  });
 
-  if (web?.schemaName) setHint("tradingNames", "high", webUrl);
-  else if (meta["og:site_name"]) setHint("tradingNames", "high", webUrl);
-  else setHint("tradingNames", "medium", webUrl);
+  if (web?.schemaName && !looksLikeSeoTagline(web.schemaName, companyName)) {
+    setHint("tradingNames", "high", webUrl);
+  } else if (
+    meta["og:site_name"] &&
+    !looksLikeSeoTagline(meta["og:site_name"], companyName)
+  ) {
+    setHint("tradingNames", "high", webUrl);
+  } else if (trading === companyName) {
+    setHint("tradingNames", "medium", webUrl);
+  } else {
+    setHint("tradingNames", "medium", webUrl);
+  }
 
-  const legalName = web?.schemaLegalName ?? `${trading} Pty Ltd`;
-  setHint(
-    "legalName",
-    web?.schemaLegalName ? "medium" : "low",
-    webUrl,
-  );
+  // Prefer real schema / ABR legal names — never invent "X Pty Ltd".
+  const legalName = web?.schemaLegalName?.trim() || undefined;
+  if (legalName) {
+    setHint("legalName", "medium", webUrl);
+  }
 
   const industry =
     industryFromTitle(meta["og:title"] ?? websitePage?.title ?? "") ||
     industryFromTitle(websitePage?.title ?? "") ||
-    web?.schemaTypes?.find((t) => /business|restaurant|store/i.test(t)) ||
-    websitePage?.description.split(" ").slice(0, 3).join(" ") ||
-    "Local business";
-  if (industryFromTitle(meta["og:title"] ?? "")) setHint("industry", "high", webUrl);
+    industryFromBody(combined) ||
+    web?.schemaTypes?.find((t) => /business|restaurant|store|import|wholesale/i.test(t)) ||
+    undefined;
+  if (industryFromTitle(meta["og:title"] ?? websitePage?.title ?? "")) {
+    setHint("industry", "high", webUrl);
+  } else if (industryFromBody(combined)) setHint("industry", "medium", webUrl);
   else if (web?.schemaTypes?.length) setHint("industry", "medium", webUrl);
-  else setHint("industry", "medium", webUrl);
+  else if (industry) setHint("industry", "low", webUrl);
 
-  const natureOfBusiness =
-    web?.schemaDescription ||
-    meta["og:description"] ||
-    meta["twitter:description"] ||
-    websitePage?.description ||
-    combined.slice(0, 200);
-  if (web?.schemaDescription) setHint("natureOfBusiness", "high", webUrl);
-  else if (meta["og:description"]) setHint("natureOfBusiness", "medium", webUrl);
-  else setHint("natureOfBusiness", "medium", webUrl);
+  const aboutBlurb = extractAboutBlurb(combined, trading || companyName);
+  const pageTitle = meta["og:title"] ?? websitePage?.title ?? "";
+  // Prefer schema/meta when strong; else about blurb; synthesize from title when chrome junk
+  const natureRaw =
+    (web?.schemaDescription && !isWeakNatureText(web.schemaDescription)
+      ? web.schemaDescription
+      : undefined) ||
+    (meta["og:description"] && !isWeakNatureText(meta["og:description"])
+      ? meta["og:description"]
+      : undefined) ||
+    (meta["twitter:description"] && !isWeakNatureText(meta["twitter:description"])
+      ? meta["twitter:description"]
+      : undefined) ||
+    aboutBlurb ||
+    (websitePage?.description && !isWeakNatureText(websitePage.description)
+      ? websitePage.description
+      : undefined);
+  const natureCleaned = cleanNatureCandidate(natureRaw, trading || companyName);
+  const natureFinal =
+    synthesizeNatureOfBusiness({
+      title: pageTitle,
+      metaDescription: meta["og:description"] || meta["twitter:description"] || natureCleaned,
+      schemaDescription: web?.schemaDescription,
+      aboutBlurb,
+      tradingName: trading || companyName,
+      industry,
+    }) || natureCleaned;
+  if (web?.schemaDescription && !isWeakNatureText(web.schemaDescription)) {
+    setHint("natureOfBusiness", "high", webUrl);
+  } else if (meta["og:description"] && !isWeakNatureText(meta["og:description"])) {
+    setHint("natureOfBusiness", "medium", webUrl);
+  } else if (aboutBlurb && natureFinal) {
+    setHint("natureOfBusiness", "medium", webUrl);
+  } else if (natureFinal) {
+    setHint("natureOfBusiness", "medium", webUrl);
+  }
 
   const area =
     web?.schemaLocality ||
     extractArea(combined) ||
-    "Local area";
+    (/\baustralia\b/i.test(`${pageTitle} ${combined}`) ? "Australia" : undefined);
   if (web?.schemaLocality) setHint("serviceAreas", "high", webUrl);
-  else setHint("serviceAreas", "medium", webUrl);
+  else if (area) setHint("serviceAreas", "medium", webUrl);
 
-  const navServices = web?.navServices ?? [];
-  const textServices = extractServices(combined);
-  const services = navServices.length > 0 ? navServices : textServices;
-  if (navServices.length > 0) setHint("services", "medium", webUrl);
-  else setHint("services", "medium", webUrl);
+  const navRaw = filterServiceLabels(web?.navServices ?? []);
+  const textRaw = extractServices(combined);
+  const contextSignal = [industry, natureFinal, pageTitle, trading || companyName]
+    .filter(Boolean)
+    .join(" · ");
+  const partitioned = partitionServicesAndProductCategories(
+    navRaw.length > 0 ? navRaw : textRaw,
+    contextSignal,
+  );
+  let services = partitioned.services;
+  const productCategories = partitioned.productCategories;
+  if (services.length === 0 && productCategories.length > 0) {
+    services = inferRetailServicesFromContext(contextSignal);
+  }
+  if (services.length > 0) setHint("services", "medium", webUrl);
+  else if (navRaw.length > 0 || textRaw.length > 0) {
+    // Categories-only retail scrape — leave services empty for enrich/templates
+  }
 
+  const scrapedAudience = extractTargetCustomers(combined);
   const targetCustomers =
-    extractTargetCustomers(combined) ?? `Locals and visitors in ${area}`;
-  setHint("targetCustomers", "medium", webUrl);
+    (scrapedAudience && !isWeakTargetCustomers(scrapedAudience)
+      ? scrapedAudience
+      : undefined) ||
+    synthesizeTargetCustomers({
+      natureOfBusiness: natureFinal,
+      industry,
+      tradingName: trading || companyName,
+      serviceAreas: area ? [area] : undefined,
+      title: pageTitle,
+    });
+  if (targetCustomers) setHint("targetCustomers", "medium", webUrl);
 
-  const brandVoice =
-    extractBrandVoice(combined) ?? "Warm, professional, approachable";
-  setHint("brandVoice", "medium", webUrl);
+  const brandVoice = extractBrandVoice(combined);
+  if (brandVoice) setHint("brandVoice", "medium", webUrl);
 
   const telCtas =
     web?.telHrefs?.map((t) => `Call ${t}`) ??
@@ -882,10 +1622,14 @@ function mergeExtracted(
   const textCtas = extractCtas(combined);
   const callsToAction = [...new Set([...textCtas, ...telCtas, ...mailCtas])].slice(0, 6);
   if (telCtas.length || web?.schemaTelephone) setHint("callsToAction", "high", webUrl);
-  else setHint("callsToAction", "medium", webUrl);
+  else if (callsToAction.length) setHint("callsToAction", "medium", webUrl);
 
+  // Only when an explicit offer signal exists — never invent offers.
   const currentOffers = extractOffer(combined);
-  if (currentOffers) setHint("currentOffers", "low", webUrl);
+  if (currentOffers) setHint("currentOffers", "medium", webUrl);
+
+  const requiredDisclaimers = extractDisclaimersFromText(combined);
+  const approvedClaims = extractApprovedClaimCandidates(combined);
 
   const socialLinks: SocialLink[] = mergeSocialLinks(
     urls.socialLinks,
@@ -898,24 +1642,29 @@ function mergeExtracted(
     web?.schemaSameAs?.length || (web?.socialLinks?.length ?? 0) > 0
       ? webUrl
       : socialPages[0]?.url;
-  setHint("socialLinks", web?.schemaSameAs?.length ? "high" : "high", socialSource);
+  if (socialLinks.length) {
+    setHint("socialLinks", "high", socialSource);
+  }
 
   setHint("website", "high", urls.website);
 
   return {
     fields: {
-      legalName,
+      ...(legalName ? { legalName } : {}),
       tradingNames: trading,
       industry,
       website: urls.website,
-      natureOfBusiness,
-      serviceAreas: [area],
-      services,
+      natureOfBusiness: natureFinal,
+      serviceAreas: area ? [area] : undefined,
+      services: services.length ? services : undefined,
+      productCategories: productCategories.length ? productCategories : undefined,
       targetCustomers,
       brandVoice,
-      callsToAction,
+      callsToAction: callsToAction.length ? callsToAction : undefined,
       currentOffers,
       socialLinks,
+      ...(approvedClaims.length ? { approvedClaims } : {}),
+      ...(requiredDisclaimers.length ? { requiredDisclaimers } : {}),
     },
     hints,
   };
@@ -1026,7 +1775,12 @@ export async function scrapeForOnboardingPreview(
     ...input.urls.socialLinks.map((l) => l.url),
   ];
 
-  const pages = await Promise.all(urlsToFetch.map((u) => loadPageContent(u)));
+  const loaded = await Promise.all(urlsToFetch.map((u) => loadPageContent(u)));
+  const pages = loaded.map((l) => l.content);
+  const websiteFetchedLive = loaded.some(
+    (l, i) => l.fetchedLive && pages[i]?.kind === "website",
+  );
+  const anyFetchedLive = loaded.some((l) => l.fetchedLive);
   const sources: AutoOnboardingSourceSnippet[] = pages.map((p) => {
     const notes = p.htmlExtract?.notes?.length
       ? ` ${p.htmlExtract.notes.join(" · ")}`
@@ -1055,11 +1809,23 @@ export async function scrapeForOnboardingPreview(
   return {
     companyId: input.company.id,
     ranAt: new Date().toISOString(),
-    mode: autoOnboardingLive() ? "live" : "simulated",
+    // Only report live when we actually fetched (not soft-sim fallback)
+    mode: websiteFetchedLive || anyFetchedLive ? "live" : "simulated",
     consent: true,
     urls: input.urls,
     fields: fieldPreviews,
     sources,
+    extras: {
+      ...(extracted.productCategories?.length
+        ? { productCategories: extracted.productCategories }
+        : {}),
+      ...(extracted.approvedClaims?.length
+        ? { approvedClaims: extracted.approvedClaims }
+        : {}),
+      ...(extracted.requiredDisclaimers?.length
+        ? { requiredDisclaimers: extracted.requiredDisclaimers }
+        : {}),
+    },
   };
 }
 
@@ -1095,6 +1861,21 @@ export function applyExtractedFields(
   if (pick("services") && (overwrite || next.services.length === 0)) {
     next.services = extracted.services ?? next.services;
   }
+  if (extracted.productCategories?.length) {
+    const existingCats = next.retail?.productCategories ?? [];
+    if (overwrite || existingCats.length === 0) {
+      next.retail = {
+        productCategories: extracted.productCategories,
+        heroProducts: next.retail?.heroProducts ?? [],
+        promotions: next.retail?.promotions ?? [],
+        seasons: next.retail?.seasons ?? [],
+        pricePositioning: next.retail?.pricePositioning,
+      };
+      if (!next.businessType || next.businessType === "other") {
+        next.businessType = "retail";
+      }
+    }
+  }
   if (pick("targetCustomers") && (overwrite || !next.targetCustomers?.trim())) {
     next.targetCustomers = extracted.targetCustomers;
   }
@@ -1106,6 +1887,18 @@ export function applyExtractedFields(
   }
   if (pick("currentOffers") && (overwrite || !next.currentOffers?.trim())) {
     next.currentOffers = extracted.currentOffers;
+  }
+  if (
+    extracted.approvedClaims?.length &&
+    (overwrite || next.approvedClaims.length === 0)
+  ) {
+    next.approvedClaims = extracted.approvedClaims;
+  }
+  if (
+    extracted.requiredDisclaimers?.length &&
+    (overwrite || next.requiredDisclaimers.length === 0)
+  ) {
+    next.requiredDisclaimers = extracted.requiredDisclaimers;
   }
   if (pick("socialLinks")) {
     const merged = [...(next.socialLinks ?? [])];
@@ -1120,11 +1913,16 @@ export function applyExtractedFields(
     next.socialLinks = merged;
   }
 
-  if (!next.businessType) {
+  if (!next.businessType || next.businessType === "other") {
+    const signal = [next.industry, extracted.industry, next.natureOfBusiness, extracted.natureOfBusiness]
+      .filter(Boolean)
+      .join(" · ");
     const { businessType } = enrichExtractedWithBusinessType({
-      industry: next.industry ?? extracted.industry,
+      industry: signal || next.industry || extracted.industry,
     });
-    next.businessType = businessType;
+    if (!next.businessType || businessType !== "other") {
+      next.businessType = businessType;
+    }
   }
 
   return next;
@@ -1160,6 +1958,15 @@ export function extractedFromPreview(
     }
   }
   if (preview.urls.website) out.website = preview.urls.website;
+  if (preview.extras?.productCategories?.length) {
+    out.productCategories = preview.extras.productCategories;
+  }
+  if (preview.extras?.approvedClaims?.length) {
+    out.approvedClaims = preview.extras.approvedClaims;
+  }
+  if (preview.extras?.requiredDisclaimers?.length) {
+    out.requiredDisclaimers = preview.extras.requiredDisclaimers;
+  }
   return out;
 }
 

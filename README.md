@@ -5,15 +5,15 @@ In-house AI marketing operating system for a group of related companies.
 
 ## Quick start
 
-```bash
+```powershell
 npm install
-npm run dev   # http://localhost:3000
+powershell -ExecutionPolicy Bypass -File scripts\dev-3002.ps1
+# → http://127.0.0.1:3002/login
 ```
 
-Runs with **no external accounts** — seeded in-memory data. Sign in with the
-two demo personas (no password): **Agency** `sasha@brightspark.dev`, **Client**
-`liam@brightspark.dev` (portal). Prefer `/dev` quick login on port 3002 with
-`CC_LOCAL_DEMO=true`.
+Runs with **no external accounts** — seeded in-memory data + `CC_LOCAL_DEMO`.
+Prefer `/dev` quick login. **Environments (local / staging / live):**
+[`docs/ENVIRONMENTS.md`](./docs/ENVIRONMENTS.md).
 
 ## Status
 

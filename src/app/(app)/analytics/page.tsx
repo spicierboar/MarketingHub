@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { buildReport } from "@/lib/analytics";
+import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +88,7 @@ export default async function AnalyticsPage({
   const { company: companyParam } = await searchParams;
   const companyId =
     companyParam && allowed.has(companyParam) ? companyParam : undefined;
+  const scopedCompany = companyId ? await getCompany(companyId) : null;
   const r = await buildReport(
     user.tenantId,
     companyId ? [companyId] : undefined,
@@ -99,8 +101,12 @@ export default async function AnalyticsPage({
   return (
     <div>
       <PageHeader
-        title="Analytics & reporting"
-        description="Group-wide performance. Engagement is simulated per published post until live platform data is connected."
+        title={scopedCompany ? `Analytics · ${scopedCompany.name}` : "Analytics & reporting"}
+        description={
+          scopedCompany
+            ? `${scopedCompany.name} performance. Engagement is simulated per published post until live platform data is connected.`
+            : "Group-wide performance. Engagement is simulated per published post until live platform data is connected."
+        }
       >
         <Link href={utmHref} className={buttonClasses("outline")}>
           UTM &amp; ROI builder
@@ -144,9 +150,9 @@ export default async function AnalyticsPage({
         </div>
 
         {/* Dimension tables */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className={`grid gap-6 ${companyId ? "" : "lg:grid-cols-2"}`}>
           <DimTable title="By platform" rows={r.byPlatform} />
-          <DimTable title="By company" rows={r.byCompany} />
+          {!companyId && <DimTable title="By company" rows={r.byCompany} />}
         </div>
         <DimTable title="By campaign" rows={r.byCampaign} />
 
@@ -201,7 +207,7 @@ export default async function AnalyticsPage({
           <Card>
             <CardContent className="p-6">
               <h3 className="mb-3 font-semibold">AI management summary</h3>
-              <AiSummary />
+              <AiSummary companyId={companyId} />
             </CardContent>
           </Card>
         </div>

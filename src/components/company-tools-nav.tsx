@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { useEffect, useId, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/status-badge";
 import type { AddonId, BusinessType, ManagedServiceLevel } from "@/lib/types";
@@ -15,9 +15,8 @@ type ToolLink = {
 };
 
 type ToolGroup = {
-  id: string;
+  id: "brand" | "produce" | "channels" | "ads";
   label: string;
-  hint?: string;
   items: ToolLink[];
 };
 
@@ -77,70 +76,58 @@ function buildTools(
   // Daily agency loop — keep this strip short.
   const primary: ToolLink[] = [
     { href: base, label: "Overview", match: "exact" },
+    { href: `${base}/strategy`, label: "Strategy", match: "prefix" },
     { href: `/calendar?${q}`, label: "Calendar" },
     { href: `/content?${q}`, label: "Content" },
     { href: `/campaigns?${q}`, label: "Campaigns" },
     { href: `/approvals?${q}`, label: "Approvals" },
     { href: `/publishing?${q}`, label: "Publishing" },
+    { href: `/requests?${q}`, label: "Asks" },
   ];
 
   const vertical = verticalTools(companyId, businessType, activeAddons);
 
-  // Ops-verb groups. Automate stays lean — unfinished Grow modules stay out of
-  // the strip so the agency desk doesn't look like a module zoo.
+  // Second-row chips (max 4) — expand inline, not a hub page.
   const groups: ToolGroup[] = [
+    {
+      id: "brand",
+      label: "Brand",
+      items: [
+        { href: `${base}/brand-brain`, label: "Brand Brain", match: "prefix" },
+        { href: `${base}/services`, label: "Services", match: "prefix" },
+        { href: `${base}/offers`, label: "Offers", match: "prefix" },
+        { href: `${base}/governance`, label: "Governance", match: "prefix" },
+        { href: `${base}/local-seo`, label: "Local SEO & AI", match: "prefix" },
+      ],
+    },
     {
       id: "produce",
       label: "Produce",
-      hint: "Draft and package",
       items: [
         { href: `/studio?${q}`, label: "Studio" },
         { href: `/assets?${q}`, label: "Assets" },
         { href: `/library?${q}`, label: "Reuse library" },
-        { href: `/ads?${q}`, label: "Paid ads" },
-      ],
-    },
-    {
-      id: "brand",
-      label: "Brand",
-      hint: "Profile that steers AI",
-      items: [
-        { href: `${base}/brand-brain`, label: "Brand Brain", match: "prefix" as const },
-        { href: `${base}/services`, label: "Services", match: "prefix" as const },
-        { href: `${base}/offers`, label: "Offers", match: "prefix" as const },
-        { href: `${base}/governance`, label: "Governance", match: "prefix" as const },
-        { href: `${base}/local-seo`, label: "Local SEO & AI", match: "prefix" as const },
       ],
     },
     {
       id: "channels",
       label: "Channels",
-      hint: "Inbox, social, reputation",
       items: [
         { href: `/inbox?${q}`, label: "Social inbox" },
         { href: `/social?${q}`, label: "Social" },
         { href: `/reviews?${q}`, label: "Reviews" },
-        { href: `/requests?${q}`, label: "Client asks" },
         { href: `/analytics?${q}`, label: "Analytics" },
+        { href: `/audit?${q}`, label: "Audit trail" },
       ],
     },
     {
-      id: "automate",
-      label: "Automate",
-      hint: "Workflows and learning loops",
-      items: [
-        { href: `/workflows?${q}`, label: "Workflows" },
-        { href: `/automations?${q}`, label: "Automations" },
-        { href: `/learning?${q}`, label: "Learning" },
-      ],
+      id: "ads",
+      label: "Ads",
+      items: [{ href: `/ads?${q}`, label: "Paid ads" }],
     },
-  ].filter((g) => g.items.length > 0);
+  ];
 
-  return {
-    primary,
-    groups,
-    vertical,
-  };
+  return { primary, groups, vertical };
 }
 
 function serviceLevelLabel(level?: ManagedServiceLevel): string | null {
@@ -153,16 +140,13 @@ function serviceLevelLabel(level?: ManagedServiceLevel): string | null {
 function ToolChip({
   item,
   active,
-  onNavigate,
 }: {
   item: ToolLink;
   active: boolean;
-  onNavigate?: () => void;
 }) {
   return (
     <Link
       href={item.href}
-      onClick={onNavigate}
       className={cn(
         "rounded-md px-2.5 py-1 text-sm transition-colors",
         active
@@ -173,6 +157,29 @@ function ToolChip({
       {item.label}
     </Link>
   );
+}
+
+function groupHasActive(
+  pathname: string,
+  group: ToolGroup,
+  vertical: ToolLink[],
+): boolean {
+  if (group.items.some((item) => linkActive(pathname, item))) return true;
+  if (group.id === "produce") {
+    return vertical.some((item) => linkActive(pathname, item));
+  }
+  return false;
+}
+
+function groupIdForPath(
+  pathname: string,
+  groups: ToolGroup[],
+  vertical: ToolLink[],
+): ToolGroup["id"] | null {
+  for (const group of groups) {
+    if (groupHasActive(pathname, group, vertical)) return group.id;
+  }
+  return null;
 }
 
 export function CompanyToolsNav({
@@ -197,30 +204,29 @@ export function CompanyToolsNav({
     activeAddons,
   );
 
-  const menuId = useId();
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const panelId = useId();
+  const [openGroupId, setOpenGroupId] = useState<ToolGroup["id"] | null>(() =>
+    groupIdForPath(pathname, groups, vertical),
+  );
 
-  const allSecondary = [...groups.flatMap((g) => g.items), ...vertical];
-  const secondaryActive = allSecondary.some((item) => linkActive(pathname, item));
-  const activeSecondary = allSecondary.find((item) => linkActive(pathname, item));
-  const levelLabel = serviceLevelLabel(serviceLevel);
+  // Sync open chip to the route on navigation only (manual collapse stays until next nav).
+  useEffect(() => {
+    const built = buildTools(companyId, businessType, activeAddons);
+    setOpenGroupId(groupIdForPath(pathname, built.groups, built.vertical));
+  }, [pathname, companyId, businessType, activeAddons]);
 
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!openGroupId) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
-    }
-    function onPointer(e: MouseEvent) {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+      if (e.key === "Escape") setOpenGroupId(null);
     }
     document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onPointer);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onPointer);
-    };
-  }, [menuOpen]);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [openGroupId]);
+
+  const openGroup = groups.find((g) => g.id === openGroupId) ?? null;
+  const levelLabel = serviceLevelLabel(serviceLevel);
+  const showVertical = openGroup?.id === "produce" && vertical.length > 0;
 
   return (
     <div className="border-b border-border bg-card">
@@ -245,15 +251,15 @@ export function CompanyToolsNav({
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Agency workspace — clients review in their portal; seasonal planning and AI
-            drafts stay here until approved
+            Working on this client — drafts stay here until approved; clients review in
+            their portal
           </p>
         </div>
         <StatusBadge status={status} />
       </div>
 
       <nav
-        className="flex flex-wrap items-center gap-1 px-6 pb-3"
+        className="flex flex-wrap items-center gap-1 px-6 pb-2"
         aria-label={`${companyName} tools`}
       >
         {primary.map((item) => (
@@ -263,90 +269,74 @@ export function CompanyToolsNav({
             active={linkActive(pathname, item)}
           />
         ))}
-
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            id={menuId}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-sm font-medium transition-colors",
-              secondaryActive || menuOpen
-                ? "bg-accent text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            {activeSecondary && !menuOpen ? activeSecondary.label : "More tools"}
-            <ChevronDown
-              className={cn(
-                "h-3.5 w-3.5 transition-transform",
-                menuOpen && "rotate-180",
-              )}
-            />
-          </button>
-
-          {menuOpen && (
-            <div
-              role="menu"
-              aria-labelledby={menuId}
-              className="absolute left-0 z-40 mt-1 w-[min(100vw-3rem,36rem)] rounded-lg border border-border bg-card p-4 shadow-lg"
-            >
-              <div className="grid gap-4 sm:grid-cols-2">
-                {groups.map((group) => (
-                  <div key={group.id}>
-                    <p className="text-xs font-semibold text-foreground">{group.label}</p>
-                    {group.hint && (
-                      <p className="mb-1.5 text-[11px] text-muted-foreground">{group.hint}</p>
-                    )}
-                    <ul className="space-y-0.5">
-                      {group.items.map((item) => {
-                        const active = linkActive(pathname, item);
-                        return (
-                          <li key={item.href}>
-                            <Link
-                              role="menuitem"
-                              href={item.href}
-                              onClick={() => setMenuOpen(false)}
-                              className={cn(
-                                "block rounded-md px-2 py-1 text-sm",
-                                active
-                                  ? "bg-accent font-medium text-primary"
-                                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                              )}
-                            >
-                              {item.label}
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-
-              {vertical.length > 0 && (
-                <div className="mt-4 border-t border-border pt-3">
-                  <p className="mb-1.5 text-xs font-semibold text-foreground">
-                    For this business
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {vertical.map((item) => (
-                      <ToolChip
-                        key={item.href}
-                        item={item}
-                        active={linkActive(pathname, item)}
-                        onNavigate={() => setMenuOpen(false)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </nav>
+
+      <div className="px-6 pb-3">
+        <div
+          className="flex flex-wrap items-center gap-1.5"
+          role="toolbar"
+          aria-label="More tools"
+        >
+          {groups.map((group) => {
+            const open = openGroupId === group.id;
+            const routeActive = groupHasActive(pathname, group, vertical);
+            return (
+              <button
+                key={group.id}
+                type="button"
+                aria-expanded={open}
+                aria-controls={open ? panelId : undefined}
+                onClick={() =>
+                  setOpenGroupId((cur) => (cur === group.id ? null : group.id))
+                }
+                className={cn(
+                  "rounded-md border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                  open
+                    ? "border-border bg-muted text-foreground"
+                    : routeActive
+                      ? "border-border bg-accent/60 text-primary"
+                      : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground",
+                )}
+              >
+                {group.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {openGroup && (
+          <div
+            id={panelId}
+            className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1 border-t border-border/60 pt-2"
+          >
+            {openGroup.items.map((item) => (
+              <ToolChip
+                key={item.href}
+                item={item}
+                active={linkActive(pathname, item)}
+              />
+            ))}
+            {showVertical && (
+              <>
+                <span
+                  className="mx-1 hidden h-3 w-px bg-border sm:inline-block"
+                  aria-hidden
+                />
+                <span className="px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Also for this business
+                </span>
+                {vertical.map((item) => (
+                  <ToolChip
+                    key={item.href}
+                    item={item}
+                    active={linkActive(pathname, item)}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Select, Input } from "@/components/ui/form";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { formatDate, titleCase } from "@/lib/utils";
 import { computeReputationScore } from "@/lib/reviews";
 import { reviewsConfigured } from "@/lib/reviews-connectors";
@@ -25,14 +26,30 @@ export default async function ReviewsPage({
     companyParam && companies.some((c) => c.id === companyParam)
       ? companyParam
       : undefined;
-  const reviews = await visibleReviews(user);
-  const campaigns = await visibleReviewCampaigns(user);
+  const formCompanies = companyDefault
+    ? companies.filter((c) => c.id === companyDefault)
+    : companies;
+  const reviews = (await visibleReviews(user)).filter(
+    (r) => !companyDefault || r.companyId === companyDefault,
+  );
+  const campaigns = (await visibleReviewCampaigns(user)).filter(
+    (c) => !companyDefault || c.companyId === companyDefault,
+  );
   const reputation = computeReputationScore(reviews);
   const names = new Map((await Promise.all([...new Set(reviews.map((r) => r.companyId))].map(async (id) => [id, (await getCompany(id))?.name] as const))));
 
+  const companyLocked = Boolean(companyDefault);
+  const scopedCompany = companyDefault
+    ? formCompanies.find((c) => c.id === companyDefault)
+    : undefined;
+  const formCompanyOpts = formCompanies.map((c) => ({ id: c.id, name: c.name }));
+
   return (
     <div>
-      <PageHeader title="Review management" description="Import reviews, AI-draft responses, and run review-request campaigns. Simulated until REVIEWS_LIVE is on." />
+      <PageHeader
+        title={scopedCompany ? `Reviews · ${scopedCompany.name}` : "Review management"}
+        description="Import reviews, AI-draft responses, and run review-request campaigns. Simulated until REVIEWS_LIVE is on."
+      />
       <div className="grid gap-4 p-6 md:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Reputation</p><p className="text-2xl font-semibold">{reputation.score}/100</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Avg rating</p><p className="text-2xl font-semibold">{reputation.averageRating || "—"}</p></CardContent></Card>
@@ -42,7 +59,7 @@ export default async function ReviewsPage({
         <Card><CardContent className="p-6">
           <h2 className="mb-4 font-semibold">Import reviews</h2>
           <form action={importReviewsAction} className="space-y-4">
-            <Field label="Client" htmlFor="companyId"><Select id="companyId" name="companyId" required defaultValue={companyDefault}>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+            <LockedCompanyField id="companyId" companies={formCompanyOpts} companyId={companyDefault} locked={companyLocked} />
             <Field label="Platform" htmlFor="platform"><Select id="platform" name="platform" defaultValue="google"><option value="google">Google</option><option value="facebook">Facebook</option><option value="yelp">Yelp</option><option value="tripadvisor">TripAdvisor</option></Select></Field>
             <Button type="submit">Import reviews</Button>
           </form>
@@ -50,8 +67,15 @@ export default async function ReviewsPage({
         <Card><CardContent className="p-6">
           <h2 className="mb-4 font-semibold">Review-request campaign</h2>
           <form action={createReviewCampaignAction} className="space-y-4">
-            <Field label="Client" htmlFor="cc"><Select id="cc" name="companyId" required defaultValue={companyDefault}>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
-            <Field label="Name" htmlFor="name"><Input id="name" name="name" required /></Field>
+            <LockedCompanyField id="cc" companies={formCompanyOpts} companyId={companyDefault} locked={companyLocked} />
+            <Field label="Name" htmlFor="name" hint="Internal label for the campaign">
+              <Input
+                id="name"
+                name="name"
+                required
+                placeholder="e.g. Post-stay Google review ask"
+              />
+            </Field>
             <Field label="Channel" htmlFor="channel"><Select id="channel" name="channel" defaultValue="email"><option value="email">Email</option><option value="sms">SMS</option><option value="qr">QR</option><option value="receipt">Receipt</option><option value="post_stay">Post-stay</option></Select></Field>
             <Button type="submit">Create campaign</Button>
           </form>

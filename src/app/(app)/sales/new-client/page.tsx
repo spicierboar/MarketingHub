@@ -1,33 +1,44 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSalesRepOrAdmin } from "@/lib/auth/rbac";
-import { getCompany } from "@/lib/db";
-import { stripeConfigured } from "@/lib/billing";
-import { ADDONS, ADDON_ORDER, isAddonId } from "@/lib/addons";
-import type { AddonId } from "@/lib/types";
-import { PROFILE_FIELD_HELP } from "@/lib/profile-suggestions";
-import { ProfileSuggestButton } from "@/components/profile-suggest-button";
+import { getCompany, getTenant } from "@/lib/db";
+import {
+  stripeConfigured,
+  stripeMarketingPackagePriceId,
+  useMockPackageCheckout,
+} from "@/lib/billing";
+import {
+  listActivePackagesForSignup,
+  resolvePackageById,
+} from "@/lib/marketing-packages";
+import type { MarketingPackageId } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
-import { BusinessTypeSection } from "@/app/(app)/companies/business-profile-fields";
+import { Field, Input } from "@/components/ui/form";
+import { NewClientProfileFields } from "@/components/new-client-profile-fields";
+import { NewClientWebsiteStep } from "@/components/new-client-website-step";
+import { NewClientCheckoutStep } from "@/components/new-client-checkout-step";
+import { FormSeedButton } from "@/components/form-seed-button";
+import { OnboardingPackagePicker } from "@/components/onboarding-package-picker";
 import {
-  nextUnpaidAddon,
+  confirmPackageCheckoutSuccessAction,
   provisionClientAction,
-  saveAddonsStepAction,
   saveBusinessStepAction,
-  skipAddonsAction,
+  savePackageStepAction,
   skipCheckoutAction,
-  startAddonCheckoutAction,
+  skipPackageAction,
+  startPackageCheckoutAction,
 } from "../actions";
+import { wizardPath } from "../wizard-path";
 
-type Step = "business" | "addons" | "checkout" | "provision" | "done";
+type Step = "website" | "business" | "package" | "checkout" | "provision" | "done";
 
 function Stepper({ step }: { step: Step }) {
   const steps: { key: Step; label: string }[] = [
-    { key: "business", label: "Business" },
-    { key: "addons", label: "Add-ons" },
+    { key: "website", label: "Website" },
+    { key: "business", label: "Profile" },
+    { key: "package", label: "Package" },
     { key: "checkout", label: "Checkout" },
     { key: "provision", label: "Client login" },
     { key: "done", label: "Done" },
@@ -47,10 +58,23 @@ function Stepper({ step }: { step: Step }) {
           >
             {i + 1}
           </span>
-          <span className={i === idx ? "font-medium" : "text-muted-foreground"}>{s.label}</span>
+          <span className={i === idx ? "font-medium" : "text-muted-foreground"}>
+            {s.label}
+          </span>
         </li>
       ))}
     </ol>
+  );
+}
+
+function BackLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+    >
+      ← {label}
+    </Link>
   );
 }
 
@@ -60,174 +84,290 @@ export default async function NewClientPage({
   searchParams: Promise<{
     step?: string;
     companyId?: string;
-    addons?: string;
-    paid?: string;
-    checkout?: string;
     clientEmail?: string;
+    scraped?: string;
+    checkout?: string;
+    session_id?: string;
+    paid?: string;
+    error?: string;
+    profileSaved?: string;
   }>;
 }) {
-  await requireSalesRepOrAdmin();
+  const user = await requireSalesRepOrAdmin();
   const params = await searchParams;
   const companyId = params.companyId?.trim();
-  let step: Step = "business";
-  if (params.step === "addons" && companyId) step = "addons";
+  const profileError = params.error ? decodeURIComponent(params.error) : null;
+  const profileSaved = params.profileSaved === "1";
+  let step: Step = "website";
+  if (params.step === "business" && companyId) step = "business";
+  else if (params.step === "package" && companyId) step = "package";
   else if (params.step === "checkout" && companyId) step = "checkout";
-  else if (params.step === "provision" && companyId) step = "provision";
+  // Legacy add-ons step removed — AI video/photo live under Content → AI Visuals.
+  else if (params.step === "addons" && companyId) {
+    redirect(wizardPath("checkout", companyId));
+  } else if (params.step === "provision" && companyId) step = "provision";
   else if (params.step === "done" && companyId) step = "done";
+  else if (params.step === "website") step = "website";
+
   const company = companyId ? await getCompany(companyId) : null;
   if (companyId && !company) redirect("/sales/new-client");
-  const selectedAddons = (params.addons ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(isAddonId) as AddonId[];
-  const checkoutQueue =
-    params.checkout === "success" && params.paid && isAddonId(params.paid)
-      ? selectedAddons.filter((id) => id !== params.paid)
-      : selectedAddons;
-  if (step === "checkout" && companyId) {
-    const unpaid = await nextUnpaidAddon(companyId, checkoutQueue);
-    if (!unpaid) redirect(`/sales/new-client?step=provision&companyId=${companyId}`);
+  if (company && company.tenantId !== user.tenantId) redirect("/sales/new-client");
+
+  // Stripe return: verify Checkout Session server-side, then continue.
+  if (
+    step === "checkout" &&
+    company &&
+    params.checkout === "success"
+  ) {
+    await confirmPackageCheckoutSuccessAction(
+      company.id,
+      params.session_id,
+    );
   }
-  const unpaidAddon =
-    step === "checkout" && companyId
-      ? await nextUnpaidAddon(companyId, checkoutQueue)
-      : null;
+
+  const tenant = await getTenant(user.tenantId);
+  const packages = listActivePackagesForSignup(tenant).map((p) => ({
+    id: p.id,
+    name: p.name,
+    priceAudMonthly: p.priceAudMonthly,
+    blurb: p.blurb,
+    channels: p.channels,
+    postsPerMonth: p.postsPerMonth,
+    campaignsPerMonth: p.campaignsPerMonth,
+    promosIncludedPerMonth: p.promosIncludedPerMonth,
+    adsManagementIncluded: p.adsManagementIncluded,
+    imageQuotaPerMonth: p.imageQuotaPerMonth,
+    videoQuotaPerMonth: p.videoQuotaPerMonth,
+    defaultServiceLevel: p.defaultServiceLevel,
+    customModuleRates: p.customModuleRates,
+  }));
+
+  const packageId = (company?.profile.managedService?.marketingPackageId ??
+    "pro") as MarketingPackageId;
+  const selectedPkg = resolvePackageById(tenant, packageId);
+  const mockCheckout =
+    useMockPackageCheckout() || !stripeMarketingPackagePriceId(packageId);
 
   return (
     <div>
       <PageHeader
         title="New client"
-        description="Field sales wizard — company, add-ons, client portal login."
+        description="Website scrape → profile → marketing package → checkout → client portal login."
       />
       <div className="mx-auto max-w-3xl p-6">
         <Card>
           <CardContent className="p-6">
             <Stepper step={step} />
-            {step === "business" && (
-              <form id="new-client-business-form" action={saveBusinessStepAction} className="space-y-4">
-                <Field
-                  label="Client name"
-                  htmlFor="name"
-                  hint="Trading name customers recognise — not necessarily the legal entity."
-                >
-                  <Input id="name" name="name" required placeholder="e.g. Bondi Beach Café" />
-                </Field>
-                <BusinessTypeSection initialType="other" />
-                <ProfileSuggestButton formId="new-client-business-form" compact />
-                <Field
-                  label="Nature of business"
-                  htmlFor="natureOfBusiness"
-                  hint={PROFILE_FIELD_HELP.natureOfBusiness}
-                >
-                  <Textarea
-                    id="natureOfBusiness"
-                    name="natureOfBusiness"
-                    rows={2}
-                    placeholder="e.g. A family café in Bondi serving breakfast and lunch."
-                  />
-                </Field>
-                <Field
-                  label="Target customers"
-                  htmlFor="targetCustomers"
-                  hint={PROFILE_FIELD_HELP.targetCustomers}
-                >
-                  <Textarea
-                    id="targetCustomers"
-                    name="targetCustomers"
-                    rows={2}
-                    placeholder="Local families and weekday workers"
-                  />
-                </Field>
-                <Field
-                  label="Brand voice"
-                  htmlFor="brandVoice"
-                  hint={PROFILE_FIELD_HELP.brandVoice}
-                >
-                  <Textarea
-                    id="brandVoice"
-                    name="brandVoice"
-                    rows={2}
-                    placeholder="Warm and neighbourly — never pushy"
-                  />
-                </Field>
-                <Button type="submit">Continue</Button>
-              </form>
+
+            {step === "website" && (
+              <>
+                {profileError && (
+                  <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                    {profileError}
+                  </p>
+                )}
+                <NewClientWebsiteStep
+                  companyId={company?.id}
+                  initialName={company?.name}
+                  initialAbn={company?.profile.abn}
+                  initialWebsite={company?.profile.website}
+                  consentDefault={!!company?.profile.autoOnboarding?.consentRecordedAt}
+                />
+              </>
             )}
-            {step === "addons" && company && (
-              <form action={saveAddonsStepAction} className="space-y-4">
+
+            {step === "business" && company && (
+              <form
+                id="new-client-business-form"
+                action={saveBusinessStepAction}
+                className="space-y-4"
+              >
                 <input type="hidden" name="companyId" value={company.id} />
-                <p className="text-sm text-muted-foreground">
-                  Optional paid capabilities for this client. Skip if you only need the base plan.
-                </p>
-                {ADDON_ORDER.map((id) => (
-                  <label key={id} className="flex gap-3 rounded border p-3">
-                    <input type="checkbox" name="addonId" value={id} className="mt-1" />
-                    <span className="text-sm">
-                      <span className="font-medium">
-                        {ADDONS[id].icon} {ADDONS[id].name} — ${ADDONS[id].priceAudMonthly}/mo
-                      </span>
-                      <span className="mt-0.5 block text-muted-foreground">{ADDONS[id].blurb}</span>
-                    </span>
-                  </label>
-                ))}
-                <div className="flex gap-2">
-                  <Button type="submit" variant="secondary" formAction={skipAddonsAction}>
-                    Skip
-                  </Button>
-                  <Button type="submit">Continue</Button>
+                {profileError && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                    {profileError}
+                  </p>
+                )}
+                {params.scraped === "1" && (
+                  <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    Pre-filled from the website and AI enrichment — review below,
+                    then continue.
+                  </p>
+                )}
+                {params.scraped === "0" && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                    Scrape found little or failed — fill the profile manually, or go
+                    back to correct the website.
+                  </p>
+                )}
+                <NewClientProfileFields
+                  formId="new-client-business-form"
+                  initialName={company.name}
+                  profile={company.profile}
+                />
+                <div className="flex flex-wrap items-center gap-4 pt-2">
+                  <BackLink
+                    href={wizardPath("website", company.id)}
+                    label="Back to website"
+                  />
+                  <Button type="submit">Continue to package</Button>
                 </div>
               </form>
             )}
-            {step === "checkout" && company && unpaidAddon && (
-              <form action={startAddonCheckoutAction} className="space-y-4">
-                <input type="hidden" name="companyId" value={company.id} />
-                <input type="hidden" name="addonId" value={unpaidAddon} />
-                <input type="hidden" name="remaining" value={checkoutQueue.join(",")} />
-                <p className="text-sm">
-                  {ADDONS[unpaidAddon].name} for {company.name}
-                </p>
-                <Button type="submit">
-                  {stripeConfigured() ? "Stripe checkout" : "Enable (demo)"}
-                </Button>
-                <Button type="submit" variant="secondary" formAction={skipCheckoutAction}>
-                  Skip
-                </Button>
-              </form>
+
+            {step === "package" && company && (
+              <div className="space-y-4">
+                {profileSaved && (
+                  <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                    Profile saved — choose a marketing package next.
+                  </p>
+                )}
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground space-y-1.5">
+                  <p>
+                    <span className="font-medium text-foreground">Marketing package</span>{" "}
+                    (Basic / Pro / Blast / Custom) is what we deliver for this{" "}
+                    <span className="font-medium text-foreground">client company</span>.
+                    Your agency <span className="font-medium text-foreground">Workspace plan</span>{" "}
+                    (how many clients you can manage) is separate — Agency Settings → Billing.
+                  </p>
+                  <p>
+                    Next step collects package payment
+                    {stripeConfigured() && !useMockPackageCheckout()
+                      ? " via Stripe Checkout when package prices are configured"
+                      : " with a full demo checkout experience"}
+                    . Extra video/photo capacity is managed later under{" "}
+                    <span className="font-medium text-foreground">AI Visuals</span>.
+                  </p>
+                </div>
+                <OnboardingPackagePicker
+                  packages={packages}
+                  initialPackageId={packageId}
+                  initialCustomModules={company.profile.managedService?.customModules}
+                  action={savePackageStepAction}
+                  description="Select the marketing package for this client. Ad spend is always extra and prepaid."
+                  hiddenFields={{ companyId: company.id }}
+                />
+                <div className="flex flex-wrap items-center gap-4">
+                  <BackLink
+                    href={wizardPath("business", company.id)}
+                    label="Back to profile"
+                  />
+                  <form action={skipPackageAction}>
+                    <input type="hidden" name="companyId" value={company.id} />
+                    <Button type="submit" variant="secondary">
+                      Skip for now
+                    </Button>
+                  </form>
+                </div>
+              </div>
             )}
+
+            {step === "checkout" && company && (
+              <div className="space-y-4">
+                <NewClientCheckoutStep
+                  companyId={company.id}
+                  companyName={company.name}
+                  packageName={selectedPkg.name}
+                  priceAudMonthly={selectedPkg.priceAudMonthly}
+                  mockMode={mockCheckout}
+                  cancelled={params.checkout === "cancelled"}
+                  action={startPackageCheckoutAction}
+                  skipAction={skipCheckoutAction}
+                />
+                <BackLink
+                  href={wizardPath("package", company.id)}
+                  label="Back to package"
+                />
+              </div>
+            )}
+
             {step === "provision" && company && (
-              <form action={provisionClientAction} className="space-y-4">
+              <form
+                id="new-client-provision-form"
+                action={provisionClientAction}
+                className="space-y-4"
+              >
                 <input type="hidden" name="companyId" value={company.id} />
+                {params.paid && (
+                  <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    Package checkout recorded
+                    {params.paid === "demo" ? " (demo payment)" : ""}. Create the
+                    client portal login next.
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground">
-                  Creates the client&apos;s portal login. They sign in with a magic link — no
-                  password.
+                  Creates the client&apos;s portal login. They sign in with a magic link —
+                  no password.
                 </p>
-                <Field label="Client name" htmlFor="name">
-                  <Input id="name" name="name" required />
+                <FormSeedButton
+                  formId="new-client-provision-form"
+                  hint={
+                    <>
+                      Seeds empty contact fields from this client — replace with the real
+                      portal user before creating the login.
+                    </>
+                  }
+                  values={{
+                    name:
+                      company.profile.approvalContact?.split("@")[0]
+                        ?.replace(/[._]/g, " ")
+                        .replace(/\b\w/g, (c) => c.toUpperCase()) ||
+                      `${company.name} Owner`,
+                    email:
+                      company.profile.email?.trim() ||
+                      company.profile.approvalContact?.trim() ||
+                      `owner@${(company.profile.website ?? "example.com")
+                        .replace(/^https?:\/\//, "")
+                        .replace(/\/.*$/, "")
+                        .replace(/^www\./, "") || "example.com"}`,
+                  }}
+                />
+                <Field
+                  label="Client contact name"
+                  htmlFor="name"
+                  hint="The person who will sign into the portal"
+                >
+                  <Input id="name" name="name" required placeholder="e.g. Sam Chen" />
                 </Field>
                 <Field
                   label="Client email"
                   htmlFor="email"
                   hint="Where the magic-link invite is sent (or used at /login in demo)."
                 >
-                  <Input id="email" name="email" type="email" required />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    placeholder="e.g. sam@example.com.au"
+                  />
                 </Field>
-                <Button type="submit">Create login</Button>
+                <div className="flex flex-wrap items-center gap-4">
+                  <BackLink
+                    href={wizardPath("checkout", company.id)}
+                    label="Back to checkout"
+                  />
+                  <Button type="submit">Create login</Button>
+                </div>
               </form>
             )}
+
             {step === "done" && company && (
               <div className="space-y-4 text-center">
                 <h2 className="text-lg font-semibold">{company.name} is ready</h2>
                 {params.clientEmail && (
                   <p className="text-sm text-muted-foreground">
-                    {params.clientEmail} — magic link at /login
+                    {params.clientEmail} — magic link at /login.
                   </p>
                 )}
-                <Link href={`/companies/${company.id}`}>
-                  <Button variant="secondary">View company</Button>
-                </Link>
-                <Link href="/sales/new-client">
-                  <Button>Add another</Button>
-                </Link>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Link href={`/companies/${company.id}`}>
+                    <Button variant="secondary">View company</Button>
+                  </Link>
+                  <Link href="/sales/new-client">
+                    <Button>Add another</Button>
+                  </Link>
+                </div>
               </div>
             )}
           </CardContent>

@@ -9,11 +9,12 @@ import {
 import type { PromoIndustry } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Select } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { FormModal } from "@/components/form-modal";
 import { PromoTemplateFormFields } from "@/components/promo-template-form";
 import {
   createAgencyPromoAction,
+  createAgencyPromoIndustryAction,
   deleteAgencyPromoAction,
   resetPlatformPromoAction,
   saveAgencyPromoAction,
@@ -51,48 +52,44 @@ function CatalogCard({
 }) {
   const { template: t, kind, hasOverride, hidden } = row;
   return (
-    <div className="rounded-md border border-border px-3 py-2 text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-medium">{t.name}</p>
-          <p className="text-xs text-muted-foreground">{t.promotion}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {durationLabel(t)} · {money(t.suggestedClientPriceUsd)} ·{" "}
-            {Math.round(t.markupPercent * 100)}% markup · {t.outlines.length} posts
-          </p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {kind === "custom" ? (
-              <Badge tone="primary">Custom</Badge>
-            ) : (
-              <Badge tone="neutral">Built-in</Badge>
-            )}
-            {hasOverride && kind === "platform" && !hidden && (
-              <Badge tone="info">Edited</Badge>
-            )}
-            {hidden && <Badge tone="warning">Hidden</Badge>}
-            {kind === "custom" && !hidden && <Badge tone="success">Active</Badge>}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Button type="button" size="sm" variant="outline" onClick={() => onEdit(row)}>
-            Edit
+    <div className="flex w-full flex-col gap-2 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-4">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium leading-tight">{t.name}</p>
+        <p className="truncate text-xs text-muted-foreground">{t.promotion}</p>
+      </div>
+      <p className="shrink-0 text-xs text-muted-foreground whitespace-nowrap sm:text-right">
+        {durationLabel(t)} · {money(t.suggestedClientPriceUsd)} ·{" "}
+        {Math.round(t.markupPercent * 100)}% markup · {t.outlines.length} posts
+      </p>
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+        {kind === "custom" ? (
+          <Badge tone="primary">Custom</Badge>
+        ) : (
+          <Badge tone="neutral">Built-in</Badge>
+        )}
+        {hasOverride && kind === "platform" && !hidden && (
+          <Badge tone="info">Edited</Badge>
+        )}
+        {hidden && <Badge tone="warning">Hidden</Badge>}
+        {kind === "custom" && !hidden && <Badge tone="success">Active</Badge>}
+        <Button type="button" size="sm" variant="outline" onClick={() => onEdit(row)}>
+          Edit
+        </Button>
+        <form action={toggleAgencyPromoAction}>
+          <input type="hidden" name="templateId" value={row.id} />
+          <input type="hidden" name="active" value={hidden ? "true" : "false"} />
+          <Button type="submit" size="sm" variant="ghost">
+            {hidden ? "Show" : "Hide"}
           </Button>
-          <form action={toggleAgencyPromoAction}>
+        </form>
+        {kind === "custom" && (
+          <form action={deleteAgencyPromoAction}>
             <input type="hidden" name="templateId" value={row.id} />
-            <input type="hidden" name="active" value={hidden ? "true" : "false"} />
             <Button type="submit" size="sm" variant="ghost">
-              {hidden ? "Show" : "Hide"}
+              Delete
             </Button>
           </form>
-          {kind === "custom" && (
-            <form action={deleteAgencyPromoAction}>
-              <input type="hidden" name="templateId" value={row.id} />
-              <Button type="submit" size="sm" variant="ghost">
-                Delete
-              </Button>
-            </form>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -100,9 +97,11 @@ function CatalogCard({
 
 function EditModal({
   row,
+  industryOptions,
   onClose,
 }: {
   row: PromoCatalogRow;
+  industryOptions: { id: string; label: string }[];
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -117,17 +116,19 @@ function EditModal({
 
   return (
     <FormModal
-      title={isPlatform ? "Edit built-in pack" : "Edit campaign"}
+      title={isPlatform ? "Edit built-in pack" : "Edit promo"}
       description={
         isPlatform
           ? "Changes apply only to your workspace. Reset anytime to restore the platform default."
-          : "Update this industry campaign for your clients."
+          : "Update this promo template for your catalog. Clients request it to create a draft campaign."
       }
       onClose={onClose}
       wide
     >
       <div className="mb-3 flex flex-wrap gap-2">
-        <Badge tone="neutral">{industryLabel(row.template.industry)}</Badge>
+        <Badge tone="neutral">
+          {industryLabel(row.template.industry, industryOptions)}
+        </Badge>
         {isPlatform && (
           <Badge tone={row.hasOverride ? "info" : "neutral"}>
             {row.hasOverride ? "Edited for your workspace" : "Platform default"}
@@ -148,6 +149,7 @@ function EditModal({
       >
         <PromoTemplateFormFields
           defaults={row.template}
+          industryOptions={industryOptions}
           submitLabel={
             pending
               ? "Saving…"
@@ -183,7 +185,7 @@ function EditModal({
           >
             <input type="hidden" name="templateId" value={row.id} />
             <Button type="submit" variant="ghost" size="sm" disabled={pending}>
-              Delete campaign
+              Delete promo
             </Button>
           </form>
         )}
@@ -192,19 +194,21 @@ function EditModal({
   );
 }
 
-function AddCampaignModal({
+function AddPromoModal({
   defaultIndustry,
+  industryOptions,
   onClose,
 }: {
   defaultIndustry?: PromoIndustry;
+  industryOptions: { id: string; label: string }[];
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
 
   return (
     <FormModal
-      title="Add industry campaign"
-      description="Include 3–5 ready-to-publish posts. Clients only adjust package price, start date, and channels."
+      title="Add promo"
+      description="Creates a promo template (pack) for the catalog — not a live Delivery campaign. Include 3–5 ready-to-publish posts; clients later request it to start a draft campaign."
       onClose={onClose}
       wide
     >
@@ -220,6 +224,7 @@ function AddCampaignModal({
       >
         <PromoTemplateFormFields
           defaults={defaultIndustry ? { industry: defaultIndustry } : null}
+          industryOptions={industryOptions}
           submitLabel={pending ? "Adding…" : "Add to catalog"}
         />
       </form>
@@ -227,12 +232,65 @@ function AddCampaignModal({
   );
 }
 
+function AddIndustryModal({ onClose }: { onClose: () => void }) {
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <FormModal
+      title="Add industry"
+      description="Adds a custom industry tag for grouping promo templates in this workspace. Platform industries stay unchanged."
+      onClose={onClose}
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          startTransition(async () => {
+            await createAgencyPromoIndustryAction(fd);
+            onClose();
+          });
+        }}
+      >
+        <Field label="Display name" htmlFor="industry-label">
+          <Input
+            id="industry-label"
+            name="label"
+            required
+            minLength={2}
+            maxLength={80}
+            placeholder="e.g. Pet care"
+          />
+        </Field>
+        <Field
+          label="Id (optional)"
+          htmlFor="industry-id"
+          hint="Lowercase slug. Leave blank to generate from the name."
+        >
+          <Input
+            id="industry-id"
+            name="id"
+            maxLength={40}
+            placeholder="e.g. pet_care"
+            pattern="[a-z][a-z0-9_]*"
+          />
+        </Field>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Adding…" : "Add industry"}
+        </Button>
+      </form>
+    </FormModal>
+  );
+}
+
 export function PromoCatalogBrowser({
   groups,
+  industryOptions,
   totalActive,
   totalRows,
 }: {
   groups: PromoCatalogGroup[];
+  industryOptions: { id: string; label: string }[];
   totalActive: number;
   totalRows: number;
 }) {
@@ -241,6 +299,7 @@ export function PromoCatalogBrowser({
   );
   const [editing, setEditing] = useState<PromoCatalogRow | null>(null);
   const [adding, setAdding] = useState(false);
+  const [addingIndustry, setAddingIndustry] = useState(false);
 
   const selected =
     groups.find((g) => g.industry === industry) ?? groups[0] ?? null;
@@ -270,8 +329,16 @@ export function PromoCatalogBrowser({
           <p className="text-xs text-muted-foreground">
             {totalActive} visible · {totalRows} total · {groups.length} industries
           </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setAddingIndustry(true)}
+          >
+            Add industry
+          </Button>
           <Button type="button" size="sm" onClick={() => setAdding(true)}>
-            Add campaign
+            Add promo
           </Button>
         </div>
       </div>
@@ -287,7 +354,7 @@ export function PromoCatalogBrowser({
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">No packs for this industry yet.</p>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="divide-y divide-border border-y border-border">
               {rows.map((row) => (
                 <CatalogCard key={row.id} row={row} onEdit={setEditing} />
               ))}
@@ -298,12 +365,22 @@ export function PromoCatalogBrowser({
         <p className="text-sm text-muted-foreground">No industries in the catalog yet.</p>
       )}
 
-      {editing && <EditModal row={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <EditModal
+          row={editing}
+          industryOptions={industryOptions}
+          onClose={() => setEditing(null)}
+        />
+      )}
       {adding && (
-        <AddCampaignModal
+        <AddPromoModal
           defaultIndustry={selected?.industry}
+          industryOptions={industryOptions}
           onClose={() => setAdding(false)}
         />
+      )}
+      {addingIndustry && (
+        <AddIndustryModal onClose={() => setAddingIndustry(false)} />
       )}
     </>
   );

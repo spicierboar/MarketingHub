@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/utils";
 import type { Company, MenuDesign, MenuDesignStatus } from "@/lib/types";
@@ -32,8 +33,14 @@ export default async function MenusPage({
   const companies = (await listCompanies(user.tenantId)).filter(
     (c) => c.status !== "archived",
   );
-  const companyId = params.company ?? companies[0]?.id;
-  const company = companies.find((c) => c.id === companyId);
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const locked = Boolean(params.company);
+  const contextCompanyId =
+    params.company && companies.some((c) => c.id === params.company)
+      ? params.company
+      : undefined;
+  const companyId = locked ? contextCompanyId : contextCompanyId ?? companies[0]?.id;
+  const company = companyId ? companies.find((c) => c.id === companyId) : undefined;
   const addons = company ? await companyAddonMap(user.tenantId, company.id) : null;
 
   const designs = companyId
@@ -45,7 +52,7 @@ export default async function MenusPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Restaurant Menus"
+        title={company ? `Menus · ${company.name}` : "Restaurant Menus"}
         description="Designed-menu deliverables for restaurant clients — 2 included redesigns per year, then per-menu billing."
       />
 
@@ -66,16 +73,12 @@ export default async function MenusPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Client" htmlFor="menu-company">
-              <Select id="menu-company" name="company" defaultValue={companyId}>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">View</Button>
+            <LockedCompanyFilter
+              companies={companyOpts}
+              companyId={companyId}
+              locked={locked && Boolean(companyId)}
+            />
+            {!locked && <Button type="submit">View</Button>}
           </form>
           {company && addons && (
             <p className="mt-3 text-sm text-muted-foreground">

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/utils";
 import {
@@ -26,8 +27,14 @@ export default async function LearningPage({
   const user = await requireAdmin();
   const params = await searchParams;
   const companies = (await listCompanies(user.tenantId)).filter((c) => c.status !== "archived");
-  const companyId = params.company ?? companies[0]?.id;
-  const company = companies.find((c) => c.id === companyId);
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const locked = Boolean(params.company);
+  const contextCompanyId =
+    params.company && companies.some((c) => c.id === params.company)
+      ? params.company
+      : undefined;
+  const companyId = locked ? contextCompanyId : contextCompanyId ?? companies[0]?.id;
+  const company = companyId ? companies.find((c) => c.id === companyId) : undefined;
 
   const [lessons, hypotheses] = companyId
     ? await Promise.all([
@@ -41,7 +48,7 @@ export default async function LearningPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Continuous learning"
+        title={company ? `Learning · ${company.name}` : "Continuous learning"}
         description="Hypotheses, experiment outcomes, and lessons-learned from dismissals and tests."
       >
         <Badge tone={mode === "live" ? "success" : "neutral"}>
@@ -52,16 +59,12 @@ export default async function LearningPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Client" htmlFor="lrn-company">
-              <Select id="lrn-company" name="company" defaultValue={companyId}>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">View</Button>
+            <LockedCompanyFilter
+              companies={companyOpts}
+              companyId={companyId}
+              locked={locked && Boolean(companyId)}
+            />
+            {!locked && <Button type="submit">View</Button>}
           </form>
         </CardContent>
       </Card>
@@ -96,11 +99,26 @@ export default async function LearningPage({
 
               <form action={recordManualLessonAction} className="space-y-3 border-t pt-4">
                 <input type="hidden" name="companyId" value={company.id} />
-                <Field label="Manual lesson title" htmlFor="ml-title">
-                  <Input id="ml-title" name="title" required placeholder="What we learned" />
+                <Field
+                  label="Manual lesson title"
+                  htmlFor="ml-title"
+                  hint="Short label for the takeaway"
+                >
+                  <Input
+                    id="ml-title"
+                    name="title"
+                    required
+                    placeholder="e.g. Weekday lunch posts underperformed on Facebook"
+                  />
                 </Field>
                 <Field label="Lesson" htmlFor="ml-lesson">
-                  <Textarea id="ml-lesson" name="lesson" required className="min-h-16" />
+                  <Textarea
+                    id="ml-lesson"
+                    name="lesson"
+                    required
+                    className="min-h-16"
+                    placeholder="e.g. Instagram Stories drove more midweek bookings than feed posts — keep Stories in the mix."
+                  />
                 </Field>
                 <Button type="submit" size="sm">
                   Record lesson
@@ -143,7 +161,11 @@ export default async function LearningPage({
                             </Select>
                           </Field>
                           <Field label="Notes" htmlFor={`notes-${h.id}`}>
-                            <Input id={`notes-${h.id}`} name="notes" placeholder="Optional" />
+                            <Input
+                              id={`notes-${h.id}`}
+                              name="notes"
+                              placeholder="e.g. +12% CTR vs control; small sample"
+                            />
                           </Field>
                           <Button type="submit" size="sm" variant="secondary">
                             Record outcome
@@ -158,10 +180,25 @@ export default async function LearningPage({
               <form action={createHypothesisAction} className="space-y-3 border-t pt-4">
                 <input type="hidden" name="companyId" value={company.id} />
                 <Field label="Hypothesis title" htmlFor="hyp-title">
-                  <Input id="hyp-title" name="title" required />
+                  <Input
+                    id="hyp-title"
+                    name="title"
+                    required
+                    placeholder="e.g. Stronger CTA on Stories"
+                  />
                 </Field>
-                <Field label="Statement" htmlFor="hyp-statement">
-                  <Textarea id="hyp-statement" name="statement" required className="min-h-14" />
+                <Field
+                  label="Statement"
+                  htmlFor="hyp-statement"
+                  hint="If we change X, then Y will improve because Z"
+                >
+                  <Textarea
+                    id="hyp-statement"
+                    name="statement"
+                    required
+                    className="min-h-14"
+                    placeholder="e.g. If we lead Stories with Book now, weekday bookings will rise because guests decide same-day."
+                  />
                 </Field>
                 <Field label="Metric (optional)" htmlFor="hyp-metric">
                   <Input id="hyp-metric" name="metric" placeholder="e.g. booking rate" />

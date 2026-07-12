@@ -2,12 +2,13 @@ import Link from "next/link";
 import { requireUser, isAdmin } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
 import { accessibleCompanyIds } from "@/lib/auth/rbac";
-import { listBrandTemplates } from "@/lib/db";
+import { getCompany, listBrandTemplates } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { titleCase } from "@/lib/utils";
 import {
   createBrandTemplateAction,
@@ -28,25 +29,54 @@ const SOURCES: [string, string][] = [
   ["upload", "In-house"],
 ];
 
-export default async function BrandTemplatesPage() {
+export default async function BrandTemplatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
   const user = await requireUser();
   const admin = isAdmin(user);
   const superAdmin = user.role === "super_admin";
   const companies = await visibleCompanies(user);
   const companyIds = new Set(await accessibleCompanyIds(user));
+  const { company: companyParam } = await searchParams;
+  const contextCompanyId =
+    companyParam && companyIds.has(companyParam) ? companyParam : undefined;
+  const scopedCompany = contextCompanyId
+    ? await getCompany(contextCompanyId)
+    : null;
   // Tenant-wide templates plus any for companies the user can see.
-  const templates = (await listBrandTemplates(user.tenantId)).filter(
-    (t) => t.companyId === null || companyIds.has(t.companyId),
-  );
+  // When ?company=, show this client's templates plus group-wide layouts
+  // available to them — never other clients' templates.
+  const templates = (await listBrandTemplates(user.tenantId)).filter((t) => {
+    if (t.companyId === null) return true;
+    if (!companyIds.has(t.companyId)) return false;
+    if (contextCompanyId) return t.companyId === contextCompanyId;
+    return true;
+  });
   const byCompany = new Map(companies.map((c) => [c.id, c.name]));
+  const formCompanies = contextCompanyId
+    ? companies.filter((c) => c.id === contextCompanyId)
+    : companies;
+  const assetsBack = contextCompanyId
+    ? `/assets?company=${contextCompanyId}`
+    : "/assets";
 
   return (
     <div>
       <PageHeader
-        title="Brand templates"
-        description="Reusable creative layouts (Canva/Figma) that keep every asset on-brand. Fed into image briefs."
+        title={
+          scopedCompany
+            ? `Brand templates · ${scopedCompany.name}`
+            : "Brand templates"
+        }
+        description={
+          scopedCompany
+            ? `Reusable layouts for ${scopedCompany.name} (plus group-wide). Fed into image briefs.`
+            : "Reusable creative layouts (Canva/Figma) that keep every asset on-brand. Fed into image briefs."
+        }
       >
-        <Link href="/assets" className="text-sm text-primary hover:underline">
+        <Link href={assetsBack} className="text-sm text-primary hover:underline">
           ← Back to assets
         </Link>
       </PageHeader>
@@ -69,24 +99,39 @@ export default async function BrandTemplatesPage() {
                         <span className="font-medium">{t.name}</span>
                         <Badge tone="neutral">{titleCase(t.kind)}</Badge>
                         <Badge tone={t.companyId === null ? "primary" : "info"}>
-                          {t.companyId === null ? "Group-wide" : byCompany.get(t.companyId) ?? "Company"}
+                          {t.companyId === null
+                            ? "Group-wide"
+                            : byCompany.get(t.companyId) ?? "Company"}
                         </Badge>
                         {t.dimensions && (
-                          <span className="text-xs text-muted-foreground">{t.dimensions}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {t.dimensions}
+                          </span>
                         )}
                       </div>
-                      <p className="mt-1 text-sm text-muted-foreground">{t.description}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t.description}
+                      </p>
                       {t.spec && (
-                        <p className="mt-1 text-xs text-muted-foreground">Spec: {t.spec}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Spec: {t.spec}
+                        </p>
                       )}
                       {t.externalRef && (
                         <p className="mt-1 text-xs">
                           {t.externalRef.startsWith("http") ? (
-                            <a href={t.externalRef} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                            <a
+                              href={t.externalRef}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline"
+                            >
                               Open in {titleCase(t.source)} →
                             </a>
                           ) : (
-                            <span className="text-muted-foreground">{t.externalRef}</span>
+                            <span className="text-muted-foreground">
+                              {t.externalRef}
+                            </span>
                           )}
                         </p>
                       )}
@@ -106,27 +151,45 @@ export default async function BrandTemplatesPage() {
           )}
         </div>
 
-        {admin && (
+        {admin && formCompanies.length > 0 && (
           <Card className="h-fit">
             <CardContent className="p-6">
               <h2 className="mb-3 font-semibold">New template</h2>
               <form action={createBrandTemplateAction} className="space-y-3">
-                <Field label="Scope" htmlFor="companyId">
-                  <Select
+                {contextCompanyId ? (
+                  <LockedCompanyField
                     id="companyId"
-                    name="companyId"
-                    defaultValue={superAdmin ? "" : (companies[0]?.id ?? "")}
-                  >
-                    {superAdmin && <option value="">Group-wide</option>}
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                    companies={formCompanies.map((c) => ({
+                      id: c.id,
+                      name: c.name,
+                    }))}
+                    companyId={contextCompanyId}
+                    locked
+                    label="Scope"
+                  />
+                ) : (
+                  <Field label="Scope" htmlFor="companyId">
+                    <Select
+                      id="companyId"
+                      name="companyId"
+                      defaultValue={superAdmin ? "" : (companies[0]?.id ?? "")}
+                    >
+                      {superAdmin && <option value="">Group-wide</option>}
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
                 <Field label="Name" htmlFor="name">
-                  <Input id="name" name="name" required />
+                  <Input
+                    id="name"
+                    name="name"
+                    required
+                    placeholder="e.g. Square feed — winter offer"
+                  />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Kind" htmlFor="kind">
@@ -148,21 +211,45 @@ export default async function BrandTemplatesPage() {
                     </Select>
                   </Field>
                 </div>
-                <Field label="Dimensions" htmlFor="dimensions">
-                  <Input id="dimensions" name="dimensions" placeholder="1080x1080" />
+                <Field
+                  label="Dimensions"
+                  htmlFor="dimensions"
+                  hint="Pixel size as used in the design tool"
+                >
+                  <Input
+                    id="dimensions"
+                    name="dimensions"
+                    placeholder="e.g. 1080×1080"
+                  />
+                </Field>
+                <Field
+                  label="External ref / URL"
+                  htmlFor="externalRef"
+                  hint="Canva/Figma link or internal file id"
+                >
+                  <Input
+                    id="externalRef"
+                    name="externalRef"
+                    placeholder="https://www.canva.com/design/…"
+                  />
                 </Field>
                 <Field label="Description" htmlFor="description">
-                  <Textarea id="description" name="description" className="min-h-14" />
+                  <Textarea
+                    id="description"
+                    name="description"
+                    className="min-h-16"
+                    placeholder="e.g. Square feed layout with logo top-left and CTA bar"
+                  />
                 </Field>
-                <Field label="Spec / layout rules" htmlFor="spec">
-                  <Textarea id="spec" name="spec" className="min-h-14" />
+                <Field label="Spec notes" htmlFor="spec">
+                  <Textarea
+                    id="spec"
+                    name="spec"
+                    className="min-h-16"
+                    placeholder="e.g. Safe margin 80px; headline max 6 words"
+                  />
                 </Field>
-                <Field label="External reference" htmlFor="externalRef">
-                  <Input id="externalRef" name="externalRef" placeholder="Canva/Figma URL or id" />
-                </Field>
-                <Button type="submit" className="w-full">
-                  Create template
-                </Button>
+                <Button type="submit">Create template</Button>
               </form>
             </CardContent>
           </Card>

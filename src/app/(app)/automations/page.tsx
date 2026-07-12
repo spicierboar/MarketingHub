@@ -205,7 +205,11 @@ export default async function AutomationsPage() {
                 </label>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Max campaigns / run" htmlFor="maxCampaignsPerRun">
+                  <Field
+                    label="Max campaigns / run"
+                    htmlFor="maxCampaignsPerRun"
+                    hint="0 = unlimited"
+                  >
                     <Input
                       id="maxCampaignsPerRun"
                       name="maxCampaignsPerRun"
@@ -213,9 +217,14 @@ export default async function AutomationsPage() {
                       min={0}
                       max={20}
                       defaultValue={s.maxCampaignsPerRun}
+                      placeholder="e.g. 5"
                     />
                   </Field>
-                  <Field label="Max drafts / company" htmlFor="maxDraftsPerCompany">
+                  <Field
+                    label="Max drafts / company"
+                    htmlFor="maxDraftsPerCompany"
+                    hint="0 = unlimited"
+                  >
                     <Input
                       id="maxDraftsPerCompany"
                       name="maxDraftsPerCompany"
@@ -223,6 +232,7 @@ export default async function AutomationsPage() {
                       min={0}
                       max={20}
                       defaultValue={s.maxDraftsPerCompany}
+                      placeholder="e.g. 3"
                     />
                   </Field>
                 </div>

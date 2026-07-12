@@ -24,9 +24,11 @@ const SERVICE_LEVELS: ManagedServiceLevel[] = [
 
 const ADDON_IDS: AddonId[] = ["video", "photo", "menus", "order_button", "bookings"];
 
-function parseChannels(raw: string): string[] {
-  return raw
-    .split(/[,|\n]/)
+/** Checkboxes (name=channels) or legacy comma-separated field. */
+function parseChannels(fd: FormData): string[] {
+  return fd
+    .getAll("channels")
+    .flatMap((v) => String(v).split(/[,|\n]/))
     .map((c) => c.trim().toLowerCase())
     .filter(Boolean);
 }
@@ -76,7 +78,7 @@ export async function saveMarketingPackageOverrideAction(formData: FormData) {
     name: String(formData.get("name") || "").trim() || base.name,
     priceAudMonthly: Math.max(0, num(formData, "priceAudMonthly", base.priceAudMonthly)),
     blurb: String(formData.get("blurb") || "").trim() || base.blurb,
-    channels: parseChannels(String(formData.get("channels") || "")),
+    channels: parseChannels(formData),
     postsPerMonth: Math.max(0, num(formData, "postsPerMonth", base.postsPerMonth)),
     campaignsPerMonth: Math.max(0, num(formData, "campaignsPerMonth", base.campaignsPerMonth)),
     promosIncludedPerMonth: Math.max(
@@ -85,6 +87,8 @@ export async function saveMarketingPackageOverrideAction(formData: FormData) {
     ),
     adsManagementIncluded: formData.get("adsManagementIncluded") === "on",
     includedAddonIds: parseAddonIds(formData),
+    imageQuotaPerMonth: Math.max(0, num(formData, "imageQuotaPerMonth", base.imageQuotaPerMonth)),
+    videoQuotaPerMonth: Math.max(0, num(formData, "videoQuotaPerMonth", base.videoQuotaPerMonth)),
     defaultServiceLevel: levelRaw as ManagedServiceLevel,
     active: formData.get("active") === "on",
   };

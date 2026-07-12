@@ -134,16 +134,32 @@ export default async function PublicConnectPage({
             </summary>
             <form action={connectInviteManualAction} className="mt-4 space-y-3">
               <input type="hidden" name="token" value={token} />
-              <Field label="Account name" htmlFor="mn-account">
+              <Field
+                label="Account name"
+                htmlFor="mn-account"
+                hint="How this connection will appear to your marketing team"
+              >
                 <Input
                   id="mn-account"
                   name="accountName"
                   required
                   defaultValue={invite.accountNameHint ?? `${company.name} ${invite.platform}`}
+                  placeholder={`e.g. ${company.name} ${invite.platform}`}
                 />
               </Field>
-              <Field label="OAuth token / API key" htmlFor="mn-token">
-                <Input id="mn-token" name="tokenValue" type="password" required />
+              <Field
+                label="OAuth token / API key"
+                htmlFor="mn-token"
+                hint="Paste the token from the platform — never your password"
+              >
+                <Input
+                  id="mn-token"
+                  name="tokenValue"
+                  type="password"
+                  required
+                  autoComplete="off"
+                  placeholder="Paste token or API key"
+                />
               </Field>
               <Button type="submit" size="sm" variant="outline">
                 Connect

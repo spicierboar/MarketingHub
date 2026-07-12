@@ -15,7 +15,33 @@ import { createUtmLinkAction } from "../actions";
 const money = (x: number) => `$${Math.round(x).toLocaleString("en-AU")}`;
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-const CONTENT_TYPES = ["social_post", "email_newsletter", "ad_copy", "landing_page", "blog_article"];
+const CONTENT_TYPES: { value: string; label: string }[] = [
+  { value: "social_post", label: "Social post" },
+  { value: "email_newsletter", label: "Email newsletter" },
+  { value: "ad_copy", label: "Ad copy" },
+  { value: "landing_page", label: "Landing page" },
+  { value: "blog_article", label: "Blog article" },
+];
+
+const UTM_SOURCES = [
+  "facebook",
+  "instagram",
+  "google",
+  "tiktok",
+  "email",
+  "sms",
+  "linkedin",
+  "newsletter",
+] as const;
+
+const UTM_MEDIUMS = [
+  "social",
+  "email",
+  "cpc",
+  "organic",
+  "referral",
+  "sms",
+] as const;
 
 export default async function UtmRoiPage({
   searchParams,
@@ -31,6 +57,9 @@ export default async function UtmRoiPage({
     companyParam && companies.some((c) => c.id === companyParam)
       ? companyParam
       : undefined;
+  const formCompanies = companyId
+    ? companies.filter((c) => c.id === companyId)
+    : companies;
   const links = (await listUtmLinks(user.tenantId)).filter(
     (l) => !companyId || l.companyId === companyId,
   );
@@ -42,11 +71,19 @@ export default async function UtmRoiPage({
     ? `/analytics?company=${companyId}`
     : "/analytics";
 
+  const scopedName = companyId ? companyById.get(companyId)?.name : undefined;
+
   return (
     <div>
       <PageHeader
-        title="UTM & ROI attribution"
-        description="Build trackable links and see attributed leads and revenue by campaign, company and platform (§42)."
+        title={
+          scopedName ? `UTM & ROI · ${scopedName}` : "UTM & ROI attribution"
+        }
+        description={
+          scopedName
+            ? `Trackable links and attributed leads/revenue for ${scopedName}.`
+            : "Build trackable links and see attributed leads and revenue by campaign, company and platform (§42)."
+        }
       >
         <Link href={analyticsHref} className="text-sm text-primary hover:underline">
           ← Analytics
@@ -130,42 +167,86 @@ export default async function UtmRoiPage({
               <h3 className="mb-4 font-semibold">Build a tracking link</h3>
               <form action={createUtmLinkAction} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Client" htmlFor="companyId">
-                    <Select
-                      id="companyId"
-                      name="companyId"
-                      required
-                      defaultValue={companyId}
-                    >
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </Select>
-                  </Field>
+                  {companyId ? (
+                    <Field label="Client" htmlFor="companyId">
+                      <input type="hidden" name="companyId" value={companyId} />
+                      <p
+                        id="companyId"
+                        className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium"
+                      >
+                        {companyById.get(companyId)?.name ?? "Client"}
+                      </p>
+                    </Field>
+                  ) : (
+                    <Field label="Client" htmlFor="companyId">
+                      <Select
+                        id="companyId"
+                        name="companyId"
+                        required
+                        defaultValue={companyId}
+                      >
+                        {formCompanies.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </Select>
+                    </Field>
+                  )}
                   <Field label="Content type" htmlFor="contentType">
                     <Select id="contentType" name="contentType" defaultValue="social_post">
                       {CONTENT_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
                       ))}
                     </Select>
                   </Field>
                 </div>
-                <Field label="Destination URL" htmlFor="destinationUrl">
-                  <Input id="destinationUrl" name="destinationUrl" required placeholder="https://…" />
+                <Field
+                  label="Destination URL"
+                  htmlFor="destinationUrl"
+                  hint="Full landing URL including https://"
+                >
+                  <Input
+                    id="destinationUrl"
+                    name="destinationUrl"
+                    required
+                    placeholder="https://www.example.com/offer"
+                  />
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Source" htmlFor="source">
-                    <Input id="source" name="source" defaultValue="facebook" />
+                  <Field label="Source" htmlFor="source" hint="utm_source">
+                    <Select id="source" name="source" defaultValue="facebook">
+                      {UTM_SOURCES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
-                  <Field label="Medium" htmlFor="medium">
-                    <Input id="medium" name="medium" defaultValue="social" />
+                  <Field label="Medium" htmlFor="medium" hint="utm_medium">
+                    <Select id="medium" name="medium" defaultValue="social">
+                      {UTM_MEDIUMS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
-                  <Field label="Campaign" htmlFor="campaign">
-                    <Input id="campaign" name="campaign" defaultValue="general" />
+                  <Field label="Campaign" htmlFor="campaign" hint="utm_campaign slug">
+                    <Input
+                      id="campaign"
+                      name="campaign"
+                      defaultValue="general"
+                      placeholder="e.g. winter-lunch-jul"
+                    />
                   </Field>
                 </div>
-                <Field label="Request ID (optional)" htmlFor="requestId">
-                  <Input id="requestId" name="requestId" placeholder="r_…" />
+                <Field
+                  label="Request ID (optional)"
+                  htmlFor="requestId"
+                  hint="Stored as utm_term for request attribution"
+                >
+                  <Input id="requestId" name="requestId" placeholder="e.g. r_…" />
                 </Field>
                 <Button type="submit">Create tracking link</Button>
               </form>

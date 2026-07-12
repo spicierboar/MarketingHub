@@ -9,7 +9,9 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { generateStudioDraftAction, repurposeForPlatformsAction } from "./actions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import Link from "next/link";
 
 const STUDIO_TYPES: [string, string][] = [
@@ -52,9 +54,6 @@ export default async function StudioPage({
   const templates = (await listPromptTemplates(user.tenantId)).filter(
     (t) => t.companyId === null || companyIds.has(t.companyId),
   );
-  const allContent = (await visibleContent(user)).filter(
-    (c) => companyIds.has(c.companyId) && canRepurposeSource(c),
-  );
   const {
     template: templateId,
     repurposeFrom,
@@ -62,6 +61,15 @@ export default async function StudioPage({
   } = await searchParams;
   const contextCompanyId =
     companyParam && companyIds.has(companyParam) ? companyParam : undefined;
+  const studioCompanies = contextCompanyId
+    ? companies.filter((c) => c.id === contextCompanyId)
+    : companies;
+  const allContent = (await visibleContent(user)).filter(
+    (c) =>
+      companyIds.has(c.companyId) &&
+      canRepurposeSource(c) &&
+      (!contextCompanyId || c.companyId === contextCompanyId),
+  );
   const preset = templateId ? await getPromptTemplate(templateId) : undefined;
   const repurposePreset = repurposeFrom ? await getContent(repurposeFrom) : undefined;
   const repurposeSource =
@@ -76,21 +84,40 @@ export default async function StudioPage({
       ? preset
       : undefined;
   const companyDefault =
+    contextCompanyId ??
     (prefill?.companyId && companyIds.has(prefill.companyId)
       ? prefill.companyId
-      : undefined) ?? contextCompanyId;
+      : undefined);
+
+  const companyLocked = Boolean(contextCompanyId);
+  const scopedCompany = contextCompanyId
+    ? studioCompanies.find((c) => c.id === contextCompanyId)
+    : undefined;
 
   return (
     <div>
       <PageHeader
-        title="Content Studio"
+        title={scopedCompany ? `Studio · ${scopedCompany.name}` : "Content Studio"}
         explainerId="studio"
         explainer="Generate any content type here. Drafts are compliance-checked and routed for approval — never published automatically."
       />
+      <p className="px-6 text-sm text-muted-foreground">
+        AI images and short videos use package free quotas — manage remaining capacity and content
+        add-ons on{" "}
+        <Link
+          href={
+            contextCompanyId ? `/visuals?company=${contextCompanyId}` : "/visuals"
+          }
+          className="text-primary underline"
+        >
+          AI Visuals
+        </Link>
+        .
+      </p>
 
       <div className="grid gap-6 p-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          {companies.length === 0 ? (
+          {studioCompanies.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-sm text-muted-foreground">
                 No AI-ready companies available to you.
@@ -101,20 +128,12 @@ export default async function StudioPage({
               <Card>
                 <CardContent className="space-y-5 p-6">
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <Field label="Client" htmlFor="companyId">
-                      <Select
-                        id="companyId"
-                        name="companyId"
-                        required
-                        defaultValue={companyDefault}
-                      >
-                        {companies.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
+                    <LockedCompanyField
+                      id="companyId"
+                      companies={studioCompanies.map((c) => ({ id: c.id, name: c.name }))}
+                      companyId={companyDefault}
+                      locked={companyLocked}
+                    />
                     <Field label="Content type" htmlFor="contentType">
                       <Select
                         id="contentType"
@@ -130,29 +149,59 @@ export default async function StudioPage({
                     </Field>
                   </div>
 
-                  <Field label="Topic / key message" htmlFor="topic">
+                  <Field
+                    label="Topic / key message"
+                    htmlFor="topic"
+                    hint="The one thing this draft is about"
+                  >
                     <Input
                       id="topic"
                       name="topic"
                       required
                       defaultValue={prefill?.topic}
+                      placeholder="e.g. Winter lunch special for locals"
                     />
                   </Field>
-                  <Field label="Objective" htmlFor="objective">
+                  <Field
+                    label="Objective"
+                    htmlFor="objective"
+                    hint="What should this piece achieve for the client?"
+                  >
                     <Textarea
                       id="objective"
                       name="objective"
                       required
                       defaultValue={prefill?.objective}
+                      placeholder="e.g. Fill weekday lunch tables"
                     />
                   </Field>
 
                   <div className="grid gap-5 sm:grid-cols-3">
                     <Field label="Audience" htmlFor="audience">
-                      <Input id="audience" name="audience" defaultValue={prefill?.audience} />
+                      <Input
+                        id="audience"
+                        name="audience"
+                        defaultValue={prefill?.audience}
+                        placeholder="e.g. Office workers within 10 minutes"
+                      />
                     </Field>
                     <Field label="Channel / platform" htmlFor="channel">
-                      <Input id="channel" name="channel" defaultValue={prefill?.channel} />
+                      <Select
+                        id="channel"
+                        name="channel"
+                        defaultValue={
+                          CONTENT_PLATFORM_OPTIONS.some((p) => p.value === prefill?.channel)
+                            ? prefill?.channel
+                            : ""
+                        }
+                      >
+                        <option value="">Not specified</option>
+                        {CONTENT_PLATFORM_OPTIONS.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </Select>
                     </Field>
                     <Field label="Tone" htmlFor="tone">
                       <Select id="tone" name="tone" defaultValue={prefill?.tone ?? "brand_default"}>
@@ -201,9 +250,9 @@ export default async function StudioPage({
               Business Profile, and TikTok variants — each becomes a new{" "}
               <span className="font-medium">ai_draft</span> for approval.
             </p>
-            {companies.length === 0 || allContent.length === 0 ? (
+            {studioCompanies.length === 0 || allContent.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {companies.length === 0
+                {studioCompanies.length === 0
                   ? "No AI-ready companies available."
                   : "No draft or approved content yet — generate a post first."}
               </p>

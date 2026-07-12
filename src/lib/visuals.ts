@@ -54,10 +54,12 @@ export async function persistGeneratedAsset(
     description: input.description,
     assetType: input.assetType,
     source: "ai_generated",
-    fileName:
-      input.assetType === "video"
-        ? `${input.name.slice(0, 40).replace(/[^\w.-]+/g, "_")}.mp4`
-        : `${input.name.slice(0, 40).replace(/[^\w.-]+/g, "_")}.png`,
+    fileName: (() => {
+      const base = input.name.slice(0, 40).replace(/[^\w.-]+/g, "_");
+      if (input.assetType === "video") return `${base}.mp4`;
+      if (input.assetType === "audio") return `${base}.wav`;
+      return `${base}.png`;
+    })(),
     mimeType: input.mimeType,
     sizeBytes: input.bytes.length,
     tags,

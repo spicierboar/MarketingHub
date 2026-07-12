@@ -1,11 +1,19 @@
 // Self-tests: client profile edit whitelist (ABN / legal name / strategy locked).
-// Wave A — portal may only patch contact/hours. ABN is never a unique company key.
+// Wave A — portal may only patch contact/hours.
+// ABN alone is not unique (1 ABN → N companies by trading name); identity
+// duplicate checks use (business name + ABN) — see company-identity.ts.
 
 import {
   applyClientProfilePatch,
   clientProfilePatchFromForm,
 } from "@/lib/client-profile-edit";
-import type { CompanyProfile } from "@/lib/types";
+import {
+  findDuplicateByNameAndAbn,
+  normalizeAbnDigits,
+  normalizeBusinessName,
+  parseAbnInput,
+} from "@/lib/company-identity";
+import type { Company, CompanyProfile } from "@/lib/types";
 
 function baseProfile(): CompanyProfile {
   return {
@@ -24,6 +32,25 @@ function baseProfile(): CompanyProfile {
     prohibitedClaims: ["Cures disease"],
     approvedClaims: ["Fresh roast"],
     requiredDisclaimers: [],
+  };
+}
+
+function stubCompany(
+  id: string,
+  name: string,
+  abn: string,
+  status: Company["status"] = "approved",
+): Company {
+  return {
+    id,
+    tenantId: "t1",
+    name,
+    status,
+    profile: { ...baseProfile(), abn },
+    documents: [],
+    createdBy: "u1",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
@@ -88,38 +115,66 @@ export function checkClientProfileFormIgnoresAbn(): {
   };
 }
 
-/** Two companies may share the same ABN (never a unique key). */
+/** Two companies may share the same ABN when business names differ. */
 export function checkAbnNotUniqueAcrossCompanies(): {
   ok: boolean;
   detail: string;
 } {
   const sharedAbn = "51 824 753 556";
-  const a = applyClientProfilePatch(
-    {
-      ...baseProfile(),
-      abn: sharedAbn,
-      website: "https://a.example",
-    },
-    { website: "https://site-a.example" },
+  const companies = [
+    stubCompany("c1", "Harbour Roasters", sharedAbn),
+    stubCompany("c2", "Harbour Wholesale", sharedAbn),
+  ];
+  const sameNameDup = findDuplicateByNameAndAbn(
+    companies,
+    "Harbour Roasters",
+    sharedAbn,
   );
-  const b = applyClientProfilePatch(
-    {
-      ...baseProfile(),
-      abn: sharedAbn,
-      website: "https://b.example",
-      serviceAreas: ["Bondi"],
-    },
-    { website: "https://site-b.example" },
+  const differentNameOk = findDuplicateByNameAndAbn(
+    companies,
+    "Harbour Events",
+    sharedAbn,
   );
-  const aWeb = a.website ?? "";
-  const bWeb = b.website ?? "";
   const ok =
-    a.abn === sharedAbn &&
-    b.abn === sharedAbn &&
-    aWeb === "https://site-a.example" &&
-    bWeb === "https://site-b.example";
+    !!sameNameDup &&
+    sameNameDup.company.id === "c1" &&
+    differentNameOk === null &&
+    normalizeAbnDigits(sharedAbn) === "51824753556" &&
+    normalizeBusinessName("  Harbour   Roasters ") === "harbour roasters";
   return {
     ok,
-    detail: `sharedAbn=${sharedAbn} a=${a.website} b=${b.website}`,
+    detail: `dup=${sameNameDup?.company.id ?? "none"} differentName=${differentNameOk === null}`,
+  };
+}
+
+/** Same business name + same ABN is a duplicate; ABN formatting variants match. */
+export function checkNameAbnIdentityDuplicate(): {
+  ok: boolean;
+  detail: string;
+} {
+  const companies = [stubCompany("c1", "Viya Imports", "51 824 753 556")];
+  const hit = findDuplicateByNameAndAbn(
+    companies,
+    "viya   imports",
+    "51824753556",
+  );
+  const excludeSelf = findDuplicateByNameAndAbn(
+    companies,
+    "Viya Imports",
+    "51 824 753 556",
+    { excludeCompanyId: "c1" },
+  );
+  const parsed = parseAbnInput("51 824 753 556");
+  const bad = parseAbnInput("12345");
+  const ok =
+    !!hit &&
+    hit.company.id === "c1" &&
+    excludeSelf === null &&
+    parsed.ok &&
+    parsed.abn === "51 824 753 556" &&
+    !bad.ok;
+  return {
+    ok,
+    detail: `hit=${hit?.company.id ?? "none"} exclude=${excludeSelf === null} parsed=${parsed.ok}`,
   };
 }

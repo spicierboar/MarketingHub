@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import {
   LayoutDashboard,
@@ -13,28 +13,22 @@ import {
   FileText,
   CalendarDays,
   Building2,
-  Users,
-  Handshake,
-  ScrollText,
-  ShieldCheck,
-  ShieldAlert,
-  Shield,
-  CreditCard,
-  Palette,
-  Landmark,
+  UserPlus,
   LogOut,
   ChevronDown,
-  MessageSquareCode,
-  Radio,
   Send,
   BarChart3,
   MessageSquare,
   Settings,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
 import { switchTenantAction } from "@/app/(app)/tenant/actions";
-import { CompanyContextBar } from "@/components/company-context-bar";
+import {
+  CompanyContextBar,
+  type CompanyWorkspaceNavData,
+} from "@/components/company-context-bar";
 
 interface NavItem {
   href: string;
@@ -46,6 +40,8 @@ interface NavItem {
   salesAccess?: boolean;
   /** Non-admin members only — admins use the company workspace hub */
   memberOnly?: boolean;
+  /** Extra path prefixes that keep this item highlighted (e.g. Settings hub children). */
+  alsoActiveFor?: string[];
 }
 
 interface NavGroup {
@@ -56,11 +52,26 @@ interface NavGroup {
   items: NavItem[];
 }
 
+const SETTINGS_PATHS = [
+  "/settings",
+  "/users",
+  "/branding",
+  "/billing",
+  "/admin",
+  "/privacy",
+  "/ai-control",
+  "/ai-prompts",
+  "/developers",
+  "/audit",
+  "/platform-admin",
+];
+
 /**
  * Agency shell — ≤7 mental-model destinations for an automation ops desk.
- * Company-scoped modules live on `/companies/[id]` (CompanyToolsNav).
+ * Client workspace tools (CompanyToolsNav) also appear via CompanyContextBar
+ * when a module is opened with ?company=.
  *
- * Home · Queues · Clients · Delivery · AI Ops · Results · Settings
+ * Home · Queues · Clients · Catalogs · Content & Delivery · AI Ops · Results · Settings
  */
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -68,7 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Agency",
     pinned: true,
     items: [
-      { href: "/dashboard", label: "Agency Home", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Home", icon: LayoutDashboard },
     ],
   },
   {
@@ -77,7 +88,6 @@ const NAV_GROUPS: NavGroup[] = [
     pinned: true,
     items: [
       { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
-      { href: "/requests", label: "Client asks", icon: MessageSquare },
     ],
   },
   {
@@ -87,18 +97,31 @@ const NAV_GROUPS: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: "/companies", label: "Clients", icon: Building2, adminOnly: true },
+      { href: "/sales/new-client", label: "New client", icon: UserPlus, salesAccess: true },
+      { href: "/requests", label: "Client asks", icon: MessageSquare },
     ],
   },
   {
-    id: "delivery",
-    label: "Delivery",
+    id: "catalogs",
+    label: "Catalogs",
+    pinned: true,
+    adminOnly: true,
+    items: [
+      { href: "/promo-catalog", label: "Promo catalog", icon: Tag, adminOnly: true },
+      { href: "/marketing-packages", label: "Marketing packages", icon: Package, adminOnly: true },
+    ],
+  },
+  {
+    id: "content-delivery",
+    label: "Content & Delivery",
     pinned: true,
     items: [
+      // Usage order: plan → produce → schedule → publish
+      { href: "/campaigns", label: "Campaigns", icon: Megaphone },
+      { href: "/content", label: "Content", icon: FileText },
+      { href: "/studio", label: "Content Studio", icon: Sparkles, memberOnly: true },
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
-      { href: "/content", label: "Content", icon: FileText },
-      { href: "/campaigns", label: "Campaigns", icon: Megaphone },
-      { href: "/studio", label: "Content Studio", icon: Sparkles, memberOnly: true },
     ],
   },
   {
@@ -108,7 +131,6 @@ const NAV_GROUPS: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
-      { href: "/ai-mos", label: "Signals", icon: Radio },
     ],
   },
   {
@@ -123,24 +145,67 @@ const NAV_GROUPS: NavGroup[] = [
   {
     id: "settings",
     label: "Settings",
+    pinned: true,
     adminOnly: true,
     items: [
-      { href: "/sales/new-client", label: "New client", icon: Handshake, salesAccess: true },
-      { href: "/users", label: "Users", icon: Users, adminOnly: true },
-      { href: "/branding", label: "Branding", icon: Palette, ownerOnly: true },
-      { href: "/billing", label: "Billing & plan", icon: CreditCard, ownerOnly: true },
-      { href: "/admin", label: "Admin & security", icon: ShieldAlert, adminOnly: true },
-      { href: "/privacy", label: "Privacy", icon: Shield, adminOnly: true },
-      { href: "/ai-control", label: "AI control", icon: ShieldCheck, adminOnly: true },
-      { href: "/ai-prompts", label: "AI prompts", icon: MessageSquareCode, adminOnly: true },
-      { href: "/promo-catalog", label: "Promo catalog", icon: Megaphone, adminOnly: true },
-      { href: "/marketing-packages", label: "Marketing packages", icon: Package, adminOnly: true },
-      { href: "/developers", label: "Developers & API", icon: Handshake, adminOnly: true },
-      { href: "/audit", label: "Audit log", icon: ScrollText, adminOnly: true },
-      { href: "/platform-admin", label: "Platform admin", icon: Landmark, platformAdminOnly: true },
+      {
+        href: "/settings",
+        label: "Settings",
+        icon: Settings,
+        adminOnly: true,
+        alsoActiveFor: SETTINGS_PATHS,
+      },
     ],
   },
 ];
+
+/** Module hubs that keep ?company= — treat as client workspace, not top-level agency nav. */
+const COMPANY_WORKSPACE_PREFIXES = [
+  "/content",
+  "/studio",
+  "/calendar",
+  "/publishing",
+  "/campaigns",
+  "/approvals",
+  "/assets",
+  "/library",
+  "/analytics",
+  "/ads",
+  "/inbox",
+  "/social",
+  "/reviews",
+  "/requests",
+  "/audit",
+  "/workflows",
+  "/learning",
+  "/visuals",
+  "/photographers",
+  "/menus",
+  "/ordering",
+  "/bookings",
+];
+
+function pathMatches(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+function isCompanyWorkspaceRoute(pathname: string) {
+  return COMPANY_WORKSPACE_PREFIXES.some((p) => pathMatches(pathname, p));
+}
+
+function itemActive(
+  item: NavItem,
+  pathname: string,
+  companyScoped: boolean,
+) {
+  // With ?company=, highlight Clients and leave Content & Delivery/etc. quiet —
+  // the context bar + company strip are the primary wayfinding.
+  if (companyScoped && isCompanyWorkspaceRoute(pathname)) {
+    return item.href === "/companies";
+  }
+  if (pathMatches(pathname, item.href)) return true;
+  return (item.alsoActiveFor ?? []).some((p) => pathMatches(pathname, p));
+}
 
 function itemVisible(
   n: NavItem,
@@ -181,12 +246,14 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function NavSection({
   group,
   pathname,
+  companyScoped,
 }: {
   group: NavGroup;
   pathname: string;
+  companyScoped: boolean;
 }) {
-  const hasActive = group.items.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/"),
+  const hasActive = group.items.some((item) =>
+    itemActive(item, pathname, companyScoped),
   );
   const [open, setOpen] = useState(hasActive);
   const expanded = group.pinned || open || hasActive;
@@ -217,14 +284,39 @@ function NavSection({
       )}
       {expanded && (
         <div className="space-y-0.5">
-          {group.items.map((item) => {
-            const active =
-              pathname === item.href || pathname.startsWith(item.href + "/");
-            return <NavLink key={item.href} item={item} active={active} />;
-          })}
+          {group.items.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={itemActive(item, pathname, companyScoped)}
+            />
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+function SidebarNav({
+  groups,
+  pathname,
+}: {
+  groups: NavGroup[];
+  pathname: string;
+}) {
+  const searchParams = useSearchParams();
+  const companyScoped = Boolean(searchParams.get("company"));
+  return (
+    <>
+      {groups.map((group) => (
+        <NavSection
+          key={group.id}
+          group={group}
+          pathname={pathname}
+          companyScoped={companyScoped}
+        />
+      ))}
+    </>
   );
 }
 
@@ -247,7 +339,7 @@ export function AppShell({
   tenantName?: string;
   activeTenantId?: string;
   tenants?: { id: string; name: string }[];
-  companies?: { id: string; name: string }[];
+  companies?: CompanyWorkspaceNavData[];
   isAdmin: boolean;
   isOwner?: boolean;
   isPlatformAdmin?: boolean;
@@ -332,13 +424,9 @@ export function AppShell({
           </div>
         )}
         <nav className="flex-1 overflow-y-auto p-2">
-          {groups.map((group) => (
-            <NavSection
-              key={group.id}
-              group={group}
-              pathname={pathname}
-            />
-          ))}
+          <Suspense fallback={null}>
+            <SidebarNav groups={groups} pathname={pathname} />
+          </Suspense>
         </nav>
         <div className="border-t border-border p-2">
           <div className="mb-1 px-2">

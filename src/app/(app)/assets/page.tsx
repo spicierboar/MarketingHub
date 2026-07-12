@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 import { Field, Select } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { RegisterAssetModalTrigger } from "@/components/register-asset-modal";
 import { now, titleCase } from "@/lib/utils";
 import type { Asset, Company } from "@/lib/types";
@@ -53,14 +54,24 @@ export default async function AssetsPage({
   const byId = new Map<string, Company>(companies.map((c) => [c.id, c]));
   const sp = await searchParams;
   const today = now().slice(0, 10);
+  const companyLocked = Boolean(sp.company && byId.has(sp.company));
+  const contextCompanyId = companyLocked ? sp.company : undefined;
+  const scopedCompany = contextCompanyId ? byId.get(contextCompanyId) : undefined;
+  const formCompanies = contextCompanyId
+    ? companies.filter((c) => c.id === contextCompanyId)
+    : companies;
+  const filterCompanies = formCompanies.map((c) => ({ id: c.id, name: c.name }));
+  const briefCompanies = formCompanies.filter(
+    (c) => c.status === "ai_ready" || c.status === "approved",
+  );
+  const clearHref = contextCompanyId ? `/assets?company=${contextCompanyId}` : "/assets";
 
   let assets = await listAssets(user.tenantId, companyIds);
-  if (sp.company) assets = assets.filter((a) => a.companyId === sp.company);
+  if (contextCompanyId) assets = assets.filter((a) => a.companyId === contextCompanyId);
   if (sp.type) assets = assets.filter((a) => a.assetType === sp.type);
   if (sp.status) assets = assets.filter((a) => a.status === sp.status);
   if (sp.tag) assets = assets.filter((a) => a.tags.includes(sp.tag!));
 
-  // Precompute rights summaries (assetUsableReason is async) for the JSX below.
   const rightsById = new Map(
     await Promise.all(
       assets.map(
@@ -69,7 +80,6 @@ export default async function AssetsPage({
     ),
   );
 
-  // Group by company for the folder view.
   const groups = new Map<string, Asset[]>();
   for (const a of assets) {
     const list = groups.get(a.companyId) ?? [];
@@ -80,17 +90,22 @@ export default async function AssetsPage({
   return (
     <div>
       <PageHeader
-        title="Creative Assets"
+        title={scopedCompany ? `Assets · ${scopedCompany.name}` : "Creative Assets"}
         description="Brand-safe logos, images and videos with usage-rights tracking. Only approved, rights-cleared assets can be used in content."
       >
-        <Link href="/assets/templates" className={buttonClasses("ghost", "sm")}>
+        <Link
+          href={
+            contextCompanyId
+              ? `/assets/templates?company=${contextCompanyId}`
+              : "/assets/templates"
+          }
+          className={buttonClasses("ghost", "sm")}
+        >
           Brand templates
         </Link>
         <RegisterAssetModalTrigger
-          companies={companies.map((c) => ({ id: c.id, name: c.name }))}
-          defaultCompanyId={
-            sp.company && byId.has(sp.company) ? sp.company : undefined
-          }
+          companies={filterCompanies}
+          defaultCompanyId={contextCompanyId}
         />
       </PageHeader>
 
@@ -99,16 +114,11 @@ export default async function AssetsPage({
           <Card>
             <CardContent className="p-4">
               <form className="grid gap-3 sm:grid-cols-3">
-                <Field label="Client">
-                  <Select name="company" defaultValue={sp.company ?? ""}>
-                    <option value="">All clients</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                <LockedCompanyFilter
+                  companies={filterCompanies}
+                  companyId={contextCompanyId}
+                  locked={companyLocked}
+                />
                 <Field label="Type">
                   <Select name="type" defaultValue={sp.type ?? ""}>
                     {TYPE_FILTERS.map(([v, l]) => (
@@ -131,8 +141,8 @@ export default async function AssetsPage({
                   <button type="submit" className={buttonClasses("outline", "sm")}>
                     Apply filters
                   </button>
-                  {(sp.company || sp.type || sp.status || sp.tag) && (
-                    <Link href="/assets" className="ml-2 text-sm text-primary hover:underline">
+                  {(sp.type || sp.status || sp.tag || (!companyLocked && sp.company)) && (
+                    <Link href={clearHref} className="ml-2 text-sm text-primary hover:underline">
                       Clear
                     </Link>
                   )}
@@ -200,9 +210,8 @@ export default async function AssetsPage({
 
         <div className="space-y-6">
           <ImageBriefCard
-            companies={companies.filter(
-              (c) => c.status === "ai_ready" || c.status === "approved",
-            )}
+            companies={briefCompanies}
+            defaultCompanyId={contextCompanyId}
           />
           <Card>
             <CardContent className="p-6 text-sm text-muted-foreground">

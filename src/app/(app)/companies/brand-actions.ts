@@ -56,8 +56,9 @@ function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 function lines(fd: FormData, key: string): string[] {
-  return text(fd, key)
-    .split(/[\n,]/)
+  return fd
+    .getAll(key)
+    .flatMap((v) => String(v).split(/[\n,]/))
     .map((s) => s.trim())
     .filter(Boolean);
 }

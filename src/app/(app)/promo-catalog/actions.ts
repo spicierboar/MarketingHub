@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth/rbac";
 import {
+  createAgencyPromoIndustry,
   deleteAgencyPromoTemplate,
   resetPlatformPromoOverride,
   saveAgencyPromoTemplate,
@@ -82,5 +83,17 @@ export async function resetPlatformPromoAction(formData: FormData) {
   const user = await requireAdmin();
   const templateId = String(formData.get("templateId") || "");
   await resetPlatformPromoOverride({ user, templateId });
+  revalidatePromoPaths();
+}
+
+export async function createAgencyPromoIndustryAction(formData: FormData) {
+  const user = await requireAdmin();
+  const label = String(formData.get("label") || "");
+  const idRaw = String(formData.get("id") || "").trim();
+  await createAgencyPromoIndustry({
+    user,
+    label,
+    ...(idRaw ? { id: idRaw } : {}),
+  });
   revalidatePromoPaths();
 }

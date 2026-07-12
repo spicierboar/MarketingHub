@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type MouseEvent } from "react";
 import Link from "next/link";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { FormModal } from "@/components/form-modal";
 import { createCompanyAction } from "@/app/(app)/companies/actions";
 import { cn } from "@/lib/utils";
 
+/** Opens the quick-add modal; falls back to the New Client wizard if JS fails. */
 export function AddClientModalTrigger({
   className,
   label = "Add client",
@@ -28,7 +29,8 @@ export function AddClientModalTrigger({
   const [website, setWebsite] = useState("");
   const [pending, startTransition] = useTransition();
 
-  function openModal() {
+  function openModal(e?: MouseEvent<HTMLAnchorElement>) {
+    e?.preventDefault();
     setError(null);
     setWebsite("");
     setOpen(true);
@@ -39,29 +41,27 @@ export function AddClientModalTrigger({
   return (
     <>
       {linkStyle ? (
-        <button
-          type="button"
+        <Link
+          href="/sales/new-client"
           className={cn("text-primary hover:underline", className)}
           onClick={openModal}
         >
           {label}
-        </button>
+        </Link>
       ) : (
-        <Button
-          type="button"
-          variant={variant}
-          size={size}
-          className={className}
+        <Link
+          href="/sales/new-client"
+          className={cn(buttonClasses(variant, size), className)}
           onClick={openModal}
         >
           {label}
-        </Button>
+        </Link>
       )}
 
       {open && (
         <FormModal
           title="Add client"
-          description="Add a website to auto-fill the profile from public pages (with consent)."
+          description="Add a website to auto-fill the profile from public pages (with consent). Or use New client in the sidebar for the full wizard (package + checkout)."
           onClose={() => setOpen(false)}
         >
           <form
@@ -75,6 +75,7 @@ export function AddClientModalTrigger({
                   const result = await createCompanyAction(fd);
                   if (result?.error) setError(result.error);
                 } catch (err) {
+                  // Redirect throws on success — rethrow so Next can navigate.
                   if (isRedirectError(err)) throw err;
                   setError(
                     err instanceof Error ? err.message : "Could not create client.",
@@ -84,8 +85,9 @@ export function AddClientModalTrigger({
             }}
           >
             <Field
-              label="Client name"
+              label="Business name"
               htmlFor="modal-client-name"
+              hint="Trading name customers recognise — identity key with ABN"
             >
               <Input
                 id="modal-client-name"
@@ -93,6 +95,21 @@ export function AddClientModalTrigger({
                 required
                 autoFocus
                 placeholder="e.g. Harbour Roasters"
+                disabled={pending}
+              />
+            </Field>
+            <Field
+              label="ABN"
+              htmlFor="modal-client-abn"
+              hint="Required. Verified against the ABR when available. Same ABN + different business name = separate account."
+            >
+              <Input
+                id="modal-client-abn"
+                name="abn"
+                required
+                inputMode="numeric"
+                placeholder="e.g. 51 824 753 556"
+                autoComplete="off"
                 disabled={pending}
               />
             </Field>
@@ -141,24 +158,33 @@ export function AddClientModalTrigger({
                 )}
               </div>
             )}
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Link
+                href="/sales/new-client"
+                className="text-sm text-muted-foreground hover:text-foreground hover:underline"
                 onClick={() => setOpen(false)}
-                disabled={pending}
               >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending
-                  ? willScrape
-                    ? "Creating & scraping…"
-                    : "Creating…"
-                  : willScrape
-                    ? "Create & scrape profile"
-                    : "Create & start onboarding"}
-              </Button>
+                Full New client wizard →
+              </Link>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setOpen(false)}
+                  disabled={pending}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={pending}>
+                  {pending
+                    ? willScrape
+                      ? "Creating & scraping…"
+                      : "Creating…"
+                    : willScrape
+                      ? "Create & scrape profile"
+                      : "Create & start onboarding"}
+                </Button>
+              </div>
             </div>
           </form>
         </FormModal>

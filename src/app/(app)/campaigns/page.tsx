@@ -39,13 +39,16 @@ export default async function CampaignsPage({
       ),
     ),
   );
+  const scopedCompany = companyId ? await getCompany(companyId) : null;
 
   return (
     <div>
       <PageHeader
-        title="Campaigns"
+        title={
+          scopedCompany ? `Campaigns · ${scopedCompany.name}` : "Campaigns"
+        }
         explainerId="campaigns"
-        explainer="Full campaign plans — every item still goes through draft → review → approval before anything publishes."
+        explainer="Full campaign plans — every item still goes through draft → review → approval before anything publishes. Package campaign-slot counts are planning guidance only (not hard-gated yet)."
       >
         <Link href={newHref} className={buttonClasses()}>
           New campaign

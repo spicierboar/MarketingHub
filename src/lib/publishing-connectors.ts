@@ -17,7 +17,7 @@
 
 import { decryptToken } from "@/lib/crypto";
 import { sendEmail } from "@/lib/email";
-import { appEnv } from "@/lib/env";
+import { liveIntegrationsAllowed } from "@/lib/env";
 import { assertConnectorAction } from "@/lib/connectors/capability-registry";
 import type { PublishingIntegration } from "@/lib/types";
 
@@ -40,7 +40,7 @@ export interface PublishingPlatformHealthRow {
 export function publishingLive(): boolean {
   if (!process.env.PUBLISHING_TOKEN_KEY?.trim()) return false;
   if (process.env.PUBLISHING_LIVE !== "true") return false;
-  if (appEnv() === "staging") return false;
+  if (!liveIntegrationsAllowed()) return false;
   return true;
 }
 

@@ -219,12 +219,20 @@ export default async function ClientCalendarPage({
                 {pendingPromos.map((s) => (
                   <li key={s.id}>
                     {s.templateName} · {formatDate(s.startDate)} → {formatDate(s.endDate)}
+                    {s.billingClass === "included" ? " · Included" : s.billingClass === "extra" ? " · Extra" : ""}
                   </li>
                 ))}
               </ul>
             </CardContent>
           </Card>
         )}
+
+        <p className="text-xs text-muted-foreground">
+          Want another promo or custom work?{" "}
+          <Link href="/client/account#extra-work" className="text-primary hover:underline">
+            Request from Account
+          </Link>
+        </p>
 
         {dates.length === 0 ? (
           <Card>

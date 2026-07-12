@@ -109,7 +109,11 @@ export default async function ClientAssetsPage() {
               <form action={createClientAssetAction} className="space-y-5">
                 <input type="hidden" name="companyId" value={companyId} />
                 <input type="hidden" name="assetType" value="image" />
-                <Field label="Name" htmlFor="name">
+                <Field
+                  label="Name"
+                  htmlFor="name"
+                  hint="A short label so we recognise it"
+                >
                   <Input
                     id="name"
                     name="name"

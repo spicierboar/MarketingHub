@@ -1,6 +1,5 @@
 import {
   PROMO_CHANNEL_OPTIONS,
-  PROMO_INDUSTRY_OPTIONS,
   type PromoTemplate,
 } from "@/lib/promo-catalog";
 import { Button } from "@/components/ui/button";
@@ -11,9 +10,11 @@ const POST_SLOTS = [0, 1, 2, 3, 4] as const;
 export function PromoTemplateFormFields({
   defaults,
   submitLabel,
+  industryOptions,
 }: {
   defaults?: Partial<PromoTemplate> | null;
   submitLabel: string;
+  industryOptions: { id: string; label: string }[];
 }) {
   const posts = defaults?.outlines ?? [];
   const checkedChannels = new Set(
@@ -21,6 +22,10 @@ export function PromoTemplateFormFields({
       ? defaults.availableChannels
       : ["instagram", "facebook"],
   );
+  const defaultIndustry =
+    defaults?.industry && industryOptions.some((o) => o.id === defaults.industry)
+      ? defaults.industry
+      : (industryOptions[0]?.id ?? "restaurant_cafe");
 
   return (
     <div className="space-y-3">
@@ -29,16 +34,16 @@ export function PromoTemplateFormFields({
           id="industry"
           name="industry"
           required
-          defaultValue={defaults?.industry ?? "restaurant_cafe"}
+          defaultValue={defaultIndustry}
         >
-          {PROMO_INDUSTRY_OPTIONS.map((o) => (
+          {industryOptions.map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}
             </option>
           ))}
         </Select>
       </Field>
-      <Field label="Campaign name" htmlFor="name">
+      <Field label="Promo name" htmlFor="name">
         <Input
           id="name"
           name="name"
@@ -65,7 +70,11 @@ export function PromoTemplateFormFields({
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Duration (days)" htmlFor="defaultDurationDays">
+        <Field
+          label="Duration (days)"
+          htmlFor="defaultDurationDays"
+          hint="Typical promo window 7–21 days"
+        >
           <Input
             id="defaultDurationDays"
             name="defaultDurationDays"
@@ -73,10 +82,15 @@ export function PromoTemplateFormFields({
             min={1}
             max={90}
             defaultValue={defaults?.defaultDurationDays ?? 14}
+            placeholder="14"
             required
           />
         </Field>
-        <Field label="Markup %" htmlFor="markupPercent">
+        <Field
+          label="Markup %"
+          htmlFor="markupPercent"
+          hint="Agency markup on delivery cost"
+        >
           <Input
             id="markupPercent"
             name="markupPercent"
@@ -85,11 +99,16 @@ export function PromoTemplateFormFields({
             max={90}
             step={1}
             defaultValue={Math.round((defaults?.markupPercent ?? 0.42) * 100)}
+            placeholder="42"
             required
           />
         </Field>
       </div>
-      <Field label="Client package price (AUD)" htmlFor="suggestedClientPriceUsd">
+      <Field
+        label="Client package price (AUD)"
+        htmlFor="suggestedClientPriceUsd"
+        hint="What the client pays for this ready-made promo"
+      >
         <Input
           id="suggestedClientPriceUsd"
           name="suggestedClientPriceUsd"
@@ -97,6 +116,7 @@ export function PromoTemplateFormFields({
           min={50}
           step={10}
           defaultValue={defaults?.suggestedClientPriceUsd ?? 499}
+          placeholder="499"
           required
         />
       </Field>
@@ -148,7 +168,7 @@ export function PromoTemplateFormFields({
             >
               <p className="text-xs font-medium text-muted-foreground">Post {i + 1}</p>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Day offset" htmlFor={`postDayOffset-${i}`}>
+                <Field label="Day offset" htmlFor={`postDayOffset-${i}`} hint="Day 1 = start">
                   <Input
                     id={`postDayOffset-${i}`}
                     name="postDayOffset"
@@ -158,6 +178,7 @@ export function PromoTemplateFormFields({
                       post?.dayOffset ??
                       (i === 0 ? 1 : i === 1 ? 4 : i === 2 ? 8 : i === 3 ? 12 : 16)
                     }
+                    placeholder="1"
                   />
                 </Field>
                 <Field label="Channel" htmlFor={`postChannel-${i}`}>

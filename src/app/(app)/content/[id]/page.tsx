@@ -12,7 +12,6 @@ import {
 } from "@/lib/db";
 import { assetChannelBlockReason, licenceLabel } from "@/lib/assets";
 import { canRepurposeSource } from "@/lib/content-repurposing";
-import { Select } from "@/components/ui/form";
 import { now } from "@/lib/utils";
 import {
   cancelScheduleAction,
@@ -25,9 +24,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { buttonClasses } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { formatDate, titleCase } from "@/lib/utils";
 import { canApproveRoute, ROUTE_LABEL } from "@/lib/routing";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import {
   approveContentAction,
   attachAssetAction,
@@ -729,7 +729,22 @@ export default async function ContentDetailPage({
                 )}
                 <form action={schedulePostAction} className="space-y-2">
                   <input type="hidden" name="contentId" value={content.id} />
-                  <Input name="platform" placeholder="Platform (e.g. Facebook)" defaultValue="Facebook" />
+                  <Field label="Platform" htmlFor="sched-platform">
+                    <Select
+                      id="sched-platform"
+                      name="platform"
+                      defaultValue="Facebook"
+                      required
+                    >
+                      {CONTENT_PLATFORM_OPTIONS.filter((p) => p.value !== "Paid ads").map(
+                        (p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ),
+                      )}
+                    </Select>
+                  </Field>
                   <div className="grid grid-cols-2 gap-2">
                     <Input name="date" type="date" required />
                     <Input name="time" type="time" />
@@ -741,7 +756,21 @@ export default async function ContentDetailPage({
                 {canScheduleAtBestTime && (
                   <form action={scheduleAtOptimalWindowAction} className="mt-2 space-y-2">
                     <input type="hidden" name="contentId" value={content.id} />
-                    <Input name="platform" placeholder="Platform (optional)" defaultValue="Facebook" />
+                    <Field
+                      label="Platform (optional)"
+                      htmlFor="opt-platform"
+                      hint="Leave as-is to use the next best window for this channel"
+                    >
+                      <Select id="opt-platform" name="platform" defaultValue="Facebook">
+                        {CONTENT_PLATFORM_OPTIONS.filter((p) => p.value !== "Paid ads").map(
+                          (p) => (
+                            <option key={p.value} value={p.value}>
+                              {p.label}
+                            </option>
+                          ),
+                        )}
+                      </Select>
+                    </Field>
                     <Button type="submit" variant="outline" size="sm" className="w-full">
                       Schedule at best time
                     </Button>
@@ -752,7 +781,7 @@ export default async function ContentDetailPage({
                   </form>
                 )}
                 <Link
-                  href="/calendar"
+                  href={`/calendar?company=${content.companyId}`}
                   className="mt-3 inline-block text-sm text-primary hover:underline"
                 >
                   View calendar →

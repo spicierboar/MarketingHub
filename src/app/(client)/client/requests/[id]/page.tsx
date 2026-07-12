@@ -50,7 +50,12 @@ export default async function ClientRequestDetailPage({ params }: { params: Prom
                       <p className="mb-1 text-sm font-medium">{g.question}</p>
                       {g.context && <p className="mb-2 text-xs text-muted-foreground">{g.context}</p>}
                       <Badge tone={g.blocking ? "danger" : "warning"}>{g.blocking ? "Required" : "Optional"}</Badge>
-                      <Textarea name="answer" required placeholder="Your answer…" className="mb-2 mt-3 min-h-16" />
+                      <Textarea
+                        name="answer"
+                        required
+                        placeholder="Type your answer here — a short note is fine"
+                        className="mb-2 mt-3 min-h-16"
+                      />
                       <Button type="submit" size="sm">Submit answer</Button>
                     </form>
                   ))}

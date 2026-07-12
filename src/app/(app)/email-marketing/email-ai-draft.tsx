@@ -59,11 +59,23 @@ export function EmailCampaignAiDraft({
         {fallbackTemplateId && !state?.htmlBody && (
           <input type="hidden" name="templateId" value={fallbackTemplateId} />
         )}
-        <Field label="Name" htmlFor="cmp-name">
-          <Input id="cmp-name" name="name" required defaultValue={state?.name ?? ""} />
+        <Field label="Name" htmlFor="cmp-name" hint="Internal campaign label">
+          <Input
+            id="cmp-name"
+            name="name"
+            required
+            defaultValue={state?.name ?? ""}
+            placeholder="e.g. Spring re-engage"
+          />
         </Field>
-        <Field label="Subject" htmlFor="cmp-subject">
-          <Input id="cmp-subject" name="subject" required defaultValue={state?.subject ?? ""} />
+        <Field label="Subject" htmlFor="cmp-subject" hint="Inbox subject line">
+          <Input
+            id="cmp-subject"
+            name="subject"
+            required
+            defaultValue={state?.subject ?? ""}
+            placeholder="e.g. We saved something for you"
+          />
         </Field>
         <Field label="HTML body" htmlFor="cmp-body" hint="Leave blank to use the first saved template">
           <Textarea
@@ -71,11 +83,15 @@ export function EmailCampaignAiDraft({
             name="htmlBody"
             rows={5}
             defaultValue={state?.htmlBody ?? ""}
-            placeholder="<p>Hi {{name}}</p>"
+            placeholder="<p>Hi {{name}} — here's what's on this week…</p>"
             required={!!state?.htmlBody || !fallbackTemplateId}
           />
         </Field>
-        <Field label="Segment tag" htmlFor="cmp-seg">
+        <Field
+          label="Segment tag"
+          htmlFor="cmp-seg"
+          hint="Only subscribers with this tag"
+        >
           <Input id="cmp-seg" name="segmentTag" placeholder="newsletter" />
         </Field>
         <Button type="submit">Create draft</Button>

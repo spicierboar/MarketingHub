@@ -1,19 +1,34 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { revalidatePath } from "next/cache";
 import {
   createCompany,
   getCompany,
   getTenant,
-  listOpenManagedDeliveryRuns,
+  listCompanies,
   updateCompany,
 } from "@/lib/db";
 import { assertAdminCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
 import { assertCompanyQuota } from "@/lib/billing";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
-import { enqueueManagedDeliveryForCompany, supersedeOpenManagedDeliveryRuns } from "@/lib/managed-service/delivery-runner";
+import { verifyBusinessNameAgainstAbr } from "@/lib/abn-lookup";
+import {
+  duplicateNameAbnMessage,
+  findDuplicateByNameAndAbn,
+  parseAbnInput,
+} from "@/lib/company-identity";
+import {
+  enqueueManagedDeliveryForCompany,
+  ensureManagedDeliveryBootstrap,
+  ensureAndKickManagedDeliveryForCompany,
+  supersedeOpenManagedDeliveryRuns,
+  forceUnlockManagedStrategyForCompany,
+  maybeProcessEligibleDeliveryForCompany,
+} from "@/lib/managed-service/delivery-runner";
+import { localDemoEnabled } from "@/lib/env";
 import { notifyClientException } from "@/lib/managed-service/exception-notify";
 import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
 import { onboardingScore } from "@/lib/types";
@@ -93,7 +108,14 @@ export async function createCompanyAction(
 ): Promise<{ error: string } | void> {
   const user = await requireAdmin();
   const name = String(formData.get("name") || "").trim();
-  if (!name) return { error: "Client name is required." };
+  if (!name) return { error: "Business name is required." };
+  const abnParsed = parseAbnInput(String(formData.get("abn") || ""));
+  if (!abnParsed.ok) return { error: abnParsed.error };
+  if (!abnParsed.abn) {
+    return {
+      error: "ABN is required — business name + ABN identify a client account.",
+    };
+  }
   const websiteRaw = String(formData.get("website") || "").trim();
   const consent =
     formData.get("consent") === "on" || formData.get("consent") === "true";
@@ -112,18 +134,37 @@ export async function createCompanyAction(
         "Confirm client consent to scrape public website data, or leave the website blank.",
     };
   }
+
+  const abrGate = await verifyBusinessNameAgainstAbr(name, abnParsed.abn);
+  if (!abrGate.ok) return { error: abrGate.error };
+
+  const dup = findDuplicateByNameAndAbn(
+    await listCompanies(user.tenantId),
+    name,
+    abnParsed.abn,
+  );
+  if (dup) return { error: duplicateNameAbnMessage(dup.company) };
+
   const company = await createCompany({ tenantId: user.tenantId, name, createdBy: user.id });
+  const withAbn: CompanyProfile = { ...company.profile, abn: abnParsed.abn };
+  if (abrGate.mode === "live" && abrGate.legalName && !withAbn.legalName?.trim()) {
+    withAbn.legalName = abrGate.legalName;
+  }
+  await updateCompany(company.id, { profile: withAbn });
   await logAction(user, "company.created", {
     targetType: "company",
     targetId: company.id,
     companyId: company.id,
-    detail: name,
+    detail:
+      abrGate.mode === "skipped"
+        ? `${name} (abr=${abrGate.warning ?? "skipped"})`
+        : `${name} (abr=verified)`,
   });
 
   let scrapedParam = "";
   if (websiteRaw && consent) {
     const result = await scrapeAndApplyInitialProfile({
-      company,
+      company: { ...company, profile: withAbn },
       website: websiteRaw,
       actorId: user.id,
     });
@@ -148,6 +189,21 @@ export async function createCompanyAction(
       result.fieldCount > 0 ? "?scraped=1" : result.mode === "failed" ? "?scraped=0" : "?scraped=0";
   }
 
+  // Quick-add never visited the package wizard — default Basic + enqueue strategy
+  // so Strategy is not stuck on opaque "Not started". Demo: eligible immediately.
+  try {
+    await ensureAndKickManagedDeliveryForCompany({
+      actor: user,
+      tenantId: user.tenantId,
+      companyId: company.id,
+      reason: "signup",
+      process: true,
+      demoForceGenerate: localDemoEnabled(),
+    });
+  } catch {
+    /* soft — Strategy / Overview on-read can retry */
+  }
+
   redirect(`/companies/${company.id}${scrapedParam}`);
 }
 
@@ -161,79 +217,118 @@ export async function createCompanyFormAction(formData: FormData): Promise<void>
 
 export async function saveOnboardingAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertAdminCompanyAccess(companyId);
-  const company = await getCompany(companyId);
-  if (!company) throw new Error("Company not found");
+  try {
+    const user = await assertAdminCompanyAccess(companyId);
+    const company = await getCompany(companyId);
+    if (!company) throw new Error("Company not found");
 
-  const businessType =
-    businessTypeFromForm(formData) ?? company.profile.businessType;
+    const businessType =
+      businessTypeFromForm(formData) ?? company.profile.businessType;
 
-  const profilePatch: CompanyProfile = {
-    ...company.profile,
-    legalName: text(formData, "legalName"),
-    tradingNames: text(formData, "tradingNames"),
-    industry: text(formData, "industry"),
-    businessType,
-    website: text(formData, "website"),
-    approvalContact: text(formData, "approvalContact"),
-    natureOfBusiness: text(formData, "natureOfBusiness"),
-    targetCustomers: text(formData, "targetCustomers"),
-    brandVoice: text(formData, "brandVoice"),
-    currentOffers: text(formData, "currentOffers"),
-    localMarketNotes: text(formData, "localMarketNotes"),
-    businessAddress: text(formData, "businessAddress"),
-    phone: text(formData, "phone"),
-    email: text(formData, "email"),
-    serviceAreas: lines(formData, "serviceAreas"),
-    services: lines(formData, "services"),
-    callsToAction: lines(formData, "callsToAction"),
-    prohibitedClaims: lines(formData, "prohibitedClaims"),
-    approvedClaims: lines(formData, "approvedClaims"),
-    requiredDisclaimers: lines(formData, "requiredDisclaimers"),
-    socialLinks: readSocialLinks(formData),
-    retail: company.profile.retail,
-    hotel: company.profile.hotel,
-    restaurant: company.profile.restaurant,
-  };
+    const name = String(formData.get("name") || company.name).trim();
+    if (!name) throw new Error("Business name is required");
+    const abnParsed = parseAbnInput(String(formData.get("abn") || ""));
+    if (!abnParsed.ok) throw new Error(abnParsed.error);
 
-  if (businessType === "retail") {
-    profilePatch.retail = {
-      productCategories: linesFromForm(String(formData.get("retail_productCategories") ?? "")),
-      heroProducts: linesFromForm(String(formData.get("retail_heroProducts") ?? "")),
-      promotions: linesFromForm(String(formData.get("retail_promotions") ?? "")),
-      seasons: linesFromForm(String(formData.get("retail_seasons") ?? "")),
-      pricePositioning: text(formData, "retail_pricePositioning"),
+    const profilePatch: CompanyProfile = {
+      ...company.profile,
+      legalName: text(formData, "legalName"),
+      tradingNames: text(formData, "tradingNames"),
+      industry: text(formData, "industry"),
+      businessType,
+      website: text(formData, "website"),
+      approvalContact: text(formData, "approvalContact"),
+      natureOfBusiness: text(formData, "natureOfBusiness"),
+      targetCustomers: text(formData, "targetCustomers"),
+      brandVoice: text(formData, "brandVoice"),
+      currentOffers: text(formData, "currentOffers"),
+      localMarketNotes: text(formData, "localMarketNotes"),
+      businessAddress: text(formData, "businessAddress"),
+      phone: text(formData, "phone"),
+      email: text(formData, "email"),
+      serviceAreas: lines(formData, "serviceAreas"),
+      services: lines(formData, "services"),
+      callsToAction: lines(formData, "callsToAction"),
+      prohibitedClaims: lines(formData, "prohibitedClaims"),
+      approvedClaims: lines(formData, "approvedClaims"),
+      requiredDisclaimers: lines(formData, "requiredDisclaimers"),
+      socialLinks: readSocialLinks(formData),
+      retail: company.profile.retail,
+      hotel: company.profile.hotel,
+      restaurant: company.profile.restaurant,
     };
-  } else if (businessType === "hotel") {
-    profilePatch.hotel = {
-      roomTypes: linesFromForm(String(formData.get("hotel_roomTypes") ?? "")),
-      packages: linesFromForm(String(formData.get("hotel_packages") ?? "")),
-      amenities: linesFromForm(String(formData.get("hotel_amenities") ?? "")),
-      occupancyLanguage: text(formData, "hotel_occupancyLanguage"),
-      directBookingBenefits: text(formData, "hotel_directBookingBenefits"),
-    };
-  } else if (businessType === "restaurant_cafe") {
-    profilePatch.restaurant = {
-      cuisineStyle: text(formData, "restaurant_cuisineStyle"),
-      serviceModes: linesFromForm(String(formData.get("restaurant_serviceModes") ?? "")),
-      dietaryOptions: linesFromForm(String(formData.get("restaurant_dietaryOptions") ?? "")),
-      peakServicePeriods: linesFromForm(
-        String(formData.get("restaurant_peakServicePeriods") ?? ""),
-      ),
-    };
+    if (abnParsed.abn) profilePatch.abn = abnParsed.abn;
+
+    const identityAbn = profilePatch.abn;
+    const identityChanged =
+      name !== company.name ||
+      (identityAbn &&
+        identityAbn.replace(/\D/g, "") !==
+          String(company.profile.abn ?? "").replace(/\D/g, ""));
+    if (identityAbn && identityChanged) {
+      const abrGate = await verifyBusinessNameAgainstAbr(name, identityAbn);
+      if (!abrGate.ok) throw new Error(abrGate.error);
+      if (abrGate.mode === "live" && abrGate.legalName && !profilePatch.legalName?.trim()) {
+        profilePatch.legalName = abrGate.legalName;
+      }
+    }
+    if (identityAbn) {
+      const dup = findDuplicateByNameAndAbn(
+        await listCompanies(user.tenantId),
+        name,
+        identityAbn,
+        { excludeCompanyId: companyId },
+      );
+      if (dup) throw new Error(duplicateNameAbnMessage(dup.company));
+    }
+
+    if (businessType === "retail") {
+      profilePatch.retail = {
+        productCategories: linesFromForm(String(formData.get("retail_productCategories") ?? "")),
+        heroProducts: linesFromForm(String(formData.get("retail_heroProducts") ?? "")),
+        promotions: linesFromForm(String(formData.get("retail_promotions") ?? "")),
+        seasons: linesFromForm(String(formData.get("retail_seasons") ?? "")),
+        pricePositioning: text(formData, "retail_pricePositioning"),
+      };
+    } else if (businessType === "hotel") {
+      profilePatch.hotel = {
+        roomTypes: linesFromForm(String(formData.get("hotel_roomTypes") ?? "")),
+        packages: linesFromForm(String(formData.get("hotel_packages") ?? "")),
+        amenities: linesFromForm(String(formData.get("hotel_amenities") ?? "")),
+        occupancyLanguage: text(formData, "hotel_occupancyLanguage"),
+        directBookingBenefits: text(formData, "hotel_directBookingBenefits"),
+      };
+    } else if (businessType === "restaurant_cafe") {
+      profilePatch.restaurant = {
+        cuisineStyle: text(formData, "restaurant_cuisineStyle"),
+        serviceModes: linesFromForm(String(formData.get("restaurant_serviceModes") ?? "")),
+        dietaryOptions: linesFromForm(String(formData.get("restaurant_dietaryOptions") ?? "")),
+        peakServicePeriods: linesFromForm(
+          String(formData.get("restaurant_peakServicePeriods") ?? ""),
+        ),
+      };
+    }
+
+    await updateCompany(companyId, {
+      name,
+      profile: profilePatch,
+    });
+
+    await logAction(user, "company.edited", {
+      targetType: "company",
+      targetId: companyId,
+      companyId,
+    });
+    revalidatePath(`/companies/${companyId}`);
+    redirect(`/companies/${companyId}?saved=1`);
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "Could not save profile";
+    if (companyId) {
+      redirect(`/companies/${companyId}?error=${encodeURIComponent(msg)}`);
+    }
+    throw e;
   }
-
-  await updateCompany(companyId, {
-    name: String(formData.get("name") || company.name).trim(),
-    profile: profilePatch,
-  });
-
-  await logAction(user, "company.edited", {
-    targetType: "company",
-    targetId: companyId,
-    companyId,
-  });
-  revalidatePath(`/companies/${companyId}`);
 }
 
 export async function setCompanyStatusAction(formData: FormData) {
@@ -323,34 +418,25 @@ export async function saveManagedServiceLevelAction(formData: FormData) {
     detail: serviceLevel,
   });
 
-  // Switching onto a managed level: enqueue delivery if tenant is onboarded and
-  // there is no open run yet (same path as sales/onboarding).
-  const managed =
-    serviceLevel === "managed_exceptions" || serviceLevel === "fully_managed";
-  if (managed && company.status !== "archived") {
-    const tenant = await getTenant(user.tenantId);
-    if (tenant?.onboardingCompletedAt) {
-      const open = (await listOpenManagedDeliveryRuns(user.tenantId)).filter(
-        (r) => r.companyId === companyId,
-      );
-      if (open.length === 0) {
-        const run = await enqueueManagedDeliveryForCompany({
-          tenantId: user.tenantId,
-          companyId,
-          onboardingCompletedAt: tenant.onboardingCompletedAt,
-          serviceLevel,
-        });
-        await logAction(user, "managed_delivery.enqueued", {
-          targetType: "managed_delivery_run",
-          targetId: run.id,
-          companyId,
-          detail: `due ${run.strategyDueAt}`,
-        });
-      }
+  // Any non-archived company with a package (or after level change): ensure a
+  // delivery run exists. Strategy drafts still require human approve to publish.
+  if (company.status !== "archived") {
+    try {
+      await ensureAndKickManagedDeliveryForCompany({
+        actor: user,
+        tenantId: user.tenantId,
+        companyId,
+        reason: "service_level",
+        process: localDemoEnabled(),
+        demoForceGenerate: localDemoEnabled(),
+      });
+    } catch {
+      /* soft */
     }
   }
 
   revalidatePath(`/companies/${companyId}`);
+  revalidatePath(`/companies/${companyId}/strategy`);
 }
 
 export async function saveMarketingPackageAction(formData: FormData) {
@@ -370,9 +456,13 @@ export async function saveMarketingPackageAction(formData: FormData) {
     formData,
   );
   const prev = company.profile.managedService;
+  const hadExplicitPackage = Boolean(prev?.marketingPackageId);
   const prevPackageId = (prev?.marketingPackageId ?? "basic") as MarketingPackageId;
 
+  // First explicit assign counts as a change even when choosing Basic (display
+  // fallback used to hide prevPackageId === "basic" and skip enqueue).
   const packageChanged =
+    !hadExplicitPackage ||
     prevPackageId !== marketingPackageId ||
     (marketingPackageId === "custom" &&
       !customModulesEqual(prev?.customModules, customModules));
@@ -431,14 +521,14 @@ export async function saveMarketingPackageAction(formData: FormData) {
       ].join(" · "),
     });
 
-    const managed =
-      serviceLevel === "managed_exceptions" || serviceLevel === "fully_managed";
-    if (managed && company.status !== "archived" && tenant?.onboardingCompletedAt) {
+    const anchor =
+      tenant?.onboardingCompletedAt ?? (localDemoEnabled() ? now() : null);
+    if (company.status !== "archived" && anchor) {
       await supersedeOpenManagedDeliveryRuns(user.tenantId, companyId);
       const run = await enqueueManagedDeliveryForCompany({
         tenantId: user.tenantId,
         companyId,
-        onboardingCompletedAt: tenant.onboardingCompletedAt,
+        onboardingCompletedAt: anchor,
         serviceLevel,
         reason: "package_change",
       });
@@ -448,6 +538,18 @@ export async function saveMarketingPackageAction(formData: FormData) {
         companyId,
         detail: `package_change eligible=${run.strategyEligibleAt} due=${run.strategyDueAt}`,
       });
+
+      if (localDemoEnabled()) {
+        try {
+          await maybeProcessEligibleDeliveryForCompany(
+            user.tenantId,
+            companyId,
+            user,
+          );
+        } catch {
+          /* soft */
+        }
+      }
 
       try {
         await notifyClientException({
@@ -463,8 +565,86 @@ export async function saveMarketingPackageAction(formData: FormData) {
     }
 
     revalidatePath(`/companies/${companyId}`);
+    revalidatePath(`/companies/${companyId}/strategy`);
     redirect(`/companies/${companyId}?package=updated`);
   }
 
+  // Re-save of same package (e.g. display-fallback Basic → explicit): still
+  // ensure a delivery run exists so Strategy is not left "Not started".
+  if (company.status !== "archived") {
+    try {
+      await ensureAndKickManagedDeliveryForCompany({
+        actor: user,
+        tenantId: user.tenantId,
+        companyId,
+        reason: "manual",
+        process: localDemoEnabled(),
+        demoForceGenerate: localDemoEnabled(),
+      });
+    } catch {
+      /* soft */
+    }
+  }
+
   revalidatePath(`/companies/${companyId}`);
+  revalidatePath(`/companies/${companyId}/strategy`);
+}
+
+/** On-read catch-up when past strategyEligibleAt (demo / no cron). */
+export async function processEligibleStrategyAction(companyId: string) {
+  const user = await assertAdminCompanyAccess(companyId);
+  await maybeProcessEligibleDeliveryForCompany(user.tenantId, companyId, user);
+  revalidatePath(`/companies/${companyId}/strategy`);
+  revalidatePath(`/companies/${companyId}`);
+}
+
+/** Agency unlock: clear the 6h floor and generate strategy drafts now. */
+export async function forceUnlockManagedStrategyAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "");
+  const user = await assertAdminCompanyAccess(companyId);
+  // Ensure a run exists first (Assigned package with missing enqueue).
+  await ensureManagedDeliveryBootstrap({
+    actor: user,
+    tenantId: user.tenantId,
+    companyId,
+    onboardingCompletedAt: (await getTenant(user.tenantId))?.onboardingCompletedAt,
+    reason: "manual",
+  });
+  await forceUnlockManagedStrategyForCompany(user.tenantId, companyId, user);
+  revalidatePath(`/companies/${companyId}/strategy`);
+  revalidatePath(`/companies/${companyId}`);
+  redirect(`/companies/${companyId}/strategy`);
+}
+
+/** Agency: send draft / revised detailed strategy to client review. */
+export async function submitDetailedStrategyForClientReviewAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "");
+  const user = await assertAdminCompanyAccess(companyId);
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("Company not found");
+  const current = company.profile.managedService?.detailedStrategy;
+  if (!current) throw new Error("No detailed strategy to submit");
+  if (current.status !== "draft" && current.status !== "changes_requested") {
+    throw new Error("Strategy is already with the client or approved");
+  }
+  const next = {
+    ...current,
+    status: "client_review" as const,
+    clientNote: undefined,
+  };
+  const prev = company.profile.managedService!;
+  await updateCompany(companyId, {
+    profile: {
+      ...company.profile,
+      managedService: { ...prev, detailedStrategy: next },
+    },
+  });
+  await logAction(user, "managed_strategy.submitted_for_client_review", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail: `v${next.version}`,
+  });
+  revalidatePath(`/companies/${companyId}/strategy`);
+  revalidatePath("/client/strategy");
 }

@@ -7,11 +7,11 @@
 //
 // Gate on appEnv() (VERCEL_ENV-aware), NOT NODE_ENV.
 
-import { appEnv } from "@/lib/env";
+import { liveIntegrationsAllowed } from "@/lib/env";
 
 /** True when live local-SEO enrichment (draft persistence) is permitted. */
 export function localSeoLive(): boolean {
   if (process.env.LOCAL_SEO_LIVE !== "true") return false;
-  if (appEnv() === "staging") return false;
+  if (!liveIntegrationsAllowed()) return false;
   return true;
 }

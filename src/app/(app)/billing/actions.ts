@@ -102,6 +102,7 @@ export async function enableAddonAction(formData: FormData) {
   });
   revalidatePath("/billing");
   revalidatePath(`/companies/${companyId}`);
+  revalidatePath("/visuals");
 }
 
 // Disable an add-on for a client company — OWNER-only, session-tenant-pinned.
@@ -141,6 +142,7 @@ export async function disableAddonAction(formData: FormData) {
   });
   revalidatePath("/billing");
   revalidatePath(`/companies/${companyId}`);
+  revalidatePath("/visuals");
 }
 
 // Permanently erase the workspace and ALL its data (GDPR / Privacy Act right to

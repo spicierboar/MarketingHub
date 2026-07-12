@@ -27,6 +27,17 @@ export interface MarketingPackageDef {
   promosIncludedPerMonth: number;
   adsManagementIncluded: boolean;
   includedAddonIds: AddonId[];
+  /**
+   * Free AI image generations / calendar month (content creation).
+   * Tuned roughly to posts/mo; over-quota needs the AI video add-on (covers image + video extras).
+   * Ads media spend is always extra — never covered by these quotas.
+   */
+  imageQuotaPerMonth: number;
+  /**
+   * Free short-form AI videos / calendar month (Reels / TikTok / Shorts).
+   * Over-quota needs the AI video add-on (or package-included video).
+   */
+  videoQuotaPerMonth: number;
   defaultServiceLevel: ManagedServiceLevel;
   active: boolean;
   customModuleRates?: Record<string, number>;
@@ -44,19 +55,153 @@ export interface ResolvedCompanyPackage {
   promosIncludedPerMonth: number;
   adsManagementIncluded: boolean;
   includedAddonIds: AddonId[];
+  imageQuotaPerMonth: number;
+  videoQuotaPerMonth: number;
   serviceLevel: ManagedServiceLevel;
   adsMediaAlwaysExtra: true;
   customModuleRates?: Record<string, number>;
 }
 
-const CUSTOM_FLOOR_AUD = 349;
+/** Custom package monthly floor (Basic). Ad media spend is never included. */
+export const CUSTOM_FLOOR_AUD = 349;
 
+/**
+ * Platform default Custom rate card — amounts added to the **monthly** fee.
+ * - `postsPerMonth` — per post / month
+ * - `campaignsPerQuarter` / `promosPerQuarter` — per campaign or promo / quarter
+ *   (do not also multiply by monthly averages; builders collect quarter counts)
+ * Agency catalog `customModuleRates` overrides individual keys.
+ */
+export const DEFAULT_CUSTOM_MODULE_RATES: Readonly<Record<string, number>> = {
+  channel: 40,
+  postsPerMonth: 25,
+  campaignsPerQuarter: 55,
+  promosPerQuarter: 80,
+  adsManagement: 150,
+  fullyManaged: 75,
+};
+
+export type CustomPackageQuote = {
+  /** Billed monthly price after floor. */
+  priceAudMonthly: number;
+  /** Sum of modules before floor. */
+  rawAud: number;
+  floorApplied: boolean;
+  floorAud: number;
+};
+
+/** Custom UI collects campaigns/promos per quarter; storage uses monthly averages. */
+export function quarterlyToMonthlyRate(perQuarter: number): number {
+  if (!Number.isFinite(perQuarter) || perQuarter <= 0) return 0;
+  return perQuarter / 3;
+}
+
+/** Inverse of {@link quarterlyToMonthlyRate} for Custom builder displays. */
+export function monthlyToQuarterlyCount(perMonth: number): number {
+  if (!Number.isFinite(perMonth) || perMonth <= 0) return 0;
+  return Math.round(perMonth * 3);
+}
+
+/** Merge agency rate-card overrides onto platform defaults. */
+export function mergeCustomModuleRates(
+  agencyRates?: Record<string, number> | null,
+): Record<string, number> {
+  return { ...DEFAULT_CUSTOM_MODULE_RATES, ...(agencyRates ?? {}) };
+}
+
+function moduleRate(rates: Record<string, number>, ...keys: string[]): number {
+  for (const key of keys) {
+    const v = rates[key];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return 0;
+}
+
+/**
+ * Quote Custom package monthly fee from modules + rate card.
+ * Campaigns & promos are priced per **quarter** (converted from stored monthly averages).
+ * Does not include ads media spend (always extra / prepaid).
+ * Floored at Basic (or a higher agency floor).
+ */
+export function quoteCustomPackagePrice(
+  modules: MarketingPackageCustomModules,
+  agencyRates?: Record<string, number> | null,
+  floorAud: number = CUSTOM_FLOOR_AUD,
+): CustomPackageQuote {
+  const rates = mergeCustomModuleRates(agencyRates);
+  const floor = Math.max(CUSTOM_FLOOR_AUD, floorAud);
+
+  // Stored as monthly averages (e.g. 1/3 = 1/quarter); price from quarter counts.
+  const campaignsPerQuarter = Math.max(0, modules.campaignsPerMonth) * 3;
+  const promosPerQuarter = Math.max(0, modules.promosIncludedPerMonth) * 3;
+
+  let raw =
+    modules.channels.length *
+      moduleRate(rates, "channel", "channels", "perChannel") +
+    Math.max(0, modules.postsPerMonth) *
+      moduleRate(rates, "postsPerMonth", "post", "posts") +
+    campaignsPerQuarter *
+      moduleRate(
+        rates,
+        "campaignsPerQuarter",
+        "campaignsPerMonth",
+        "campaign",
+        "campaigns",
+      ) +
+    promosPerQuarter *
+      moduleRate(
+        rates,
+        "promosPerQuarter",
+        "promosIncludedPerMonth",
+        "promo",
+        "promos",
+      );
+
+  if (modules.adsManagementIncluded) {
+    raw += moduleRate(rates, "adsManagement", "adsManagementIncluded");
+  }
+  if (modules.serviceLevel === "fully_managed") {
+    raw += moduleRate(rates, "fullyManaged", "serviceLevel_fully_managed");
+  } else if (modules.serviceLevel === "managed_exceptions") {
+    raw += moduleRate(
+      rates,
+      "managedExceptions",
+      "serviceLevel_managed_exceptions",
+    );
+  } else if (modules.serviceLevel === "approval") {
+    raw += moduleRate(rates, "approval", "serviceLevel_approval");
+  }
+
+  for (const id of modules.addonIds) {
+    raw += moduleRate(rates, id, `addon_${id}`);
+  }
+
+  const rawAud = Math.round(raw);
+  const priceAudMonthly = Math.max(floor, rawAud);
+  return {
+    priceAudMonthly,
+    rawAud,
+    floorApplied: rawAud < floor,
+    floorAud: floor,
+  };
+}
+
+/**
+ * Free AI visuals quotas per marketing package (per calendar month).
+ * Proportional to plan price / organic cadence — simple integers.
+ * - Basic ($349): light — ~1 image per post, 2 short videos
+ * - Pro ($649): medium — ~1 image per post, 4 short videos
+ * - Blast ($999): higher free pool; AI video also package-included (unlimited via includedAddonIds)
+ * - Custom: at least Basic floor (modules may raise via customModules.*QuotaPerMonth)
+ * Ads media always extra (never included in these quotas).
+ */
 export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> = {
   basic: {
     id: "basic",
     name: "Basic",
     priceAudMonthly: 349,
-    blurb: "Always on presence — IG + FB, ~8 posts/mo, 1 always-on theme, 1 promo/quarter. Ads media always extra.",
+    blurb:
+      "Always on presence — IG + FB, ~8 posts/mo, 1 always-on theme, 1 promo/quarter, 8 AI images + 2 short videos/mo. Ads media always extra.",
     channels: ["instagram", "facebook"],
     postsPerMonth: 8,
     campaignsPerMonth: 1,
@@ -64,6 +209,8 @@ export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> 
     promosIncludedPerMonth: 1 / 3,
     adsManagementIncluded: false,
     includedAddonIds: [],
+    imageQuotaPerMonth: 8,
+    videoQuotaPerMonth: 2,
     defaultServiceLevel: "managed_exceptions",
     active: true,
   },
@@ -71,13 +218,16 @@ export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> 
     id: "pro",
     name: "Pro",
     priceAudMonthly: 649,
-    blurb: "Multi-channel growth — IG + FB + GBP (± email), ~16 posts/mo, always-on + 1 growth campaign, 1 promo/mo. Ads media always extra.",
+    blurb:
+      "Multi-channel growth — IG + FB + GBP (± email), ~16 posts/mo, always-on + 1 growth campaign, 1 promo/mo, 16 AI images + 4 short videos/mo. Ads media always extra.",
     channels: ["instagram", "facebook", "gbp", "email"],
     postsPerMonth: 16,
     campaignsPerMonth: 2,
     promosIncludedPerMonth: 1,
     adsManagementIncluded: false,
     includedAddonIds: [],
+    imageQuotaPerMonth: 16,
+    videoQuotaPerMonth: 4,
     defaultServiceLevel: "managed_exceptions",
     active: true,
   },
@@ -85,13 +235,17 @@ export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> 
     id: "blast",
     name: "Blast",
     priceAudMonthly: 999,
-    blurb: "Full funnel push — IG + FB + GBP + TikTok + email, ~24 posts/mo, always-on + 2 themes, 2 promos/mo. Ads management included; media always extra.",
+    blurb:
+      "Full funnel push — IG + FB + GBP + TikTok + email, ~24 posts/mo, always-on + 2 themes, 2 promos/mo, AI video included (32 images + 8 videos/mo floor). Ads management included; media always extra.",
     channels: ["instagram", "facebook", "gbp", "tiktok", "email"],
     postsPerMonth: 24,
     campaignsPerMonth: 3,
     promosIncludedPerMonth: 2,
     adsManagementIncluded: true,
+    // Package-included AI video → unlimited image/video creation (see visuals-allowance).
     includedAddonIds: ["video"],
+    imageQuotaPerMonth: 32,
+    videoQuotaPerMonth: 8,
     defaultServiceLevel: "fully_managed",
     active: true,
   },
@@ -99,13 +253,17 @@ export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> 
     id: "custom",
     name: "Custom",
     priceAudMonthly: CUSTOM_FLOOR_AUD,
-    blurb: "Build your own from modules. Floor ≥ Basic (A$349). Ads media always extra.",
+    blurb:
+      "Build your own from modules. Floor ≥ Basic (A$349) including 8 AI images + 2 short videos/mo. Ads media always extra.",
     channels: [],
     postsPerMonth: 0,
     campaignsPerMonth: 0,
     promosIncludedPerMonth: 0,
     adsManagementIncluded: false,
     includedAddonIds: [],
+    // Custom floor matches Basic free visuals unless modules raise quotas.
+    imageQuotaPerMonth: 8,
+    videoQuotaPerMonth: 2,
     defaultServiceLevel: "managed_exceptions",
     active: true,
     customModuleRates: {},
@@ -134,6 +292,8 @@ function mergeOverride(
     promosIncludedPerMonth: ov.promosIncludedPerMonth ?? base.promosIncludedPerMonth,
     adsManagementIncluded: ov.adsManagementIncluded ?? base.adsManagementIncluded,
     includedAddonIds: ov.includedAddonIds ?? [...base.includedAddonIds],
+    imageQuotaPerMonth: ov.imageQuotaPerMonth ?? base.imageQuotaPerMonth,
+    videoQuotaPerMonth: ov.videoQuotaPerMonth ?? base.videoQuotaPerMonth,
     defaultServiceLevel: ov.defaultServiceLevel ?? base.defaultServiceLevel,
     active: ov.active ?? base.active,
     customModuleRates:
@@ -201,14 +361,27 @@ export function resolveCompanyPackage(
 
   if (packageId === "custom") {
     const mods = ms?.customModules ?? emptyCustomModules(catalogPkg.defaultServiceLevel);
-    const price = Math.max(
+    const quote = quoteCustomPackagePrice(
+      mods,
+      catalogPkg.customModuleRates,
       catalogPkg.priceAudMonthly,
-      CUSTOM_FLOOR_AUD,
+    );
+    const imageQuota = Math.max(
+      catalogPkg.imageQuotaPerMonth,
+      typeof mods.imageQuotaPerMonth === "number" && Number.isFinite(mods.imageQuotaPerMonth)
+        ? Math.max(0, Math.round(mods.imageQuotaPerMonth))
+        : 0,
+    );
+    const videoQuota = Math.max(
+      catalogPkg.videoQuotaPerMonth,
+      typeof mods.videoQuotaPerMonth === "number" && Number.isFinite(mods.videoQuotaPerMonth)
+        ? Math.max(0, Math.round(mods.videoQuotaPerMonth))
+        : 0,
     );
     return {
       id: "custom",
       name: catalogPkg.name,
-      priceAudMonthly: price,
+      priceAudMonthly: quote.priceAudMonthly,
       blurb: catalogPkg.blurb,
       channels: [...mods.channels],
       postsPerMonth: mods.postsPerMonth,
@@ -216,6 +389,8 @@ export function resolveCompanyPackage(
       promosIncludedPerMonth: mods.promosIncludedPerMonth,
       adsManagementIncluded: mods.adsManagementIncluded,
       includedAddonIds: [...mods.addonIds],
+      imageQuotaPerMonth: imageQuota,
+      videoQuotaPerMonth: videoQuota,
       serviceLevel: mods.serviceLevel,
       adsMediaAlwaysExtra: ADS_MEDIA_ALWAYS_EXTRA,
       customModuleRates: catalogPkg.customModuleRates
@@ -235,6 +410,8 @@ export function resolveCompanyPackage(
     promosIncludedPerMonth: catalogPkg.promosIncludedPerMonth,
     adsManagementIncluded: catalogPkg.adsManagementIncluded,
     includedAddonIds: [...catalogPkg.includedAddonIds],
+    imageQuotaPerMonth: catalogPkg.imageQuotaPerMonth,
+    videoQuotaPerMonth: catalogPkg.videoQuotaPerMonth,
     serviceLevel: catalogPkg.defaultServiceLevel,
     adsMediaAlwaysExtra: ADS_MEDIA_ALWAYS_EXTRA,
     customModuleRates: catalogPkg.customModuleRates
@@ -276,6 +453,23 @@ export const CUSTOM_CHANNEL_OPTIONS = [
   "email",
 ] as const;
 
+export function customChannelLabel(id: string): string {
+  switch (id) {
+    case "gbp":
+      return "Google Business";
+    case "instagram":
+      return "Instagram";
+    case "facebook":
+      return "Facebook";
+    case "tiktok":
+      return "TikTok";
+    case "email":
+      return "Email";
+    default:
+      return id.charAt(0).toUpperCase() + id.slice(1);
+  }
+}
+
 const SERVICE_LEVELS: ManagedServiceLevel[] = [
   "approval",
   "managed_exceptions",
@@ -288,9 +482,13 @@ export function isManagedServiceLevel(v: string): v is ManagedServiceLevel {
 
 /**
  * Parse Custom module fields from a form (onboarding + company overview).
- * Expects: customChannels (comma-separated), customPostsPerMonth,
- * customCampaignsPerMonth, customPromosIncludedPerMonth,
+ * Expects: customChannels, customPostsPerMonth,
+ * customCampaignsPerQuarter (preferred) or legacy customCampaignsPerMonth,
+ * customPromosPerQuarter (preferred) or legacy customPromosIncludedPerMonth,
  * customAdsManagementIncluded ("on"), customServiceLevel.
+ *
+ * Campaigns & promos are collected **per quarter** and stored as monthly averages
+ * (`/3`) so promo allowance + delivery keep working.
  */
 export function parseCustomModulesFromFormData(
   formData: FormData,
@@ -298,19 +496,33 @@ export function parseCustomModulesFromFormData(
 ): MarketingPackageCustomModules {
   const levelRaw = String(formData.get("customServiceLevel") || "").trim();
   const serviceLevel = isManagedServiceLevel(levelRaw) ? levelRaw : fallbackLevel;
-  const channels = String(formData.get("customChannels") || "")
-    .split(/[,|\n]/)
+  // Checkboxes (name=customChannels) or legacy comma-separated single field.
+  const channels = formData
+    .getAll("customChannels")
+    .flatMap((v) => String(v).split(/[,|\n]/))
     .map((c) => c.trim().toLowerCase())
     .filter(Boolean);
   const n = (key: string, fallback: number) => {
     const v = Number(formData.get(key));
     return Number.isFinite(v) ? Math.max(0, v) : fallback;
   };
+  const has = (key: string) => {
+    const v = formData.get(key);
+    return v != null && String(v).trim() !== "";
+  };
+  // Prefer explicit per-quarter fields; legacy month-named fields are also
+  // treated as quarter counts (Custom builder product rule).
+  const campaignsPerQuarter = has("customCampaignsPerQuarter")
+    ? n("customCampaignsPerQuarter", 0)
+    : n("customCampaignsPerMonth", 0);
+  const promosPerQuarter = has("customPromosPerQuarter")
+    ? n("customPromosPerQuarter", 0)
+    : n("customPromosIncludedPerMonth", 0);
   return {
     channels,
     postsPerMonth: n("customPostsPerMonth", 0),
-    campaignsPerMonth: n("customCampaignsPerMonth", 0),
-    promosIncludedPerMonth: n("customPromosIncludedPerMonth", 0),
+    campaignsPerMonth: quarterlyToMonthlyRate(campaignsPerQuarter),
+    promosIncludedPerMonth: quarterlyToMonthlyRate(promosPerQuarter),
     adsManagementIncluded: formData.get("customAdsManagementIncluded") === "on",
     serviceLevel,
     addonIds: [],

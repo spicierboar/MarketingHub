@@ -84,6 +84,11 @@ export interface Tenant {
    */
   promoCatalog?: AgencyPromoTemplate[];
   /**
+   * Tenant-scoped custom promo industries (jsonb). Merged with platform
+   * `PROMO_INDUSTRY_OPTIONS` for catalog grouping and template forms.
+   */
+  promoIndustries?: AgencyPromoIndustry[];
+  /**
    * Agency overrides for marketing package SKUs (Basic / Pro / Blast / Custom).
    * Merged onto platform defaults in `src/lib/marketing-packages.ts`.
    */
@@ -331,10 +336,10 @@ export interface CompanyProfile {
   phone?: string;
   email?: string;
   /**
-   * AU business number (ABR) — optional attribute for tax/legal display only.
-   * NEVER a primary key or uniqueness constraint: one ABN can cover many
-   * company records (locations, brands, trading names under the same entity).
-   * Identity is always `Company.id`.
+   * AU business number (ABR). With `Company.name` (business/trading name), forms
+   * the business identity key for onboarding duplicate checks — see
+   * `company-identity.ts`. ABN alone is NOT unique: one legal entity may run
+   * multiple trading names as separate MCC accounts. Technical PK is `Company.id`.
    */
   abn?: string;
   /** Read-only Google Places match for onboarding enrichment. */
@@ -1001,6 +1006,7 @@ export interface AiRun {
     | "image_brief"
     | "image_gen"
     | "video_gen"
+    | "voice_gen"
     | "content_critique"
     | "ai_mos_scan"
     | "ai_mos_signal_scan"
@@ -3312,18 +3318,79 @@ export type ManagedDeliveryEnqueueReason =
   | "package_change"
   | "manual";
 
+/** Approval lifecycle for a company marketing strategy document. */
+export type DetailedStrategyStatus =
+  | "draft"
+  | "client_review"
+  | "approved"
+  | "changes_requested";
+
+export interface StrategyPersona {
+  name: string;
+  demographics: string;
+  motivations: string;
+  painPoints: string;
+}
+
+export interface StrategyChannelPlan {
+  channel: string;
+  rationale: string;
+  tactics: string[];
+}
+
+export interface StrategyRoadmapPhase {
+  /** "30" | "60" | "90" | "annual" */
+  key: "30" | "60" | "90" | "annual";
+  title: string;
+  objectives: string[];
+  activities: string[];
+  kpis: string[];
+}
+
+/**
+ * Full marketing strategy document (objectives, personas, channels, 30/60/90 + annual).
+ * Stored on company.profile.managedService — no separate table.
+ */
+export interface DetailedMarketingStrategy {
+  id: string;
+  version: number;
+  title: string;
+  status: DetailedStrategyStatus;
+  generatedAt: string;
+  model: string;
+  packageName: string;
+  executiveSummary: string;
+  businessObjectives: string[];
+  personas: StrategyPersona[];
+  channels: StrategyChannelPlan[];
+  roadmap: StrategyRoadmapPhase[];
+  /** Optional short note when client requests changes. */
+  clientNote?: string;
+  approvedAt?: string;
+  approvedByUserId?: string;
+}
+
 export interface ManagedServiceSettings {
   serviceLevel: ManagedServiceLevel;
   operatingAuthorityConfirmedAt?: string;
   /**
    * Earliest time generation may start.
-   * Signup/onboarding: onboard + 6h. Package change: now (no 6h delay).
+   * Signup/onboarding: onboard + 6h (immediate in local demo). Package change: now.
    */
   strategyEligibleAt?: string;
+  /** SLA ceiling — ready by eligible anchor + 12h (signup: onboard+12h). */
   strategyDueAt?: string;
   strategyStartedAt?: string;
   strategyCompletedAt?: string;
   calendarCompletedAt?: string;
+  /** Latest package-based strategy text for company / client Strategy UI. */
+  strategySummary?: string;
+  strategyChannelPlan?: string;
+  strategyPackageName?: string;
+  /** Current detailed strategy document (v1+ structured plan). */
+  detailedStrategy?: DetailedMarketingStrategy;
+  /** Prior detailed strategy versions (newest first, capped). */
+  detailedStrategyHistory?: DetailedMarketingStrategy[];
   /**
    * Idempotency stamp for client implementation-plan email.
    * Cleared on package change so the refreshed plan can email again.
@@ -3346,15 +3413,25 @@ export interface ManagedServiceSettings {
 /** Company-level marketing delivery SKU (not tenant SaaS plan). */
 export type MarketingPackageId = "basic" | "pro" | "blast" | "custom";
 
-/** Build-your-own modules when a company is on the Custom package. */
+/**
+ * Build-your-own modules when a company is on the Custom package.
+ * Posts are per month. Campaigns & promos are collected per quarter in the UI
+ * and stored here as monthly averages (`perQuarter / 3`) for allowance/delivery.
+ */
 export interface MarketingPackageCustomModules {
   channels: string[];
   postsPerMonth: number;
+  /** Monthly average of Custom campaigns/quarter (`n/3`). */
   campaignsPerMonth: number;
+  /** Monthly average of Custom promos/quarter (`n/3`); fractional e.g. 1/3 = 1/quarter. */
   promosIncludedPerMonth: number;
   adsManagementIncluded: boolean;
   serviceLevel: ManagedServiceLevel;
   addonIds: AddonId[];
+  /** Optional Custom overrides for free AI image quota (else package floor). */
+  imageQuotaPerMonth?: number;
+  /** Optional Custom overrides for free AI short-video quota (else package floor). */
+  videoQuotaPerMonth?: number;
 }
 
 /**
@@ -3372,18 +3449,36 @@ export interface AgencyMarketingPackageOverride {
   promosIncludedPerMonth?: number;
   adsManagementIncluded?: boolean;
   includedAddonIds?: AddonId[];
+  /** Free AI hero/social images included per calendar month. */
+  imageQuotaPerMonth?: number;
+  /** Free short-form AI videos included per calendar month. */
+  videoQuotaPerMonth?: number;
   defaultServiceLevel?: ManagedServiceLevel;
   active?: boolean;
   /** Optional Custom package rate card (module key → AUD). */
   customModuleRates?: Record<string, number>;
 }
 
-/** Industry tag for ready-made promos (extends BusinessType with verticals). */
-export type PromoIndustry =
+/** Platform built-in industry tags for ready-made promos. */
+export type PlatformPromoIndustry =
   | BusinessType
   | "fast_food"
   | "fitness"
   | "beauty_salon";
+
+/**
+ * Industry tag for ready-made promos.
+ * Platform packs use PlatformPromoIndustry; agencies may add custom slug ids.
+ */
+export type PromoIndustry = PlatformPromoIndustry | (string & {});
+
+/** Tenant-authored industry option for promo catalog grouping. */
+export interface AgencyPromoIndustry {
+  id: string;
+  label: string;
+  createdById: string;
+  createdAt: string;
+}
 
 /** One pre-written post inside an agency or platform promo template. */
 export interface AgencyPromoPost {
@@ -3430,6 +3525,12 @@ export type ClientPromoSelectionStatus =
   | "completed"
   | "cancelled";
 
+/**
+ * Over-allowance billing for ready-made promos (mirrors menu included/billable).
+ * `included` consumes a package promo slot for `periodKey`; `extra` is billed.
+ */
+export type PromoBillingClass = "included" | "extra";
+
 /** Client request for a catalog promotion — dates, budget, channels only. */
 export interface ClientPromoSelection {
   id: string;
@@ -3449,6 +3550,15 @@ export interface ClientPromoSelection {
   totalUsd: number;
   channels: string[];
   campaignId?: string | null;
+  /** Ask ticket created alongside the selection (Client asks / agency queue). */
+  requestId?: string | null;
+  /**
+   * Package entitlement vs over-allowance.
+   * Older selections without this field are treated as `extra` when counting.
+   */
+  billingClass?: PromoBillingClass;
+  /** YYYY-MM period used for `promosIncludedPerMonth` quota. */
+  periodKey?: string;
   requestedById: string;
   requestedAt: string;
   notes?: string;
@@ -3462,10 +3572,10 @@ export interface ManagedDeliveryRun {
   onboardingCompletedAt: string;
   /**
    * Do not start generating until now >= this.
-   * Signup/onboarding: onboard + 6h. Package change: now (immediate).
+   * Signup/onboarding: onboard + 6h (immediate in local demo). Package change: now.
    */
   strategyEligibleAt: string;
-  /** SLA ceiling — strategy should be ready by eligible anchor + 24h (signup: onboard+24h). */
+  /** SLA ceiling — strategy should be ready by eligible anchor + 12h (signup: onboard+12h). */
   strategyDueAt: string;
   strategyStartedAt?: string | null;
   strategyCompletedAt?: string | null;

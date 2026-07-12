@@ -9,7 +9,7 @@ Speed client/company onboarding so public data pre-fills profile fields and the 
 
 1. **Deepen website scrape** — schema.org / OG / tel|mailto / sameAs / logo notes / nav→services; confidence + sourceUrl; sim HTML for `harbourroasters.example`
 2. **Industry templates** — `SIGNUP_DEFAULTS` + `inferBusinessTypeFromIndustry` + `signup-prefill-templates.ts`; apply sets `businessType` when missing
-3. **ABN + Places** — `abn-lookup.ts`, `places-enrichment.ts`, env-gated + simulated; profile `abn` / `googlePlaceId` / `tradingHours`. **ABN is never a PK/unique key** (one ABN → many companies).
+3. **ABN + Places** — `abn-lookup.ts`, `places-enrichment.ts`, env-gated + simulated; profile `abn` / `googlePlaceId` / `tradingHours`. **ABN alone is not unique** (one ABN → many companies by trading name). Account identity / duplicate checks use **(business name + ABN)** — see `company-identity.ts`.
 4. **Looks-correct UX** — summary card, confidence groups, default high+medium, primary CTA; enrichment wired into same review list
 
 ## Env (optional live)

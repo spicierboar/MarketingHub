@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/utils";
 import type { BookingStatus, Reservation } from "@/lib/types";
@@ -44,8 +45,14 @@ export default async function BookingsPage({
   const user = await requireAdmin();
   const params = await searchParams;
   const companies = (await listCompanies(user.tenantId)).filter((c) => c.status !== "archived");
-  const companyId = params.company ?? companies[0]?.id;
-  const company = companies.find((c) => c.id === companyId);
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const locked = Boolean(params.company);
+  const contextCompanyId =
+    params.company && companies.some((c) => c.id === params.company)
+      ? params.company
+      : undefined;
+  const companyId = locked ? contextCompanyId : contextCompanyId ?? companies[0]?.id;
+  const company = companyId ? companies.find((c) => c.id === companyId) : undefined;
   const addons = company ? await companyAddonMap(user.tenantId, company.id) : null;
 
   const [periods, reservations, settingsRow] = companyId
@@ -65,7 +72,7 @@ export default async function BookingsPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Bookings"
+        title={company ? `Bookings · ${company.name}` : "Bookings"}
         description="Table and room reservations for restaurant and hotel clients — service periods, capacity, guest requests, host queue."
       />
 
@@ -80,16 +87,12 @@ export default async function BookingsPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Client" htmlFor="bk-company">
-              <Select id="bk-company" name="company" defaultValue={companyId}>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">View</Button>
+            <LockedCompanyFilter
+              companies={companyOpts}
+              companyId={companyId}
+              locked={locked && Boolean(companyId)}
+            />
+            {!locked && <Button type="submit">View</Button>}
           </form>
           {company && addons && (
             <p className="mt-3 text-sm text-muted-foreground">
@@ -128,17 +131,42 @@ export default async function BookingsPage({
                   <input type="checkbox" name="enabled" defaultChecked={settings.enabled} />
                   Accepting reservations
                 </label>
-                <Field label="Button label" htmlFor="btn-label">
-                  <Input id="btn-label" name="buttonLabel" defaultValue={settings.buttonLabel} />
+                <Field label="Button label" htmlFor="btn-label" hint="Shown on the public booking page">
+                  <Input
+                    id="btn-label"
+                    name="buttonLabel"
+                    defaultValue={settings.buttonLabel}
+                    placeholder="e.g. Book a table"
+                  />
                 </Field>
-                <Field label="Lead time (hours)" htmlFor="lead-time">
-                  <Input id="lead-time" name="leadTimeHours" type="number" min="0" defaultValue={settings.leadTimeHours} />
+                <Field label="Lead time (hours)" htmlFor="lead-time" hint="Minimum notice before a booking">
+                  <Input
+                    id="lead-time"
+                    name="leadTimeHours"
+                    type="number"
+                    min="0"
+                    defaultValue={settings.leadTimeHours}
+                    placeholder="e.g. 2"
+                  />
                 </Field>
                 <Field label="Max party size" htmlFor="max-party">
-                  <Input id="max-party" name="maxPartySize" type="number" min="1" defaultValue={settings.maxPartySize} />
+                  <Input
+                    id="max-party"
+                    name="maxPartySize"
+                    type="number"
+                    min="1"
+                    defaultValue={settings.maxPartySize}
+                    placeholder="e.g. 12"
+                  />
                 </Field>
-                <Field label="Guest notes" htmlFor="bk-notes">
-                  <Textarea id="bk-notes" name="notes" defaultValue={settings.notes ?? ""} className="min-h-16" />
+                <Field label="Guest notes" htmlFor="bk-notes" hint="Shown to guests on the booking form">
+                  <Textarea
+                    id="bk-notes"
+                    name="notes"
+                    defaultValue={settings.notes ?? ""}
+                    className="min-h-16"
+                    placeholder="e.g. Please note dietary requirements in the comments"
+                  />
                 </Field>
                 <Button type="submit" size="sm">
                   Save settings
@@ -179,10 +207,25 @@ export default async function BookingsPage({
                   </Field>
                 </div>
                 <Field label="Capacity (covers)" htmlFor="sp-cap">
-                  <Input id="sp-cap" name="capacity" type="number" min="1" defaultValue="20" />
+                  <Input
+                    id="sp-cap"
+                    name="capacity"
+                    type="number"
+                    min="1"
+                    defaultValue="20"
+                    placeholder="e.g. 20"
+                  />
                 </Field>
                 <Field label="Slot length (minutes)" htmlFor="sp-slot">
-                  <Input id="sp-slot" name="slotMinutes" type="number" min="15" step="15" defaultValue="30" />
+                  <Input
+                    id="sp-slot"
+                    name="slotMinutes"
+                    type="number"
+                    min="15"
+                    step="15"
+                    defaultValue="30"
+                    placeholder="e.g. 30"
+                  />
                 </Field>
                 <Button type="submit" size="sm">
                   Add service period

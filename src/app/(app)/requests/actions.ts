@@ -5,25 +5,16 @@ import { revalidatePath } from "next/cache";
 import {
   advanceRequest,
   answerGap,
-  createContent,
-  createGap,
   createRequest,
-  getCompany,
   getGap,
   getRequest,
   listGaps,
 } from "@/lib/db";
 import { assertCompanyAccess, assertAdminCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
-import { draftContent } from "@/lib/ai/draft";
-import { auditClaims, checkCompliance } from "@/lib/ai/compliance";
-import { detectGaps } from "@/lib/ai/gaps";
-import { duplicateWarning } from "@/lib/ai/similarity";
-import { assertAiBudget } from "@/lib/ai/budget";
-import { recordAiUsage } from "@/lib/ai/metering";
-import { assertAiRateLimit } from "@/lib/ratelimit";
+import { draftFromRequestId } from "@/lib/promo-requests";
 import { id, now } from "@/lib/utils";
-import type { GroundingLabel, RequestType, UploadedAsset, Urgency } from "@/lib/types";
+import type { RequestType, UploadedAsset, Urgency } from "@/lib/types";
 
 function bool(fd: FormData, key: string): boolean {
   return fd.get(key) === "on" || fd.get(key) === "true";
@@ -86,132 +77,22 @@ export async function createRequestAction(formData: FormData) {
 
 // Generate an AI draft from a request (master prompt §19). Phase 2/3 pipeline:
 // knowledge-gap check → grounded drafting → compliance + claims audit →
-// grounding label → AI run logged.
+// grounding label → AI run logged. Shared with client custom-work kick.
 export async function generateDraftAction(requestId: string) {
   const req = await getRequest(requestId);
   if (!req) throw new Error("Request not found");
   const user = await assertCompanyAccess(req.companyId);
-  const company = await getCompany(req.companyId);
-  if (!company) throw new Error("Company not found");
-  if (company.status !== "ai_ready" && company.status !== "approved") {
-    throw new Error(
-      "Company is not AI-ready. Complete onboarding before generating content.",
-    );
-  }
-
-  // Knowledge gap detector (§51): blocking gaps open the Ask-the-Local-Manager
-  // workflow and stop drafting until answered.
-  const openGaps = await listGaps({ requestId, openOnly: true });
-  const existingGaps = await listGaps({ requestId });
-  const detected = (await detectGaps(company, req)).filter(
-    (d) =>
-      // Don't re-raise a question that is already open or already answered.
-      !existingGaps.some((g) => g.question === d.question),
-  );
-  for (const d of detected) {
-    await createGap({
-      companyId: company.id,
-      requestId,
-      question: d.question,
-      context: d.context,
-      blocking: d.blocking,
+  let contentId: string;
+  try {
+    contentId = await draftFromRequestId(requestId, user, {
+      qualityRoute: true,
+      origin: "agency_generate_draft",
     });
-  }
-  const blockingOpen = [
-    ...openGaps.filter((g) => g.blocking),
-    ...detected.filter((d) => d.blocking),
-  ];
-  if (blockingOpen.length > 0) {
-    await advanceRequest(
-      requestId,
-      "needs_more_information",
-      user.id,
-      `AI drafting paused — ${blockingOpen.length} question(s) for the local manager`,
-    );
-    await logAction(user, "gap.raised", {
-      targetType: "request",
-      targetId: requestId,
-      companyId: company.id,
-      detail: blockingOpen.map((g) => g.question).join(" | ").slice(0, 300),
-    });
+  } catch {
+    // Gaps / not AI-ready — stay on the request so staff can answer or unblock.
     redirect(`/requests/${requestId}`);
   }
-
-  await assertAiBudget(user.tenantId);
-  await assertAiRateLimit(user.tenantId);
-  await advanceRequest(requestId, "ai_drafting", user.id);
-
-  const managerAnswers = (await listGaps({ requestId }))
-    .filter((g) => g.status === "answered" && g.answer)
-    .map((g) => ({ question: g.question, answer: g.answer! }));
-
-  const draft = await draftContent({
-    company,
-    requestType: req.requestType,
-    topic: req.topic,
-    objective: req.objective,
-    platform: req.platform,
-    audience: req.targetAudience,
-    offer: req.offer,
-    callToAction: req.callToAction,
-    notes: req.notes,
-    managerAnswers,
-  });
-
-  const compliance = await checkCompliance(draft.body, company, { consent: req.consent });
-  const claimAudit = await auditClaims(draft.body, company);
-  const groundingLabel: GroundingLabel = claimAudit.some(
-    (c) => c.status === "unsupported",
-  )
-    ? "requires_evidence"
-    : draft.sourceRefs.length > 0
-      ? "grounded"
-      : "suggested_by_ai";
-
-  const dupWarn = await duplicateWarning(company.id, draft.body);
-  const aiRun = await recordAiUsage({
-    tenantId: company.tenantId,
-    companyId: company.id,
-    userId: user.id,
-    kind: "content_draft",
-    model: draft.model,
-    promptSummary: req.topic.slice(0, 120),
-    outputChars: draft.body.length,
-    sourcesUsed: draft.sources,
-    contextChars: draft.body.length + req.objective.length,
-  });
-
-  const content = await createContent({
-    companyId: company.id,
-    requestId: req.id,
-    type: req.requestType,
-    title: draft.title,
-    body: draft.body,
-    status: "ai_draft",
-    createdById: user.id,
-    compliance,
-    claimAudit,
-    groundingLabel,
-    sourceRefs: draft.sourceRefs,
-    brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
-    aiModel: draft.model,
-    aiPrompt: `${req.objective} — ${req.topic}`,
-    sourcesUsed: draft.sources,
-    duplicateWarning: dupWarn,
-    aiRunId: aiRun.id,
-    estCostUsd: aiRun.estCostUsd,
-  });
-
-  await advanceRequest(requestId, "draft_ready", user.id, `Draft ${content.id} created`);
-
-  await logAction(user, "content.ai_drafted", {
-    targetType: "content",
-    targetId: content.id,
-    companyId: company.id,
-    detail: `${draft.model} · risk ${compliance.riskLevel} · ${groundingLabel}`,
-  });
-
-  redirect(`/content/${content.id}`);
+  redirect(`/content/${contentId}`);
 }
 
 // "Ask the Local Manager": the requester answers a knowledge gap. When no

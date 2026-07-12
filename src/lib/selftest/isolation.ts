@@ -159,6 +159,17 @@ import {
   checkPromoMarkupMath,
 } from "@/lib/selftest/promo-catalog";
 import {
+  checkPromoAllowanceBillingClass,
+  checkPromoIncludedStillAvailable,
+  checkPromoPeriodKeyQuarterly,
+} from "@/lib/selftest/promo-allowance";
+import {
+  checkApprovalStrategyStartsDraft,
+  checkCustomQuarterlyPromoLimit,
+  checkMarketingPackageCheckoutKind,
+  checkMarketingPackageCheckoutVerify,
+} from "@/lib/selftest/billing-package";
+import {
   checkCampaignBuilderGoalProducesPlan,
   checkCampaignBuilderKpisPresent,
   checkCampaignBuilderSpawnsDraftContentNotScheduled,
@@ -253,6 +264,8 @@ import {
 import {
   checkAbnResultToProfilePatch,
   checkAbnSimulatedWhenUnconfigured,
+  checkAbrIdentityGateSoftSkipsWhenNotLive,
+  checkAbrNameMatchingHelpers,
   checkPlaceMatchToExtractedHints,
   checkPlaceSimulatedWhenUnconfigured,
 } from "@/lib/selftest/abn-places";
@@ -324,6 +337,7 @@ import {
   checkAbnNotUniqueAcrossCompanies,
   checkClientProfileFormIgnoresAbn,
   checkClientProfileLocksAbnAndLegalName,
+  checkNameAbnIdentityDuplicate,
 } from "@/lib/selftest/client-profile";
 import {
   checkLogRecordsDedupeKey,
@@ -847,6 +861,25 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("promoCatalog.byIndustry", () => checkPromoCatalogByIndustry());
     await expect("promoCatalog.markupMath", () => checkPromoMarkupMath());
+    await expect("promoAllowance.periodKey", () => checkPromoPeriodKeyQuarterly());
+    await expect("promoAllowance.billingClassExtra", () =>
+      checkPromoAllowanceBillingClass(),
+    );
+    await expect("promoAllowance.billingClassIncluded", () =>
+      checkPromoIncludedStillAvailable(),
+    );
+    await expect("promoAllowance.customQuarterlyLimit", () =>
+      checkCustomQuarterlyPromoLimit(),
+    );
+    await expect("billingPackage.checkoutKind", () =>
+      checkMarketingPackageCheckoutKind(),
+    );
+    await expect("billingPackage.checkoutVerify", () =>
+      checkMarketingPackageCheckoutVerify(),
+    );
+    await expect("managedStrategy.approvalStartsDraft", () =>
+      checkApprovalStrategyStartsDraft(),
+    );
 
     await expect("liveAds.simulatedWhenOff", () => checkLiveAdsSimulatedWhenOff());
     await expect("liveAds.dispatchNullWhenOff", () => checkLiveAdsDispatchNullWhenOff());
@@ -1129,6 +1162,14 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
       checkAbnResultToProfilePatch(),
     );
 
+    await expect("abnPlaces.abrNameMatchingHelpers", () =>
+      Promise.resolve(checkAbrNameMatchingHelpers()),
+    );
+
+    await expect("abnPlaces.abrIdentityGateSoftSkipsWhenNotLive", () =>
+      checkAbrIdentityGateSoftSkipsWhenNotLive(),
+    );
+
     await expect("abnPlaces.placeSimulatedWhenUnconfigured", () =>
       checkPlaceSimulatedWhenUnconfigured(),
     );
@@ -1230,6 +1271,9 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
     await expect("clientProfile.abnNotUniqueAcrossCompanies", () =>
       checkAbnNotUniqueAcrossCompanies(),
+    );
+    await expect("clientProfile.nameAbnIdentityDuplicate", () =>
+      checkNameAbnIdentityDuplicate(),
     );
 
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());

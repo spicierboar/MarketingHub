@@ -210,11 +210,19 @@ export async function freezeScopeAction(formData: FormData) {
 }
 
 // "Publish due posts now" — runs the same queue tick as the production cron.
-export async function publishDueAction() {
+// Optional companyId scopes the tick to one client (company workspace).
+export async function publishDueAction(formData?: FormData) {
   const user = await requireAdmin();
-  const counts = await publishDuePosts(user);
+  const companyId = formData
+    ? String(formData.get("companyId") || "").trim() || undefined
+    : undefined;
+  if (companyId && !(await canAccessCompany(user, companyId))) {
+    throw new Error("Forbidden: no access to this company");
+  }
+  const counts = await publishDuePosts(user, companyId ? { companyId } : undefined);
   await logAction(user, "publishing.run", {
-    detail: `published ${counts.published}, failed ${counts.failed}, skipped ${counts.skipped}, deferred ${counts.deferred} (platform ceilings), dead-lettered ${counts.dead}`,
+    companyId,
+    detail: `published ${counts.published}, failed ${counts.failed}, skipped ${counts.skipped}, deferred ${counts.deferred} (platform ceilings), dead-lettered ${counts.dead}${companyId ? ` · company ${companyId}` : ""}`,
   });
   refresh();
 }

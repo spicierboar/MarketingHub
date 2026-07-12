@@ -1,10 +1,13 @@
-import { requireAdmin } from "@/lib/auth/rbac";
+import { requireAdmin, isTenantOwner } from "@/lib/auth/rbac";
 import {
+  getTenant,
+  listAiRuns,
   listCompanies,
   listContent,
   listPhotoShoots,
 } from "@/lib/db";
 import { companyAddonMap } from "@/lib/entitlements";
+import { visualsAllowanceSummary } from "@/lib/visuals-allowance";
 import { visualsLive } from "@/lib/visuals-connectors";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
@@ -12,8 +15,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
+import { VisualsQuotaAddonsPanel } from "@/components/visuals-quota-addons-panel";
 import { formatDate } from "@/lib/utils";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import type { Company, PhotoShoot } from "@/lib/types";
 import {
   advancePhotoShootAction,
@@ -41,18 +47,41 @@ export default async function VisualsPage({
   const companies = (await listCompanies(user.tenantId)).filter(
     (c) => c.status !== "archived",
   );
-  const companyId = params.company ?? companies[0]?.id;
-  const company = companies.find((c) => c.id === companyId);
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const locked = Boolean(params.company);
+  const contextCompanyId =
+    params.company && companies.some((c) => c.id === params.company)
+      ? params.company
+      : undefined;
+  const companyId = locked ? contextCompanyId : contextCompanyId ?? companies[0]?.id;
+  const company = companyId ? companies.find((c) => c.id === companyId) : undefined;
   const addons = company ? await companyAddonMap(user.tenantId, company.id) : null;
 
-  const [shoots, contentItems] = await Promise.all([
+  const [shoots, contentItems, tenant, aiRuns] = await Promise.all([
     listPhotoShoots(user.tenantId, companyId),
     listContent(user.tenantId),
+    getTenant(user.tenantId),
+    companyId
+      ? listAiRuns(user.tenantId, [companyId])
+      : Promise.resolve([]),
   ]);
   const companyContent = contentItems.filter(
     (c) => c.companyId === companyId && !["archived", "rejected"].includes(c.status),
   );
   const videoScripts = companyContent.filter((c) => c.type === "video_script");
+
+  const allowance =
+    company && addons
+      ? await visualsAllowanceSummary(company, tenant, {
+          videoAddonActive: addons.video,
+          runs: aiRuns.filter((r) => r.companyId === company.id),
+        })
+      : null;
+
+  const canGenerateImage =
+    !!allowance && (allowance.images.unlimited || allowance.images.remaining > 0);
+  const canGenerateVideo =
+    !!allowance && (allowance.videos.unlimited || allowance.videos.remaining > 0);
 
   const templates = listVideoTemplates();
   const defaultTemplateId = templates[0]?.id ?? "service_spotlight";
@@ -65,12 +94,13 @@ export default async function VisualsPage({
 
   const live = visualsLive();
   const storage = storageConfigured();
+  const canManageAddons = isTenantOwner(user);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="AI Visuals"
-        description="Video-first creative generation and managed photo shoots — gated per company add-on."
+        title={company ? `AI visuals · ${company.name}` : "AI Visuals"}
+        description="Video-first creative generation and managed photo shoots — free package quotas first, then content add-ons."
       />
 
       <Card>
@@ -87,41 +117,20 @@ export default async function VisualsPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Client" htmlFor="vis-company">
-              <Select id="vis-company" name="company" defaultValue={companyId}>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">View</Button>
+            <LockedCompanyFilter
+              companies={companyOpts}
+              companyId={companyId}
+              locked={locked && Boolean(companyId)}
+            />
+            {!locked && <Button type="submit">View</Button>}
           </form>
-          {company && addons && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Add-ons:{" "}
-              {addons.video ? (
-                <span className="text-foreground">🎬 AI video</span>
-              ) : (
-                <span>🎬 AI video (off)</span>
-              )}
-              {" · "}
-              {addons.photo ? (
-                <span className="text-foreground">📸 Photo shoots</span>
-              ) : (
-                <span>📸 Photo shoots (off)</span>
-              )}
-              {!addons.video && !addons.photo && (
-                <>
-                  {" "}
-                  — enable on{" "}
-                  <a href="/billing" className="text-primary underline">
-                    Billing
-                  </a>
-                </>
-              )}
-            </p>
+          {company && addons && allowance && (
+            <VisualsQuotaAddonsPanel
+              companyId={company.id}
+              allowance={allowance}
+              addons={addons}
+              canManageAddons={canManageAddons}
+            />
           )}
         </CardContent>
       </Card>
@@ -133,10 +142,13 @@ export default async function VisualsPage({
               <h2 className="mb-1 font-semibold">🎬 AI image</h2>
               <p className="mb-4 text-sm text-muted-foreground">
                 Generate a brand-grounded hero image into the asset library (pending approval).
-                Requires the AI video add-on.
+                Uses free package image quota, then the AI video add-on.
               </p>
-              {!addons?.video ? (
-                <p className="text-sm text-amber-700">Enable the AI video add-on on Billing first.</p>
+              {!canGenerateImage ? (
+                <p className="text-sm text-amber-700">
+                  Free image quota used for this month. Enable the AI video add-on above (or on
+                  Billing) for unlimited image + video generation.
+                </p>
               ) : (
                 <form action={generateAiImageAction} className="space-y-3">
                   <input type="hidden" name="companyId" value={company.id} />
@@ -144,7 +156,13 @@ export default async function VisualsPage({
                     <Input id="img-topic" name="topic" required placeholder="Winter warmers hero" />
                   </Field>
                   <Field label="Objective" htmlFor="img-objective">
-                    <Textarea id="img-objective" name="objective" required className="min-h-14" />
+                    <Textarea
+                      id="img-objective"
+                      name="objective"
+                      required
+                      className="min-h-14"
+                      placeholder="e.g. Hero image for winter lunch special — warm, inviting, no text overlay"
+                    />
                   </Field>
                   <Field label="Format" htmlFor="img-format">
                     <Select id="img-format" name="format" defaultValue="square">
@@ -154,7 +172,14 @@ export default async function VisualsPage({
                     </Select>
                   </Field>
                   <Field label="Channel (optional)" htmlFor="img-channel">
-                    <Input id="img-channel" name="channel" placeholder="Instagram" />
+                    <Select id="img-channel" name="channel" defaultValue="">
+                      <option value="">Not specified</option>
+                      {CONTENT_PLATFORM_OPTIONS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
                   <Field label="Auto-attach after approval (optional)" htmlFor="img-content">
                     <Select id="img-content" name="contentId">
@@ -178,15 +203,25 @@ export default async function VisualsPage({
             <CardContent className="p-6">
               <h2 className="mb-1 font-semibold">🎬 AI vertical video</h2>
               <p className="mb-4 text-sm text-muted-foreground">
-                Short-form Reels / TikTok / Shorts from a script. Simulated MP4 until VISUALS_LIVE.
+                Short-form Reels / TikTok / Shorts from client-provided photos, templates and a
+                script. Simulated MP4 until VISUALS_LIVE. Uses free package video quota, then the
+                AI video add-on.
               </p>
-              {!addons?.video ? (
-                <p className="text-sm text-amber-700">Enable the AI video add-on on Billing first.</p>
+              {!canGenerateVideo ? (
+                <p className="text-sm text-amber-700">
+                  Free video quota used for this month. Enable the AI video add-on above (or on
+                  Billing) for unlimited generation.
+                </p>
               ) : (
                 <form action={generateAiVideoAction} className="space-y-3">
                   <input type="hidden" name="companyId" value={company.id} />
                   <Field label="Topic" htmlFor="vid-topic">
-                    <Input id="vid-topic" name="topic" required />
+                    <Input
+                      id="vid-topic"
+                      name="topic"
+                      required
+                      placeholder="e.g. 15s Reels — winter special"
+                    />
                   </Field>
                   <Field label="Script" htmlFor="vid-script">
                     <Textarea
@@ -199,7 +234,14 @@ export default async function VisualsPage({
                     />
                   </Field>
                   <Field label="Channel (optional)" htmlFor="vid-channel">
-                    <Input id="vid-channel" name="channel" placeholder="TikTok" />
+                    <Select id="vid-channel" name="channel" defaultValue="">
+                      <option value="">Not specified</option>
+                      {CONTENT_PLATFORM_OPTIONS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
                   <Field label="Auto-attach after approval (optional)" htmlFor="vid-content">
                     <Select id="vid-content" name="contentId">
@@ -230,52 +272,55 @@ export default async function VisualsPage({
               <span className="font-medium">ai_draft</span> script, then generate vertical
               channel variants (assets land as{" "}
               <span className="font-medium">pending_approval</span>). Simulated MP4 until
-              VISUALS_LIVE.
+              VISUALS_LIVE. Script drafts are free; variants use video quota.
             </p>
-            {!addons?.video ? (
-              <p className="text-sm text-amber-700">Enable the AI video add-on on Billing first.</p>
-            ) : (
-              <div className="space-y-6">
-                <form action={draftVideoStudioScriptAction} className="space-y-3 border-b pb-6">
-                  <input type="hidden" name="companyId" value={company.id} />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Template" htmlFor="vs-template">
-                      <Select id="vs-template" name="templateId" defaultValue={defaultTemplateId}>
-                        {templates.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.label}
+            <div className="space-y-6">
+              <form action={draftVideoStudioScriptAction} className="space-y-3 border-b pb-6">
+                <input type="hidden" name="companyId" value={company.id} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Template" htmlFor="vs-template">
+                    <Select id="vs-template" name="templateId" defaultValue={defaultTemplateId}>
+                      {templates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Script pack" htmlFor="vs-pack">
+                    <Select id="vs-pack" name="scriptPackId" defaultValue={defaultPack?.id}>
+                      {templates.flatMap((t) =>
+                        listScriptPacks(t.id).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {t.label}: {p.label}
                           </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Field label="Script pack" htmlFor="vs-pack">
-                      <Select id="vs-pack" name="scriptPackId" defaultValue={defaultPack?.id}>
-                        {templates.flatMap((t) =>
-                          listScriptPacks(t.id).map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {t.label}: {p.label}
-                            </option>
-                          )),
-                        )}
-                      </Select>
-                    </Field>
-                  </div>
-                  <Field label="Topic" htmlFor="vs-topic">
-                    <Input id="vs-topic" name="topic" required placeholder="Winter warmers promo" />
+                        )),
+                      )}
+                    </Select>
                   </Field>
-                  <Field label="Script (optional — auto-filled from pack if blank)" htmlFor="vs-script-draft">
-                    <Textarea
-                      id="vs-script-draft"
-                      name="script"
-                      className="min-h-28 font-mono text-xs"
-                      placeholder={prefilledScript.slice(0, 200)}
-                    />
-                  </Field>
-                  <Button type="submit" variant="secondary">
-                    Draft script (ai_draft)
-                  </Button>
-                </form>
+                </div>
+                <Field label="Topic" htmlFor="vs-topic">
+                  <Input id="vs-topic" name="topic" required placeholder="Winter warmers promo" />
+                </Field>
+                <Field label="Script (optional — auto-filled from pack if blank)" htmlFor="vs-script-draft">
+                  <Textarea
+                    id="vs-script-draft"
+                    name="script"
+                    className="min-h-28 font-mono text-xs"
+                    placeholder={prefilledScript.slice(0, 200)}
+                  />
+                </Field>
+                <Button type="submit" variant="secondary">
+                  Draft script (ai_draft)
+                </Button>
+              </form>
 
+              {!canGenerateVideo ? (
+                <p className="text-sm text-amber-700">
+                  Free video quota used — enable the AI video add-on above to generate channel
+                  variants.
+                </p>
+              ) : (
                 <form action={generateVideoStudioVariantsAction} className="space-y-3">
                   <input type="hidden" name="companyId" value={company.id} />
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -301,7 +346,12 @@ export default async function VisualsPage({
                     </Field>
                   </div>
                   <Field label="Topic" htmlFor="vs-topic-v">
-                    <Input id="vs-topic-v" name="topic" required />
+                    <Input
+                      id="vs-topic-v"
+                      name="topic"
+                      required
+                      placeholder="e.g. Winter warmers promo"
+                    />
                   </Field>
                   <Field label="Script" htmlFor="vs-script-v">
                     <Textarea
@@ -337,8 +387,8 @@ export default async function VisualsPage({
                     Generate vertical variants
                   </Button>
                 </form>
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -348,27 +398,61 @@ export default async function VisualsPage({
           <CardContent className="p-6">
             <h2 className="mb-1 font-semibold">📸 Photo shoots</h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Request a managed shoot — booking → deliverables in the DAM → approve → optional auto-attach.
-              Or{" "}
-              <a href="/photographers" className="text-primary underline">
+              Request a managed shoot — booking → deliverables in the DAM → approve → optional
+              auto-attach. Professional photographer ≈ A$450/hr. Or{" "}
+              <a href={`/photographers?company=${companyId}`} className="text-primary underline">
                 book via the photographer marketplace
               </a>
               .
             </p>
             {!addons?.photo ? (
-              <p className="text-sm text-amber-700">Enable the Photo shoots add-on on Billing first.</p>
+              <p className="text-sm text-amber-700">
+                Enable the Photo shoots add-on above (or on Billing) first.
+              </p>
             ) : (
               <>
                 <form action={requestPhotoShootAction} className="mb-6 space-y-3 border-b pb-6">
                   <input type="hidden" name="companyId" value={company.id} />
                   <Field label="Brief" htmlFor="ps-brief">
-                    <Textarea id="ps-brief" name="brief" required className="min-h-20" />
+                    <Textarea
+                      id="ps-brief"
+                      name="brief"
+                      required
+                      className="min-h-20"
+                      placeholder="e.g. Hero dish shots + staff portraits for Instagram and GBP"
+                    />
                   </Field>
                   <Field label="Location" htmlFor="ps-location">
-                    <Input id="ps-location" name="location" placeholder="On-site address or room" />
+                    <Input
+                      id="ps-location"
+                      name="location"
+                      placeholder="e.g. 12 Main St, Brisbane QLD — dining room"
+                    />
                   </Field>
-                  <Field label="Target channels" htmlFor="ps-channels">
-                    <Input id="ps-channels" name="targetChannels" placeholder="instagram, facebook" />
+                  <Field
+                    label="Target channels"
+                    htmlFor="ps-channels"
+                    hint="Leave all unchecked if not sure yet"
+                  >
+                    <div
+                      id="ps-channels"
+                      className="flex flex-wrap gap-x-4 gap-y-2"
+                    >
+                      {CONTENT_PLATFORM_OPTIONS.map((ch) => (
+                        <label
+                          key={ch.value}
+                          className="inline-flex items-center gap-1.5 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            name="targetChannels"
+                            value={ch.value}
+                            className="h-4 w-4"
+                          />
+                          {ch.label}
+                        </label>
+                      ))}
+                    </div>
                   </Field>
                   <Button type="submit">Request shoot</Button>
                 </form>
@@ -446,7 +530,11 @@ function ShootRow({ shoot, company }: { shoot: PhotoShoot; company: Company }) {
           <input type="hidden" name="shootId" value={shoot.id} />
           <input type="hidden" name="to" value="delivered" />
           <Field label="Photographer notes" htmlFor={`notes-${shoot.id}`}>
-            <Input id={`notes-${shoot.id}`} name="photographerNotes" />
+            <Input
+              id={`notes-${shoot.id}`}
+              name="photographerNotes"
+              placeholder="e.g. Soft natural light; avoided windows with street glare"
+            />
           </Field>
           <div className="flex gap-2">
             <Button type="submit" size="sm">

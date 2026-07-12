@@ -21,6 +21,17 @@ export function addDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Inclusive ISO date list from `today - pastDays` through `today + aheadDays`. */
+export function isoDayRange(
+  todayIso: string,
+  pastDays: number,
+  aheadDays: number,
+): string[] {
+  const start = addDaysIso(todayIso, -pastDays);
+  const total = pastDays + aheadDays;
+  return Array.from({ length: total + 1 }, (_, i) => addDaysIso(start, i));
+}
+
 // "2026-07" → previous/next month keys and a 6x7-max grid of ISO dates
 // (weeks start Monday; null = day outside the month).
 export function monthGrid(monthKey: string): {

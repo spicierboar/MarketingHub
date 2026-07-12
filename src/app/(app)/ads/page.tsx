@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { AD_PLATFORMS } from "@/lib/types";
@@ -69,6 +70,11 @@ export default async function AdsPage({
   const companies = allCompanies.filter((c) => c.status !== "archived");
   const companyById = new Map(allCompanies.map((c) => [c.id, c] as const));
 
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const companyLocked = Boolean(
+    params.company && companies.some((c) => c.id === params.company),
+  );
+
   const [accounts, campaigns, leads, budgets, segments] = await Promise.all([
     listAdAccounts(user.tenantId),
     listAdCampaigns(user.tenantId),
@@ -87,9 +93,18 @@ export default async function AdsPage({
   for (const l of leads) (leadsByCompany.get(l.companyId) ?? leadsByCompany.set(l.companyId, []).get(l.companyId)!).push(l);
   for (const s of segments) (segmentsByCompany.get(s.companyId) ?? segmentsByCompany.set(s.companyId, []).get(s.companyId)!).push(s);
 
-  // Tenant-wide band: sum every company's summary (managed spend is the CLIENTS'
-  // spend; the fee is OUR revenue).
-  const summaries = companies.map((company) =>
+  const contextCompanyId =
+    params.company && companies.some((c) => c.id === params.company)
+      ? params.company
+      : undefined;
+  const pickerCompanies = contextCompanyId
+    ? companies.filter((c) => c.id === contextCompanyId)
+    : companies;
+
+  // Band: when ?company= is set, only that client; otherwise tenant-wide
+  // (managed spend is the CLIENTS' spend; the fee is OUR revenue).
+  const bandCompanies = contextCompanyId ? pickerCompanies : companies;
+  const summaries = bandCompanies.map((company) =>
     companyPaidSummary({
       company,
       campaigns: campaignsByCompany.get(company.id) ?? [],
@@ -104,7 +119,10 @@ export default async function AdsPage({
 
   // Selected company detail.
   const selected =
-    companies.find((c) => c.id === params.company) ?? companies[0] ?? undefined;
+    (contextCompanyId
+      ? companies.find((c) => c.id === contextCompanyId)
+      : companies.find((c) => c.id === params.company) ?? companies[0]) ??
+    undefined;
   const sel = selected
     ? {
         company: selected as Company,
@@ -154,6 +172,7 @@ export default async function AdsPage({
     );
   }
 
+  const scopedCompany = contextCompanyId ? selected : undefined;
   const creditBalanceUsd = sel ? await getCreditBalance(sel.company.id) : null;
   const creditBelowFloor =
     creditBalanceUsd != null && creditBalanceUsd < MIN_CREDIT_FLOOR_USD;
@@ -161,14 +180,14 @@ export default async function AdsPage({
   return (
     <div>
       <PageHeader
-        title="Paid advertising"
-        description="Delegated ad accounts + AI budget allocation. The client's own card pays the platform for ad spend — we manage the campaigns and charge a management fee. We never front spend or store a card."
+        title={scopedCompany ? `Paid ads · ${scopedCompany.name}` : "Paid advertising"}
+        description="Delegated ad accounts + AI budget allocation. The client's own card pays the platform for ad spend — we manage the campaigns and charge a management fee. We never front spend or store a card. Package flag “ads management included” is informational until full entitlement gating ships — media spend is always extra."
       >
         <div className="flex items-center gap-2">
           <Badge tone={adsLive() ? "success" : "neutral"}>
             {adsLive() ? "Live campaign execution ON" : "Simulated (pending ad-API approval)"}
           </Badge>
-          {owner && (
+          {owner && feeTotal > 0 && !contextCompanyId && (
             <form action={invoiceManagementFeeAction}>
               <Button type="submit" size="sm" variant="outline" disabled={feeTotal <= 0}>
                 Invoice management fee ({money(feeTotal)})
@@ -207,19 +226,23 @@ export default async function AdsPage({
           </CardContent>
         </Card>
 
-        {/* Company selector */}
+        {/* Company selector — locked when opened from client workspace */}
         <Card>
           <CardContent className="p-4">
             <form className="flex flex-wrap items-end gap-3">
-              <Field label="Client company" htmlFor="company">
-                <Select id="company" name="company" defaultValue={selected?.id} className="w-64">
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Button type="submit" variant="outline" size="sm">View</Button>
-              <span className="text-xs text-muted-foreground">{leadsTotal} lead(s) captured across the workspace</span>
+              <LockedCompanyFilter
+                companies={companyOpts}
+                companyId={selected?.id}
+                locked={companyLocked}
+                name="company"
+              />
+              {!companyLocked && (
+                <Button type="submit" variant="outline" size="sm">View</Button>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {leadsTotal} lead(s) captured
+                {contextCompanyId ? " for this client" : " across the workspace"}
+              </span>
             </form>
           </CardContent>
         </Card>
@@ -371,8 +394,20 @@ export default async function AdsPage({
                   <h2 className="mb-4 font-semibold">Budget &amp; management fee</h2>
                   <form action={saveBudgetAction} className="space-y-4">
                     <input type="hidden" name="companyId" value={sel.company.id} />
-                    <Field label="Monthly ad budget (client's spend, AUD)" htmlFor="mb">
-                      <Input id="mb" name="monthlyBudgetUsd" type="number" min="0" step="50" defaultValue={sel.budget?.monthlyBudgetUsd ?? 0} />
+                    <Field
+                      label="Monthly ad budget (client's spend, AUD)"
+                      htmlFor="mb"
+                      hint="What the client authorises platforms to spend"
+                    >
+                      <Input
+                        id="mb"
+                        name="monthlyBudgetUsd"
+                        type="number"
+                        min="0"
+                        step="50"
+                        defaultValue={sel.budget?.monthlyBudgetUsd ?? 0}
+                        placeholder="e.g. 1500"
+                      />
                     </Field>
                     <div className="grid gap-4 sm:grid-cols-3">
                       <Field label="Fee model" htmlFor="fm">
@@ -381,11 +416,28 @@ export default async function AdsPage({
                           <option value="flat_monthly">Flat monthly</option>
                         </Select>
                       </Field>
-                      <Field label="Fee %" htmlFor="fp">
-                        <Input id="fp" name="feePercentPct" type="number" min="0" max="100" step="1" defaultValue={Math.round((sel.budget?.feePercent ?? 0.15) * 100)} />
+                      <Field label="Fee %" htmlFor="fp" hint="Typical 10–20%">
+                        <Input
+                          id="fp"
+                          name="feePercentPct"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          defaultValue={Math.round((sel.budget?.feePercent ?? 0.15) * 100)}
+                          placeholder="15"
+                        />
                       </Field>
-                      <Field label="Flat $/mo" htmlFor="ff">
-                        <Input id="ff" name="feeFlatUsd" type="number" min="0" step="10" defaultValue={sel.budget?.feeFlatUsd ?? 0} />
+                      <Field label="Flat $/mo" htmlFor="ff" hint="Used when fee model is flat">
+                        <Input
+                          id="ff"
+                          name="feeFlatUsd"
+                          type="number"
+                          min="0"
+                          step="10"
+                          defaultValue={sel.budget?.feeFlatUsd ?? 0}
+                          placeholder="e.g. 500"
+                        />
                       </Field>
                     </div>
                     <Button type="submit" size="sm">Save budget</Button>
@@ -448,7 +500,14 @@ export default async function AdsPage({
                         <Input id="ex" name="externalAccountId" required placeholder="e.g. act_1234567890" />
                       </Field>
                       <Field label="Delegated grant token" htmlFor="tk" hint="Encrypted at rest. Live OAuth delegated-connect is the production drop-in once the ad-API approvals land.">
-                        <Input id="tk" name="token" type="password" required />
+                        <Input
+                          id="tk"
+                          name="token"
+                          type="password"
+                          required
+                          placeholder="Paste delegated grant token"
+                          autoComplete="off"
+                        />
                       </Field>
                       <Button type="submit" size="sm">Connect</Button>
                     </form>
@@ -629,8 +688,20 @@ export default async function AdsPage({
                             {["leads", "traffic", "awareness", "sales"].map((o) => (<option key={o} value={o}>{o}</option>))}
                           </Select>
                         </Field>
-                        <Field label="Daily budget (AUD)" htmlFor="cd"><Input id="cd" name="dailyBudgetUsd" type="number" min="0" step="5" defaultValue={20} /></Field>
-                        <Field label="Start date" htmlFor="cs"><Input id="cs" name="startDate" type="date" required /></Field>
+                        <Field label="Daily budget (AUD)" htmlFor="cd" hint="Platform daily cap">
+                          <Input
+                            id="cd"
+                            name="dailyBudgetUsd"
+                            type="number"
+                            min="0"
+                            step="5"
+                            defaultValue={20}
+                            placeholder="20"
+                          />
+                        </Field>
+                        <Field label="Start date" htmlFor="cs" hint="When the campaign may go live">
+                          <Input id="cs" name="startDate" type="date" required />
+                        </Field>
                         <Field label="Audience (optional)" htmlFor="ca" hint="Platform-mismatched picks fall back to broad.">
                           <Select id="ca" name="audienceSegmentId" defaultValue="">
                             <option value="">Broad / none</option>
@@ -675,14 +746,24 @@ export default async function AdsPage({
                   <summary className="cursor-pointer text-sm font-medium">Record a lead</summary>
                   <form action={recordLeadAction} className="mt-3 grid gap-3 sm:grid-cols-2">
                     <input type="hidden" name="companyId" value={sel.company.id} />
-                    <Field label="Contact" htmlFor="lc"><Input id="lc" name="contact" required placeholder="Name or handle" /></Field>
+                    <Field label="Contact" htmlFor="lc" hint="Name, email, or phone">
+                      <Input id="lc" name="contact" required placeholder="e.g. Jamie Lee / jamie@…" />
+                    </Field>
                     <Field label="Platform" htmlFor="lp">
                       <Select id="lp" name="platform">
                         {AD_PLATFORMS.map((p) => (<option key={p.key} value={p.key}>{p.label}</option>))}
                       </Select>
                     </Field>
-                    <Field label="Source" htmlFor="ls"><Input id="ls" name="source" defaultValue="meta_lead_ad" /></Field>
-                    <Field label="Value (AUD, optional)" htmlFor="lv"><Input id="lv" name="valueUsd" type="number" min="0" step="1" /></Field>
+                    <Field label="Source" htmlFor="ls" hint="Where the lead came from">
+                      <Select id="ls" name="source" defaultValue="meta_lead_ad">
+                        <option value="meta_lead_ad">Meta lead ad</option>
+                        <option value="google_lead_form">Google lead form</option>
+                        <option value="manual">Manual</option>
+                      </Select>
+                    </Field>
+                    <Field label="Value (AUD, optional)" htmlFor="lv" hint="Estimated deal value">
+                      <Input id="lv" name="valueUsd" type="number" min="0" step="1" placeholder="e.g. 250" />
+                    </Field>
                     <div className="flex items-end"><Button type="submit" size="sm">Record lead</Button></div>
                   </form>
                 </details>

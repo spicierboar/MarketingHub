@@ -65,8 +65,17 @@ export default async function PrivacyPage({
             <h2 className="font-semibold">Create request</h2>
             <form action={createPrivacyRequestAction} className="grid gap-3 sm:grid-cols-2">
               <input type="hidden" name="companyId" value={companyId} />
-              <Field label="Subject (contact id or email)" htmlFor="subjectRef">
-                <Input id="subjectRef" name="subjectRef" required placeholder="crm_… or email@" />
+              <Field
+                label="Subject (contact id or email)"
+                htmlFor="subjectRef"
+                hint="CRM contact id or the person's email"
+              >
+                <Input
+                  id="subjectRef"
+                  name="subjectRef"
+                  required
+                  placeholder="crm_… or jamie@example.com"
+                />
               </Field>
               <Field label="Request type" htmlFor="requestType">
                 <Select id="requestType" name="requestType" defaultValue="access">
@@ -77,17 +86,45 @@ export default async function PrivacyPage({
                   ))}
                 </Select>
               </Field>
-              <Field label="Jurisdiction" htmlFor="jurisdiction">
-                <Input id="jurisdiction" name="jurisdiction" defaultValue="AU" />
+              <Field label="Jurisdiction" htmlFor="jurisdiction" hint="Governing privacy regime">
+                <Select id="jurisdiction" name="jurisdiction" defaultValue="AU">
+                  <option value="AU">Australia (APP)</option>
+                  <option value="NZ">New Zealand</option>
+                  <option value="EU">EU / UK (GDPR)</option>
+                  <option value="US">United States</option>
+                  <option value="OTHER">Other</option>
+                </Select>
               </Field>
               <Field label="Lawful basis" htmlFor="lawfulBasis">
-                <Input id="lawfulBasis" name="lawfulBasis" placeholder="consent / legitimate interest" />
+                <Select id="lawfulBasis" name="lawfulBasis" defaultValue="consent">
+                  <option value="consent">Consent</option>
+                  <option value="legitimate_interest">Legitimate interest</option>
+                  <option value="contract">Contract</option>
+                  <option value="legal_obligation">Legal obligation</option>
+                  <option value="vital_interests">Vital interests</option>
+                  <option value="public_task">Public task</option>
+                </Select>
               </Field>
-              <Field label="Due in (days)" htmlFor="dueDays">
-                <Input id="dueDays" name="dueDays" type="number" min="1" defaultValue="30" />
+              <Field
+                label="Due in (days)"
+                htmlFor="dueDays"
+                hint="Typical statutory window is 30 days"
+              >
+                <Input
+                  id="dueDays"
+                  name="dueDays"
+                  type="number"
+                  min="1"
+                  defaultValue="30"
+                  placeholder="30"
+                />
               </Field>
-              <Field label="Notes" htmlFor="notes">
-                <Input id="notes" name="notes" placeholder="Optional" />
+              <Field label="Notes" htmlFor="notes" hint="Optional context for the handler">
+                <Input
+                  id="notes"
+                  name="notes"
+                  placeholder="e.g. Received via support ticket #412"
+                />
               </Field>
               <div className="sm:col-span-2">
                 <Button type="submit">Create privacy request</Button>

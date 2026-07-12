@@ -8,6 +8,7 @@ import {
   getCompany,
   getContent,
   getPhotoShoot,
+  getTenant,
   updatePhotoShoot,
 } from "@/lib/db";
 import { assertCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
@@ -16,6 +17,7 @@ import { assertAiBudget } from "@/lib/ai/budget";
 import { recordAiUsage } from "@/lib/ai/metering";
 import { assertAiRateLimit } from "@/lib/ratelimit";
 import { assertCompanyAddon } from "@/lib/entitlements";
+import { assertVisualsGeneration } from "@/lib/visuals-allowance";
 import { generateImage } from "@/lib/ai/imagegen";
 import { generateVideo } from "@/lib/ai/videogen";
 import { auditClaims, checkCompliance } from "@/lib/ai/compliance";
@@ -40,8 +42,10 @@ function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 function lines(fd: FormData, key: string): string[] {
-  return String(fd.get(key) || "")
-    .split(/[\n,]/)
+  // Checkboxes (name=key, multiple) or legacy comma/newline text.
+  return fd
+    .getAll(key)
+    .flatMap((v) => String(v).split(/[\n,]/))
     .map((s) => s.trim())
     .filter(Boolean);
 }
@@ -58,8 +62,9 @@ async function assertAiReadyCompany(companyId: string) {
 export async function generateAiImageAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
-  await assertCompanyAddon(companyId, "video");
   const company = await assertAiReadyCompany(companyId);
+  const tenant = await getTenant(user.tenantId);
+  await assertVisualsGeneration(company, "image", 1, tenant);
   await assertAiBudget(user.tenantId);
   await assertAiRateLimit(user.tenantId);
 
@@ -126,8 +131,9 @@ export async function generateAiImageAction(formData: FormData) {
 export async function generateAiVideoAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
-  await assertCompanyAddon(companyId, "video");
   const company = await assertAiReadyCompany(companyId);
+  const tenant = await getTenant(user.tenantId);
+  await assertVisualsGeneration(company, "video", 1, tenant);
   await assertAiBudget(user.tenantId);
   await assertAiRateLimit(user.tenantId, 2);
 
@@ -257,7 +263,7 @@ function parseChannels(formData: FormData): VideoStudioChannel[] {
 export async function draftVideoStudioScriptAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
-  await assertCompanyAddon(companyId, "video");
+  // Script drafts are text content — no video quota / add-on required.
   const company = await assertAiReadyCompany(companyId);
   await assertAiBudget(user.tenantId);
   await assertAiRateLimit(user.tenantId);
@@ -321,7 +327,6 @@ export async function draftVideoStudioScriptAction(formData: FormData) {
 export async function generateVideoStudioVariantsAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
-  await assertCompanyAddon(companyId, "video");
   const company = await assertAiReadyCompany(companyId);
 
   const templateId = text(formData, "templateId") as VideoStudioTemplateId;
@@ -332,6 +337,8 @@ export async function generateVideoStudioVariantsAction(formData: FormData) {
     throw new Error("Template, script pack, topic, and script are required.");
   }
   const channels = parseChannels(formData);
+  const tenant = await getTenant(user.tenantId);
+  await assertVisualsGeneration(company, "video", channels.length, tenant);
   await assertAiBudget(user.tenantId);
   await assertAiRateLimit(user.tenantId, channels.length * 2);
 

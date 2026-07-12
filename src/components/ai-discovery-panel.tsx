@@ -138,7 +138,7 @@ export function AiDiscoveryPanel({
                 id="yelpUrl"
                 name="yelpUrl"
                 defaultValue={report.directories.yelpUrl ?? ""}
-                placeholder="https://…"
+                placeholder="https://www.yelp.com.au/biz/…"
               />
             </Field>
             <Field label="Notes" htmlFor="directoryNotes">

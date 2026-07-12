@@ -9,8 +9,9 @@ import {
 import type { BusinessType } from "@/lib/types";
 
 /**
- * Fills empty profile textareas from business type + service areas / postcode.
+ * Seeds empty profile textareas from business type + service areas / postcode.
  * Does not overwrite fields the user already filled (unless force=true).
+ * Used on New Client profile and company profile forms.
  */
 export function ProfileSuggestButton({
   companyName,
@@ -49,13 +50,17 @@ export function ProfileSuggestButton({
         .map((s) => s.trim())
         .filter(Boolean);
 
+      const nameVal =
+        (form.elements.namedItem("name") as HTMLInputElement | null)?.value?.trim() ||
+        companyName;
+
       const industryVal =
         (form.elements.namedItem("industry") as HTMLInputElement | null)?.value?.trim() ||
         industry;
 
       const suggestions = suggestProfileFields({
         businessType,
-        companyName,
+        companyName: nameVal,
         industry: industryVal,
         areas: areas.length ? areas : suburbs,
       } satisfies ProfileSuggestionInput);
@@ -76,6 +81,18 @@ export function ProfileSuggestButton({
       setIfEmpty("localMarketNotes", suggestions.localMarketNotes);
       setIfEmpty("callsToAction", suggestions.callsToAction.join("\n"));
       setIfEmpty("services", suggestions.services.join("\n"));
+      setIfEmpty("approvedClaims", suggestions.approvedClaims.join("\n"));
+      setIfEmpty("prohibitedClaims", suggestions.prohibitedClaims.join("\n"));
+      setIfEmpty(
+        "requiredDisclaimers",
+        suggestions.requiredDisclaimers.join("\n"),
+      );
+      if (suggestions.productCategories?.length) {
+        setIfEmpty(
+          "retail_productCategories",
+          suggestions.productCategories.join("\n"),
+        );
+      }
     },
     [companyName, industry, formId],
   );
@@ -85,20 +102,20 @@ export function ProfileSuggestButton({
       <p className="flex-1 text-xs text-muted-foreground">
         {compact ? (
           <>
-            Pick <strong>business type</strong>, then Suggest — empty fields only.
+            Pick <strong>business type</strong>, then Seed — empty fields only.
           </>
         ) : (
           <>
             Set <strong>business type</strong> and <strong>service areas</strong> (or suburbs), then
-            let AI draft the unclear fields. Empty fields only — your edits stay.
+            seed the unclear fields. Empty fields only — your edits stay.
           </>
         )}
       </p>
       <Button type="button" size="sm" variant="secondary" onClick={() => fill(false)}>
-        Suggest empty fields
+        Seed empty fields
       </Button>
       <Button type="button" size="sm" variant="outline" onClick={() => fill(true)}>
-        Re-suggest all
+        Re-seed all
       </Button>
     </div>
   );

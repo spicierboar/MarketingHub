@@ -248,28 +248,41 @@ export default async function BillingPage({
           </div>
           <p className="mb-3 text-sm text-muted-foreground">
             Add-ons are enabled per client company on top of your base plan.
+            AI video / photo can also be managed from{" "}
+            <a href="/visuals" className="text-primary underline">
+              AI Visuals
+            </a>{" "}
+            (content creation). Free image/video quotas come from the marketing package.
             {live
               ? " Enabling one opens Stripe Checkout for a separate subscription; we never store card details."
               : " Demo mode: Stripe is not configured, so toggling applies immediately without payment."}
           </p>
 
           {/* Add-on catalogue legend */}
-          <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 flex flex-col gap-2">
             {ADDON_ORDER.map((id) => {
               const a = ADDONS[id];
               return (
-                <div key={id} className="rounded-lg border border-border p-3">
-                  <div className="flex items-center justify-between">
+                <div
+                  key={id}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                >
+                  <div className="min-w-0">
                     <span className="font-medium">
                       <span aria-hidden className="mr-1">{a.icon}</span>
                       {a.name}
                     </span>
-                    <span className="text-sm text-muted-foreground">A${a.priceAudMonthly}/mo</span>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{a.blurb}</p>
+                    {a.includedNote && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{a.includedNote}</p>
+                    )}
+                    {a.segment === "restaurant" && (
+                      <Badge tone="neutral" className="mt-1">Restaurants</Badge>
+                    )}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{a.blurb}</p>
-                  {a.segment === "restaurant" && (
-                    <Badge tone="neutral" className="mt-2">Restaurants</Badge>
-                  )}
+                  <span className="shrink-0 text-sm text-muted-foreground">
+                    A${a.priceAudMonthly}/mo
+                  </span>
                 </div>
               );
             })}

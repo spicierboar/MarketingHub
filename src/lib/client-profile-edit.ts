@@ -1,6 +1,7 @@
 // Client portal: which company profile fields clients may edit vs view-only.
 // Wave A — contact / hours only. Brand Brain strategy stays agency-only.
-// ABN is an attribute only — never a primary or unique key (1 ABN → N companies).
+// ABN is locked in the portal; agency identity rule is (business name + ABN)
+// — see company-identity.ts (ABN alone may appear on multiple companies).
 
 import type { CompanyProfile } from "@/lib/types";
 

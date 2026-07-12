@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
+import { FormSeedButton } from "@/components/form-seed-button";
 import { createCompanyFormAction } from "../actions";
 
 export default async function NewCompanyPage({
@@ -22,15 +23,47 @@ export default async function NewCompanyPage({
         description="Add a website to auto-fill the profile from public pages (with consent)."
       />
       <div className="mx-auto max-w-xl p-6">
-        <form action={createCompanyFormAction}>
+        <form id="add-client-form" action={createCompanyFormAction}>
           <Card>
             <CardContent className="space-y-4 p-6">
-              <Field label="Client name" htmlFor="name">
+              <FormSeedButton
+                formId="add-client-form"
+                hint={
+                  <>
+                    Demo walkthrough — seeds empty fields with an example client.
+                  </>
+                }
+                values={{
+                  name: "Harbourview Café",
+                  abn: "51 824 753 556",
+                  website: "https://example.com",
+                  consent: true,
+                }}
+              />
+              <Field
+                label="Business name"
+                htmlFor="name"
+                hint="Trading name customers recognise — identity key with ABN"
+              >
                 <Input
                   id="name"
                   name="name"
                   required
                   placeholder="e.g. Harbour Roasters"
+                />
+              </Field>
+              <Field
+                label="ABN"
+                htmlFor="abn"
+                hint="Required. Verified against the ABR when available. Same ABN + different business name = separate account."
+              >
+                <Input
+                  id="abn"
+                  name="abn"
+                  required
+                  inputMode="numeric"
+                  placeholder="e.g. 51 824 753 556"
+                  autoComplete="off"
                 />
               </Field>
               <Field

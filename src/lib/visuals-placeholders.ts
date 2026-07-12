@@ -95,3 +95,38 @@ const BASE_MP4 = Buffer.from(
 export function placeholderMp4(_seed: string): Buffer {
   return BASE_MP4;
 }
+
+/**
+ * Minimal silent (or seed-tinted tone) PCM WAV so DAM + /api/media can serve
+ * an audio asset before a real TTS provider is wired.
+ */
+export function placeholderWav(seed: string, durationSec = 1.5): Buffer {
+  const sampleRate = 8000;
+  const seconds = Math.min(3, Math.max(0.5, durationSec));
+  const numSamples = Math.floor(sampleRate * seconds);
+  const dataSize = numSamples * 2;
+  const buf = Buffer.alloc(44 + dataSize);
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + dataSize, 4);
+  buf.write("WAVE", 8);
+  buf.write("fmt ", 12);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write("data", 36);
+  buf.writeUInt32LE(dataSize, 40);
+
+  const [r, g, b] = seedBytes(seed);
+  const freq = 220 + ((r + g + b) % 180);
+  const amp = 800; // quiet tone so players show a non-empty waveform
+  for (let i = 0; i < numSamples; i += 1) {
+    const t = i / sampleRate;
+    const sample = Math.round(Math.sin(2 * Math.PI * freq * t) * amp * Math.exp(-t * 1.2));
+    buf.writeInt16LE(sample, 44 + i * 2);
+  }
+  return buf;
+}

@@ -87,27 +87,34 @@ export async function checkConsentRequired(): Promise<{ ok: boolean; detail: str
 }
 
 export async function checkSimulatedWhenLiveOff(): Promise<{ ok: boolean; detail: string }> {
-  const live = autoOnboardingLive();
-  const company = stubAutoOnboardCompany();
-  const preview = await scrapeForOnboardingPreview({
-    company,
-    consent: true,
-    urls: {
-      website: "https://harbourroasters.example",
-      socialLinks: [
-        { platform: "instagram", url: "https://instagram.com/harbourroasters" },
-      ],
-    },
-  });
-  const ok =
-    !live &&
-    preview.mode === "simulated" &&
-    preview.fields.length >= 6 &&
-    preview.sources.length === 2;
-  return {
-    ok,
-    detail: `live=${live} mode=${preview.mode} fields=${preview.fields.length} sources=${preview.sources.length}`,
-  };
+  const prev = process.env.AUTO_ONBOARDING_LIVE;
+  process.env.AUTO_ONBOARDING_LIVE = "false";
+  try {
+    const live = autoOnboardingLive();
+    const company = stubAutoOnboardCompany();
+    const preview = await scrapeForOnboardingPreview({
+      company,
+      consent: true,
+      urls: {
+        website: "https://harbourroasters.example",
+        socialLinks: [
+          { platform: "instagram", url: "https://instagram.com/harbourroasters" },
+        ],
+      },
+    });
+    const ok =
+      !live &&
+      preview.mode === "simulated" &&
+      preview.fields.length >= 6 &&
+      preview.sources.length === 2;
+    return {
+      ok,
+      detail: `live=${live} mode=${preview.mode} fields=${preview.fields.length} sources=${preview.sources.length}`,
+    };
+  } finally {
+    if (prev === undefined) delete process.env.AUTO_ONBOARDING_LIVE;
+    else process.env.AUTO_ONBOARDING_LIVE = prev;
+  }
 }
 
 export async function checkApplyPrefillsProfile(): Promise<{ ok: boolean; detail: string }> {
@@ -194,35 +201,42 @@ export async function checkSocialSameAsDetection(): Promise<{ ok: boolean; detai
 }
 
 export async function checkSchemaSimulatedScrape(): Promise<{ ok: boolean; detail: string }> {
-  const company = stubAutoOnboardCompany();
-  const preview = await scrapeForOnboardingPreview({
-    company,
-    consent: true,
-    urls: {
-      website: "https://harbourroasters.example",
-      socialLinks: [],
-    },
-  });
+  const prev = process.env.AUTO_ONBOARDING_LIVE;
+  process.env.AUTO_ONBOARDING_LIVE = "false";
+  try {
+    const company = stubAutoOnboardCompany();
+    const preview = await scrapeForOnboardingPreview({
+      company,
+      consent: true,
+      urls: {
+        website: "https://harbourroasters.example",
+        socialLinks: [],
+      },
+    });
 
-  const trading = preview.fields.find((f) => f.key === "tradingNames");
-  const areas = preview.fields.find((f) => f.key === "serviceAreas");
-  const services = preview.fields.find((f) => f.key === "services");
-  const industry = preview.fields.find((f) => f.key === "industry");
-  const websiteSource = preview.sources.find((s) => s.kind === "website");
+    const trading = preview.fields.find((f) => f.key === "tradingNames");
+    const areas = preview.fields.find((f) => f.key === "serviceAreas");
+    const services = preview.fields.find((f) => f.key === "services");
+    const industry = preview.fields.find((f) => f.key === "industry");
+    const websiteSource = preview.sources.find((s) => s.kind === "website");
 
-  const ok =
-    preview.mode === "simulated" &&
-    trading?.value === "Harbour Roasters" &&
-    trading?.confidence === "high" &&
-    areas?.value.includes("Harbour precinct") === true &&
-    areas?.confidence === "high" &&
-    services?.value.includes("Espresso") === true &&
-    industry?.value.includes("Cafe") === true &&
-    (websiteSource?.snippet.includes("Logo URL:") === true ||
-      websiteSource?.snippet.includes("Telephone:") === true);
+    const ok =
+      preview.mode === "simulated" &&
+      trading?.value === "Harbour Roasters" &&
+      trading?.confidence === "high" &&
+      areas?.value.includes("Harbour precinct") === true &&
+      areas?.confidence === "high" &&
+      services?.value.includes("Espresso") === true &&
+      industry?.value.includes("Cafe") === true &&
+      (websiteSource?.snippet.includes("Logo URL:") === true ||
+        websiteSource?.snippet.includes("Telephone:") === true);
 
-  return {
-    ok,
-    detail: `trading=${trading?.value}@${trading?.confidence} areas=${areas?.value} services=${services?.value}`,
-  };
+    return {
+      ok,
+      detail: `trading=${trading?.value}@${trading?.confidence} areas=${areas?.value} services=${services?.value}`,
+    };
+  } finally {
+    if (prev === undefined) delete process.env.AUTO_ONBOARDING_LIVE;
+    else process.env.AUTO_ONBOARDING_LIVE = prev;
+  }
 }

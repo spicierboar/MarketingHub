@@ -102,11 +102,18 @@ export async function dismissMentionAction(formData: FormData) {
 
 // Pull new mentions from connected platforms (live only; a no-op in demo). Only
 // mentions for companies THIS admin can access are ingested.
-export async function checkForMentionsAction() {
+export async function checkForMentionsAction(formData?: FormData) {
   const user = await requireUser();
   const allowed = new Set(await accessibleCompanyIds(user));
+  const filterCompanyId = formData?.get("companyId")
+    ? String(formData.get("companyId"))
+    : undefined;
+  if (filterCompanyId && !allowed.has(filterCompanyId)) {
+    throw new Error("Company not accessible");
+  }
   const fetched = (await fetchNewMentions(user.tenantId)).filter((m) =>
-    allowed.has(m.companyId), // never ingest outside the actor's scope
+    allowed.has(m.companyId) &&
+    (!filterCompanyId || m.companyId === filterCompanyId),
   );
   for (const m of fetched) {
     await createSocialMention({ ...m, status: "new" }); // dedups on externalId

@@ -1,6 +1,6 @@
 "use server";
 
-import { getCompany, updateCompany } from "@/lib/db";
+import { getCompany, listCompanies, updateCompany } from "@/lib/db";
 import { assertAdminCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import {
@@ -8,6 +8,10 @@ import {
   lookupAbn,
   type AbnLookupResult,
 } from "@/lib/abn-lookup";
+import {
+  duplicateNameAbnMessage,
+  findDuplicateByNameAndAbn,
+} from "@/lib/company-identity";
 import {
   matchPlace,
   placeMatchToExtractedHints,
@@ -135,6 +139,16 @@ export async function applyEnrichmentProfileAction(
     if (patch.website?.trim()) profile.website = patch.website.trim();
     if (patch.industry?.trim()) profile.industry = patch.industry.trim();
     if (patch.serviceAreas?.length) profile.serviceAreas = patch.serviceAreas;
+
+    if (profile.abn?.trim()) {
+      const dup = findDuplicateByNameAndAbn(
+        await listCompanies(user.tenantId),
+        company.name,
+        profile.abn,
+        { excludeCompanyId: companyId },
+      );
+      if (dup) throw new Error(duplicateNameAbnMessage(dup.company));
+    }
 
     await updateCompany(companyId, { profile });
     await logAction(user, "enrichment.profile_applied", {

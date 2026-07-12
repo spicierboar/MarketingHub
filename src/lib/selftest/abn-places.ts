@@ -3,7 +3,11 @@
 import {
   abnLookupConfigured,
   abnResultToProfilePatch,
+  businessNameMatchesAbrNames,
+  isAbnLookupLive,
   lookupAbn,
+  normalizeNameForAbrMatch,
+  verifyBusinessNameAgainstAbr,
 } from "@/lib/abn-lookup";
 import {
   matchPlace,
@@ -46,6 +50,67 @@ export async function checkAbnResultToProfilePatch(): Promise<{
   return {
     ok,
     detail: `abn=${patch.abn} legal=${patch.legalName}`,
+  };
+}
+
+/** Pure ABR name-match helpers (case / punctuation / Pty Ltd tolerant). */
+export function checkAbrNameMatchingHelpers(): {
+  ok: boolean;
+  detail: string;
+} {
+  const normOk =
+    normalizeNameForAbrMatch("  Harbour-Roasters,  Pty. Ltd. ") ===
+    "harbour roasters";
+  const entityMatch = businessNameMatchesAbrNames(
+    "Harbour Roasters",
+    "Harbour Roasters Pty Ltd",
+    [],
+  );
+  const tradingMatch = businessNameMatchesAbrNames(
+    "Grinders Coffee House",
+    "COCA-COLA AMATIL (AUST) PTY LTD",
+    ["AMATIL X", "Grinders Coffee House", "CAFE DIRECT"],
+  );
+  const mismatch = businessNameMatchesAbrNames(
+    "Totally Unrelated Cafe",
+    "Harbour Roasters Pty Ltd",
+    ["Harbour Roasters"],
+  );
+  const ok =
+    normOk &&
+    entityMatch.match &&
+    entityMatch.matchedAs === "entity" &&
+    tradingMatch.match &&
+    tradingMatch.matchedAs === "business_name" &&
+    !mismatch.match;
+  return {
+    ok,
+    detail: `norm=${normOk} entity=${entityMatch.matchedAs} trading=${tradingMatch.matchedAs} mismatch=${!mismatch.match}`,
+  };
+}
+
+/** Soft-skip gate when ABR is not live (demos without GUID). */
+export async function checkAbrIdentityGateSoftSkipsWhenNotLive(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const live = isAbnLookupLive();
+  const gate = await verifyBusinessNameAgainstAbr(
+    "Any Trading Name",
+    "51 824 753 556",
+  );
+  if (live) {
+    // Live env: don't assert skip; just ensure the call returns a shaped result.
+    const shaped = gate.ok === true || (gate.ok === false && !!gate.error);
+    return {
+      ok: shaped,
+      detail: `live=true ok=${gate.ok} mode=${gate.ok ? gate.mode : gate.code}`,
+    };
+  }
+  const ok = gate.ok === true && gate.mode === "skipped" && !!gate.warning;
+  return {
+    ok,
+    detail: `live=false ok=${gate.ok} mode=${gate.ok ? gate.mode : "err"} warn=${gate.ok ? !!gate.warning : false}`,
   };
 }
 

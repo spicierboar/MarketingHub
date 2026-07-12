@@ -7,12 +7,13 @@
 //   • Critique gate and approval policies remain the only publish path
 //
 // Timing:
-//   • signup / onboarding: strategyEligibleAt = onboard+6h, strategyDueAt = onboard+24h
-//   • package_change: strategyEligibleAt = now (no 6h delay), strategyDueAt = now+24h
+//   • signup / onboarding: strategyEligibleAt = onboard+6h, strategyDueAt = onboard+12h
+//   • local demo: eligibleAt = now (so strategy can unlock without waiting 6h)
+//   • package_change: strategyEligibleAt = now (no 6h delay), strategyDueAt = now+12h
 // processDueManagedDeliveries must not start generating until now >= strategyEligibleAt.
 
 import { logAction } from "@/lib/audit";
-import { executeCampaignBuilder } from "@/lib/campaign-builder";
+import { executeCampaignBuilder, unpackKeyMessage } from "@/lib/campaign-builder";
 import {
   createCalendarAssistSuggestion,
   getCompany,
@@ -29,11 +30,22 @@ import {
   updateManagedDeliveryRun,
 } from "@/lib/db";
 import { surfaceCalendarAssistSuggestions } from "@/lib/ai/calendar-assist";
+import { localDemoEnabled } from "@/lib/env";
 import { defaultServiceLevel } from "@/lib/managed-service/authority";
+import {
+  generateDetailedMarketingStrategy,
+  initialDetailedStrategyStatus,
+  pushStrategyHistory,
+  strategyChannelPlanFromDetailed,
+  strategySummaryFromDetailed,
+} from "@/lib/managed-service/detailed-strategy";
 import { notifyClientException } from "@/lib/managed-service/exception-notify";
 import { sendImplementationPlanEmail } from "@/lib/managed-service/implementation-plan-email";
 import { applyQualityRoutingAfterDraft } from "@/lib/managed-service/quality-routing";
-import { resolveCompanyPackage } from "@/lib/marketing-packages";
+import {
+  resolveCompanyPackage,
+  resolveSelectionForPackage,
+} from "@/lib/marketing-packages";
 import { now } from "@/lib/utils";
 import type {
   ActingUser,
@@ -43,12 +55,15 @@ import type {
   ManagedDeliveryRun,
   ManagedServiceLevel,
   ManagedServiceSettings,
+  MarketingPackageId,
 } from "@/lib/types";
 
 const MAX_RUNS_PER_TICK = 5;
 const MAX_PROMOTIONS_PER_TICK = 10;
-const STRATEGY_ELIGIBLE_HOURS = 6;
-const STRATEGY_DUE_HOURS = 24;
+/** Floor: do not generate before this many hours after signup/onboarding. */
+export const STRATEGY_ELIGIBLE_HOURS = 6;
+/** Ceiling: strategy should be ready within this many hours after signup/onboarding. */
+export const STRATEGY_DUE_HOURS = 12;
 const MAX_PLAN_SUGGESTIONS = 12;
 
 const IN_PROGRESS: ReadonlySet<ManagedDeliveryPhase> = new Set([
@@ -294,11 +309,175 @@ async function maybeSendImplementationPlanEmail(
 }
 
 /**
+ * After Add Client / New Client: ensure a marketing package (default Basic) and
+ * enqueue strategy delivery when the tenant has finished workspace onboarding.
+ * Local demo: if workspace onboarding stamp is missing, use now() so strategy
+ * is not stuck idle; eligibility floor is skipped in enqueueManagedDeliveryForCompany.
+ */
+export async function ensureManagedDeliveryBootstrap(args: {
+  actor: ActingUser;
+  tenantId: string;
+  companyId: string;
+  /** ISO from tenant.onboardingCompletedAt — demo falls back to now() when missing. */
+  onboardingCompletedAt: string | null | undefined;
+  reason?: ManagedDeliveryEnqueueReason;
+  /** When no package is set, assign this (default basic). */
+  defaultPackageId?: MarketingPackageId;
+}): Promise<ManagedDeliveryRun | null> {
+  const onboardedAt =
+    args.onboardingCompletedAt ?? (localDemoEnabled() ? now() : null);
+  if (!onboardedAt) return null;
+  const company = await getCompany(args.companyId);
+  if (!company || company.status === "archived") return null;
+
+  const tenant = await getTenant(args.tenantId);
+  const prev = company.profile.managedService;
+  let serviceLevel = prev?.serviceLevel;
+  let marketingPackageId = prev?.marketingPackageId;
+
+  if (!marketingPackageId) {
+    const packageId = args.defaultPackageId ?? "basic";
+    const selection = resolveSelectionForPackage(tenant, packageId);
+    serviceLevel = selection.serviceLevel;
+    marketingPackageId = packageId;
+    // Quick-add / skip-checkout bootstrap: unpaid until demo mock or live settle.
+    // Demo still enqueues; Strategy UI surfaces billing-pending for non-demo.
+    await updateCompany(company.id, {
+      profile: {
+        ...company.profile,
+        managedService: {
+          ...(prev ?? { serviceLevel }),
+          serviceLevel,
+          marketingPackageId,
+          ...(packageId === "custom" && selection.customModules
+            ? { customModules: selection.customModules }
+            : {}),
+          ...(!localDemoEnabled() ? { packageChangePendingBilling: true } : {}),
+        },
+      },
+    });
+    await logAction(args.actor, "company.marketing_package_set", {
+      targetType: "company",
+      targetId: company.id,
+      companyId: company.id,
+      detail: `${packageId} · ${serviceLevel} (default on create)${
+        localDemoEnabled() ? "" : " · packageChangePendingBilling"
+      }`,
+    });
+  }
+
+  const allRuns = await listManagedDeliveryRuns(args.tenantId, args.companyId);
+  const open = allRuns.filter((r) => IN_PROGRESS.has(r.phase));
+  if (open.length > 0) return open[0] ?? null;
+
+  // Awaiting approval / active are not in listOpenManagedDeliveryRuns — do not
+  // spawn a duplicate run on every Overview / Strategy page load.
+  const settled = allRuns.find(
+    (r) => r.phase === "awaiting_approval" || r.phase === "active",
+  );
+  if (settled) return settled;
+
+  const stamped = await getCompany(args.companyId);
+  if (
+    stamped?.profile.managedService?.strategySummary ||
+    stamped?.profile.managedService?.strategyCompletedAt
+  ) {
+    return allRuns[0] ?? null;
+  }
+
+  // Prefer catalog default for the assigned package over a stale "approval"
+  // stamp that would leave strategy idle after Overview shows Assigned.
+  const catalogLevel = resolveSelectionForPackage(
+    tenant,
+    (marketingPackageId ?? args.defaultPackageId ?? "basic") as MarketingPackageId,
+  ).serviceLevel;
+  const level =
+    serviceLevel && serviceLevel !== "approval" ? serviceLevel : catalogLevel;
+
+  // Persist package default level when still on approval so Overview matches delivery.
+  if (marketingPackageId && (!serviceLevel || serviceLevel === "approval") && level !== "approval") {
+    const fresh = await getCompany(args.companyId);
+    if (fresh) {
+      const ms = fresh.profile.managedService;
+      await updateCompany(fresh.id, {
+        profile: {
+          ...fresh.profile,
+          managedService: {
+            ...(ms ?? { serviceLevel: level }),
+            serviceLevel: level,
+            marketingPackageId,
+          },
+        },
+      });
+    }
+  }
+
+  const run = await enqueueManagedDeliveryForCompany({
+    tenantId: args.tenantId,
+    companyId: args.companyId,
+    onboardingCompletedAt: onboardedAt,
+    serviceLevel: level,
+    reason: args.reason ?? "signup",
+  });
+  await logAction(args.actor, "managed_delivery.enqueued", {
+    targetType: "managed_delivery_run",
+    targetId: run.id,
+    companyId: args.companyId,
+    detail: `bootstrap eligible=${run.strategyEligibleAt} due=${run.strategyDueAt}`,
+  });
+  return run;
+}
+
+/**
+ * Overview / Strategy on-read: ensure package + delivery run exist, then in
+ * local demo advance (or force-unlock) so strategy is not left "Not started".
+ */
+export async function ensureAndKickManagedDeliveryForCompany(args: {
+  actor: ActingUser;
+  tenantId: string;
+  companyId: string;
+  reason?: ManagedDeliveryEnqueueReason;
+  /** When true, process eligible run; in demo also force-unlock if still waiting. */
+  process?: boolean;
+  demoForceGenerate?: boolean;
+}): Promise<ManagedDeliveryRun | null> {
+  const tenant = await getTenant(args.tenantId);
+  const run = await ensureManagedDeliveryBootstrap({
+    actor: args.actor,
+    tenantId: args.tenantId,
+    companyId: args.companyId,
+    onboardingCompletedAt: tenant?.onboardingCompletedAt,
+    reason: args.reason ?? "signup",
+  });
+  if (!args.process && !args.demoForceGenerate) return run;
+
+  let advanced = await maybeProcessEligibleDeliveryForCompany(
+    args.tenantId,
+    args.companyId,
+    args.actor,
+  );
+  if (
+    args.demoForceGenerate &&
+    localDemoEnabled() &&
+    (!advanced || !advanced.strategyCompletedAt)
+  ) {
+    const unlocked = await forceUnlockManagedStrategyForCompany(
+      args.tenantId,
+      args.companyId,
+      args.actor,
+    );
+    if (unlocked) advanced = unlocked;
+  }
+  return advanced ?? run;
+}
+
+/**
  * Enqueue a managed delivery run.
  *
  * Timing by reason (see docs/MARKETING-PACKAGES.md):
- * - signup / onboarding / service_level / manual: eligibleAt = anchor+6h, dueAt = anchor+24h
- * - package_change: eligibleAt = now (no 6h delay), dueAt = now+24h
+ * - signup / onboarding / service_level / manual: eligibleAt = anchor+6h, dueAt = anchor+12h
+ * - local demo: eligibleAt = now (skip 6h wait so demo can unlock without wall-clock)
+ * - package_change: eligibleAt = now (no 6h delay), dueAt = now+12h
  */
 export async function enqueueManagedDeliveryForCompany(args: {
   tenantId: string;
@@ -314,12 +493,13 @@ export async function enqueueManagedDeliveryForCompany(args: {
     defaultServiceLevel();
   const reason: ManagedDeliveryEnqueueReason = args.reason ?? "signup";
   const t = now();
+  const demoSkipFloor = localDemoEnabled() && reason !== "package_change";
   const strategyEligibleAt =
-    reason === "package_change"
+    reason === "package_change" || demoSkipFloor
       ? t
       : addHours(args.onboardingCompletedAt, STRATEGY_ELIGIBLE_HOURS);
   const strategyDueAt =
-    reason === "package_change"
+    reason === "package_change" || demoSkipFloor
       ? addHours(t, STRATEGY_DUE_HOURS)
       : addHours(args.onboardingCompletedAt, STRATEGY_DUE_HOURS);
 
@@ -567,7 +747,16 @@ export async function processManagedDeliveryRun(
       const pkg = resolveCompanyPackage(company, tenant);
 
       const startDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
-      const goal = goalFromProfile(company);
+      const profileGoal = goalFromProfile(company);
+      const goal = [
+        profileGoal,
+        `Marketing package: ${pkg.name} (A$${pkg.priceAudMonthly}/mo).`,
+        `Deliver ~${pkg.postsPerMonth} organic posts/month across ${channels.join(", ") || "default channels"}.`,
+        `${pkg.campaignsPerMonth} campaign slot(s)/month; ${pkg.promosIncludedPerMonth} included promo(s)/month.`,
+        pkg.adsManagementIncluded
+          ? "Ads management included; media spend always extra."
+          : "Ads management not included; media spend always extra.",
+      ].join(" ");
       const exec = await executeCampaignBuilder({
         input: {
           company,
@@ -585,29 +774,64 @@ export async function processManagedDeliveryRun(
         offer: null,
       });
 
+      const nextVersion = run.strategyVersion + 1;
+      const strategyStatus = initialDetailedStrategyStatus(
+        run.serviceLevel ??
+          company.profile.managedService?.serviceLevel ??
+          defaultServiceLevel(),
+      );
+      const detailedStrategy = await generateDetailedMarketingStrategy({
+        company,
+        pkg,
+        channels,
+        version: nextVersion,
+        status: strategyStatus,
+      });
+      const { strategy, meta } = unpackKeyMessage(exec.campaign.keyMessage);
+      const strategySummary =
+        strategySummaryFromDetailed(detailedStrategy) ||
+        (exec.result.strategy || strategy).trim() ||
+        `Package-led plan for ${company.name} on ${pkg.name}: ~${pkg.postsPerMonth}/mo across ${channels.join(", ") || "social"}.`;
+      const strategyChannelPlan =
+        strategyChannelPlanFromDetailed(detailedStrategy) ||
+        (exec.result.channelPlan || meta?.channelPlan || "").trim() ||
+        `Channels: ${channels.join(", ") || "per package"} · cadence ~${pkg.postsPerMonth}/mo.`;
+
+      const msPrev = company.profile.managedService;
+      const detailedStrategyHistory = pushStrategyHistory(
+        msPrev?.detailedStrategy,
+        msPrev?.detailedStrategyHistory,
+      );
+
       // Draft schedules from the builder are proposal rows only — not live posts.
       const strategyCompletedAt = now();
       const assumptions = [
         ...run.assumptions,
         `Package: ${pkg.name} · channels=${channels.join(",") || "default"} · ~${pkg.postsPerMonth}/mo`,
+        `Detailed strategy v${nextVersion} (${detailedStrategy.model})`,
       ];
       run = await advancePhase(run, {
         phase: "calendar",
         campaignId: exec.campaign.id,
         strategyCompletedAt,
-        strategyVersion: run.strategyVersion + 1,
+        strategyVersion: nextVersion,
         assumptions,
         statusMessageKey: "strategy_ready",
       });
       await patchCompanyManaged(company, {
         strategyCompletedAt,
+        strategySummary,
+        strategyChannelPlan,
+        strategyPackageName: pkg.name,
+        detailedStrategy,
+        detailedStrategyHistory,
         lastDeliveryRunId: run.id,
       });
       await logAction(actor, "managed_delivery.strategy_drafted", {
         targetType: "managed_delivery_run",
         targetId: run.id,
         companyId: company.id,
-        detail: `campaign=${exec.campaign.id} drafts=${exec.spawnedContentIds.length} package=${pkg.id}`,
+        detail: `campaign=${exec.campaign.id} drafts=${exec.spawnedContentIds.length} package=${pkg.id} strategy=v${nextVersion}`,
       });
     }
 
@@ -807,6 +1031,62 @@ export async function processDueManagedDeliveries(
   }
 
   return processed;
+}
+
+/**
+ * On-read catch-up: if a company's open delivery run is past strategyEligibleAt,
+ * advance it once (covers demo / local without waiting for cron).
+ */
+export async function maybeProcessEligibleDeliveryForCompany(
+  tenantId: string,
+  companyId: string,
+  actor: ActingUser,
+): Promise<ManagedDeliveryRun | undefined> {
+  const open = (await listOpenManagedDeliveryRuns(tenantId)).filter(
+    (r) => r.companyId === companyId && IN_PROGRESS.has(r.phase),
+  );
+  const at = now();
+  const due = open
+    .filter((r) => isStrategyEligible(r, at))
+    .sort((a, b) => a.strategyDueAt.localeCompare(b.strategyDueAt))[0];
+  if (!due) return undefined;
+  return processManagedDeliveryRun(due.id, actor);
+}
+
+/**
+ * Agency/demo: unlock the 6h floor immediately and process the open run.
+ * Prod-safe — still never publishes; only advances draft strategy pipeline.
+ */
+export async function forceUnlockManagedStrategyForCompany(
+  tenantId: string,
+  companyId: string,
+  actor: ActingUser,
+): Promise<ManagedDeliveryRun | undefined> {
+  const open = (await listOpenManagedDeliveryRuns(tenantId)).filter(
+    (r) => r.companyId === companyId && IN_PROGRESS.has(r.phase),
+  );
+  const run = open.sort((a, b) => a.strategyDueAt.localeCompare(b.strategyDueAt))[0];
+  if (!run) return undefined;
+
+  const unlockedAt = now();
+  await updateManagedDeliveryRun(run.id, {
+    strategyEligibleAt: unlockedAt,
+    statusMessageKey: "strategy_preparing",
+  });
+  const company = await getCompany(companyId);
+  if (company) {
+    await patchCompanyManaged(company, {
+      strategyEligibleAt: unlockedAt,
+      lastDeliveryRunId: run.id,
+    });
+  }
+  await logAction(actor, "managed_delivery.strategy_unlocked", {
+    targetType: "managed_delivery_run",
+    targetId: run.id,
+    companyId,
+    detail: "force_unlock",
+  });
+  return processManagedDeliveryRun(run.id, actor);
 }
 
 /** Test helper — list all runs for a tenant (including terminal). */

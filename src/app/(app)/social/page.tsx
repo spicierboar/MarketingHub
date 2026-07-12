@@ -6,7 +6,8 @@ import { StatusBadge, RiskBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Select, Textarea, Input } from "@/components/ui/form";
+import { Field, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { formatDate, titleCase } from "@/lib/utils";
 import {
   approveSocialAction,
@@ -14,6 +15,7 @@ import {
   draftSocialAction,
   publishSocialReplyAction,
 } from "./actions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 
 export default async function SocialPage({
   searchParams,
@@ -31,7 +33,12 @@ export default async function SocialPage({
     companyParam && companies.some((c) => c.id === companyParam)
       ? companyParam
       : undefined;
-  const drafts = await visibleSocial(user);
+  const draftCompaniesForForm = companyDefault
+    ? companies.filter((c) => c.id === companyDefault)
+    : companies;
+  const drafts = (await visibleSocial(user)).filter(
+    (d) => !companyDefault || d.companyId === companyDefault,
+  );
   // Precompute company names for the drafts list (getCompany is async).
   const draftCompanyIds = Array.from(new Set(drafts.map((d) => d.companyId)));
   const draftCompanies = await Promise.all(
@@ -41,10 +48,15 @@ export default async function SocialPage({
     draftCompanyIds.map((id, i) => [id, draftCompanies[i]?.name]),
   );
 
+  const companyLocked = Boolean(companyDefault);
+  const scopedCompany = companyDefault
+    ? draftCompaniesForForm.find((c) => c.id === companyDefault)
+    : undefined;
+
   return (
     <div>
       <PageHeader
-        title="Social responses"
+        title={scopedCompany ? `Social · ${scopedCompany.name}` : "Social responses"}
         description="Paste a customer comment. AI drafts a reply — a human always approves before use."
       />
 
@@ -52,29 +64,29 @@ export default async function SocialPage({
         <Card className="h-fit">
           <CardContent className="p-6">
             <h2 className="mb-4 font-semibold">Draft a response</h2>
-            {companies.length === 0 ? (
+            {draftCompaniesForForm.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No AI-ready companies available to you.
               </p>
             ) : (
               <form action={draftSocialAction} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Client" htmlFor="companyId">
-                    <Select
-                      id="companyId"
-                      name="companyId"
-                      required
-                      defaultValue={companyDefault}
-                    >
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <LockedCompanyField
+                    id="companyId"
+                    companies={draftCompaniesForForm.map((c) => ({ id: c.id, name: c.name }))}
+                    companyId={companyDefault}
+                    locked={companyLocked}
+                  />
                   <Field label="Platform" htmlFor="platform">
-                    <Input id="platform" name="platform" defaultValue="Facebook" />
+                    <Select id="platform" name="platform" defaultValue="Facebook">
+                      {CONTENT_PLATFORM_OPTIONS.filter((p) => p.value !== "Paid ads").map(
+                        (p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ),
+                      )}
+                    </Select>
                   </Field>
                 </div>
                 <Field label="Customer comment / message" htmlFor="comment">

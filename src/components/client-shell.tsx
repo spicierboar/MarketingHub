@@ -57,6 +57,9 @@ const NAV_ITEMS: NavItem[] = [
       "/client/assets",
       "/client/help",
       "/client/profile",
+      "/client/strategy",
+      "/client/content",
+      "/client/promos",
     ],
   },
 ];

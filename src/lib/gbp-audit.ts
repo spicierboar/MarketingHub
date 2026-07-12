@@ -4,6 +4,7 @@
 
 import { decryptToken } from "@/lib/crypto";
 import { resolveBusinessType } from "@/lib/business-profiles";
+import { liveIntegrationsAllowed } from "@/lib/env";
 import type {
   Company,
   LocalAreaProfile,
@@ -74,6 +75,7 @@ export interface GbpAuditResult {
 /** True when live GBP Business Information API reads are permitted. */
 export function gbpAuditLive(): boolean {
   return (
+    liveIntegrationsAllowed() &&
     process.env.PUBLISHING_LIVE === "true" &&
     !!process.env.PUBLISHING_TOKEN_KEY &&
     !!process.env.GOOGLE_OAUTH_CLIENT_ID &&

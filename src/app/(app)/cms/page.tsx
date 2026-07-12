@@ -93,11 +93,11 @@ export default async function CmsAdminPage({
               <h2 className="font-semibold">Create draft page</h2>
               <form action={createPageAction} className="space-y-3">
                 <input type="hidden" name="companyId" value={companyId} />
-                <Field label="Title" htmlFor="title">
-                  <Input id="title" name="title" required placeholder="Summer offer" />
+                <Field label="Title" htmlFor="title" hint="Shown in CMS lists and page chrome">
+                  <Input id="title" name="title" required placeholder="e.g. Summer lunch offer" />
                 </Field>
-                <Field label="Slug" htmlFor="slug">
-                  <Input id="slug" name="slug" required placeholder="summer-offer" />
+                <Field label="Slug" htmlFor="slug" hint="URL path segment — lowercase, hyphens">
+                  <Input id="slug" name="slug" required placeholder="e.g. summer-lunch-offer" />
                 </Field>
                 <Field label="Kind" htmlFor="kind">
                   <Select id="kind" name="kind" defaultValue="page">
@@ -106,7 +106,12 @@ export default async function CmsAdminPage({
                   </Select>
                 </Field>
                 <Field label="Body HTML" htmlFor="bodyHtml">
-                  <Textarea id="bodyHtml" name="bodyHtml" rows={4} placeholder="<h1>Hello</h1>" />
+                  <Textarea
+                    id="bodyHtml"
+                    name="bodyHtml"
+                    rows={4}
+                    placeholder='e.g. <h1>Weekday lunch from $18</h1><p>Book online…</p>'
+                  />
                 </Field>
                 <Button type="submit">Create draft</Button>
               </form>
@@ -180,13 +185,32 @@ export default async function CmsAdminPage({
                   <input type="hidden" name="companyId" value={companyId} />
                   <input type="hidden" name="pageId" value={selectedPage.id} />
                   <Field label="New version title" htmlFor="vtitle">
-                    <Input id="vtitle" name="title" defaultValue={selectedPage.title} />
+                    <Input
+                      id="vtitle"
+                      name="title"
+                      defaultValue={selectedPage.title}
+                      placeholder="e.g. Summer lunch offer"
+                    />
                   </Field>
                   <Field label="Body HTML" htmlFor="vbody">
-                    <Textarea id="vbody" name="bodyHtml" rows={3} defaultValue={currentVersion.bodyHtml} />
+                    <Textarea
+                      id="vbody"
+                      name="bodyHtml"
+                      rows={3}
+                      defaultValue={currentVersion.bodyHtml}
+                      placeholder="<h1>…</h1>"
+                    />
                   </Field>
-                  <Field label="Change summary" htmlFor="changeSummary">
-                    <Input id="changeSummary" name="changeSummary" placeholder="Updated hero copy" />
+                  <Field
+                    label="Change summary"
+                    htmlFor="changeSummary"
+                    hint="Shown in version history"
+                  >
+                    <Input
+                      id="changeSummary"
+                      name="changeSummary"
+                      placeholder="e.g. Updated hero copy + CTA"
+                    />
                   </Field>
                   <Button type="submit" variant="outline" size="sm">
                     Save new version
@@ -218,14 +242,34 @@ export default async function CmsAdminPage({
                 <form action={saveSeoAction} className="space-y-3">
                   <input type="hidden" name="companyId" value={companyId} />
                   <input type="hidden" name="pageId" value={selectedPage.id} />
-                  <Field label="Meta title" htmlFor="metaTitle">
-                    <Input id="metaTitle" name="metaTitle" defaultValue={seo?.metaTitle ?? ""} />
+                  <Field label="Meta title" htmlFor="metaTitle" hint="~50–60 characters for SERPs">
+                    <Input
+                      id="metaTitle"
+                      name="metaTitle"
+                      defaultValue={seo?.metaTitle ?? ""}
+                      placeholder="e.g. Summer lunch specials | Acme Café"
+                    />
                   </Field>
-                  <Field label="Meta description" htmlFor="metaDescription">
-                    <Textarea id="metaDescription" name="metaDescription" rows={2} defaultValue={seo?.metaDescription ?? ""} />
+                  <Field
+                    label="Meta description"
+                    htmlFor="metaDescription"
+                    hint="~150–160 characters"
+                  >
+                    <Textarea
+                      id="metaDescription"
+                      name="metaDescription"
+                      rows={2}
+                      defaultValue={seo?.metaDescription ?? ""}
+                      placeholder="e.g. Weekday lunch from $18 — book a table online."
+                    />
                   </Field>
                   <Field label="Canonical URL" htmlFor="canonicalUrl">
-                    <Input id="canonicalUrl" name="canonicalUrl" defaultValue={seo?.canonicalUrl ?? ""} />
+                    <Input
+                      id="canonicalUrl"
+                      name="canonicalUrl"
+                      defaultValue={seo?.canonicalUrl ?? ""}
+                      placeholder="https://www.example.com/summer-lunch"
+                    />
                   </Field>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="noIndex" defaultChecked={seo?.noIndex} />
@@ -248,10 +292,15 @@ export default async function CmsAdminPage({
                 <input type="hidden" name="companyId" value={companyId} />
                 {selectedPageId && <input type="hidden" name="pageId" value={selectedPageId} />}
                 <Field label="Title" htmlFor="urt">
-                  <Input id="urt" name="title" required placeholder="Update hero image" />
+                  <Input id="urt" name="title" required placeholder="e.g. Update hero image" />
                 </Field>
                 <Field label="Description" htmlFor="urd">
-                  <Input id="urd" name="description" required placeholder="Client requested new photo" />
+                  <Input
+                    id="urd"
+                    name="description"
+                    required
+                    placeholder="e.g. Client requested new shopfront photo"
+                  />
                 </Field>
                 <Button type="submit" className="md:col-span-2 md:w-fit">
                   Open request

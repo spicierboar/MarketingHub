@@ -133,6 +133,7 @@ export async function applyAutoOnboardingAction(
           businessAddress: preview.extras.businessAddress,
           phone: preview.extras.phone,
           email: preview.extras.email,
+          productCategories: preview.extras.productCategories,
         },
         inferredKeys: [],
         mode: preview.extras.enrichMode ?? "template",

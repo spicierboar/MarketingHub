@@ -28,7 +28,11 @@ export default async function ClientPromosPage() {
   if (!company) return null;
 
   const tenant = await getTenant(company.tenantId);
-  const templates = templatesForCompany(company, tenant?.promoCatalog);
+  const templates = templatesForCompany(
+    company,
+    tenant?.promoCatalog,
+    tenant?.promoIndustries,
+  );
   const open = listOpenPromoSelections(company);
 
   return (
@@ -65,16 +69,28 @@ export default async function ClientPromosPage() {
                         <p className="font-medium">{s.templateName}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(s.startDate)} → {formatDate(s.endDate)} ·{" "}
-                          {s.channels.join(", ")} · {money(s.totalUsd)} incl. fee
+                          {s.channels.join(", ")} ·{" "}
+                          {s.billingClass === "included"
+                            ? "Included in package"
+                            : `${money(s.totalUsd)} incl. fee`}
                         </p>
                       </div>
-                      <Badge
-                        tone={s.status === "requested" ? "warning" : "success"}
-                      >
-                        {s.status === "requested"
-                          ? "Not on calendar yet"
-                          : s.status.replace(/_/g, " ")}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge
+                          tone={
+                            s.billingClass === "included" ? "success" : "warning"
+                          }
+                        >
+                          {s.billingClass === "included" ? "Included" : "Extra"}
+                        </Badge>
+                        <Badge
+                          tone={s.status === "requested" ? "warning" : "success"}
+                        >
+                          {s.status === "requested"
+                            ? "Not on calendar yet"
+                            : s.status.replace(/_/g, " ")}
+                        </Badge>
+                      </div>
                     </CardContent>
                   </Card>
                 </li>

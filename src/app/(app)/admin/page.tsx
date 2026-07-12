@@ -19,7 +19,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonClasses } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input } from "@/components/ui/form";
 import { formatDate, now } from "@/lib/utils";
 import {
   saveSecuritySettingsAction,
@@ -162,11 +162,33 @@ export default async function AdminPage() {
           <CardContent className="p-6">
             <h2 className="mb-4 font-semibold">Data retention &amp; AI cost limits</h2>
             <form action={saveSecuritySettingsAction} className="grid gap-4 sm:grid-cols-3">
-              <Field label="Data retention (days)" htmlFor="retentionDays" hint="§53 retention policy">
-                <Input id="retentionDays" name="retentionDays" type="number" min={30} defaultValue={s.retentionDays} />
+              <Field
+                label="Data retention (days)"
+                htmlFor="retentionDays"
+                hint="§53 retention policy — minimum 30"
+              >
+                <Input
+                  id="retentionDays"
+                  name="retentionDays"
+                  type="number"
+                  min={30}
+                  defaultValue={s.retentionDays}
+                  placeholder="365"
+                />
               </Field>
-              <Field label="AI monthly cost cap (AUD)" htmlFor="aiMonthlyCapUsd" hint="0 = uncapped">
-                <Input id="aiMonthlyCapUsd" name="aiMonthlyCapUsd" type="number" min={0} defaultValue={s.aiMonthlyCapUsd} />
+              <Field
+                label="AI monthly cost cap (AUD)"
+                htmlFor="aiMonthlyCapUsd"
+                hint="0 = uncapped"
+              >
+                <Input
+                  id="aiMonthlyCapUsd"
+                  name="aiMonthlyCapUsd"
+                  type="number"
+                  min={0}
+                  defaultValue={s.aiMonthlyCapUsd}
+                  placeholder="0"
+                />
               </Field>
               <div className="flex items-end">
                 <div className="text-sm">

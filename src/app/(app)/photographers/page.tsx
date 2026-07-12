@@ -16,8 +16,10 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Field, Input, Textarea } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { StatusBadge } from "@/components/status-badge";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import { formatDate } from "@/lib/utils";
 import type { PhotoMarketplaceBooking } from "@/lib/types";
 import { bookPhotographerAction, releaseMarketplacePayoutAction } from "./actions";
@@ -32,8 +34,14 @@ export default async function PhotographersPage({
   const companies = (await listCompanies(user.tenantId)).filter(
     (c) => c.status !== "archived",
   );
-  const companyId = params.company ?? companies[0]?.id;
-  const company = companies.find((c) => c.id === companyId);
+  const companyOpts = companies.map((c) => ({ id: c.id, name: c.name }));
+  const locked = Boolean(params.company);
+  const contextCompanyId =
+    params.company && companies.some((c) => c.id === params.company)
+      ? params.company
+      : undefined;
+  const companyId = locked ? contextCompanyId : contextCompanyId ?? companies[0]?.id;
+  const company = companyId ? companies.find((c) => c.id === companyId) : undefined;
   const addons = company ? await companyAddonMap(user.tenantId, company.id) : null;
 
   const [photographers, bookings] = await Promise.all([
@@ -46,7 +54,7 @@ export default async function PhotographersPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Photographer marketplace"
+        title={company ? `Photographers · ${company.name}` : "Photographer marketplace"}
         description="Browse vetted photographers, book shoots, and track marketplace billing — deliverables still flow through Creative Assets → approval."
       />
 
@@ -58,7 +66,7 @@ export default async function PhotographersPage({
           <span className="text-muted-foreground">
             Platform fee 15% · photographer payout held until shoot completed with deliverables
           </span>
-          <a href="/visuals" className="ml-auto text-primary underline text-sm">
+          <a href={`/visuals?company=${companyId}`} className="ml-auto text-primary underline text-sm">
             AI Visuals & manual shoots →
           </a>
         </CardContent>
@@ -67,16 +75,12 @@ export default async function PhotographersPage({
       <Card>
         <CardContent className="p-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
-            <Field label="Client" htmlFor="ph-company">
-              <Select id="ph-company" name="company" defaultValue={companyId}>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">View</Button>
+            <LockedCompanyFilter
+              companies={companyOpts}
+              companyId={companyId}
+              locked={locked && Boolean(companyId)}
+            />
+            {!locked && <Button type="submit">View</Button>}
           </form>
           {company && addons && (
             <p className="mt-3 text-sm text-muted-foreground">
@@ -165,34 +169,64 @@ export default async function PhotographersPage({
                                 </p>
                               )}
                             </div>
-                            <Field label="Brief" htmlFor={`brief-${pkg.id}`}>
+                            <Field
+                              label="Brief"
+                              htmlFor={`brief-${pkg.id}`}
+                              hint="Mood, products, people, must-have shots"
+                            >
                               <Textarea
                                 id={`brief-${pkg.id}`}
                                 name="brief"
                                 className="min-h-16"
-                                placeholder="What should the photographer capture?"
+                                placeholder="e.g. Hero dish shots + staff portraits for Instagram"
                               />
                             </Field>
-                            <Field label="Location" htmlFor={`loc-${pkg.id}`}>
+                            <Field
+                              label="Location"
+                              htmlFor={`loc-${pkg.id}`}
+                              hint="Where the shoot happens"
+                            >
                               <Input
                                 id={`loc-${pkg.id}`}
                                 name="location"
-                                placeholder="On-site address"
+                                placeholder="e.g. 12 Main St, Brisbane QLD"
                               />
                             </Field>
-                            <Field label="Preferred slot" htmlFor={`slot-${pkg.id}`}>
+                            <Field
+                              label="Preferred slot"
+                              htmlFor={`slot-${pkg.id}`}
+                              hint="Local time — photographer will confirm"
+                            >
                               <Input
                                 id={`slot-${pkg.id}`}
                                 name="scheduledSlot"
                                 type="datetime-local"
                               />
                             </Field>
-                            <Field label="Target channels" htmlFor={`ch-${pkg.id}`}>
-                              <Input
+                            <Field
+                              label="Target channels"
+                              htmlFor={`ch-${pkg.id}`}
+                              hint="Leave all unchecked if not sure yet"
+                            >
+                              <div
                                 id={`ch-${pkg.id}`}
-                                name="targetChannels"
-                                placeholder="instagram, facebook"
-                              />
+                                className="flex flex-wrap gap-x-4 gap-y-2"
+                              >
+                                {CONTENT_PLATFORM_OPTIONS.map((ch) => (
+                                  <label
+                                    key={ch.value}
+                                    className="inline-flex items-center gap-1.5 text-sm"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      name="targetChannels"
+                                      value={ch.value}
+                                      className="h-4 w-4"
+                                    />
+                                    {ch.label}
+                                  </label>
+                                ))}
+                              </div>
                             </Field>
                             <Button type="submit" size="sm" className="w-full">
                               Book — {formatAud(pkg.priceCents)}

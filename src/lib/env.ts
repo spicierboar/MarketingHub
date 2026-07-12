@@ -1,4 +1,4 @@
-// Deployment environment (staging vs live) — a single source of truth.
+// Deployment environment (local / staging / live) — a single source of truth.
 //
 // WHY this exists: on Vercel, a PREVIEW (staging) deployment builds with
 // NODE_ENV=production, so `NODE_ENV === "production"` is TRUE on staging too —
@@ -16,7 +16,7 @@
 // environment banner; PRODUCTION locks the dev-tools (secret-gated) and shows no
 // banner. Data isolation between staging and live is by SEPARATE Supabase
 // projects (different NEXT_PUBLIC_SUPABASE_URL per environment) — see
-// docs/DEPLOYMENT.md.
+// docs/ENVIRONMENTS.md and docs/DEPLOYMENT.md.
 
 export type AppEnv = "production" | "staging" | "development";
 
@@ -58,6 +58,51 @@ export function localDemoEnabled(): boolean {
   const server = (process.env.CC_LOCAL_DEMO || "").trim().toLowerCase();
   const pub = (process.env.NEXT_PUBLIC_CC_LOCAL_DEMO || "").trim().toLowerCase();
   return server === "true" || server === "1" || pub === "true" || pub === "1";
+}
+
+/** True when APP_ORIGIN (or the given URL) points at a local/dev host. */
+export function looksLikeLocalOrigin(origin?: string | null): boolean {
+  const raw = (origin ?? process.env.APP_ORIGIN ?? "").trim().toLowerCase();
+  if (!raw) return false;
+  try {
+    const url = new URL(raw.includes("://") ? raw : `http://${raw}`);
+    const host = url.hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.endsWith(".local")
+    );
+  } catch {
+    return /localhost|127\.0\.0\.1/.test(raw);
+  }
+}
+
+/**
+ * Soft safety for cutover `*_LIVE` flags (publishing / ads / analytics / visuals).
+ * Returns false on staging, local demo, or when APP_ORIGIN is localhost — so a
+ * mistaken Preview/local flip cannot hit Meta/Google. Does not break the demo
+ * (demo leaves flags unset). Unset APP_ORIGIN still allows intentional local
+ * live experiments when flags are explicitly set.
+ */
+export function liveIntegrationsAllowed(): boolean {
+  if (appEnv() === "staging") return false;
+  if (localDemoEnabled()) return false;
+  if (looksLikeLocalOrigin()) return false;
+  return true;
+}
+
+/** Startup / diagnostics: which cutover flags are set but soft-blocked. */
+export function blockedLiveFlagNames(): string[] {
+  if (liveIntegrationsAllowed()) return [];
+  const names = [
+    "PUBLISHING_LIVE",
+    "ADS_LIVE",
+    "ANALYTICS_LIVE",
+    "VISUALS_LIVE",
+    "LOCAL_SEO_LIVE",
+  ] as const;
+  return names.filter((n) => (process.env[n] || "").trim().toLowerCase() === "true");
 }
 
 // Label for the non-production environment ribbon (null in production).

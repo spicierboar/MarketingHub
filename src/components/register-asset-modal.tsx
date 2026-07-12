@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { FormModal } from "@/components/form-modal";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { createAssetAction } from "@/app/(app)/assets/actions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 
 const ASSET_TYPES: [string, string][] = [
   ["image", "Image"],
@@ -27,6 +29,13 @@ const LICENCES: [string, string][] = [
   ["royalty_free", "Royalty-free"],
   ["user_generated", "User-generated (UGC)"],
   ["unknown", "Unknown"],
+];
+
+/** Allowed-channel checkboxes — content platforms + common offline/web. */
+const ASSET_CHANNEL_OPTIONS = [
+  ...CONTENT_PLATFORM_OPTIONS,
+  { value: "Website", label: "Website" },
+  { value: "In-store", label: "In-store" },
 ];
 
 export function RegisterAssetModalTrigger({
@@ -64,25 +73,29 @@ export function RegisterAssetModalTrigger({
         >
           <form action={createAssetAction} className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Client" htmlFor="modal-asset-company">
-                <Select
-                  id="modal-asset-company"
-                  name="companyId"
-                  required
-                  defaultValue={defaultCompanyId ?? companies[0]?.id}
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Folder" htmlFor="modal-asset-folder">
-                <Input id="modal-asset-folder" name="folder" placeholder="Optional folder" />
+              <LockedCompanyField
+                id="modal-asset-company"
+                companies={companies}
+                companyId={defaultCompanyId}
+                locked={Boolean(defaultCompanyId)}
+              />
+              <Field
+                label="Folder"
+                htmlFor="modal-asset-folder"
+                hint="Optional — e.g. Store photos, Brand, Video"
+              >
+                <Input
+                  id="modal-asset-folder"
+                  name="folder"
+                  placeholder="e.g. Store photos"
+                />
               </Field>
             </div>
-            <Field label="Asset name" htmlFor="modal-asset-name">
+            <Field
+              label="Asset name"
+              htmlFor="modal-asset-name"
+              hint="What the team will search for in the library"
+            >
               <Input
                 id="modal-asset-name"
                 name="name"
@@ -90,8 +103,17 @@ export function RegisterAssetModalTrigger({
                 placeholder="e.g. Family room — made up"
               />
             </Field>
-            <Field label="Description" htmlFor="modal-asset-desc">
-              <Textarea id="modal-asset-desc" name="description" className="min-h-16" />
+            <Field
+              label="Description"
+              htmlFor="modal-asset-desc"
+              hint="Optional context for approvers"
+            >
+              <Textarea
+                id="modal-asset-desc"
+                name="description"
+                className="min-h-16"
+                placeholder="e.g. Hero shot for winter campaign — no people in frame"
+              />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Type" htmlFor="modal-asset-type">
@@ -114,10 +136,18 @@ export function RegisterAssetModalTrigger({
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="File name" htmlFor="modal-asset-file">
+              <Field
+                label="File name"
+                htmlFor="modal-asset-file"
+                hint="Reference only — bytes not stored here"
+              >
                 <Input id="modal-asset-file" name="fileName" placeholder="hero.jpg" />
               </Field>
-              <Field label="External reference" htmlFor="modal-asset-ref">
+              <Field
+                label="External reference"
+                htmlFor="modal-asset-ref"
+                hint="Canva/Figma edit URL or stock id"
+              >
                 <Input
                   id="modal-asset-ref"
                   name="externalRef"
@@ -125,15 +155,32 @@ export function RegisterAssetModalTrigger({
                 />
               </Field>
             </div>
-            <Field label="Tags" htmlFor="modal-asset-tags">
-              <Input id="modal-asset-tags" name="tags" placeholder="winter, hero" />
+            <Field
+              label="Tags"
+              htmlFor="modal-asset-tags"
+              hint="Comma-separated — helps search"
+            >
+              <Input
+                id="modal-asset-tags"
+                name="tags"
+                placeholder="winter, hero, butcher"
+              />
             </Field>
 
             <div className="border-t border-border pt-4">
               <p className="mb-3 text-sm font-medium">Usage rights</p>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Owner" htmlFor="modal-asset-owner">
-                  <Input id="modal-asset-owner" name="owner" required placeholder="Who owns it" />
+                <Field
+                  label="Owner"
+                  htmlFor="modal-asset-owner"
+                  hint="Who owns or supplied it"
+                >
+                  <Input
+                    id="modal-asset-owner"
+                    name="owner"
+                    required
+                    placeholder="e.g. Client / Photographer name"
+                  />
                 </Field>
                 <Field label="Licence" htmlFor="modal-asset-licence">
                   <Select id="modal-asset-licence" name="licenceType" defaultValue="owned">
@@ -146,31 +193,77 @@ export function RegisterAssetModalTrigger({
                 </Field>
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label="Licence reference" htmlFor="modal-asset-licref">
-                  <Input id="modal-asset-licref" name="licenceRef" />
+                <Field
+                  label="Licence reference"
+                  htmlFor="modal-asset-licref"
+                  hint="Contract, invoice, or stock licence id"
+                >
+                  <Input
+                    id="modal-asset-licref"
+                    name="licenceRef"
+                    placeholder="e.g. INV-2041 / Shutterstock #…"
+                  />
                 </Field>
-                <Field label="Consent reference" htmlFor="modal-asset-consent">
-                  <Input id="modal-asset-consent" name="consentRef" placeholder="e.g. cons_dave" />
+                <Field
+                  label="Consent reference"
+                  htmlFor="modal-asset-consent"
+                  hint="Consent Register id — leave blank if none"
+                >
+                  <Input
+                    id="modal-asset-consent"
+                    name="consentRef"
+                    placeholder="e.g. cons_dave"
+                  />
                 </Field>
               </div>
               <label className="mt-3 flex items-center gap-2 text-sm">
                 <input type="checkbox" name="consentObtained" className="h-4 w-4" />
-                Consent obtained
+                Consent obtained (required for recognisable people / UGC)
               </label>
-              <Field label="Allowed channels" htmlFor="modal-asset-channels" className="mt-3">
-                <Textarea
+              <Field
+                label="Allowed channels"
+                htmlFor="modal-asset-channels"
+                className="mt-3"
+                hint="Leave all unchecked to permit every channel"
+              >
+                <div
                   id="modal-asset-channels"
-                  name="allowedChannels"
-                  className="min-h-16"
-                  placeholder={"Facebook\nInstagram"}
-                />
+                  className="flex flex-wrap gap-x-4 gap-y-2"
+                >
+                  {ASSET_CHANNEL_OPTIONS.map((ch) => (
+                    <label
+                      key={ch.value}
+                      className="inline-flex items-center gap-1.5 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        name="allowedChannels"
+                        value={ch.value}
+                        className="h-4 w-4"
+                      />
+                      {ch.label}
+                    </label>
+                  ))}
+                </div>
               </Field>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label="Expiry date" htmlFor="modal-asset-expiry">
+                <Field
+                  label="Expiry date"
+                  htmlFor="modal-asset-expiry"
+                  hint="On/after this date the asset is blocked"
+                >
                   <Input id="modal-asset-expiry" name="expiryDate" type="date" />
                 </Field>
-                <Field label="Restrictions" htmlFor="modal-asset-restrict">
-                  <Input id="modal-asset-restrict" name="restrictions" />
+                <Field
+                  label="Restrictions"
+                  htmlFor="modal-asset-restrict"
+                  hint="Anything rights don't cover"
+                >
+                  <Input
+                    id="modal-asset-restrict"
+                    name="restrictions"
+                    placeholder="e.g. Website only; no paid ads"
+                  />
                 </Field>
               </div>
             </div>

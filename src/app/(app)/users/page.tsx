@@ -78,11 +78,28 @@ export default async function UsersPage() {
           <CardContent className="p-6">
             <h2 className="mb-4 font-semibold">Add user</h2>
             <form action={createUserAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="Name" htmlFor="name">
-                <Input id="name" name="name" required />
+              <Field label="Name" htmlFor="name" hint="Full name as it appears in audit logs">
+                <Input
+                  id="name"
+                  name="name"
+                  required
+                  autoComplete="name"
+                  placeholder="e.g. Sam Nguyen"
+                />
               </Field>
-              <Field label="Email" htmlFor="email">
-                <Input id="email" name="email" type="email" required />
+              <Field
+                label="Email"
+                htmlFor="email"
+                hint="Invite goes here — OAuth only, no app password"
+              >
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="name@agency.com"
+                />
               </Field>
               <Field label="Role" htmlFor="role">
                 <Select id="role" name="role" defaultValue="user">
@@ -91,7 +108,7 @@ export default async function UsersPage() {
                   <option value="super_admin">Super Admin</option>
                 </Select>
               </Field>
-              <Field label="Assign to company" htmlFor="companyId">
+              <Field label="Assign to company" htmlFor="companyId" hint="Optional — grant client access now">
                 <Select id="companyId" name="companyId" defaultValue="">
                   <option value="">— none —</option>
                   {companies.map((c) => (

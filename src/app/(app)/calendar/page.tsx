@@ -40,8 +40,16 @@ import {
   listOpenCalendarAssistForTenant,
 } from "@/lib/ai/calendar-assist";
 import { Select, Input } from "@/components/ui/form";
+import { LockedCompanyFilter } from "@/components/locked-company-field";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { now, titleCase } from "@/lib/utils";
+import { PROMO_CHANNEL_OPTIONS } from "@/lib/promo-catalog";
+
+/** Channel filter options — promo/content channel ids plus LinkedIn from social platforms. */
+const CHANNEL_FILTER_OPTIONS = [
+  ...PROMO_CHANNEL_OPTIONS,
+  { id: "linkedin", label: "LinkedIn" },
+];
 
 // Central social & content calendar (Phase 6, §34) + V1 module 4 intelligence:
 // seasonal prompts, optimal-time hints, agency portfolio view.
@@ -55,13 +63,15 @@ export default async function CalendarPage({
   const month = /^\d{4}-\d{2}$/.test(params.month ?? "")
     ? params.month!
     : now().slice(0, 7);
-  const view = params.view === "portfolio" ? "portfolio" : "month";
   const grid = monthGrid(month);
 
   const companies = await visibleCompanies(user);
   const companyById = new Map(companies.map((c) => [c.id, c]));
   const companyIds = new Set(companies.map((c) => c.id));
   const fCompany = params.company || "";
+  const companyLocked = Boolean(fCompany && companyIds.has(fCompany));
+  const view =
+    companyLocked ? "month" : params.view === "portfolio" ? "portfolio" : "month";
   const fPlatform = (params.platform || "").toLowerCase();
   const fStatus = params.status || "";
   const fCampaign = params.campaign || "";
@@ -266,9 +276,7 @@ export default async function CalendarPage({
     <div>
       <PageHeader
         title={
-          scopedCompany
-            ? `${scopedCompany.name} · delivery calendar`
-            : "Agency calendar"
+          scopedCompany ? `Calendar · ${scopedCompany.name}` : "Agency calendar"
         }
         explainerId="calendar"
         explainer={
@@ -291,29 +299,26 @@ export default async function CalendarPage({
         >
           →
         </Link>
-        <Link
-          href={`/calendar?${filterQs({ view: view === "month" ? "portfolio" : "month" })}`}
-          className={buttonClasses(view === "portfolio" ? "default" : "outline", "sm")}
-        >
-          {view === "portfolio" ? "Month grid" : "Portfolio view"}
-        </Link>
+        {!companyLocked && (
+          <Link
+            href={`/calendar?${filterQs({ view: view === "month" ? "portfolio" : "month" })}`}
+            className={buttonClasses(view === "portfolio" ? "default" : "outline", "sm")}
+          >
+            {view === "portfolio" ? "Month grid" : "Portfolio view"}
+          </Link>
+        )}
       </PageHeader>
 
       <div className="space-y-4 p-6">
         <form className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
           <input type="hidden" name="month" value={month} />
           {view === "portfolio" && <input type="hidden" name="view" value="portfolio" />}
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Client</label>
-            <Select name="company" defaultValue={fCompany} className="h-9 w-44">
-              <option value="">All clients (agency)</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <LockedCompanyFilter
+            companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+            companyId={fCompany || undefined}
+            locked={companyLocked}
+            allLabel="All clients (agency)"
+          />
           {!fCompany && (
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Business type</label>
@@ -329,7 +334,14 @@ export default async function CalendarPage({
           )}
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Channel</label>
-            <Input name="platform" defaultValue={params.platform} placeholder="e.g. Facebook" className="h-9 w-36" />
+            <Select name="platform" defaultValue={fPlatform} className="h-9 w-44">
+              <option value="">All channels</option>
+              {CHANNEL_FILTER_OPTIONS.map((ch) => (
+                <option key={ch.id} value={ch.id}>
+                  {ch.label}
+                </option>
+              ))}
+            </Select>
           </div>
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Status</label>
@@ -360,7 +372,14 @@ export default async function CalendarPage({
           <Button type="submit" size="sm">
             Filter
           </Button>
-          <Link href={`/calendar?month=${month}`} className="text-sm text-muted-foreground hover:text-foreground">
+          <Link
+            href={
+              companyLocked
+                ? `/calendar?month=${month}&company=${fCompany}`
+                : `/calendar?month=${month}`
+            }
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
             Reset
           </Link>
         </form>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Field, Textarea } from "@/components/ui/form";
+import { Field, Select, Textarea } from "@/components/ui/form";
 import { BUSINESS_TYPES } from "@/lib/business-profiles";
 import type {
   BusinessType,
@@ -15,6 +15,8 @@ interface Props {
   retail?: RetailProfileFields;
   hotel?: HotelProfileFields;
   restaurant?: RestaurantProfileFields;
+  /** When false, hide retail/wholesale profile fields (e.g. New Client wizard). Default true. */
+  showRetailProfile?: boolean;
 }
 
 function joinLines(items?: string[]): string {
@@ -27,6 +29,7 @@ export function BusinessTypeSection({
   retail,
   hotel,
   restaurant,
+  showRetailProfile = true,
 }: Props) {
   const [type, setType] = useState<BusinessType>(initialType);
 
@@ -37,10 +40,9 @@ export function BusinessTypeSection({
         htmlFor="businessType"
         hint="Drives content templates, campaign goals, and AI context"
       >
-        <select
+        <Select
           id="businessType"
           name="businessType"
-          className="h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           value={type}
           onChange={(e) => setType(e.target.value as BusinessType)}
           required
@@ -50,28 +52,30 @@ export function BusinessTypeSection({
               {b.label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <p className="text-xs text-muted-foreground">
         {BUSINESS_TYPES.find((b) => b.value === type)?.description}
       </p>
 
-      {type === "retail" && (
+      {showRetailProfile && type === "retail" && (
         <div className="space-y-5 rounded-md border border-dashed border-border p-4">
-          <p className="text-sm font-medium">Retail profile</p>
+          <p className="text-sm font-medium">Retail and wholesale profile</p>
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Product categories" htmlFor="retail_productCategories" hint="One per line">
+            <Field label="Product categories" htmlFor="retail_productCategories" hint="One per line — leave blank unless this is a real store category list">
               <Textarea
                 id="retail_productCategories"
                 name="retail_productCategories"
                 defaultValue={joinLines(retail?.productCategories)}
+                placeholder={"e.g. Specialty foods\nHomewares\nGiftware"}
               />
             </Field>
-            <Field label="Hero products" htmlFor="retail_heroProducts" hint="Bestsellers to feature">
+            <Field label="Hero products" htmlFor="retail_heroProducts" hint="Bestsellers to feature — only if known">
               <Textarea
                 id="retail_heroProducts"
                 name="retail_heroProducts"
                 defaultValue={joinLines(retail?.heroProducts)}
+                placeholder={"e.g. Hero SKU or range names from the site"}
               />
             </Field>
             <Field label="Promotions" htmlFor="retail_promotions" hint="Approved wording only">
@@ -79,13 +83,15 @@ export function BusinessTypeSection({
                 id="retail_promotions"
                 name="retail_promotions"
                 defaultValue={joinLines(retail?.promotions)}
+                placeholder="e.g. Midweek specials — see in-store board"
               />
             </Field>
-            <Field label="Seasonal focus" htmlFor="retail_seasons" hint="e.g. Winter: soup veg, slow-cooking cuts">
+            <Field label="Seasonal focus" htmlFor="retail_seasons" hint="Optional seasonal ranges">
               <Textarea
                 id="retail_seasons"
                 name="retail_seasons"
                 defaultValue={joinLines(retail?.seasons)}
+                placeholder={"Winter: …\nSummer: …"}
               />
             </Field>
           </div>
@@ -94,6 +100,7 @@ export function BusinessTypeSection({
               id="retail_pricePositioning"
               name="retail_pricePositioning"
               defaultValue={retail?.pricePositioning ?? ""}
+              placeholder="e.g. Mid-market independent — quality over cheapest"
             />
           </Field>
         </div>
@@ -108,6 +115,7 @@ export function BusinessTypeSection({
                 id="hotel_roomTypes"
                 name="hotel_roomTypes"
                 defaultValue={joinLines(hotel?.roomTypes)}
+                placeholder={"King studio\nOcean-view suite"}
               />
             </Field>
             <Field label="Packages" htmlFor="hotel_packages" hint="Stay + experience bundles">
@@ -115,6 +123,7 @@ export function BusinessTypeSection({
                 id="hotel_packages"
                 name="hotel_packages"
                 defaultValue={joinLines(hotel?.packages)}
+                placeholder={"Weekend spa escape\nDinner + stay"}
               />
             </Field>
             <Field label="Amenities" htmlFor="hotel_amenities" hint="One per line">
@@ -122,6 +131,7 @@ export function BusinessTypeSection({
                 id="hotel_amenities"
                 name="hotel_amenities"
                 defaultValue={joinLines(hotel?.amenities)}
+                placeholder={"Pool\nOn-site restaurant\nFree parking"}
               />
             </Field>
             <Field label="Occupancy language" htmlFor="hotel_occupancyLanguage" hint="Approved availability phrasing — not live inventory">
@@ -129,6 +139,7 @@ export function BusinessTypeSection({
                 id="hotel_occupancyLanguage"
                 name="hotel_occupancyLanguage"
                 defaultValue={hotel?.occupancyLanguage ?? ""}
+                placeholder="e.g. Limited rooms remaining this weekend"
               />
             </Field>
           </div>
@@ -137,6 +148,7 @@ export function BusinessTypeSection({
               id="hotel_directBookingBenefits"
               name="hotel_directBookingBenefits"
               defaultValue={hotel?.directBookingBenefits ?? ""}
+              placeholder="e.g. Best rate guarantee + late checkout when you book direct"
             />
           </Field>
         </div>
@@ -153,6 +165,7 @@ export function BusinessTypeSection({
               id="restaurant_cuisineStyle"
               name="restaurant_cuisineStyle"
               defaultValue={restaurant?.cuisineStyle ?? ""}
+              placeholder="e.g. Modern Australian all-day café — breakfast and lunch"
             />
           </Field>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -161,6 +174,7 @@ export function BusinessTypeSection({
                 id="restaurant_serviceModes"
                 name="restaurant_serviceModes"
                 defaultValue={joinLines(restaurant?.serviceModes)}
+                placeholder={"Dine-in\nTakeaway\nDelivery"}
               />
             </Field>
             <Field label="Dietary options" htmlFor="restaurant_dietaryOptions">
@@ -168,6 +182,7 @@ export function BusinessTypeSection({
                 id="restaurant_dietaryOptions"
                 name="restaurant_dietaryOptions"
                 defaultValue={joinLines(restaurant?.dietaryOptions)}
+                placeholder={"Vegetarian\nGF options\nKids meals"}
               />
             </Field>
           </div>
@@ -176,6 +191,7 @@ export function BusinessTypeSection({
               id="restaurant_peakServicePeriods"
               name="restaurant_peakServicePeriods"
               defaultValue={joinLines(restaurant?.peakServicePeriods)}
+              placeholder={"Weekday lunch 11:30–2pm\nSaturday brunch 8am–2pm"}
             />
           </Field>
         </div>

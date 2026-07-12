@@ -48,7 +48,7 @@ export function ClientPromoPicker({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="divide-y divide-border border-y border-border">
         {templates.map((t) => {
           const active = t.id === selectedId;
           return (
@@ -59,23 +59,20 @@ export function ClientPromoPicker({
                 setSelectedId(t.id);
                 setPackagePrice(t.suggestedClientPriceUsd);
               }}
-              className={`rounded-md border p-3 text-left transition-colors ${
-                active
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-card hover:border-primary/40"
+              className={`flex w-full flex-col gap-2 py-2.5 text-left transition-colors sm:flex-row sm:items-center sm:gap-4 ${
+                active ? "bg-primary/5" : "hover:bg-muted/40"
               }`}
             >
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {industryLabel(t.industry)}
-              </p>
-              <p className="mt-0.5 text-sm font-semibold">{t.name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{t.promotion}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {industryLabel(t.industry)}
+                </p>
+                <p className="text-sm font-semibold leading-tight">{t.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{t.promotion}</p>
+              </div>
+              <p className="shrink-0 text-xs text-muted-foreground whitespace-nowrap sm:text-right">
                 {durationLabel(t)} · {money(t.suggestedClientPriceUsd)} ·{" "}
-                {Math.round(t.markupPercent * 100)}% markup
-              </p>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                {t.outlines.length} ready-to-publish posts included
+                {Math.round(t.markupPercent * 100)}% markup · {t.outlines.length} posts
               </p>
             </button>
           );

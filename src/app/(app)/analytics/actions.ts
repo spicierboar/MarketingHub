@@ -14,28 +14,40 @@ function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 
-// AI management summary (§41). Tenant-wide (admin only). Returned to the client
-// component via useActionState; the run is logged in the AI Control Centre.
-export async function generateSummaryAction(_prev: unknown, _formData: FormData) {
+// AI management summary (§41). Admin only. Optional companyId scopes the report
+// when opened from a client workspace.
+export async function generateSummaryAction(_prev: unknown, formData: FormData) {
   const user = await requireAdmin();
   await assertAiBudget(user.tenantId);
   await assertAiRateLimit(user.tenantId);
-  const report = await buildReport(user.tenantId);
+  const companyId = text(formData, "companyId");
+  if (companyId) await assertCompanyAccess(companyId);
+  const report = await buildReport(
+    user.tenantId,
+    companyId ? [companyId] : undefined,
+  );
   const tenant = await getTenant(user.tenantId);
-  const { text: summary, model } = await summariseReport(report, tenant?.name ?? "your organisation");
+  const company = companyId ? await getCompany(companyId) : null;
+  const scopeName = company?.name ?? tenant?.name ?? "your organisation";
+  const { text: summary, model } = await summariseReport(report, scopeName);
   await logAiRun({
     tenantId: user.tenantId,
     userId: user.id,
     kind: "management_summary",
     model,
-    promptSummary: "Group performance summary",
+    promptSummary: company
+      ? `Performance summary · ${company.name}`
+      : "Group performance summary",
     outputChars: summary.length,
     sourcesUsed: ["Analytics report"],
     estCostUsd: model.startsWith("claude")
       ? Number(((summary.length / 4 / 1e6) * 15).toFixed(4))
       : 0,
   });
-  await logAction(user, "analytics.summary_generated", { detail: model });
+  await logAction(user, "analytics.summary_generated", {
+    companyId: companyId || undefined,
+    detail: model,
+  });
   return { text: summary, model };
 }
 

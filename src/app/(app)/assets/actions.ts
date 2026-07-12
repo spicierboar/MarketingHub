@@ -41,8 +41,10 @@ function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 function lines(fd: FormData, key: string): string[] {
-  return String(fd.get(key) || "")
-    .split(/[\n,]/)
+  // Checkboxes (name=key, multiple) or legacy comma/newline textarea.
+  return fd
+    .getAll(key)
+    .flatMap((v) => String(v).split(/[\n,]/))
     .map((s) => s.trim())
     .filter(Boolean);
 }

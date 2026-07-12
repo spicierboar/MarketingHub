@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { createAssetAction } from "../actions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 
 const ASSET_TYPES: [string, string][] = [
   ["image", "Image"],
@@ -29,6 +30,11 @@ const LICENCES: [string, string][] = [
   ["user_generated", "User-generated (UGC)"],
   ["unknown", "Unknown"],
 ];
+const ASSET_CHANNEL_OPTIONS = [
+  ...CONTENT_PLATFORM_OPTIONS,
+  { value: "Website", label: "Website" },
+  { value: "In-store", label: "In-store" },
+];
 
 export default async function NewAssetPage({
   searchParams,
@@ -36,8 +42,14 @@ export default async function NewAssetPage({
   searchParams: Promise<{ company?: string }>;
 }) {
   const user = await requireUser();
-  const companies = await visibleCompanies(user);
+  const allCompanies = await visibleCompanies(user);
   const { company: preCompany } = await searchParams;
+  const contextCompanyId =
+    preCompany && allCompanies.some((c) => c.id === preCompany) ? preCompany : undefined;
+  const companies = contextCompanyId
+    ? allCompanies.filter((c) => c.id === contextCompanyId)
+    : allCompanies;
+  const backHref = contextCompanyId ? `/assets?company=${contextCompanyId}` : "/assets";
 
   return (
     <div>
@@ -45,7 +57,7 @@ export default async function NewAssetPage({
         title="Register asset"
         description="Record an asset's metadata and usage rights. Bytes aren't stored — link the file via Canva/Figma or a stored reference."
       >
-        <Link href="/assets" className="text-sm text-primary hover:underline">
+        <Link href={backHref} className="text-sm text-primary hover:underline">
           ← Back to assets
         </Link>
       </PageHeader>
@@ -64,15 +76,29 @@ export default async function NewAssetPage({
             <CardContent className="space-y-5 p-6">
               <h2 className="font-semibold">Asset details</h2>
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Client" htmlFor="companyId">
-                  <Select id="companyId" name="companyId" required defaultValue={preCompany}>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                {contextCompanyId ? (
+                  <>
+                    <input type="hidden" name="companyId" value={contextCompanyId} />
+                    <Field label="Client" htmlFor="companyId">
+                      <p
+                        id="companyId"
+                        className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium"
+                      >
+                        {companies[0]?.name}
+                      </p>
+                    </Field>
+                  </>
+                ) : (
+                  <Field label="Client" htmlFor="companyId">
+                    <Select id="companyId" name="companyId" required defaultValue={preCompany}>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
                 <Field label="Folder" htmlFor="folder" hint="e.g. Store photos, Brand, Video">
                   <Input id="folder" name="folder" placeholder="Optional folder" />
                 </Field>
@@ -80,8 +106,13 @@ export default async function NewAssetPage({
               <Field label="Asset name" htmlFor="name">
                 <Input id="name" name="name" required placeholder="e.g. Family room — made up" />
               </Field>
-              <Field label="Description" htmlFor="description">
-                <Textarea id="description" name="description" className="min-h-16" />
+              <Field label="Description" htmlFor="description" hint="Optional context for approvers">
+                <Textarea
+                  id="description"
+                  name="description"
+                  className="min-h-16"
+                  placeholder="e.g. Hero shot for winter campaign — no people in frame"
+                />
               </Field>
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="Type" htmlFor="assetType">
@@ -155,14 +186,24 @@ export default async function NewAssetPage({
               <Field
                 label="Allowed channels"
                 htmlFor="allowedChannels"
-                hint="One per line. Leave blank to permit all channels."
+                hint="Leave all unchecked to permit every channel"
               >
-                <Textarea
-                  id="allowedChannels"
-                  name="allowedChannels"
-                  className="min-h-16"
-                  placeholder={"Facebook\nInstagram\nWebsite"}
-                />
+                <div id="allowedChannels" className="flex flex-wrap gap-x-4 gap-y-2">
+                  {ASSET_CHANNEL_OPTIONS.map((ch) => (
+                    <label
+                      key={ch.value}
+                      className="inline-flex items-center gap-1.5 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        name="allowedChannels"
+                        value={ch.value}
+                        className="h-4 w-4"
+                      />
+                      {ch.label}
+                    </label>
+                  ))}
+                </div>
               </Field>
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="Expiry date" htmlFor="expiryDate" hint="On/after this date the asset is blocked">

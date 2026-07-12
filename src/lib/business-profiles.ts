@@ -23,8 +23,9 @@ export const BUSINESS_TYPES: {
   },
   {
     value: "retail",
-    label: "Retail",
-    description: "Products, promotions, seasonal ranges — not full inventory",
+    label: "Retail and Wholesale",
+    description:
+      "Retail and wholesale businesses — products, promotions, seasonal ranges (not full inventory)",
   },
   {
     value: "hotel",
@@ -111,6 +112,7 @@ export interface SignupDefaults {
 /** Deterministic keyword map from scraped or manual industry text → business type. */
 export function inferBusinessTypeFromIndustry(industry?: string): BusinessType {
   const text = (industry ?? "").toLowerCase();
+
   if (
     /restaurant|cafe|café|food service|hospitality.*dining|bistro|bakery|dining|bar\b|pub\b/.test(
       text,
@@ -122,18 +124,32 @@ export function inferBusinessTypeFromIndustry(industry?: string): BusinessType {
     return "hotel";
   }
   if (
-    /retail|supermarket|grocery|shop|store|convenience|boutique|florist|flowers|iga\b/.test(
-      text,
-    )
-  ) {
-    return "retail";
-  }
-  if (
     /dental|medical|legal|accounting|consulting|professional|clinic|physio|chiro|lawyer|solicitor/.test(
       text,
     )
   ) {
     return "professional";
+  }
+
+  // Consumer grocery / online store beats brand-name "Imports" (e.g. Viya Imports).
+  // Keep B2B wholesale as other when there is no consumer-retail signal.
+  const consumerRetail =
+    /\b(grocery|supermarket|convenience|online\s+store|e-?commerce|florist|flowers|iga\b)\b/.test(
+      text,
+    ) ||
+    (/\b(retail|boutique|shop|store)\b/.test(text) &&
+      !/\b(serving\s+retailers?|for\s+retailers?|wholesale|b2b|trade\s+supply|distributor)\b/.test(
+        text,
+      ));
+  if (consumerRetail) return "retail";
+
+  // Trade / wholesale / imports
+  if (
+    /\b(import(?:er|s|ing)?|wholesale|distributor|distribution|b2b|trade supply)\b/.test(
+      text,
+    )
+  ) {
+    return "other";
   }
   return "other";
 }

@@ -79,13 +79,54 @@ export default async function SmsPage({
               <h2 className="text-lg font-semibold">Settings</h2>
               <form action={saveSmsSettingsAction} className="space-y-3">
                 <input type="hidden" name="companyId" value={company.id} />
-                <Field label="Country"><Select name="countryCode" defaultValue={settings.countryCode}>{["AU","NZ","US","GB"].map((cc)=><option key={cc} value={cc}>{cc}</option>)}</Select></Field>
-                <Field label="Sender ID" hint={`Max ${smsCountryRule(settings.countryCode).maxSenderIdLen} chars`}><Input name="senderId" defaultValue={settings.senderId} required /></Field>
+                <Field label="Country" hint="Affects sender-ID rules and cost preview">
+                  <Select name="countryCode" defaultValue={settings.countryCode}>
+                    {["AU", "NZ", "US", "GB"].map((cc) => (
+                      <option key={cc} value={cc}>
+                        {cc}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field
+                  label="Sender ID"
+                  hint={`Max ${smsCountryRule(settings.countryCode).maxSenderIdLen} chars ï¿½ brand name or short code`}
+                >
+                  <Input
+                    name="senderId"
+                    defaultValue={settings.senderId}
+                    required
+                    placeholder="e.g. HarbourRstr"
+                  />
+                </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Quiet start"><Input name="quietHoursStart" type="time" defaultValue={settings.quietHoursStart} /></Field>
-                  <Field label="Quiet end"><Input name="quietHoursEnd" type="time" defaultValue={settings.quietHoursEnd} /></Field>
+                  <Field label="Quiet start" hint="Local time ï¿½ no promotional sends">
+                    <Input
+                      name="quietHoursStart"
+                      type="time"
+                      defaultValue={settings.quietHoursStart}
+                    />
+                  </Field>
+                  <Field label="Quiet end">
+                    <Input
+                      name="quietHoursEnd"
+                      type="time"
+                      defaultValue={settings.quietHoursEnd}
+                    />
+                  </Field>
                 </div>
-                <Field label="Monthly cap AUD"><Input name="monthlySpendCapUsd" type="number" min={0} defaultValue={settings.monthlySpendCapUsd ?? ""} /></Field>
+                <Field
+                  label="Monthly cap AUD"
+                  hint="Optional spend ceiling ï¿½ blank = uncapped"
+                >
+                  <Input
+                    name="monthlySpendCapUsd"
+                    type="number"
+                    min={0}
+                    defaultValue={settings.monthlySpendCapUsd ?? ""}
+                    placeholder="e.g. 200"
+                  />
+                </Field>
                 <Button type="submit">Save settings</Button>
               </form>
             </CardContent></Card>
@@ -93,10 +134,19 @@ export default async function SmsPage({
               <h2 className="text-lg font-semibold">Add subscriber</h2>
               <form action={addSmsSubscriberAction} className="space-y-3">
                 <input type="hidden" name="companyId" value={company.id} />
-                <Field label="Phone"><Input name="phone" required /></Field>
-                <Field label="Name"><Input name="name" /></Field>
-                <Field label="Tags"><Input name="tags" placeholder="loyalty" /></Field>
-                <label className="flex gap-2 text-sm"><input type="checkbox" name="consent" defaultChecked />Consent on file</label>
+                <Field label="Phone" hint="E.164 preferred ï¿½ e.g. +61400111222">
+                  <Input name="phone" required placeholder="+61400111222" />
+                </Field>
+                <Field label="Name" hint="Optional ï¿½ used in {{name}} merge">
+                  <Input name="name" placeholder="e.g. Sam" />
+                </Field>
+                <Field label="Tags" hint="Comma-separated segment tags">
+                  <Input name="tags" placeholder="loyalty, vip" />
+                </Field>
+                <label className="flex gap-2 text-sm">
+                  <input type="checkbox" name="consent" defaultChecked />
+                  Consent on file
+                </label>
                 <Button type="submit">Add</Button>
               </form>
             </CardContent></Card>
@@ -109,9 +159,9 @@ export default async function SmsPage({
                 {subs.map((sub) => (
                   <tr key={sub.id} className="border-b">
                     <td className="py-2 font-mono text-xs">{sub.phoneE164}</td>
-                    <td>{sub.name ?? "—"}</td>
+                    <td>{sub.name ?? "ï¿½"}</td>
                     <td><StatusBadge status={sub.consentStatus} /></td>
-                    <td>{sub.tags.join(", ") || "—"}</td>
+                    <td>{sub.tags.join(", ") || "ï¿½"}</td>
                     <td className="flex gap-2">
                       {sub.consentStatus !== "opted_in" && <form action={setSmsConsentAction}><input type="hidden" name="subscriberId" value={sub.id} /><input type="hidden" name="status" value="opted_in" /><Button size="sm" variant="secondary" type="submit">Opt in</Button></form>}
                       {sub.consentStatus !== "opted_out" && <form action={setSmsConsentAction}><input type="hidden" name="subscriberId" value={sub.id} /><input type="hidden" name="status" value="opted_out" /><Button size="sm" variant="outline" type="submit">Opt out</Button></form>}
@@ -131,9 +181,9 @@ export default async function SmsPage({
               const cost = previewSmsCost(camp.body, camp.stats.recipients, settings.countryCode);
               return (
                 <div key={camp.id} className="rounded-lg border p-4">
-                  <div className="flex justify-between gap-2"><div><p className="font-medium">{camp.name}</p><p className="text-xs text-muted-foreground">{kindLabel(camp.kind)}{camp.sentAt ? ` · ${formatDate(camp.sentAt)}` : ""}</p></div><StatusBadge status={camp.status} /></div>
+                  <div className="flex justify-between gap-2"><div><p className="font-medium">{camp.name}</p><p className="text-xs text-muted-foreground">{kindLabel(camp.kind)}{camp.sentAt ? ` ï¿½ ${formatDate(camp.sentAt)}` : ""}</p></div><StatusBadge status={camp.status} /></div>
                   <p className="mt-2 text-sm whitespace-pre-wrap">{camp.body}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">Est. {money(camp.stats.estimatedCostUsd || cost.estimatedCostUsd)} · {cost.segmentsPerMessage} seg/msg · {camp.stats.recipients} recipients</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Est. {money(camp.stats.estimatedCostUsd || cost.estimatedCostUsd)} ï¿½ {cost.segmentsPerMessage} seg/msg ï¿½ {camp.stats.recipients} recipients</p>
                   {(camp.status === "draft" || camp.status === "scheduled") && (
                     <form action={sendSmsCampaignAction} className="mt-3"><input type="hidden" name="campaignId" value={camp.id} /><Button size="sm" type="submit">Send now (simulated)</Button></form>
                   )}

@@ -13,10 +13,12 @@
 import type { PostMetrics } from "@/lib/analytics";
 import { findConnectedIntegration } from "@/lib/db";
 import { decryptToken } from "@/lib/crypto";
+import { liveIntegrationsAllowed } from "@/lib/env";
 import type { PublishingIntegration, ScheduledPost } from "@/lib/types";
 
 export function analyticsLive(): boolean {
-  return process.env.ANALYTICS_LIVE === "true";
+  if (process.env.ANALYTICS_LIVE !== "true") return false;
+  return liveIntegrationsAllowed();
 }
 
 /** Parse the platform object id from a publish-log detail string. */

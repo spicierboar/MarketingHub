@@ -7,8 +7,11 @@
 // pipeline is testable with zero external accounts. Mirrors adsLive() /
 // publishingLive().
 
+import { liveIntegrationsAllowed } from "@/lib/env";
+
 export function visualsLive(): boolean {
-  return process.env.VISUALS_LIVE === "true";
+  if (process.env.VISUALS_LIVE !== "true") return false;
+  return liveIntegrationsAllowed();
 }
 
 // Co-gate: live generation needs a storage backend for the output bytes.

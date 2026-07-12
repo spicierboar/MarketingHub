@@ -6,7 +6,7 @@
 >
 > | Item | Status | Notes |
 > |------|--------|-------|
-> | Automation-first + packages + 6h–24h delivery | **COMMITTED** `c1c30a0` | Basic $349 / Pro $649 / Blast $999 / Custom · ads media always extra |
+> | Automation-first + packages + 6h–12h delivery | **COMMITTED** `c1c30a0` | Basic $349 / Pro $649 / Blast $999 / Custom · ads media always extra |
 > | **Migrations 0043 + 0044** | **PASTED** | `marketing_package_catalog` · delivery eligibleAt / email stamp / enqueue_reason |
 > | **Migration 0045** | **PASTE IF NOT DONE** | `0045_tenant_promo_industries.sql` (+ any owner paste batch for 0045) |
 > | UX / polish / New Client / Approvals look-ahead | **UNCOMMITTED** | large tree beyond `c1c30a0` — no invented hashes |
@@ -19,22 +19,28 @@
 > - Company-scoped strip + Working on {client} · chip-row Brand/Produce/Channels/Ads on all `?company=` pages
 > - Client Account extra work requests · form UX placeholders/dropdowns platform-wide (multiple passes)
 > - New Client website-first scrape / Back / add-on gating / package+card copy
+> - **New Client Checkout restored** — Package → Checkout (mock demo payment clears `packageChangePendingBilling`; live Stripe when `STRIPE_PRICE_PACKAGE_*` + keys) → Client login
+> - Scrape smarter: whole-page social URLs (FB/IG/TikTok/YT/LI/X/GBP), no SEO title → trading names, no invented Pty Ltd / offers
 > - Approvals look-ahead calendar (−7…+21) · LocalSeoQaDraftSpec fix · demo server flaky/restarts
 >
 > **Owner migrations:** 0043 + 0044 **done**. **0045** — paste if not done.
 >
 > **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. No commit unless asked. Exclude `_owner_paste_*`.
 >
-> **Demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · New Client · Approvals look-ahead · client Account extra work · Agency Settings → Marketing packages
+> **Demo:** `scripts/dev-3002.ps1` or `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · New Client (Website → Profile → Package → **Checkout** → Client login) · Approvals look-ahead · client Account extra work · Agency Settings → Marketing packages
+>
+> **Envs:** Local / Staging / Live — **`docs/ENVIRONMENTS.md`** (matrix + owner actions). Deploy contract: `docs/DEPLOYMENT.md`. Live cutover: `docs/OWNER-LIVE-CUTOVER.md`. Soft-block: `liveIntegrationsAllowed()` refuses cutover `*_LIVE` on staging / local demo / localhost `APP_ORIGIN`.
 >
 > **NEXT:**
 > 1. Commit UX/polish tree when asked (exclude integrator temps / `_owner_paste_*`)
 > 2. Paste **0045** if not done
-> 3. Demo New Client + Approvals look-ahead + client extra work
+> 3. Demo New Client checkout (mock) + Approvals look-ahead + client extra work
 > 4. Push `main` when asked · W6 Google still waiting
-> 5. Optional: Stripe package billing for Extra promos · denser form leftovers if any
+> 5. **Pending — live Stripe package prices / proration:** set `STRIPE_PRICE_PACKAGE_*` when ready; webhook `kind=marketing_package` + session-verify settle are wired (demo mock still OK; do not invent charges)
+> 6. Optional: denser form leftovers if any
+> 7. **Owner env setup (when ready):** Supabase staging project + Vercel Preview env scope + `git push -u origin staging` — see `docs/ENVIRONMENTS.md`
 >
-> **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover
+> **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover · staging Supabase + Preview env vars (optional until shared QA)
 >
 > **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
 >
@@ -348,14 +354,23 @@ Core rule enforced everywhere: **AI drafts → users review → admins approve �
 
 ## Run it
 
-```bash
+**Three environments:** local coding · staging preview · live production — see **`docs/ENVIRONMENTS.md`**.
+
+```powershell
 cd F:/MarketingHub/command-centre
 npm install       # first time only
-npm run dev       # http://localhost:3000  (preview config uses port 5590)
+
+# Preferred local demo (port 3002):
+powershell -ExecutionPolicy Bypass -File scripts\dev-3002.ps1
+# → http://127.0.0.1:3002/login
+
+# Or foreground:
+# $env:CC_LOCAL_DEMO='true'; $env:NEXT_PUBLIC_CC_LOCAL_DEMO='true'; npm run dev -- -p 3002
 ```
 
 - **Runs with zero external accounts.** Data is a seeded in-memory store; AI drafting uses a deterministic template when no API key is set.
 - Node 24+, npm 11+. No database, Docker, or cloud project required for the demo.
+- Staging / live deploy: `docs/DEPLOYMENT.md` · cutover: `docs/OWNER-LIVE-CUTOVER.md` (`https://mangotickle.com.au`).
 - Preview/verify config: server name `command-centre`, port **5590** (in `C:/Claude/.claude/launch.json`).
 
 ### Demo accounts (passwordless — enter the email, no password)

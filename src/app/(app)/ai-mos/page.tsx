@@ -7,10 +7,11 @@ import {
   listRecentSignalRunsForTenant,
 } from "@/lib/ai-mos";
 import { aiMosConfigured } from "@/lib/ai-mos-connectors";
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { formatDate, titleCase } from "@/lib/utils";
 import type { AiMosOpportunity, AiMosSignalRun } from "@/lib/types";
 import { AiMosOpportunityCard } from "@/components/ai-mos-opportunity-cards";
@@ -40,6 +41,9 @@ export default async function AiMosPage() {
         explainer="Ops radar: scan clients for health, calendar gaps, cadence, approvals, reviews, and loyalty. Convert a signal into a draft or dismiss it — never auto-publishes."
       >
         <div className="flex flex-wrap items-center gap-2">
+          <Link href="/recommendations" className={buttonClasses("outline", "sm")}>
+            Recommendations
+          </Link>
           <Badge tone="info">{titleCase(aiMosExecutionMode().replace(/_/g, " "))}</Badge>
           <Badge tone={aiMosConfigured() ? "success" : "neutral"}>
             {aiMosConfigured() ? "Live connectors" : "Simulated signals"}

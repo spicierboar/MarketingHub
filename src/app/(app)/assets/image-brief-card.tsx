@@ -1,13 +1,21 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { generateImageBriefAction } from "./actions";
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import type { Company } from "@/lib/types";
 
 // AI image-brief generator (§46). Produces a governed creative brief (as a
 // content item) grounded in the company Brand Brain. Runs with the template
 // fallback when no Claude key is set.
-export function ImageBriefCard({ companies }: { companies: Company[] }) {
+export function ImageBriefCard({
+  companies,
+  defaultCompanyId,
+}: {
+  companies: Company[];
+  defaultCompanyId?: string;
+}) {
   if (companies.length === 0) {
     return (
       <Card>
@@ -18,6 +26,7 @@ export function ImageBriefCard({ companies }: { companies: Company[] }) {
       </Card>
     );
   }
+  const opts = companies.map((c) => ({ id: c.id, name: c.name }));
   return (
     <Card>
       <CardContent className="p-6">
@@ -27,15 +36,12 @@ export function ImageBriefCard({ companies }: { companies: Company[] }) {
           routed for review like any other content.
         </p>
         <form action={generateImageBriefAction} className="space-y-3">
-          <Field label="Client" htmlFor="ib-company">
-            <Select id="ib-company" name="companyId" required>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <LockedCompanyField
+            id="ib-company"
+            companies={opts}
+            companyId={defaultCompanyId}
+            locked={Boolean(defaultCompanyId)}
+          />
           <Field label="Topic / subject" htmlFor="ib-topic">
             <Input id="ib-topic" name="topic" required placeholder="e.g. Winter warmers hero shot" />
           </Field>
@@ -49,7 +55,14 @@ export function ImageBriefCard({ companies }: { companies: Company[] }) {
             />
           </Field>
           <Field label="Channel (optional)" htmlFor="ib-channel">
-            <Input id="ib-channel" name="channel" placeholder="e.g. Instagram" />
+            <Select id="ib-channel" name="channel" defaultValue="">
+              <option value="">Not specified</option>
+              {CONTENT_PLATFORM_OPTIONS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Button type="submit" className="w-full">
             Generate brief

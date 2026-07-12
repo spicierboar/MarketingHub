@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import {
@@ -13,19 +14,48 @@ import {
   getTenant,
   getUserByEmail,
   grantAccess,
+  listCompanies,
   updateCompany,
   upsertCompanyEntitlement,
 } from "@/lib/db";
 import { requireSalesRepOrAdmin } from "@/lib/auth/rbac";
-import { assertCompanyQuota, createAddonCheckoutSession, stripeConfigured } from "@/lib/billing";
+import {
+  assertCompanyQuota,
+  createAddonCheckoutSession,
+  createMarketingPackageCheckoutSession,
+  retrieveCheckoutSession,
+  stripeConfigured,
+  stripeMarketingPackagePriceId,
+  useMockPackageCheckout,
+  verifyMarketingPackageCheckoutSession,
+} from "@/lib/billing";
 import { isAddonId } from "@/lib/addons";
+import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
+import { verifyBusinessNameAgainstAbr } from "@/lib/abn-lookup";
+import {
+  duplicateNameAbnMessage,
+  findDuplicateByNameAndAbn,
+  parseAbnInput,
+} from "@/lib/company-identity";
+import {
+  isMarketingPackageId,
+  resolvePackageById,
+  resolveSelectionForPackage,
+} from "@/lib/marketing-packages";
 import { resolveOrigin } from "@/lib/origin";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
-import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
-import { defaultServiceLevel } from "@/lib/managed-service/authority";
-import type { AddonId, BusinessType, CompanyProfile } from "@/lib/types";
+import { ensureAndKickManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
+import { localDemoEnabled } from "@/lib/env";
+import type {
+  AddonId,
+  BusinessType,
+  CompanyProfile,
+  ManagedServiceSettings,
+  MarketingPackageId,
+} from "@/lib/types";
+import { wizardPath } from "./wizard-path";
 
 const BUSINESS_TYPES: BusinessType[] = [
   "restaurant_cafe",
@@ -45,71 +75,452 @@ function text(fd: FormData, key: string): string | undefined {
   return v || undefined;
 }
 
-function wizardPath(step: string, companyId?: string, extras?: Record<string, string>): string {
-  const params = new URLSearchParams({ step });
-  if (companyId) params.set("companyId", companyId);
-  if (extras) for (const [k, v] of Object.entries(extras)) if (v) params.set(k, v);
-  return `/sales/new-client?${params.toString()}`;
-}
-
 async function assertSalesCompanyInTenant(companyId: string) {
   const user = await requireSalesRepOrAdmin();
   const company = await getCompany(companyId);
   if (!company || company.tenantId !== user.tenantId) {
     throw new Error("Forbidden: no access to this company");
   }
-  return user;
+  return { user, company };
 }
 
-function profileFromForm(fd: FormData, businessType: BusinessType): CompanyProfile {
+function profileFromForm(fd: FormData, businessType: BusinessType, base?: CompanyProfile): CompanyProfile {
   const profile: CompanyProfile = {
+    ...(base ?? {
+      callsToAction: [],
+      prohibitedClaims: [],
+      approvedClaims: [],
+      requiredDisclaimers: [],
+      socialLinks: [],
+      serviceAreas: [],
+      services: [],
+    }),
     businessType,
     natureOfBusiness: text(fd, "natureOfBusiness"),
     targetCustomers: text(fd, "targetCustomers"),
     brandVoice: text(fd, "brandVoice"),
-    callsToAction: [],
-    prohibitedClaims: [],
-    approvedClaims: [],
-    requiredDisclaimers: [],
-    socialLinks: [],
-    serviceAreas: [],
-    services: [],
+    serviceAreas: linesFromForm(String(fd.get("serviceAreas") ?? "")),
+    services: linesFromForm(String(fd.get("services") ?? "")),
+    callsToAction: linesFromForm(String(fd.get("callsToAction") ?? "")),
+    approvedClaims: (() => {
+      const fromForm = linesFromForm(String(fd.get("approvedClaims") ?? ""));
+      return fromForm.length ? fromForm : (base?.approvedClaims ?? []);
+    })(),
+    prohibitedClaims: (() => {
+      const fromForm = linesFromForm(String(fd.get("prohibitedClaims") ?? ""));
+      return fromForm.length ? fromForm : (base?.prohibitedClaims ?? []);
+    })(),
+    requiredDisclaimers: (() => {
+      const fromForm = linesFromForm(
+        String(fd.get("requiredDisclaimers") ?? ""),
+      );
+      return fromForm.length ? fromForm : (base?.requiredDisclaimers ?? []);
+    })(),
   };
   if (businessType === "retail") {
+    const cats = linesFromForm(String(fd.get("retail_productCategories") ?? ""));
+    const baseRetail = base?.retail;
     profile.retail = {
-      productCategories: linesFromForm(String(fd.get("retail_productCategories") ?? "")),
-      heroProducts: linesFromForm(String(fd.get("retail_heroProducts") ?? "")),
-      promotions: [],
-      seasons: [],
+      productCategories: cats.length ? cats : (baseRetail?.productCategories ?? []),
+      heroProducts: baseRetail?.heroProducts ?? [],
+      promotions: baseRetail?.promotions ?? [],
+      seasons: baseRetail?.seasons ?? [],
+      pricePositioning: baseRetail?.pricePositioning,
+    };
+    // Drop empty retail slice so we don't invent blank vertical data
+    if (
+      !profile.retail.productCategories.length &&
+      !profile.retail.heroProducts.length &&
+      !profile.retail.promotions.length &&
+      !profile.retail.seasons.length &&
+      !profile.retail.pricePositioning?.trim()
+    ) {
+      delete profile.retail;
+    }
+  } else if (businessType === "hotel") {
+    profile.hotel = {
+      roomTypes: linesFromForm(String(fd.get("hotel_roomTypes") ?? "")),
+      packages: linesFromForm(String(fd.get("hotel_packages") ?? "")),
+      amenities: linesFromForm(String(fd.get("hotel_amenities") ?? "")),
+      occupancyLanguage: text(fd, "hotel_occupancyLanguage"),
+      directBookingBenefits: text(fd, "hotel_directBookingBenefits"),
+    };
+  } else if (businessType === "restaurant_cafe") {
+    profile.restaurant = {
+      cuisineStyle: text(fd, "restaurant_cuisineStyle"),
+      serviceModes: linesFromForm(String(fd.get("restaurant_serviceModes") ?? "")),
+      dietaryOptions: linesFromForm(String(fd.get("restaurant_dietaryOptions") ?? "")),
+      peakServicePeriods: linesFromForm(
+        String(fd.get("restaurant_peakServicePeriods") ?? ""),
+      ),
     };
   }
   return profile;
 }
 
-export async function saveBusinessStepAction(formData: FormData) {
-  const user = await requireSalesRepOrAdmin();
-  const name = String(formData.get("name") || "").trim();
-  if (!name) throw new Error("Client name is required");
-  const raw = String(formData.get("businessType") || "other");
-  const businessType = BUSINESS_TYPES.includes(raw as BusinessType) ? (raw as BusinessType) : "other";
-  await assertCompanyQuota(user.tenantId);
-  const company = await createCompany({ tenantId: user.tenantId, name, createdBy: user.id });
-  await updateCompany(company.id, { profile: profileFromForm(formData, businessType) });
-  await logAction(user, "company.created", {
-    targetType: "company",
-    targetId: company.id,
-    companyId: company.id,
-    detail: `${name} (field sales)`,
-  });
-  redirect(wizardPath("addons", company.id));
+async function assertNoNameAbnDuplicate(
+  tenantId: string,
+  businessName: string,
+  abn: string | undefined,
+  excludeCompanyId?: string,
+) {
+  if (!abn) return;
+  const dup = findDuplicateByNameAndAbn(
+    await listCompanies(tenantId),
+    businessName,
+    abn,
+    { excludeCompanyId },
+  );
+  if (dup) throw new Error(duplicateNameAbnMessage(dup.company));
 }
 
+/** ABR name+ABN gate then internal duplicate check (create / identity update). */
+async function assertAbrIdentityAndNoDuplicate(
+  tenantId: string,
+  businessName: string,
+  abn: string | undefined,
+  excludeCompanyId?: string,
+): Promise<{ legalName?: string; abrDetail: string }> {
+  if (!abn) return { abrDetail: "abr=n/a" };
+  const abrGate = await verifyBusinessNameAgainstAbr(businessName, abn);
+  if (!abrGate.ok) throw new Error(abrGate.error);
+  await assertNoNameAbnDuplicate(tenantId, businessName, abn, excludeCompanyId);
+  return {
+    legalName: abrGate.mode === "live" ? abrGate.legalName : undefined,
+    abrDetail:
+      abrGate.mode === "skipped"
+        ? `abr=${abrGate.warning ?? "skipped"}`
+        : "abr=verified",
+  };
+}
+
+/**
+ * Step 1 — website (+ consent) → scrape/enrich → Profile (prefilled).
+ * Creates the company on first submit; re-scrapes when editing an existing draft.
+ * Identity: business name + ABN (ABN required for new accounts).
+ */
+export async function saveWebsiteStepAction(formData: FormData) {
+  const existingId = String(formData.get("companyId") || "").trim();
+  try {
+    const user = await requireSalesRepOrAdmin();
+    const name = String(formData.get("name") || "").trim();
+    if (!name) throw new Error("Business name is required");
+    const abnParsed = parseAbnInput(String(formData.get("abn") || ""));
+    if (!abnParsed.ok) throw new Error(abnParsed.error);
+    const websiteRaw = String(formData.get("website") || "").trim();
+    const consent =
+      formData.get("consent") === "on" || formData.get("consent") === "true";
+
+    // Back-edit: empty ABN field keeps the existing company ABN (I1).
+    let existingCompany =
+      existingId ? (await assertSalesCompanyInTenant(existingId)).company : null;
+    const existingAbnParsed = existingCompany?.profile.abn
+      ? parseAbnInput(existingCompany.profile.abn)
+      : { ok: true as const, abn: undefined };
+    if (existingCompany && !existingAbnParsed.ok) {
+      throw new Error(existingAbnParsed.error);
+    }
+    const effectiveAbn =
+      abnParsed.abn ??
+      (existingAbnParsed.ok ? existingAbnParsed.abn : undefined);
+
+    if (!existingId && !effectiveAbn) {
+      throw new Error(
+        "ABN is required — business name + ABN identify a client account.",
+      );
+    }
+
+    if (websiteRaw && !consent) {
+      throw new Error(
+        "Confirm client consent to scrape public website data, or leave the website blank.",
+      );
+    }
+
+    // Always re-run ABR + (name+ABN) duplicate when an ABN is present.
+    const identity = await assertAbrIdentityAndNoDuplicate(
+      user.tenantId,
+      name,
+      effectiveAbn,
+      existingId || undefined,
+    );
+
+    let company;
+    if (existingCompany) {
+      company = existingCompany;
+      const nextProfile: CompanyProfile = { ...company.profile };
+      if (effectiveAbn) nextProfile.abn = effectiveAbn;
+      if (identity.legalName && !nextProfile.legalName?.trim()) {
+        nextProfile.legalName = identity.legalName;
+      }
+      await updateCompany(company.id, { name, profile: nextProfile });
+      company = { ...company, name, profile: nextProfile };
+    } else {
+      await assertCompanyQuota(user.tenantId);
+      company = await createCompany({
+        tenantId: user.tenantId,
+        name,
+        createdBy: user.id,
+      });
+      if (effectiveAbn) {
+        const nextProfile: CompanyProfile = {
+          ...company.profile,
+          abn: effectiveAbn,
+        };
+        if (identity.legalName) nextProfile.legalName = identity.legalName;
+        await updateCompany(company.id, { profile: nextProfile });
+        company = { ...company, profile: nextProfile };
+      }
+      await logAction(user, "company.created", {
+        targetType: "company",
+        targetId: company.id,
+        companyId: company.id,
+        detail: `${name} (field sales; ${identity.abrDetail})`,
+      });
+    }
+
+    let scraped = "0";
+    if (websiteRaw && consent) {
+      const result = await scrapeAndApplyInitialProfile({
+        company,
+        website: websiteRaw,
+        actorId: user.id,
+      });
+      await updateCompany(company.id, { profile: result.profile });
+      if (result.mode !== "failed") {
+        await logAction(user, "auto_onboarding.scraped", {
+          targetType: "company",
+          targetId: company.id,
+          companyId: company.id,
+          detail: `mode=${result.mode} fields=${result.fieldCount} sales=1 enrich=${result.enrichMode ?? "none"}`,
+        });
+      }
+      if (result.fieldCount > 0) {
+        await logAction(user, "auto_onboarding.applied", {
+          targetType: "company",
+          targetId: company.id,
+          companyId: company.id,
+          detail: `fields=${result.fieldCount} sales=1`,
+        });
+        scraped = "1";
+      }
+    } else if (!websiteRaw && existingId) {
+      // Clearing website on back-edit — keep profile, drop URL if blank.
+      const next = { ...company.profile };
+      delete next.website;
+      await updateCompany(company.id, { profile: next });
+    }
+
+    redirect(wizardPath("business", company.id, { scraped }));
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "Could not save website step";
+    redirect(
+      wizardPath("website", existingId || undefined, { error: msg }),
+    );
+  }
+}
+
+/** Step 2 — review/edit Profile (prefilled from scrape). */
+export async function saveBusinessStepAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "").trim();
+  try {
+    if (!companyId) throw new Error("Company is required");
+    const { user, company } = await assertSalesCompanyInTenant(companyId);
+    const name = String(formData.get("name") || "").trim();
+    if (!name) throw new Error("Business name is required");
+    const abnParsed = parseAbnInput(String(formData.get("abn") || ""));
+    if (!abnParsed.ok) throw new Error(abnParsed.error);
+    if (!abnParsed.abn && !company.profile.abn?.trim()) {
+      throw new Error(
+        "ABN is required — business name + ABN identify a client account.",
+      );
+    }
+    const raw = String(formData.get("businessType") || "other");
+    const businessType = BUSINESS_TYPES.includes(raw as BusinessType)
+      ? (raw as BusinessType)
+      : "other";
+    const profile = profileFromForm(formData, businessType, company.profile);
+    if (abnParsed.abn) profile.abn = abnParsed.abn;
+    const identityAbn = profile.abn;
+    const identityChanged =
+      name !== company.name ||
+      (identityAbn &&
+        identityAbn.replace(/\D/g, "") !==
+          String(company.profile.abn ?? "").replace(/\D/g, ""));
+    if (identityAbn && identityChanged) {
+      const identity = await assertAbrIdentityAndNoDuplicate(
+        user.tenantId,
+        name,
+        identityAbn,
+        company.id,
+      );
+      if (identity.legalName && !profile.legalName?.trim()) {
+        profile.legalName = identity.legalName;
+      }
+    } else {
+      await assertNoNameAbnDuplicate(user.tenantId, name, identityAbn, company.id);
+    }
+    await updateCompany(company.id, { name, profile });
+    await logAction(user, "company.updated", {
+      targetType: "company",
+      targetId: company.id,
+      companyId: company.id,
+      detail: "Field sales profile step",
+    });
+    redirect(wizardPath("package", company.id, { profileSaved: "1" }));
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "Could not save profile";
+    if (companyId) {
+      redirect(wizardPath("business", companyId, { error: msg }));
+    }
+    throw e;
+  }
+}
+
+/** Step 3 — marketing package for this company (not tenant SaaS plan). */
+export async function savePackageStepAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "").trim();
+  const { user, company } = await assertSalesCompanyInTenant(companyId);
+  const idRaw = String(formData.get("marketingPackageId") || "").trim();
+  if (!isMarketingPackageId(idRaw)) throw new Error("Unknown marketing package.");
+  const marketingPackageId = idRaw as MarketingPackageId;
+  const tenant = await getTenant(user.tenantId);
+  const { serviceLevel, customModules } = resolveSelectionForPackage(
+    tenant,
+    marketingPackageId,
+    formData,
+  );
+  const prev = company.profile.managedService;
+  const nextMs: ManagedServiceSettings = {
+    ...(prev ?? { serviceLevel }),
+    serviceLevel,
+    marketingPackageId,
+    customModules,
+    packageChangePendingBilling: true,
+  };
+  await updateCompany(companyId, {
+    profile: { ...company.profile, managedService: nextMs },
+  });
+  await logAction(user, "company.marketing_package_set", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail:
+      marketingPackageId === "custom"
+        ? `custom · ${serviceLevel} (field sales)`
+        : `${marketingPackageId} · ${serviceLevel} (field sales)`,
+  });
+  redirect(wizardPath("checkout", companyId));
+}
+
+/** Clear packageChangePendingBilling after demo or live Checkout success. */
+async function settlePackageBilling(
+  companyId: string,
+  detail: string,
+): Promise<void> {
+  const { user, company } = await assertSalesCompanyInTenant(companyId);
+  const prev = company.profile.managedService;
+  if (!prev) return;
+  const nextMs: ManagedServiceSettings = { ...prev };
+  delete nextMs.packageChangePendingBilling;
+  await updateCompany(companyId, {
+    profile: { ...company.profile, managedService: nextMs },
+  });
+  await logAction(user, "company.marketing_package_paid", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail,
+  });
+}
+
+/**
+ * Step 4 — marketing package Checkout.
+ * Local demo / no Stripe keys / no STRIPE_PRICE_PACKAGE_* → mock settle.
+ * Live path: hosted Checkout; failed session create throws (never mock-settles).
+ */
+export async function startPackageCheckoutAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "").trim();
+  const { user, company } = await assertSalesCompanyInTenant(companyId);
+  const tenant = await getTenant(user.tenantId);
+  if (!tenant) throw new Error("Workspace not found.");
+  const packageId = (company.profile.managedService?.marketingPackageId ??
+    "pro") as MarketingPackageId;
+
+  const livePrice = stripeMarketingPackagePriceId(packageId);
+  if (!useMockPackageCheckout() && livePrice) {
+    const url = await createMarketingPackageCheckoutSession(
+      tenant,
+      companyId,
+      packageId,
+      await requestOrigin(),
+      {
+        successPath: wizardPath("checkout", companyId, { checkout: "success" }),
+        cancelPath: wizardPath("checkout", companyId, { checkout: "cancelled" }),
+      },
+    );
+    if (!url) {
+      throw new Error(
+        "Could not start Stripe Checkout for this marketing package. Check STRIPE_SECRET_KEY and STRIPE_PRICE_PACKAGE_* ids.",
+      );
+    }
+    redirect(url);
+  }
+
+  // Demo / mock path — card fields are UX only (never stored).
+  const pkg = resolvePackageById(tenant, packageId);
+  await settlePackageBilling(
+    companyId,
+    `demo checkout · ${pkg.name} · $${pkg.priceAudMonthly}/mo (mock — no Stripe charge)`,
+  );
+  redirect(wizardPath("provision", companyId, { paid: "demo" }));
+}
+
+/**
+ * Stripe return URL (?checkout=success&session_id=…) — verify the Checkout
+ * Session server-side before clearing pending. Query flag alone must not settle.
+ */
+export async function confirmPackageCheckoutSuccessAction(
+  companyId: string,
+  sessionId?: string | null,
+) {
+  const { user, company } = await assertSalesCompanyInTenant(companyId);
+  const sid = sessionId?.trim();
+  if (!sid) {
+    redirect(
+      wizardPath("checkout", companyId, {
+        checkout: "cancelled",
+        error:
+          "Checkout could not be verified — missing session. Complete payment again or use demo mock checkout.",
+      }),
+    );
+  }
+  const session = await retrieveCheckoutSession(sid);
+  const verified = verifyMarketingPackageCheckoutSession(session, {
+    tenantId: user.tenantId,
+    companyId: company.id,
+  });
+  if (!verified.ok) {
+    redirect(
+      wizardPath("checkout", companyId, {
+        checkout: "cancelled",
+        error: `Checkout not confirmed (${verified.reason}). Pending billing left set.`,
+      }),
+    );
+  }
+  await settlePackageBilling(
+    companyId,
+    `stripe checkout verified · session=${verified.sessionId} · packageChangePendingBilling cleared`,
+  );
+  redirect(wizardPath("provision", companyId, { paid: "stripe" }));
+}
+
+/** @deprecated Add-ons moved to AI Visuals / Billing — kept for any stale forms. */
 export async function saveAddonsStepAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
   await assertSalesCompanyInTenant(companyId);
-  const selected = formData.getAll("addonId").map(String).filter(isAddonId);
-  if (!selected.length) redirect(wizardPath("provision", companyId));
-  redirect(wizardPath("checkout", companyId, { addons: selected.join(",") }));
+  redirect(wizardPath("provision", companyId));
 }
 
 export async function startAddonCheckoutAction(formData: FormData) {
@@ -117,22 +528,41 @@ export async function startAddonCheckoutAction(formData: FormData) {
   const addonId = String(formData.get("addonId") || "");
   const remaining = String(formData.get("remaining") || "");
   if (!isAddonId(addonId)) throw new Error("Unknown add-on.");
-  const user = await assertSalesCompanyInTenant(companyId);
+  const { user } = await assertSalesCompanyInTenant(companyId);
   const tenant = await getTenant(user.tenantId);
   if (!tenant) throw new Error("Workspace not found.");
   if (stripeConfigured()) {
-    const returnBase = wizardPath("checkout", companyId, { addons: remaining || addonId, paid: addonId });
-    const url = await createAddonCheckoutSession(tenant, addonId, companyId, await requestOrigin(), {
-      successPath: `${returnBase}&checkout=success`,
-      cancelPath: wizardPath("checkout", companyId, { addons: remaining || addonId, checkout: "cancelled" }),
-    });
+    const returnBase = wizardPath("provision", companyId);
+    const url = await createAddonCheckoutSession(
+      tenant,
+      addonId,
+      companyId,
+      await requestOrigin(),
+      {
+        successPath: `${returnBase}&checkout=success&paid=${addonId}`,
+        cancelPath: wizardPath("provision", companyId, {
+          checkout: "cancelled",
+        }),
+      },
+    );
     if (!url) throw new Error("Could not start add-on checkout.");
     redirect(url);
   }
-  await upsertCompanyEntitlement({ companyId, addonId, status: "active", enabledById: user.id });
-  const rest = remaining.split(",").map((s) => s.trim()).filter(isAddonId).filter((id) => id !== addonId);
+  await upsertCompanyEntitlement({
+    companyId,
+    addonId,
+    status: "active",
+    enabledById: user.id,
+  });
+  const rest = remaining
+    .split(",")
+    .map((s) => s.trim())
+    .filter(isAddonId)
+    .filter((id) => id !== addonId);
   if (!rest.length) redirect(wizardPath("provision", companyId));
-  redirect(wizardPath("checkout", companyId, { addons: rest.join(",") }));
+  // Signup no longer chains add-ons — land on provision after first enable.
+  void rest;
+  redirect(wizardPath("provision", companyId));
 }
 
 export async function provisionClientAction(formData: FormData) {
@@ -140,8 +570,10 @@ export async function provisionClientAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   const name = String(formData.get("name") || "").trim();
   if (!email || !name) throw new Error("Client name and email are required");
-  const user = await assertSalesCompanyInTenant(companyId);
-  const client = (await getUserByEmail(email)) ?? (await createUser({ email, name, role: "user" }));
+  const { user } = await assertSalesCompanyInTenant(companyId);
+  const client =
+    (await getUserByEmail(email)) ??
+    (await createUser({ email, name, role: "user" }));
   if (!(await getMembership(user.tenantId, client.id))) {
     await addMembership({
       tenantId: user.tenantId,
@@ -168,30 +600,17 @@ export async function provisionClientAction(formData: FormData) {
     detail: `Field sales portal client ${name} (${email})`,
   });
 
-  // Kick managed delivery when the workspace is already onboarded (strategy SLA).
-  const tenant = await getTenant(user.tenantId);
-  if (tenant?.onboardingCompletedAt) {
-    const company = await getCompany(companyId);
-    if (company && company.status !== "archived") {
-      const level = company.profile.managedService?.serviceLevel ?? defaultServiceLevel();
-      if (!company.profile.managedService) {
-        await updateCompany(companyId, {
-          profile: { ...company.profile, managedService: { serviceLevel: level } },
-        });
-      }
-      const run = await enqueueManagedDeliveryForCompany({
-        tenantId: user.tenantId,
-        companyId,
-        onboardingCompletedAt: tenant.onboardingCompletedAt,
-        serviceLevel: level,
-      });
-      await logAction(user, "managed_delivery.enqueued", {
-        targetType: "managed_delivery_run",
-        targetId: run.id,
-        companyId,
-        detail: `due ${run.strategyDueAt}`,
-      });
-    }
+  try {
+    await ensureAndKickManagedDeliveryForCompany({
+      actor: user,
+      tenantId: user.tenantId,
+      companyId,
+      reason: "signup",
+      process: true,
+      demoForceGenerate: localDemoEnabled(),
+    });
+  } catch {
+    /* soft — Strategy page on-read can retry */
   }
 
   revalidatePath("/users");
@@ -207,10 +626,20 @@ export async function skipAddonsAction(formData: FormData) {
 export async function skipCheckoutAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
   await assertSalesCompanyInTenant(companyId);
+  // Leave packageChangePendingBilling set — real Stripe settlement still pending.
   redirect(wizardPath("provision", companyId));
 }
 
-export async function nextUnpaidAddon(companyId: string, addonIds: AddonId[]): Promise<AddonId | null> {
+export async function skipPackageAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "");
+  await assertSalesCompanyInTenant(companyId);
+  redirect(wizardPath("provision", companyId));
+}
+
+export async function nextUnpaidAddon(
+  companyId: string,
+  addonIds: AddonId[],
+): Promise<AddonId | null> {
   for (const id of addonIds) {
     const ent = await getCompanyEntitlement(companyId, id);
     if (ent?.status !== "active") return id;

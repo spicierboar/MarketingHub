@@ -1,25 +1,19 @@
 import Link from "next/link";
 import { isAdmin, requireUser } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
-import { liveOffers } from "@/lib/db";
+import { liveOffers, getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { LockedCompanyField } from "@/components/locked-company-field";
 import { createCampaignAction, createCampaignFromGoalAction } from "../actions";
 import { planCampaignFromInstructionAction } from "../ai-layer-actions";
 import { resolveBusinessType } from "@/lib/business-profiles";
 import { CampaignObjectiveHints } from "../campaign-objective-hints";
 import { CampaignBuilderPanel } from "@/components/campaign-builder-panel";
 import { MARKETING_FIELD_HELP } from "@/lib/profile-suggestions";
-
-const CHANNELS = [
-  "Facebook",
-  "Instagram",
-  "Google Business Profile",
-  "Email",
-  "Paid ads",
-];
+import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 
 export default async function NewCampaignPage({
   searchParams,
@@ -35,10 +29,17 @@ export default async function NewCampaignPage({
   const pf = await searchParams;
   const pfCompany =
     pf.company && companies.some((c) => c.id === pf.company) ? pf.company : undefined;
+  const formCompanies = pfCompany
+    ? companies.filter((c) => c.id === pfCompany)
+    : companies;
+  const companyLocked = Boolean(pfCompany);
+  const scopedCompany = pfCompany ? await getCompany(pfCompany) : null;
+  const cancelHref = pfCompany ? `/campaigns?company=${pfCompany}` : "/campaigns";
+  const formCompanyOpts = formCompanies.map((c) => ({ id: c.id, name: c.name }));
   // Offers grouped per company; the action validates company/offer pairing.
   const offerOptions = (
     await Promise.all(
-      companies.map(async (c) =>
+      formCompanies.map(async (c) =>
         (await liveOffers(c.id)).map((o) => ({
           id: o.id,
           label: `${c.name} — ${o.name}`,
@@ -53,11 +54,11 @@ export default async function NewCampaignPage({
   return (
     <div>
       <PageHeader
-        title="New campaign"
+        title={scopedCompany ? `New campaign · ${scopedCompany.name}` : "New campaign"}
         description="The AI plans the full calendar; every item is drafted and approved individually."
       />
       <div className="mx-auto max-w-3xl p-6">
-        {companies.length === 0 ? (
+        {formCompanies.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">
               No AI-ready companies available to you.
@@ -68,20 +69,12 @@ export default async function NewCampaignPage({
             <form action={createCampaignFromGoalAction}>
               <Card>
                 <CardContent className="space-y-5 p-6">
-                  <Field label="Client" htmlFor="builderCompanyId">
-                    <Select
-                      id="builderCompanyId"
-                      name="companyId"
-                      required
-                      defaultValue={pfCompany}
-                    >
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <LockedCompanyField
+                    id="builderCompanyId"
+                    companies={formCompanyOpts}
+                    companyId={pfCompany}
+                    locked={companyLocked}
+                  />
 
                   <Field
                     label="Your goal"
@@ -98,7 +91,7 @@ export default async function NewCampaignPage({
                   </Field>
 
                   <CampaignBuilderPanel
-                    companies={companies.map((c) => ({
+                    companies={formCompanies.map((c) => ({
                       id: c.id,
                       name: c.name,
                       businessType: resolveBusinessType(c),
@@ -129,7 +122,7 @@ export default async function NewCampaignPage({
               </Card>
 
               <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                <Link href="/campaigns" className="text-sm text-muted-foreground hover:text-foreground">
+                <Link href={cancelHref} className="text-sm text-muted-foreground hover:text-foreground">
                   Cancel
                 </Link>
                 <Button type="submit">Build from goal</Button>
@@ -166,17 +159,18 @@ export default async function NewCampaignPage({
             <Card>
               <CardContent className="space-y-5 p-6">
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Client" htmlFor="companyId">
-                    <Select id="companyId" name="companyId" required defaultValue={pfCompany}>
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <LockedCompanyField
+                    id="companyId"
+                    companies={formCompanyOpts}
+                    companyId={pfCompany}
+                    locked={companyLocked}
+                  />
                   <Field label="Campaign name" htmlFor="name" hint="Optional — auto-named from the objective">
-                    <Input id="name" name="name" />
+                    <Input
+                      id="name"
+                      name="name"
+                      placeholder="e.g. July weekday lunch push"
+                    />
                   </Field>
                 </div>
 
@@ -195,7 +189,7 @@ export default async function NewCampaignPage({
                 </Field>
 
                 <CampaignObjectiveHints
-                  companies={companies.map((c) => ({
+                  companies={formCompanies.map((c) => ({
                     id: c.id,
                     name: c.name,
                     businessType: resolveBusinessType(c),
@@ -216,24 +210,33 @@ export default async function NewCampaignPage({
                       placeholder="Local families within 10 minutes"
                     />
                   </Field>
-                  <Field label="Service / product focus" htmlFor="serviceFocus" hint="A service from the catalogue works best">
-                    <Input id="serviceFocus" name="serviceFocus" defaultValue={pf.serviceFocus} />
+                  <Field
+                    label="Service / product focus"
+                    htmlFor="serviceFocus"
+                    hint="A service from the catalogue works best"
+                  >
+                    <Input
+                      id="serviceFocus"
+                      name="serviceFocus"
+                      defaultValue={pf.serviceFocus}
+                      placeholder="e.g. Weekday lunch specials"
+                    />
                   </Field>
                 </div>
 
                 <fieldset className="rounded-md border border-border p-4">
                   <legend className="px-1 text-sm font-medium">Channels</legend>
                   <div className="grid gap-2 sm:grid-cols-3">
-                    {CHANNELS.map((c) => (
-                      <label key={c} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    {CONTENT_PLATFORM_OPTIONS.map((c) => (
+                      <label key={c.value} className="flex items-center gap-2 text-sm text-muted-foreground">
                         <input
                           type="checkbox"
                           name="channels"
-                          value={c}
-                          defaultChecked={c !== "Paid ads" && c !== "Email"}
+                          value={c.value}
+                          defaultChecked={c.value !== "Paid ads" && c.value !== "Email" && c.value !== "TikTok"}
                           className="h-4 w-4"
                         />
-                        {c}
+                        {c.label}
                       </label>
                     ))}
                   </div>
@@ -285,7 +288,7 @@ export default async function NewCampaignPage({
             </Card>
 
             <div className="mt-4 flex items-center justify-end gap-2">
-              <Link href="/campaigns" className="text-sm text-muted-foreground hover:text-foreground">
+              <Link href={cancelHref} className="text-sm text-muted-foreground hover:text-foreground">
                 Cancel
               </Link>
               <Button type="submit">Generate campaign plan</Button>

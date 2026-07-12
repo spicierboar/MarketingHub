@@ -9,15 +9,15 @@
 // a company writes a CompanyEntitlement (src/lib/entitlements.ts); the deliverable
 // modules gate on it with assertCompanyAddon().
 
-import type { AddonId } from "@/lib/types";
+import type { AddonId, BusinessType } from "@/lib/types";
 
 export interface AddonDef {
   id: AddonId;
   name: string;
   priceAudMonthly: number;
   blurb: string;
-  // Which client segment the add-on is aimed at (UI hint only — any company can
-  // enable any add-on). Restaurants are the wedge for menus + Order-Now.
+  // Which client segment the add-on is aimed at. Restaurants/hotels are the
+  // wedge for menus, Order Now, and Bookings — New Client hides them otherwise.
   segment?: "restaurant";
   // A human note about what the add-on includes (e.g. the free-menu allowance).
   // Enforcement of any allowance lands with the deliverable module that consumes
@@ -31,14 +31,17 @@ export const ADDONS: Record<AddonId, AddonDef> = {
     id: "video",
     name: "AI video",
     priceAudMonthly: 79,
-    blurb: "Short-form vertical video (Reels / TikTok / Shorts) auto-generated from photos, templates and a script.",
+    blurb:
+      "Short-form vertical video (Reels / TikTok / Shorts) auto-generated from client-provided photos, templates and a script.",
     icon: "🎬",
   },
   photo: {
     id: "photo",
     name: "Photo shoots",
     priceAudMonthly: 59,
-    blurb: "Managed professional photo shoots — booking, upload to the asset library, rights-tagging and auto-scheduling.",
+    blurb:
+      "Managed professional photo shoots — booking, upload to the asset library, rights-tagging and auto-scheduling.",
+    includedNote: "Professional photographer ≈ A$450/hr.",
     icon: "📸",
   },
   menus: {
@@ -71,6 +74,31 @@ export const ADDONS: Record<AddonId, AddonDef> = {
 };
 
 export const ADDON_ORDER: AddonId[] = ["video", "photo", "menus", "order_button", "bookings"];
+
+/** Business types that match restaurant-segment add-ons (menus, Order Now, bookings). */
+export function isHospitalityBusinessType(type: BusinessType | undefined): boolean {
+  return type === "restaurant_cafe" || type === "hotel";
+}
+
+/**
+ * Whether an add-on should be offered for this business type (AI Visuals / Billing).
+ * Non-segmented add-ons (video, photo) are always offered; restaurant-segment
+ * add-ons only for restaurant/café and hotel. Signup no longer lists add-ons.
+ */
+export function addonRelevantToBusinessType(
+  addonId: AddonId,
+  businessType: BusinessType | undefined,
+): boolean {
+  const def = ADDONS[addonId];
+  if (!def?.segment) return true;
+  if (def.segment === "restaurant") return isHospitalityBusinessType(businessType);
+  return true;
+}
+
+/** Ordered add-ons to show for a given business type (AI Visuals / Billing / sales). */
+export function addonsForBusinessType(businessType: BusinessType | undefined): AddonId[] {
+  return ADDON_ORDER.filter((id) => addonRelevantToBusinessType(id, businessType));
+}
 
 // Total-safe lookup: an unknown/legacy add-on id returns undefined so callers
 // fail closed (an entitlement for a retired add-on grants nothing).

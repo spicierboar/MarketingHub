@@ -11,11 +11,19 @@ import {
 } from "@/lib/profile-suggestions";
 import { inferBusinessTypeFromIndustry } from "@/lib/business-profiles";
 import { sanitizeAiUserInput } from "@/lib/security-slice";
-import type {
-  AutoOnboardingExtractedFields,
-  AutoOnboardingFieldKey,
-  AutoOnboardingFieldPreview,
-  AutoOnboardingScrapeResult,
+import {
+  filterServiceLabels,
+  inferRetailServicesFromContext,
+  isProductSellerContext,
+  isWeakNatureText,
+  isWeakTargetCustomers,
+  partitionServicesAndProductCategories,
+  synthesizeNatureOfBusiness,
+  synthesizeTargetCustomers,
+  type AutoOnboardingExtractedFields,
+  type AutoOnboardingFieldKey,
+  type AutoOnboardingFieldPreview,
+  type AutoOnboardingScrapeResult,
 } from "@/lib/auto-onboarding";
 import type { BusinessType, Company } from "@/lib/types";
 
@@ -28,7 +36,15 @@ export interface OnboardingContactSignals {
 export interface OnboardingAiEnrichment {
   fields: Partial<
     Record<
-      AutoOnboardingFieldKey | "localMarketNotes" | "businessAddress" | "phone" | "email",
+      | AutoOnboardingFieldKey
+      | "localMarketNotes"
+      | "businessAddress"
+      | "phone"
+      | "email"
+      | "productCategories"
+      | "approvedClaims"
+      | "prohibitedClaims"
+      | "requiredDisclaimers",
       string | string[]
     >
   >;
@@ -45,8 +61,7 @@ const INFERABLE_KEYS: AutoOnboardingFieldKey[] = [
   "targetCustomers",
   "brandVoice",
   "callsToAction",
-  "currentOffers",
-  "tradingNames",
+  // tradingNames / currentOffers / legalName: only from scrape or ABR — never invent
 ];
 
 function asString(v: unknown): string | undefined {
@@ -75,13 +90,36 @@ function scrapeMap(preview: AutoOnboardingScrapeResult): Map<string, string> {
 }
 
 function weakNature(value: string | undefined): boolean {
+  return isWeakNatureText(value);
+}
+
+function weakServices(value: string | undefined, contextSignal?: string): boolean {
   if (!value?.trim()) return true;
-  const v = value.trim();
-  if (v.length < 40) return true;
-  // Simulated / generic hash fluff
-  if (/serves \w+ with friendly, professional/i.test(v)) return true;
-  if (/^Locals and visitors in /i.test(v) && v.length < 80) return true;
-  return false;
+  const parts = filterServiceLabels(
+    value
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  if (parts.length === 0) return true;
+  // Retail: category-looking lists (Rice, Snacks…) are not real services
+  if (isProductSellerContext(contextSignal)) {
+    const { services, productCategories } = partitionServicesAndProductCategories(
+      parts,
+      contextSignal,
+    );
+    if (productCategories.length > 0 && services.length === 0) return true;
+    if (productCategories.length >= services.length && productCategories.length >= 2) {
+      return true;
+    }
+  }
+  const placeholder = /^(core service|premium package|consultation|core services|enquir(?:y|ies))$/i;
+  const placeholderCount = parts.filter((p) => placeholder.test(p)).length;
+  return placeholderCount >= Math.min(2, parts.length);
+}
+
+function weakTargetCustomers(value: string | undefined): boolean {
+  return isWeakTargetCustomers(value);
 }
 
 function templateEnrich(
@@ -91,11 +129,16 @@ function templateEnrich(
 ): OnboardingAiEnrichment {
   const map = scrapeMap(preview);
   const industry = map.get("industry") || company.profile.industry;
+  const natureHint = map.get("natureOfBusiness");
+  const titleHint = preview.sources.find((s) => s.kind === "website")?.title;
   const areasRaw = map.get("serviceAreas");
   const areas = areasRaw
     ? areasRaw.split(/,\s*/).map((s) => s.trim()).filter(Boolean)
     : company.profile.serviceAreas;
-  const businessType: BusinessType = inferBusinessTypeFromIndustry(industry);
+  const typeSignal = [industry, natureHint, titleHint, company.name]
+    .filter(Boolean)
+    .join(" · ");
+  const businessType: BusinessType = inferBusinessTypeFromIndustry(typeSignal);
   const suggestions: ProfileSuggestions = suggestProfileFields({
     businessType,
     companyName: company.name,
@@ -108,11 +151,24 @@ function templateEnrich(
 
   const nature = map.get("natureOfBusiness");
   if (weakNature(nature)) {
-    fields.natureOfBusiness = suggestions.natureOfBusiness;
+    const synthesized = synthesizeNatureOfBusiness({
+      title: titleHint,
+      metaDescription: nature,
+      tradingName: company.name,
+      industry,
+    });
+    fields.natureOfBusiness = synthesized || suggestions.natureOfBusiness;
     inferredKeys.push("natureOfBusiness");
   }
-  if (!map.get("targetCustomers")?.trim()) {
-    fields.targetCustomers = suggestions.targetCustomers;
+  if (weakTargetCustomers(map.get("targetCustomers"))) {
+    fields.targetCustomers =
+      synthesizeTargetCustomers({
+        natureOfBusiness: (fields.natureOfBusiness as string) || nature,
+        industry,
+        tradingName: company.name,
+        serviceAreas: areas,
+        title: titleHint,
+      }) || suggestions.targetCustomers;
     inferredKeys.push("targetCustomers");
   }
   if (!map.get("brandVoice")?.trim()) {
@@ -123,9 +179,39 @@ function templateEnrich(
     fields.callsToAction = suggestions.callsToAction;
     inferredKeys.push("callsToAction");
   }
-  if (!map.get("services")?.trim()) {
+  const scrapedServices = map.get("services");
+  const contextSignal = [industry, natureHint, titleHint, company.name]
+    .filter(Boolean)
+    .join(" · ");
+  const scrapedParts = scrapedServices
+    ? scrapedServices.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean)
+    : [];
+  const partitioned = partitionServicesAndProductCategories(scrapedParts, contextSignal);
+  const previewCats = preview.extras?.productCategories ?? [];
+  const productCategories = [
+    ...new Set([...previewCats, ...partitioned.productCategories]),
+  ];
+  let cleanedServices = partitioned.services;
+  if (cleanedServices.length === 0 && productCategories.length > 0) {
+    cleanedServices = inferRetailServicesFromContext(contextSignal);
+  }
+  if (
+    weakServices(scrapedServices, contextSignal) ||
+    (scrapedServices && cleanedServices.length === 0 && productCategories.length === 0)
+  ) {
     fields.services = suggestions.services;
     inferredKeys.push("services");
+  } else if (
+    scrapedServices &&
+    (cleanedServices.join(", ") !== scrapedServices || productCategories.length > 0)
+  ) {
+    fields.services =
+      cleanedServices.length > 0 ? cleanedServices : suggestions.services;
+    inferredKeys.push("services");
+  }
+  if (productCategories.length) {
+    fields.productCategories = productCategories;
+    inferredKeys.push("productCategories");
   }
   if (!map.get("serviceAreas")?.trim() || map.get("serviceAreas") === "Local area") {
     if (areas.length && areas[0] !== "Local area") {
@@ -138,6 +224,24 @@ function templateEnrich(
 
   fields.localMarketNotes = suggestions.localMarketNotes;
   inferredKeys.push("localMarketNotes");
+
+  // Compliance: prefer real scrape lines; otherwise industry starters (owner wants text).
+  const scrapedApproved = preview.extras?.approvedClaims ?? [];
+  const scrapedDisclaimers = preview.extras?.requiredDisclaimers ?? [];
+  if (scrapedApproved.length) {
+    fields.approvedClaims = scrapedApproved;
+  } else {
+    fields.approvedClaims = suggestions.approvedClaims;
+    inferredKeys.push("approvedClaims");
+  }
+  fields.prohibitedClaims = suggestions.prohibitedClaims;
+  inferredKeys.push("prohibitedClaims");
+  if (scrapedDisclaimers.length) {
+    fields.requiredDisclaimers = scrapedDisclaimers;
+  } else {
+    fields.requiredDisclaimers = suggestions.requiredDisclaimers;
+    inferredKeys.push("requiredDisclaimers");
+  }
 
   if (contacts.businessAddress) fields.businessAddress = contacts.businessAddress;
   if (contacts.phone) fields.phone = contacts.phone;
@@ -191,15 +295,27 @@ async function claudeEnrich(
   const system = `You enrich a marketing company onboarding profile from public scrape signals.
 Return ONLY valid JSON (no markdown) with keys:
 natureOfBusiness, industry, tradingNames, legalName, serviceAreas (string[]),
-services (string[]), targetCustomers, brandVoice, callsToAction (string[]),
-currentOffers, localMarketNotes, businessAddress, phone, email.
+services (string[]), productCategories (string[]), targetCustomers, brandVoice, callsToAction (string[]),
+currentOffers, localMarketNotes, businessAddress, phone, email,
+approvedClaims (string[]), prohibitedClaims (string[]), requiredDisclaimers (string[]).
 
 Rules:
-- Prefer scrape facts over invention.
+- Prefer scrape facts over invention, but REWRITE polluted scrape text into clean marketing copy.
+- Strip UI/nav chrome from any field: "Toggle menu", "Welcome to X!", "Skip to content", Register/Login/Cart, breadcrumbs.
+- natureOfBusiness: 1–2 clean sentences (what they do, for whom, where). Example: "Online Indian grocery store delivering across Australia."
+- For retail / grocery / wholesale / e-commerce product sellers: nav category labels (Rice, Lentils, Indian Snacks, Gravies, Oil/Ghee) belong in productCategories — NEVER in services.
+- services: only real fulfilment or ops offerings when evident — e.g. online delivery, nationwide shipping, click & collect, wholesale supply, online ordering. Never SKU or category lists.
+- If scrape only has product categories and context shows delivery/online grocery, put categories in productCategories and set services to delivery-related offerings (or leave empty).
+- targetCustomers: specific audience with common sense from context (e.g. Indian diaspora grocery shoppers across Australia) — NEVER tautologies like "people who need what X offers".
 - Infer natureOfBusiness, targetCustomers, brandVoice, services, CTAs logically from name + industry + area when scrape is thin or generic.
+- If signals say Indian grocery / online store / retail, treat as specialty retail (not vague "other").
 - NEVER invent phone, email, or street address — only copy when present in contactSignals or scrape snippets.
+- NEVER invent currentOffers — omit unless an explicit promo is visible in scrape.
+- For approvedClaims / prohibitedClaims / requiredDisclaimers: prefer real disclaimer or trust lines from scrape when present. If missing, supply short industry-standard Brand Brain starters (e.g. grocery: no unverified health claims; specials while stocks last) — not fake product-specific claims.
+- tradingNames: brand/trading name only (e.g. "Viya Imports") — NEVER SEO titles like "Online Indian Grocery Store in Australia". Prefer companyName or og:site_name.
+- legalName: only when a real registered entity name is evident — never invent "X Pty Ltd".
 - Use Australian English. Be concrete and marketing-useful.
-- serviceAreas: suburbs/towns only (not full street).
+- serviceAreas: suburbs/towns/regions only (not full street).
 - businessAddress: full street address only if known from signals.`;
 
   const user = sanitizeAiUserInput(
@@ -257,15 +373,114 @@ Rules:
 
   setStr("natureOfBusiness", true);
   setStr("industry", false);
-  setStr("tradingNames", false);
-  setStr("legalName", false);
+  // tradingNames / legalName / currentOffers: never invent SEO titles, Pty Ltd, or offers.
+  {
+    const t = asString(parsed.tradingNames);
+    if (
+      t &&
+      t.split(/\s+/).length < 6 &&
+      !/\b(online\s+indian\s+grocery|grocery\s+store\s+in)\b/i.test(t)
+    ) {
+      fields.tradingNames = t;
+    }
+  }
+  {
+    const legal = asString(parsed.legalName);
+    const hadLegal = !!map.get("legalName")?.trim();
+    if (
+      legal &&
+      (hadLegal ||
+        /\b(pty\.?\s*ltd|limited|trust|incorporated)\b/i.test(legal)) &&
+      !/\b(online|grocery store in)\b/i.test(legal)
+    ) {
+      fields.legalName = legal;
+    }
+  }
   setList("serviceAreas");
-  setList("services");
+  {
+    const contextSignal = [
+      map.get("industry"),
+      map.get("natureOfBusiness"),
+      asString(parsed.industry),
+      asString(parsed.natureOfBusiness),
+      company.name,
+      preview.sources.find((s) => s.kind === "website")?.title,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const v = asStringList(parsed.services) ?? [];
+    const catsFromClaude = asStringList(parsed.productCategories) ?? [];
+    const partitioned = partitionServicesAndProductCategories(
+      [...v, ...(map.get("services")?.split(/[,;\n]/).map((s) => s.trim()) ?? [])],
+      contextSignal,
+    );
+    const productCategories = [
+      ...new Set([
+        ...(preview.extras?.productCategories ?? []),
+        ...catsFromClaude,
+        ...partitioned.productCategories,
+      ]),
+    ];
+    let cleaned = partitioned.services;
+    if (cleaned.length === 0 && productCategories.length > 0) {
+      cleaned = inferRetailServicesFromContext(contextSignal);
+    }
+    if (cleaned.length === 0 && isProductSellerContext(contextSignal)) {
+      // Fall through — template merge may still fill from suggestions via weakServices
+      const existing = map.get("services");
+      if (!existing?.trim() || weakServices(existing, contextSignal)) {
+        // leave services unset so merge keeps empty / later template path
+      }
+    }
+    if (cleaned.length) {
+      fields.services = cleaned;
+      const existing = map.get("services");
+      if (!existing?.trim() || weakServices(existing, contextSignal)) {
+        inferredKeys.push("services");
+      }
+    } else if (productCategories.length && weakServices(map.get("services"), contextSignal)) {
+      // Clear category dump from services preview
+      fields.services = [];
+      inferredKeys.push("services");
+    }
+    if (productCategories.length) {
+      fields.productCategories = productCategories;
+      inferredKeys.push("productCategories");
+    }
+  }
   setStr("targetCustomers", true);
   setStr("brandVoice", true);
   setList("callsToAction");
-  setStr("currentOffers", false);
+  // currentOffers only when scrape already had an offer signal
+  if (map.get("currentOffers")?.trim()) {
+    const offer = asString(parsed.currentOffers) || map.get("currentOffers");
+    if (offer) fields.currentOffers = offer;
+  }
   setStr("localMarketNotes", true);
+
+  {
+    const scrapedApproved = preview.extras?.approvedClaims ?? [];
+    const scrapedDisclaimers = preview.extras?.requiredDisclaimers ?? [];
+    const approved =
+      asStringList(parsed.approvedClaims) ??
+      (scrapedApproved.length ? scrapedApproved : undefined);
+    if (approved?.length) {
+      fields.approvedClaims = approved;
+      if (!scrapedApproved.length) inferredKeys.push("approvedClaims");
+    }
+    const prohibited = asStringList(parsed.prohibitedClaims);
+    if (prohibited?.length) {
+      fields.prohibitedClaims = prohibited;
+      inferredKeys.push("prohibitedClaims");
+    }
+    const disclaimers =
+      asStringList(parsed.requiredDisclaimers) ??
+      (scrapedDisclaimers.length ? scrapedDisclaimers : undefined);
+    if (disclaimers?.length) {
+      fields.requiredDisclaimers = disclaimers;
+      if (!scrapedDisclaimers.length) inferredKeys.push("requiredDisclaimers");
+    }
+  }
 
   // Contact: only when Claude returns AND we had a signal, or Claude mirrors signal
   const addr = asString(parsed.businessAddress);
@@ -307,16 +522,32 @@ export function mergeEnrichmentIntoPreview(
     key: AutoOnboardingFieldKey,
     value: string,
     confidence: AutoOnboardingFieldPreview["confidence"],
+    opts?: { allowEmpty?: boolean },
   ) => {
-    if (!value.trim()) return;
+    if (!value.trim() && !opts?.allowEmpty) return;
     const existing = byKey.get(key);
     const inferred = enrichment.inferredKeys.includes(key);
-    // Prefer enrichment when existing is weak nature or missing
+    const contextSignal = [
+      byKey.get("industry")?.value,
+      byKey.get("natureOfBusiness")?.value,
+      enrichment.fields.industry,
+      enrichment.fields.natureOfBusiness,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    // Prefer enrichment when existing is weak nature/services or missing
     if (
       !existing ||
       (key === "natureOfBusiness" && weakNature(existing.value)) ||
-      inferred
+      (key === "services" && weakServices(existing.value, contextSignal)) ||
+      (key === "targetCustomers" && weakTargetCustomers(existing.value)) ||
+      inferred ||
+      (opts?.allowEmpty && key === "services" && inferred)
     ) {
+      if (!value.trim() && key === "services") {
+        byKey.delete(key);
+        return;
+      }
       byKey.set(key, {
         key,
         label: existing?.label ?? key,
@@ -332,7 +563,9 @@ export function mergeEnrichmentIntoPreview(
     const raw = enrichment.fields[key];
     if (raw == null) continue;
     const value = Array.isArray(raw) ? raw.join(key === "callsToAction" ? " · " : ", ") : String(raw);
-    upsert(key, value, "medium");
+    upsert(key, value, "medium", {
+      allowEmpty: key === "services" && Array.isArray(raw) && raw.length === 0,
+    });
   }
 
   // Ensure labels for known keys
@@ -354,9 +587,15 @@ export function mergeEnrichmentIntoPreview(
     }
   }
 
+  const productCategories = asStringList(enrichment.fields.productCategories);
+
   return {
     ...preview,
     fields: [...byKey.values()],
+    extras: {
+      ...preview.extras,
+      ...(productCategories?.length ? { productCategories } : {}),
+    },
   };
 }
 
@@ -376,6 +615,31 @@ export function applyContactAndNotesToProfile(
   // Prefer approval contact from email if empty
   if (!next.approvalContact?.trim() && (email || phone)) {
     next.approvalContact = [email, phone].filter(Boolean).join(" · ");
+  }
+  const cats = asStringList(enrichment.fields.productCategories);
+  if (cats?.length && !(next.retail?.productCategories?.length)) {
+    next.retail = {
+      productCategories: cats,
+      heroProducts: next.retail?.heroProducts ?? [],
+      promotions: next.retail?.promotions ?? [],
+      seasons: next.retail?.seasons ?? [],
+      pricePositioning: next.retail?.pricePositioning,
+    };
+    if (!next.businessType || next.businessType === "other") {
+      next.businessType = "retail";
+    }
+  }
+  const approved = asStringList(enrichment.fields.approvedClaims);
+  if (approved?.length && next.approvedClaims.length === 0) {
+    next.approvedClaims = approved;
+  }
+  const prohibited = asStringList(enrichment.fields.prohibitedClaims);
+  if (prohibited?.length && next.prohibitedClaims.length === 0) {
+    next.prohibitedClaims = prohibited;
+  }
+  const disclaimers = asStringList(enrichment.fields.requiredDisclaimers);
+  if (disclaimers?.length && next.requiredDisclaimers.length === 0) {
+    next.requiredDisclaimers = disclaimers;
   }
   return next;
 }
@@ -420,8 +684,26 @@ export async function enrichOnboardingPreview(input: {
       input.actorId,
     );
   }
+  const template = templateEnrich(input.company, input.preview, contacts);
   if (!enrichment) {
-    enrichment = templateEnrich(input.company, input.preview, contacts);
+    enrichment = template;
+  } else {
+    // Fill compliance starters when Claude omitted them (never overwrite scrape extras).
+    for (const key of [
+      "approvedClaims",
+      "prohibitedClaims",
+      "requiredDisclaimers",
+    ] as const) {
+      if (!asStringList(enrichment.fields[key])?.length) {
+        const fromTemplate = asStringList(template.fields[key]);
+        if (fromTemplate?.length) {
+          enrichment.fields[key] = fromTemplate;
+          if (template.inferredKeys.includes(key)) {
+            enrichment.inferredKeys.push(key);
+          }
+        }
+      }
+    }
   }
 
   return {
@@ -433,6 +715,14 @@ export async function enrichOnboardingPreview(input: {
         phone: asString(enrichment.fields.phone),
         email: asString(enrichment.fields.email),
         enrichMode: enrichment.mode,
+        productCategories: asStringList(enrichment.fields.productCategories) ??
+          input.preview.extras?.productCategories,
+        approvedClaims:
+          asStringList(enrichment.fields.approvedClaims) ??
+          input.preview.extras?.approvedClaims,
+        requiredDisclaimers:
+          asStringList(enrichment.fields.requiredDisclaimers) ??
+          input.preview.extras?.requiredDisclaimers,
       },
     },
     enrichment,
@@ -451,6 +741,7 @@ export function enrichmentToExtractedPatch(
   if (asString(f.natureOfBusiness)) out.natureOfBusiness = asString(f.natureOfBusiness);
   if (asStringList(f.serviceAreas)) out.serviceAreas = asStringList(f.serviceAreas);
   if (asStringList(f.services)) out.services = asStringList(f.services);
+  if (asStringList(f.productCategories)) out.productCategories = asStringList(f.productCategories);
   if (asString(f.targetCustomers)) out.targetCustomers = asString(f.targetCustomers);
   if (asString(f.brandVoice)) out.brandVoice = asString(f.brandVoice);
   if (asStringList(f.callsToAction)) out.callsToAction = asStringList(f.callsToAction);

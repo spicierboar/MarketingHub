@@ -2,10 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { advanceRequest, answerGap, createRequest, getGap, getRequest, listGaps } from "@/lib/db";
+import { advanceRequest, answerGap, createRequest, getCompany, getGap, getRequest, listGaps, updateCompany } from "@/lib/db";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { completeClientApproval } from "@/lib/client-approval";
 import { logAction } from "@/lib/audit";
+import { maybeProcessEligibleDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
 import { id, now } from "@/lib/utils";
 import type { RequestType, UploadedAsset, Urgency } from "@/lib/types";
 
@@ -126,4 +127,77 @@ export async function portalRequestChangesAction(formData: FormData) {
   revalidatePath("/client/approvals");
   revalidatePath(`/client/approvals/${contentId}`);
   redirect("/client/approvals");
+}
+
+/** On-read: advance eligible managed strategy when the client opens Strategy. */
+export async function processEligibleStrategyForPortalAction() {
+  const { user, companyId } = await requirePortalUser();
+  await maybeProcessEligibleDeliveryForCompany(user.tenantId, companyId, user);
+  revalidatePath("/client/strategy");
+  revalidatePath("/client");
+}
+
+/** Client: approve the detailed marketing strategy document. */
+export async function portalApproveDetailedStrategyAction(formData: FormData) {
+  const { user, companyId } = await requirePortalUser();
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("Company not found");
+  const current = company.profile.managedService?.detailedStrategy;
+  if (!current || current.status !== "client_review") {
+    throw new Error("No strategy awaiting your approval");
+  }
+  const next = {
+    ...current,
+    status: "approved" as const,
+    approvedAt: now(),
+    approvedByUserId: user.id,
+    clientNote: undefined,
+  };
+  const prev = company.profile.managedService!;
+  await updateCompany(companyId, {
+    profile: {
+      ...company.profile,
+      managedService: { ...prev, detailedStrategy: next },
+    },
+  });
+  await logAction(user, "managed_strategy.approved", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail: `v${next.version}`,
+  });
+  revalidatePath("/client/strategy");
+  revalidatePath(`/companies/${companyId}/strategy`);
+}
+
+/** Client: request changes on the detailed marketing strategy. */
+export async function portalRequestDetailedStrategyChangesAction(formData: FormData) {
+  const note = String(formData.get("note") || "").trim();
+  const { user, companyId } = await requirePortalUser();
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("Company not found");
+  const current = company.profile.managedService?.detailedStrategy;
+  if (!current || current.status !== "client_review") {
+    throw new Error("No strategy awaiting your approval");
+  }
+  const next = {
+    ...current,
+    status: "changes_requested" as const,
+    clientNote: note || "Please revise this strategy.",
+  };
+  const prev = company.profile.managedService!;
+  await updateCompany(companyId, {
+    profile: {
+      ...company.profile,
+      managedService: { ...prev, detailedStrategy: next },
+    },
+  });
+  await logAction(user, "managed_strategy.changes_requested", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail: `v${next.version}${note ? ` · ${note.slice(0, 120)}` : ""}`,
+  });
+  revalidatePath("/client/strategy");
+  revalidatePath(`/companies/${companyId}/strategy`);
 }

@@ -33,10 +33,12 @@ export default async function LibraryPage({
     rowCompanyIds.map((id, i) => [id, rowCompanies[i]?.name]),
   );
 
+  const scopedCompany = companyId ? await getCompany(companyId) : null;
+
   return (
     <div>
       <PageHeader
-        title="Content Reuse Library"
+        title={scopedCompany ? `Reuse library · ${scopedCompany.name}` : "Content Reuse Library"}
         description="Approved content available for reuse. Expired items must be reviewed before they can be repurposed."
       />
       <div className="p-6">

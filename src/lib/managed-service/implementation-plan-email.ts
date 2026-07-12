@@ -103,7 +103,7 @@ async function resolveRecipient(company: Company): Promise<string | null> {
 }
 
 /**
- * Send the 6h–24h implementation plan email. Soft no-op without Resend / recipient.
+ * Send the 6h–12h implementation plan email. Soft no-op without Resend / recipient.
  * Caller is responsible for idempotency stamps (implementationPlanEmailedAt).
  */
 export async function sendImplementationPlanEmail(args: {

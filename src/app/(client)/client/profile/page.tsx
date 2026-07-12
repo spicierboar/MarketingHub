@@ -78,42 +78,55 @@ export default async function ClientProfilePage() {
               <form action={saveClientProfileAction} className="space-y-5">
                 <input type="hidden" name="companyId" value={companyId} />
 
-                <Field label="Display name" htmlFor="displayName">
+                <Field
+                  label="Display name"
+                  htmlFor="displayName"
+                  hint="How your business appears in the portal"
+                >
                   <Input
                     id="displayName"
                     name="displayName"
                     defaultValue={company.name}
                     required
+                    placeholder="e.g. Harbourview Café"
                   />
                 </Field>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Website" htmlFor="website">
+                  <Field label="Website" htmlFor="website" hint="Your public site URL">
                     <Input
                       id="website"
                       name="website"
                       type="url"
                       defaultValue={p.website ?? ""}
-                      placeholder="https://"
+                      placeholder="https://www.harbourviewcafe.com.au"
                     />
                   </Field>
-                  <Field label="Approval / billing contact" htmlFor="approvalContact">
+                  <Field
+                    label="Approval / billing contact"
+                    htmlFor="approvalContact"
+                    hint="Who we email for approvals and billing"
+                  >
                     <Input
                       id="approvalContact"
                       name="approvalContact"
                       defaultValue={p.approvalContact ?? ""}
-                      placeholder="email or phone"
+                      placeholder="owner@harbourviewcafe.com.au"
                     />
                   </Field>
                 </div>
 
-                <Field label="Trading hours" htmlFor="tradingHours">
+                <Field
+                  label="Trading hours"
+                  htmlFor="tradingHours"
+                  hint="Plain text is fine — used in posts and local listings"
+                >
                   <Textarea
                     id="tradingHours"
                     name="tradingHours"
                     rows={3}
                     defaultValue={p.tradingHours ?? ""}
-                    placeholder="Mon–Fri 9–5, Sat 10–2"
+                    placeholder="Mon–Fri 7am–3pm, Sat 8am–2pm, closed Sun"
                   />
                 </Field>
 

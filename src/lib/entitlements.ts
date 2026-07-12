@@ -35,7 +35,7 @@ export async function assertCompanyAddon(
   if (!(await companyHasAddon(companyId, addonId))) {
     const name = ADDONS[addonId]?.name ?? addonId;
     throw new Error(
-      `The "${name}" add-on isn't enabled for this company. Enable it on the Billing page to use this feature.`,
+      `The "${name}" add-on isn't enabled for this company. Enable it on AI Visuals (content creation) or Billing to use this feature.`,
     );
   }
 }
