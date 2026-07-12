@@ -1,22 +1,17 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-12, **PACKAGES + 6h–24h DELIVERY · uncommitted** · **W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-12, **c1c30a0 SHIPPED** · **0043+0044 PASTE** · **W6 WAITING**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 4** + large uncommitted tree) · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 5**) · live flags **OFF**
 >
 > | Item | Status | Notes |
 > |------|--------|-------|
-> | Automation-first C P0 + A + B | UNCOMMITTED | - |
-> | Marketing packages ($349/$649/$999/Custom) | UNCOMMITTED | agency editable · festival relevance |
-> | Onboarding package pick | UNCOMMITTED | Basic/Pro/Blast/Custom → company managedService |
-> | 6h–24h impl plan email + calendar | UNCOMMITTED | eligibleAt+6h · dueAt+24h · ICS/portal calendar |
-> | Package change → strategy refresh | UNCOMMITTED | immediate eligible · pending billing audit · no fake Stripe |
+> | Automation-first + packages + 6h–24h delivery | **COMMITTED** `c1c30a0` | client review-only · agency ops desk · Basic $349 / Pro $649 / Blast $999 / Custom |
 > | **Migrations 0043 + 0044** | **PASTE NEEDED** | batch below |
 > | W6 | WAITING | do not flip `*_LIVE` |
 >
 > ### Just finished
-> - Proceeded: signup/onboarding package SKU · delivery window · plan-change refresh
-> - `tsc` clean
+> - Committed automation-first + marketing packages wave as `c1c30a0`
 >
 > **Owner paste now (batch):**
 > ```powershell
@@ -25,12 +20,12 @@
 >
 > **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. No commit unless asked. Exclude `_owner_paste_*`.
 >
-> **Demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · Agency Settings → Marketing packages · Company assign · Client Account shows package
+> **Demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · Agency Settings → Marketing packages · Client Approvals / Account
 >
 > **NEXT:**
-> 1. Owner paste **0043+0044** batch
-> 2. Demo proof (onboard → wait/eligibility · email stamp · package change refresh)
-> 3. Commit when asked · Stripe package products/proration later · park Google
+> 1. Owner paste **0043+0044**
+> 2. Demo proof · push `main` when asked
+> 3. Stripe package products/proration later · park Google
 >
 > **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover
 >
