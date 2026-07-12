@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { canAccessCompany, requireAdmin } from "@/lib/auth/rbac";
 import {
   getCompany,
+  getTenant,
   listContent,
   listIntegrations,
   listRecommendations,
+  listScheduledPosts,
   getLocalProfile,
   usersForCompany,
 } from "@/lib/db";
@@ -31,9 +33,13 @@ import { Field, Input, Textarea, Select } from "@/components/ui/form";
 import {
   addCompanyDocAction,
   saveManagedServiceLevelAction,
+  saveMarketingPackageAction,
   saveOnboardingAction,
   setCompanyStatusAction,
 } from "../actions";
+import { CompanyMarketingPackageForm } from "@/components/company-marketing-package-form";
+import { resolveMarketingPackages } from "@/lib/marketing-packages";
+import type { MarketingPackageId } from "@/lib/types";
 import {
   markPromoOnCalendarAction,
   savePromoMarkupAction,
@@ -41,21 +47,26 @@ import {
 import { DEFAULT_PROMO_MARKUP_PERCENT } from "@/lib/promo-catalog";
 import { listOpenPromoSelections } from "@/lib/promo-requests";
 import { Badge } from "@/components/ui/badge";
-import { formatDate, formatMoney } from "@/lib/utils";
+import { formatDate, formatMoney, now } from "@/lib/utils";
 import { defaultServiceLevel } from "@/lib/managed-service/authority";
+import { listOpenOpportunitiesForTenant } from "@/lib/ai-mos";
+import { addDaysIso } from "@/lib/calendar-utils";
 
 export default async function CompanyOnboardingPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ scraped?: string }>;
+  searchParams?: Promise<{ scraped?: string; package?: string }>;
 }) {
   const user = await requireAdmin();
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   const company = await getCompany(id);
   if (!company || !(await canAccessCompany(user, company.id))) notFound();
+
+  const tenant = await getTenant(user.tenantId);
+  const marketingPackages = resolveMarketingPackages(tenant);
 
   const { score, missing } = onboardingScore(company);
   const p = company.profile;
@@ -74,7 +85,7 @@ export default async function CompanyOnboardingPage({
   const setupFocus =
     company.status === "draft_onboarding" || company.status === "pending_review";
 
-  const [integrations, allContent, activeAddons, recommendations, health, localProfile] =
+  const [integrations, allContent, activeAddons, recommendations, health, localProfile, scheduledPosts, openAiMos] =
     await Promise.all([
       listIntegrations(user.tenantId, company.id),
       listContent(user.tenantId),
@@ -82,8 +93,36 @@ export default async function CompanyOnboardingPage({
       listRecommendations(user.tenantId, [company.id], "open"),
       buildCompanyHealthScore(user.tenantId, company),
       getLocalProfile(company.id),
+      listScheduledPosts(user.tenantId),
+      listOpenOpportunitiesForTenant(user.tenantId, [company.id], 5),
     ]);
   const companyContent = allContent.filter((c) => c.companyId === company.id);
+  const today = now().slice(0, 10);
+  const weekEnd = addDaysIso(today, 7);
+  const nextPosts = scheduledPosts
+    .filter(
+      (p) =>
+        p.companyId === company.id &&
+        (p.status === "scheduled" || p.status === "publishing") &&
+        p.scheduledDate >= today &&
+        p.scheduledDate <= weekEnd,
+    )
+    .sort((a, b) =>
+      a.scheduledDate === b.scheduledDate
+        ? (a.scheduledTime ?? "").localeCompare(b.scheduledTime ?? "")
+        : a.scheduledDate.localeCompare(b.scheduledDate),
+    )
+    .slice(0, 5);
+  const qualityHolds = companyContent.filter(
+    (c) =>
+      c.qualityRouting?.decision === "hold_agency" &&
+      ["pending_approval", "ai_draft", "user_edited"].includes(c.status) &&
+      c.clientReview?.status !== "pending",
+  );
+  const pendingApprovals = companyContent.filter((c) => c.status === "pending_approval");
+  const failedPosts = scheduledPosts.filter(
+    (p) => p.companyId === company.id && p.status === "failed",
+  );
   const serviceLevelSet = !!p.managedService?.serviceLevel;
   const hasCampaign = companyContent.some((c) => !!c.campaignId);
   const steps: { label: string; done: boolean; href: string; cta: string }[] = [
@@ -135,6 +174,7 @@ export default async function CompanyOnboardingPage({
   const doneCount = steps.filter((s) => s.done).length;
   const nextStep = steps.find((s) => !s.done);
   const scrapedBanner = sp.scraped;
+  const packageUpdated = sp.package === "updated";
 
   // ── Setup: single calm column — scrape + essentials only ─────────────
   if (setupFocus) {
@@ -153,6 +193,12 @@ export default async function CompanyOnboardingPage({
         </PageHeader>
 
         <div className="mx-auto max-w-2xl space-y-8 p-6">
+          {packageUpdated && (
+            <p className="text-sm text-emerald-800">
+              Package updated — billing adjustment pending / recorded. Strategy refresh
+              queued (eligible immediately; due within 24h).
+            </p>
+          )}
           {scrapedBanner === "1" && (
             <p className="text-sm text-emerald-800">
               Pre-filled from the website and AI enrichment — review below, then save.
@@ -418,11 +464,165 @@ export default async function CompanyOnboardingPage({
       <PageHeader
         title={company.name}
         explainerId="client-overview"
-        explainer="Onboarding, profile, and ops settings for this client."
+        explainer="Ops board first — exceptions, next posts, and health. Profile and brand live below."
       />
 
       <div className="grid gap-6 p-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
+          {packageUpdated && (
+            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              Package updated — billing adjustment pending / recorded. Strategy refresh
+              queued (eligible immediately; due within 24h).
+            </p>
+          )}
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h2 className="font-semibold">Ops board</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Exceptions and delivery for the next 7 days.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge tone={health.score < 60 ? "danger" : health.score < 80 ? "warning" : "success"}>
+                    Health {Math.round(health.score)}
+                  </Badge>
+                  {qualityHolds.length > 0 && (
+                    <Badge tone="warning">Needs attention {qualityHolds.length}</Badge>
+                  )}
+                  {pendingApprovals.length > 0 && (
+                    <Badge tone="info">Approvals {pendingApprovals.length}</Badge>
+                  )}
+                  {failedPosts.length > 0 && (
+                    <Badge tone="danger">Failed publish {failedPosts.length}</Badge>
+                  )}
+                  {openAiMos.length > 0 && (
+                    <Badge tone="info">AI signals {openAiMos.length}</Badge>
+                  )}
+                </div>
+              </div>
+
+              {(qualityHolds.length > 0 ||
+                pendingApprovals.length > 0 ||
+                failedPosts.length > 0 ||
+                openAiMos.length > 0) && (
+                <ul className="space-y-1.5 text-sm">
+                  {qualityHolds.slice(0, 3).map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={`/content/${c.id}`}
+                        className="flex justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 hover:bg-muted"
+                      >
+                        <span className="truncate font-medium">{c.title}</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          Needs attention
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                  {pendingApprovals
+                    .filter((c) => !qualityHolds.some((h) => h.id === c.id))
+                    .slice(0, 3)
+                    .map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          href={`/approvals?company=${company.id}`}
+                          className="flex justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 hover:bg-muted"
+                        >
+                          <span className="truncate font-medium">{c.title}</span>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            Pending approval
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  {failedPosts.slice(0, 2).map((p) => (
+                    <li key={p.id}>
+                      <Link
+                        href={`/publishing?company=${company.id}`}
+                        className="flex justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 hover:bg-muted"
+                      >
+                        <span className="truncate font-medium">
+                          {p.platform} · {formatDate(p.scheduledDate)}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          Failed publish
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                  {openAiMos.slice(0, 2).map((opp) => (
+                    <li key={opp.id}>
+                      <Link
+                        href="/ai-mos"
+                        className="flex justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 hover:bg-muted"
+                      >
+                        <span className="truncate font-medium">{opp.title}</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          AI signal
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Next 7 days
+                  </p>
+                  <Link
+                    href={`/calendar?company=${company.id}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Calendar
+                  </Link>
+                </div>
+                {nextPosts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nothing scheduled this week.</p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {nextPosts.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex justify-between gap-2 border-b border-border py-1.5 last:border-0"
+                      >
+                        <span className="truncate">{p.platform}</span>
+                        <span className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDate(p.scheduledDate)}
+                          {p.scheduledTime ? ` · ${p.scheduledTime}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Link
+                  href={`/companies/${company.id}/brand-brain`}
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Brand Brain →
+                </Link>
+                <Link
+                  href={`/content?company=${company.id}`}
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Content →
+                </Link>
+                <Link
+                  href={`/publishing?company=${company.id}`}
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Publishing →
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
           <AutoOnboardingPanel
             companyId={company.id}
             companyName={company.name}
@@ -701,6 +901,28 @@ export default async function CompanyOnboardingPage({
                   Save service level
                 </Button>
               </form>
+              <div className="border-t border-border pt-4">
+                <h3 className="mb-2 text-sm font-medium">Marketing package</h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Delivery SKU for this client. Assigning Basic / Pro / Blast also
+                  sets service level from the package default. Ads media always extra.
+                </p>
+                <CompanyMarketingPackageForm
+                  companyId={company.id}
+                  packageId={
+                    (p.managedService?.marketingPackageId ??
+                      "basic") as MarketingPackageId
+                  }
+                  customModules={p.managedService?.customModules}
+                  options={marketingPackages.map((pkg) => ({
+                    id: pkg.id,
+                    name: pkg.name,
+                    priceAudMonthly: pkg.priceAudMonthly,
+                    active: pkg.active,
+                  }))}
+                  action={saveMarketingPackageAction}
+                />
+              </div>
             </CardContent>
           </Card>
 

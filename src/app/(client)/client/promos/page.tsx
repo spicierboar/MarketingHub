@@ -18,6 +18,10 @@ function money(n: number) {
   });
 }
 
+/**
+ * Deep-link only — demoted from primary nav and Home (Wave A).
+ * Agency owns packaging; route kept for existing links / agency-proposed flows.
+ */
 export default async function ClientPromosPage() {
   const { companyId } = await requirePortalUser();
   const company = await getCompany(companyId);
@@ -30,16 +34,25 @@ export default async function ClientPromosPage() {
   return (
     <div>
       <PageHeader
-        title="Ready-made promotions"
+        title="Promotions"
         explainerId="client-promos"
-        explainer="Pick a pre-built campaign for your industry. You only set package price, start date, and channels — creative and posts are ready. Separate from your ongoing strategy calendar."
+        explainer="Ready-made packages your agency may propose. Not part of day-to-day review — prefer Approvals and Ask us."
       >
         <Link href="/client" className={buttonClasses("outline", "sm")}>
-          Home
+          Needs you
         </Link>
       </PageHeader>
 
       <div className="space-y-6 p-4 sm:p-6">
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          This page isn&apos;t in your main menu. Dates, price, and channels are normally set with
+          your agency — use{" "}
+          <Link href="/client/requests/new" className="text-primary hover:underline">
+            Ask us
+          </Link>{" "}
+          if you want a promotion.
+        </p>
+
         {open.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold">Your promo requests</h2>
@@ -71,7 +84,7 @@ export default async function ClientPromosPage() {
         )}
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Choose a promotion</h2>
+          <h2 className="text-sm font-semibold">Browse packages</h2>
           <ClientPromoPicker templates={templates} />
         </section>
       </div>

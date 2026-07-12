@@ -1,18 +1,10 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import {
-  activeSchedulesForContent,
-  getCampaignItem,
-  getContent,
-  getScheduledPost,
-  transitionScheduledPost,
-  updateCampaignItem,
-  updateContent,
-} from "@/lib/db";
+import { createRequest, getContent, getScheduledPost } from "@/lib/db";
 import { assertCompanyAccess, requirePortalUser } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
-import { rescheduleOne } from "@/lib/scheduling";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -27,68 +19,119 @@ async function assertPortalPostAccess(postId: string) {
   return { user, post, companyId };
 }
 
-/** Client portal reschedule — always via rescheduleOne (critique gate). */
-export async function rescheduleClientPostAction(formData: FormData) {
+/**
+ * Wave A — clients do not reschedule live. Opens an Ask ticket for the agency.
+ * Does not call rescheduleOne.
+ */
+export async function askRescheduleClientPostAction(formData: FormData) {
   const postId = text(formData, "postId");
-  const date = text(formData, "date");
-  if (!date) throw new Error("A date is required.");
+  const preferredDate = text(formData, "date");
+  const note = text(formData, "note");
 
-  const { user, post } = await assertPortalPostAccess(postId);
+  const { user, post, companyId } = await assertPortalPostAccess(postId);
   if (post.status !== "scheduled") {
     throw new Error("Only scheduled posts can be moved.");
   }
 
-  const { post: updated, conflictWarning } = await rescheduleOne({
-    postId,
-    date,
-    time: text(formData, "time") || undefined,
-    userId: user.id,
-    tenantId: user.tenantId,
+  const content = await getContent(post.contentId);
+  const title = content?.title ?? "Untitled post";
+  const topic = `Please move: ${title}`;
+  const notes = [
+    `Client asked to move scheduled post.`,
+    `Post id: ${postId}`,
+    `Current date: ${post.scheduledDate}${post.scheduledTime ? ` ${post.scheduledTime}` : ""}`,
+    `Platform: ${post.platform}`,
+    preferredDate ? `Preferred new date: ${preferredDate}` : null,
+    note ? `Note: ${note}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const req = await createRequest({
+    companyId,
+    requesterId: user.id,
+    requestType: "social_post",
+    objective: "",
+    topic,
+    preferredDate: preferredDate || undefined,
+    urgency: "normal",
+    notes,
+    consent: {
+      customerNamed: false,
+      customerInPhotos: false,
+      consentObtained: false,
+      mentionsPricing: false,
+      mentionsOffer: false,
+      performanceClaims: false,
+    },
+    uploads: [],
+    assignedReviewerId: null,
   });
 
-  await logAction(user, "content.rescheduled", {
-    targetType: "scheduled_post",
-    targetId: postId,
-    companyId: post.companyId,
-    detail: `→ ${updated.scheduledDate}${updated.scheduledTime ? ` ${updated.scheduledTime}` : ""}${
-      conflictWarning ? ` (soft conflict)` : ""
-    }`,
+  await logAction(user, "request.submitted", {
+    targetType: "request",
+    targetId: req.id,
+    companyId,
+    detail: topic,
   });
 
   revalidatePath("/client/calendar");
+  redirect(`/client/requests/${req.id}`);
 }
 
-/** Pause = cancel schedule (same guarded transition as agency calendar). */
-export async function cancelClientScheduleAction(formData: FormData) {
+/**
+ * Wave A — clients do not cancel/pause live. Opens an Ask ticket for the agency.
+ * Does not call transitionScheduledPost / cancel.
+ */
+export async function askPauseClientPostAction(formData: FormData) {
   const postId = text(formData, "postId");
-  const { user, post } = await assertPortalPostAccess(postId);
+  const note = text(formData, "note");
 
-  const cancelled = await transitionScheduledPost(user.tenantId, postId, {
-    from: ["scheduled", "failed", "dead"],
-    to: "cancelled",
-  });
-  if (!cancelled) {
-    throw new Error("Already inactive (or currently publishing).");
+  const { user, post, companyId } = await assertPortalPostAccess(postId);
+  if (post.status !== "scheduled") {
+    throw new Error("Only scheduled posts can be paused.");
   }
 
   const content = await getContent(post.contentId);
-  if (content && (await activeSchedulesForContent(content.id)).length === 0) {
-    if (content.status === "scheduled") {
-      await updateContent(content.id, { status: "approved" });
-    }
-    if (content.campaignItemId) {
-      const item = await getCampaignItem(content.campaignItemId);
-      if (item?.status === "scheduled") {
-        await updateCampaignItem(content.campaignItemId, { status: "approved" });
-      }
-    }
-  }
+  const title = content?.title ?? "Untitled post";
+  const topic = `Please pause: ${title}`;
+  const notes = [
+    `Client asked to pause/cancel a scheduled post.`,
+    `Post id: ${postId}`,
+    `Scheduled: ${post.scheduledDate}${post.scheduledTime ? ` ${post.scheduledTime}` : ""}`,
+    `Platform: ${post.platform}`,
+    note ? `Note: ${note}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  await logAction(user, "content.schedule_cancelled", {
-    targetType: "scheduled_post",
-    targetId: postId,
-    companyId: post.companyId,
+  const req = await createRequest({
+    companyId,
+    requesterId: user.id,
+    requestType: "social_post",
+    objective: "",
+    topic,
+    urgency: "normal",
+    notes,
+    consent: {
+      customerNamed: false,
+      customerInPhotos: false,
+      consentObtained: false,
+      mentionsPricing: false,
+      mentionsOffer: false,
+      performanceClaims: false,
+    },
+    uploads: [],
+    assignedReviewerId: null,
+  });
+
+  await logAction(user, "request.submitted", {
+    targetType: "request",
+    targetId: req.id,
+    companyId,
+    detail: topic,
   });
 
   revalidatePath("/client/calendar");
+  redirect(`/client/requests/${req.id}`);
 }

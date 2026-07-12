@@ -53,6 +53,10 @@ export interface TenantOnboarding {
   contactEmail?: string;
   contactPhone?: string;
   notes?: string;
+  /** Client marketing package (company delivery SKU) — persisted until a company exists. */
+  marketingPackageId?: MarketingPackageId;
+  /** Module picks when marketingPackageId is `"custom"`. */
+  customModules?: MarketingPackageCustomModules;
 }
 
 export interface Tenant {
@@ -79,6 +83,11 @@ export interface Tenant {
    * platform catalog for client picks; filtered by industry per company.
    */
   promoCatalog?: AgencyPromoTemplate[];
+  /**
+   * Agency overrides for marketing package SKUs (Basic / Pro / Blast / Custom).
+   * Merged onto platform defaults in `src/lib/marketing-packages.ts`.
+   */
+  marketingPackageCatalog?: AgencyMarketingPackageOverride[];
   // Schedule due-ness: IANA timezone for calendar intent (e.g. Australia/Sydney).
   // When unset, publish-queue falls back to CC_TZ_OFFSET_MINUTES then UTC.
   timezone?: string;
@@ -1460,7 +1469,8 @@ export type CalendarAssistSuggestionKind =
   | "calendar_gap"
   | "cadence_fill"
   | "optimal_window"
-  | "ad_alignment";
+  | "ad_alignment"
+  | "implementation_plan";
 
 export type CalendarAssistSuggestionStatus = "open" | "accepted" | "dismissed";
 
@@ -3294,16 +3304,78 @@ export type ManagedDeliveryPhase =
   | "active"
   | "blocked"
   | "failed";
+/** Why a managed delivery run was enqueued (timing windows differ by reason). */
+export type ManagedDeliveryEnqueueReason =
+  | "signup"
+  | "onboarding"
+  | "service_level"
+  | "package_change"
+  | "manual";
+
 export interface ManagedServiceSettings {
   serviceLevel: ManagedServiceLevel;
   operatingAuthorityConfirmedAt?: string;
+  /**
+   * Earliest time generation may start.
+   * Signup/onboarding: onboard + 6h. Package change: now (no 6h delay).
+   */
+  strategyEligibleAt?: string;
   strategyDueAt?: string;
   strategyStartedAt?: string;
   strategyCompletedAt?: string;
   calendarCompletedAt?: string;
+  /**
+   * Idempotency stamp for client implementation-plan email.
+   * Cleared on package change so the refreshed plan can email again.
+   */
+  implementationPlanEmailedAt?: string;
+  /**
+   * Ops flag: package upgrade/downgrade recorded but Stripe package
+   * proration/Checkout is not wired yet — do not invent charges.
+   */
+  packageChangePendingBilling?: boolean;
   lastDeliveryRunId?: string;
   /** Fallback agency markup when no catalog template applies (0.42 = 42%). */
   promoMarkupPercent?: number;
+  /** Company marketing package SKU (separate from tenant SaaS plan). */
+  marketingPackageId?: MarketingPackageId;
+  /** Module picks when marketingPackageId is `"custom"`. */
+  customModules?: MarketingPackageCustomModules;
+}
+
+/** Company-level marketing delivery SKU (not tenant SaaS plan). */
+export type MarketingPackageId = "basic" | "pro" | "blast" | "custom";
+
+/** Build-your-own modules when a company is on the Custom package. */
+export interface MarketingPackageCustomModules {
+  channels: string[];
+  postsPerMonth: number;
+  campaignsPerMonth: number;
+  promosIncludedPerMonth: number;
+  adsManagementIncluded: boolean;
+  serviceLevel: ManagedServiceLevel;
+  addonIds: AddonId[];
+}
+
+/**
+ * Agency override for one platform marketing package.
+ * Stored on `Tenant.marketingPackageCatalog`; merged onto defaults.
+ */
+export interface AgencyMarketingPackageOverride {
+  id: MarketingPackageId;
+  name?: string;
+  priceAudMonthly?: number;
+  blurb?: string;
+  channels?: string[];
+  postsPerMonth?: number;
+  campaignsPerMonth?: number;
+  promosIncludedPerMonth?: number;
+  adsManagementIncluded?: boolean;
+  includedAddonIds?: AddonId[];
+  defaultServiceLevel?: ManagedServiceLevel;
+  active?: boolean;
+  /** Optional Custom package rate card (module key → AUD). */
+  customModuleRates?: Record<string, number>;
 }
 
 /** Industry tag for ready-made promos (extends BusinessType with verticals). */
@@ -3388,10 +3460,20 @@ export interface ManagedDeliveryRun {
   phase: ManagedDeliveryPhase;
   serviceLevel: ManagedServiceLevel;
   onboardingCompletedAt: string;
+  /**
+   * Do not start generating until now >= this.
+   * Signup/onboarding: onboard + 6h. Package change: now (immediate).
+   */
+  strategyEligibleAt: string;
+  /** SLA ceiling — strategy should be ready by eligible anchor + 24h (signup: onboard+24h). */
   strategyDueAt: string;
   strategyStartedAt?: string | null;
   strategyCompletedAt?: string | null;
   calendarCompletedAt?: string | null;
+  /** Idempotency stamp — implementation plan email sent once. */
+  implementationPlanEmailedAt?: string | null;
+  /** Signup vs package_change — drives eligible/due windows. */
+  enqueueReason?: ManagedDeliveryEnqueueReason | null;
   campaignId?: string | null;
   strategyVersion: number;
   calendarVersion: number;

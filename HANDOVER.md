@@ -1,49 +1,56 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-11, **AGENCY/CLIENT SURFACES + CALENDAR CONTEXT** · **partial uncommitted** · **W6 WAITING ON GOOGLE**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-12, **PACKAGES + 6h–24h DELIVERY · uncommitted** · **W6 WAITING**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 3**) · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 4** + large uncommitted tree) · live flags **OFF**
 >
-> | Wave | Status | Notes |
+> | Item | Status | Notes |
 > |------|--------|-------|
-> | W0–W5 + W7 · managed · C2 · signup · platform | SHIPPED | - |
-> | **Promo + onboarding scrape/AI + UX declutter** | **COMMITTED** `294611e` | promo catalog · create scrape+enrich · setup overview · tools menu |
-> | **Agency vs client surfaces + calendar context** | **COMMITTED** `2e55e78` | seasonal date bug · delivery vs planning · `?company=` scope |
-> | **W6** | **WAITING** | Google Cloud billing — **do not flip `*_LIVE`** |
+> | Automation-first C P0 + A + B | UNCOMMITTED | - |
+> | Marketing packages ($349/$649/$999/Custom) | UNCOMMITTED | agency editable · festival relevance |
+> | Onboarding package pick | UNCOMMITTED | Basic/Pro/Blast/Custom → company managedService |
+> | 6h–24h impl plan email + calendar | UNCOMMITTED | eligibleAt+6h · dueAt+24h · ICS/portal calendar |
+> | Package change → strategy refresh | UNCOMMITTED | immediate eligible · pending billing audit · no fake Stripe |
+> | **Migrations 0043 + 0044** | **PASTE NEEDED** | batch below |
+> | W6 | WAITING | do not flip `*_LIVE` |
 >
-> ### Shipped @ `294611e` + `2e55e78` (do not redo)
-> - Add client: website + consent → scrape + AI/template enrich · setup overview · promo catalog · tools dropdown
-> - Calendar: seasonal MM-DD bug fixed · agency delivery-first when `?company=` · assist/campaigns scoped · context bar **Agency tools**
-> - Rule: **AI/planning = agency; review = client portal** (`docs/MANAGED-SERVICE-MODEL.md`)
+> ### Just finished
+> - Proceeded: signup/onboarding package SKU · delivery window · plan-change refresh
+> - `tsc` clean
 >
-> ### Just finished (this session)
-> - Committed calendar/context polish as `2e55e78`
->
-> **Demo scrape:** `harbourroasters.example` + consent
->
-> **Owner migrations — paste if not done:**
+> **Owner paste now (batch):**
 > ```powershell
-> notepad F:\MarketingHub\command-centre\supabase\migrations\0041_credit_wallet_stripe_pm.sql
-> notepad F:\MarketingHub\command-centre\supabase\migrations\0042_tenant_promo_catalog.sql
+> notepad F:\MarketingHub\command-centre\supabase\migrations\_owner_paste_0043_0044_batch.sql
 > ```
 >
-> **Hard locks:** Do **NOT** flip `*_LIVE` until W6 GO. Critique gate untouched. AI never auto-publishes / auto-spends. Data via `@/lib/db` (await). No commit unless asked.
+> **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. No commit unless asked. Exclude `_owner_paste_*`.
 >
-> **Local demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · `/dev` → Agency `sasha@brightspark.dev` · Client `liam@brightspark.dev`
+> **Demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · Agency Settings → Marketing packages · Company assign · Client Account shows package
 >
-> **NEXT (priority):**
-> 1. Verify: Clients → client → Calendar — delivery first; Agency planning collapsed; July seasons correct; assist scoped
-> 2. Owner paste **0041** + **0042**
-> 3. Optional: sales wizard website field; push `main` when asked
-> 4. Park live cutover until Google GO
+> **NEXT:**
+> 1. Owner paste **0043+0044** batch
+> 2. Demo proof (onboard → wait/eligibility · email stamp · package change refresh)
+> 3. Commit when asked · Stripe package products/proration later · park Google
 >
-> **Owner waiting:** Google Cloud billing · then `GOOGLE_OAUTH_*` + GBP · Meta App Review · Phase 4 cutover on `https://mangotickle.com.au`
+> **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover
 >
 > **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
 >
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, **0041+0042 PASTED**) — archived
+>
+> Migrations pasted. Owner called out DIY UX → automation-first plan (see block above).
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-11, **AGENCY/CLIENT SURFACES + CALENDAR CONTEXT**) — archived
+>
+> Calendar/context shipped @ `2e55e78`.
 >
 > ---
 >

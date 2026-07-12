@@ -1,5 +1,5 @@
 // Self-tests for managed-service rolling 30-day calendar maintainer.
-// Suggestions only — never creates scheduled posts.
+// Suggestions only at approval level; managed levels may auto-draft (never publish).
 
 import {
   addMembership,
@@ -7,6 +7,7 @@ import {
   createTenant,
   createUser,
   listCalendarAssistSuggestions,
+  listContent,
   listScheduledPosts,
   purgeTenant,
   updateCompany,
@@ -115,14 +116,77 @@ export async function checkRollingCalendarMaintainAddsSuggestionsOnly(): Promise
     const live = afterPosts.filter(
       (p) => p.status === "scheduled" || p.status === "published",
     );
+    // approval level: suggestions only — no auto-draft
     const ok =
       result.suggestionsAdded >= 1 &&
+      result.draftsCreated === 0 &&
       open.length >= result.suggestionsAdded &&
       live.length === 0 &&
       afterPosts.length === beforePosts.length;
     return {
       ok,
-      detail: `added=${result.suggestionsAdded} open=${open.length} livePosts=${live.length}`,
+      detail: `added=${result.suggestionsAdded} drafts=${result.draftsCreated} open=${open.length} livePosts=${live.length}`,
+    };
+  } finally {
+    await purgeTenant(t.id);
+  }
+}
+
+/** managed_exceptions may auto-accept assists into drafts (never scheduled posts). */
+export async function checkRollingCalendarAutoDraftsWhenManaged(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const t = await createTenant({
+    name: `Rolling Cal AutoDraft ${Date.now()}`,
+    kind: "agency",
+    plan: "starter",
+    status: "active",
+    timezone: "Australia/Sydney",
+  });
+  const userRow = await createUser({
+    email: `rc-ad-${Date.now()}@example.dev`,
+    name: "Rolling AutoDraft Admin",
+    role: "admin",
+  });
+  await addMembership({ tenantId: t.id, userId: userRow.id, role: "owner" });
+  const user = acting(userRow, t.id);
+  const company = await createCompany({
+    tenantId: t.id,
+    name: "AutoDraft Co",
+    createdBy: userRow.id,
+  });
+  await updateCompany(company.id, {
+    status: "ai_ready",
+    profile: {
+      ...company.profile,
+      industry: "cafe",
+      natureOfBusiness: "Local cafe",
+      services: ["Coffee"],
+      serviceAreas: ["Town"],
+      approvalContact: "owner@example.dev",
+      managedService: { serviceLevel: "managed_exceptions" },
+    },
+  });
+
+  try {
+    const result = await maintainRollingCalendarForCompany(user, company.id);
+    const open = await listCalendarAssistSuggestions(t.id, [company.id], "open");
+    const accepted = await listCalendarAssistSuggestions(t.id, [company.id], "accepted");
+    const content = (await listContent(t.id)).filter((c) => c.companyId === company.id);
+    const live = (await listScheduledPosts(t.id)).filter(
+      (p) => p.status === "scheduled" || p.status === "published",
+    );
+    const ok =
+      result.suggestionsAdded >= 1 &&
+      result.draftsCreated >= 1 &&
+      accepted.length >= result.draftsCreated &&
+      content.length >= result.draftsCreated &&
+      open.length === 0 &&
+      live.length === 0;
+    return {
+      ok,
+      detail: `added=${result.suggestionsAdded} drafts=${result.draftsCreated} accepted=${accepted.length} content=${content.length} open=${open.length} live=${live.length}`,
     };
   } finally {
     await purgeTenant(t.id);

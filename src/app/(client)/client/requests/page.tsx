@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { visibleRequests } from "@/lib/scope";
 import { PageHeader } from "@/components/page-header";
+import { ClientAccountLinks } from "@/components/client-account-links";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -16,16 +17,17 @@ export default async function ClientRequestsPage() {
   return (
     <div>
       <PageHeader
-        title="Things you've asked us to handle"
+        title="Ask us"
         explainerId="client-requests"
-        explainer="Your messages to the agency. Track status here, or ask for something new."
+        explainer="Your messages to the agency. Track status here, or send a new one."
       >
-        <Link href="/client/requests/new" className={buttonClasses()}>Ask for something</Link>
+        <Link href="/client/requests/new" className={buttonClasses()}>New message</Link>
       </PageHeader>
+      <ClientAccountLinks />
       <div className="p-6">
         {requests.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
-            Nothing yet. <Link href="/client/requests/new" className="text-primary hover:underline">Ask for something</Link>.
+            Nothing yet. <Link href="/client/requests/new" className="text-primary hover:underline">Send a message</Link>.
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border bg-card">

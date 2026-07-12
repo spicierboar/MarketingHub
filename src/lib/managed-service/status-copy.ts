@@ -7,6 +7,7 @@ const STATUS_COPY: Record<string, string> = {
   calendar_updated: "Your social media calendar has been updated",
   content_ready: "Your content is ready for review",
   approval_required: "Your approval is required",
+  delivery_active: "Your marketing is live and being managed",
   campaign_optimised: "Your campaign has been optimised",
   payment_attention: "Your payment method requires attention",
   report_ready: "Your monthly report is ready",

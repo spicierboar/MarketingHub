@@ -8,6 +8,7 @@ import {
   CheckSquare,
   Lightbulb,
   Megaphone,
+  Package,
   Sparkles,
   FileText,
   CalendarDays,
@@ -24,6 +25,11 @@ import {
   LogOut,
   ChevronDown,
   MessageSquareCode,
+  Radio,
+  Send,
+  BarChart3,
+  MessageSquare,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -51,43 +57,72 @@ interface NavGroup {
 }
 
 /**
- * Agency shell — only cross-company queues, portfolio, and workspace.
+ * Agency shell — ≤7 mental-model destinations for an automation ops desk.
  * Company-scoped modules live on `/companies/[id]` (CompanyToolsNav).
+ *
+ * Home · Queues · Clients · Delivery · AI Ops · Results · Settings
  */
 const NAV_GROUPS: NavGroup[] = [
   {
-    id: "exceptions",
-    label: "Exceptions",
+    id: "home",
+    label: "Agency",
     pinned: true,
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
+      { href: "/dashboard", label: "Agency Home", icon: LayoutDashboard },
     ],
   },
   {
-    id: "monitor",
-    label: "Monitor",
+    id: "queues",
+    label: "Queues",
+    pinned: true,
+    items: [
+      { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
+      { href: "/requests", label: "Client asks", icon: MessageSquare },
+    ],
+  },
+  {
+    id: "clients",
+    label: "Clients",
     pinned: true,
     adminOnly: true,
     items: [
       { href: "/companies", label: "Clients", icon: Building2, adminOnly: true },
-      { href: "/recommendations", label: "AI next steps", icon: Lightbulb },
     ],
   },
   {
-    id: "create-member",
-    label: "Client work",
+    id: "delivery",
+    label: "Delivery",
     pinned: true,
     items: [
-      { href: "/campaigns", label: "Campaigns", icon: Megaphone, memberOnly: true },
+      { href: "/calendar", label: "Calendar", icon: CalendarDays },
+      { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
+      { href: "/content", label: "Content", icon: FileText },
+      { href: "/campaigns", label: "Campaigns", icon: Megaphone },
       { href: "/studio", label: "Content Studio", icon: Sparkles, memberOnly: true },
-      { href: "/calendar", label: "Calendar", icon: CalendarDays, memberOnly: true },
-      { href: "/content", label: "Content library", icon: FileText, memberOnly: true },
     ],
   },
   {
-    id: "workspace",
-    label: "Workspace",
+    id: "ai-ops",
+    label: "AI Ops",
+    pinned: true,
+    adminOnly: true,
+    items: [
+      { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
+      { href: "/ai-mos", label: "Signals", icon: Radio },
+    ],
+  },
+  {
+    id: "results",
+    label: "Results",
+    pinned: true,
+    adminOnly: true,
+    items: [
+      { href: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
     adminOnly: true,
     items: [
       { href: "/sales/new-client", label: "New client", icon: Handshake, salesAccess: true },
@@ -99,6 +134,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/ai-control", label: "AI control", icon: ShieldCheck, adminOnly: true },
       { href: "/ai-prompts", label: "AI prompts", icon: MessageSquareCode, adminOnly: true },
       { href: "/promo-catalog", label: "Promo catalog", icon: Megaphone, adminOnly: true },
+      { href: "/marketing-packages", label: "Marketing packages", icon: Package, adminOnly: true },
       { href: "/developers", label: "Developers & API", icon: Handshake, adminOnly: true },
       { href: "/audit", label: "Audit log", icon: ScrollText, adminOnly: true },
       { href: "/platform-admin", label: "Platform admin", icon: Landmark, platformAdminOnly: true },
@@ -170,7 +206,10 @@ function NavSection({
           className="mb-0.5 flex w-full items-center justify-between rounded-md px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground"
           aria-expanded={expanded}
         >
-          {group.label}
+          <span className="inline-flex items-center gap-1.5">
+            {group.id === "settings" && <Settings className="h-3 w-3" />}
+            {group.label}
+          </span>
           <ChevronDown
             className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")}
           />
@@ -300,15 +339,6 @@ export function AppShell({
               pathname={pathname}
             />
           ))}
-          {isAdmin && (
-            <p className="mt-2 px-2.5 text-[10px] leading-snug text-muted-foreground">
-              Client work lives in each{" "}
-              <Link href="/companies" className="text-primary hover:underline">
-                client
-              </Link>
-              .
-            </p>
-          )}
         </nav>
         <div className="border-t border-border p-2">
           <div className="mb-1 px-2">

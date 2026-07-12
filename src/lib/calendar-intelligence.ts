@@ -30,8 +30,50 @@ export interface SeasonalPrompt {
   prompt: string;
   /** Lowercase industry keywords this prompt is especially relevant to. */
   industries: string[];
+  /** Keywords matched against targetCustomers / natureOfBusiness / services text. */
+  audienceHints?: string[];
+  /** Hard exclude when company industry/services match these keywords. */
+  excludeIndustries?: string[];
   priority: "high" | "medium" | "low";
 }
+
+/** Trade / home-services keywords — cultural hard-sell festivals should not target these. */
+const TRADE_EXCLUDE = [
+  "trade",
+  "tradie",
+  "plumber",
+  "plumbing",
+  "electrician",
+  "electrical",
+  "carpenter",
+  "builder",
+  "building",
+  "roofing",
+  "roofer",
+  "hvac",
+  "handyman",
+  "construction",
+  "tiler",
+  "painter",
+  "landscap",
+];
+
+/** Hospitality / retail verticals that typically run cultural festival campaigns. */
+const CULTURAL_HOSP_RETAIL = [
+  "restaurant",
+  "cafe",
+  "food",
+  "retail",
+  "hospitality",
+  "beauty",
+  "salon",
+  "supermarket",
+  "grocery",
+  "florist",
+  "accommodation",
+  "hotel",
+  "pub",
+];
 
 /** Fixed AU calendar moments beyond public holidays (approximate dates). */
 const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
@@ -41,8 +83,21 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "Families are settling into school routines — promote lunchbox fillers, after-school snacks, or family meal deals.",
-    industries: ["supermarket", "grocery", "convenience", "cafe", "food"],
+    industries: ["supermarket", "grocery", "convenience", "cafe", "food", "retail", "restaurant"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "medium",
+  },
+  {
+    date: "01-20",
+    endDate: "02-20",
+    title: "Lunar New Year",
+    category: "seasonal",
+    prompt:
+      "Lunar New Year — banquet bookings, gift sets, red-theme menus, or community celebration posts (when audience fits).",
+    industries: CULTURAL_HOSP_RETAIL,
+    audienceHints: ["chinese", "vietnamese", "korean", "asian", "lunar", "multicultural", "diaspora"],
+    excludeIndustries: TRADE_EXCLUDE,
+    priority: "high",
   },
   {
     date: "02-14",
@@ -50,7 +105,8 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "Run a Valentine's offer — flowers, dining packages, gift hampers, or date-night bookings.",
-    industries: ["florist", "retail", "cafe", "food", "accommodation", "hospitality"],
+    industries: ["florist", "retail", "cafe", "food", "restaurant", "accommodation", "hospitality", "beauty"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "high",
   },
   {
@@ -59,17 +115,29 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "Celebrate local women in business — staff spotlights, community partnerships, or a limited offer.",
-    industries: ["retail", "cafe", "health", "dental", "florist"],
+    industries: ["retail", "cafe", "restaurant", "health", "dental", "florist", "beauty", "hospitality"],
     priority: "low",
+  },
+  {
+    date: "03-20",
+    endDate: "04-10",
+    title: "Eid",
+    category: "seasonal",
+    prompt:
+      "Eid celebrations — family feast deals, community greetings, or gift/hampers for local audiences (when demographics fit).",
+    industries: ["restaurant", "cafe", "food", "retail", "hospitality", "supermarket", "grocery"],
+    audienceHints: ["muslim", "islamic", "halal", "eid", "middle eastern", "multicultural", "community"],
+    excludeIndustries: TRADE_EXCLUDE,
+    priority: "high",
   },
   {
     date: "04-25",
     title: "Anzac Day",
     category: "holiday",
     prompt:
-      "Acknowledge respectfully — dawn service attendance, tradie-friendly hours, or a quiet community post (no hard sell).",
-    industries: ["cafe", "food", "accommodation", "retail", "supermarket"],
-    priority: "medium",
+      "Acknowledge respectfully — dawn service attendance, trading hours, or a quiet community post (no hard sell).",
+    industries: [],
+    priority: "low",
   },
   {
     date: "05-11",
@@ -77,17 +145,66 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "Mother's Day is approaching — gift bundles, brunch bookings, spa packages, or last-minute pickup offers.",
-    industries: ["florist", "retail", "cafe", "food", "accommodation", "hospitality"],
+    industries: ["florist", "retail", "cafe", "food", "restaurant", "accommodation", "hospitality", "beauty"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "high",
+  },
+  {
+    date: "06-01",
+    endDate: "06-30",
+    title: "Long-weekend DIY / home improvement",
+    category: "industry",
+    prompt:
+      "Long weekends drive DIY and home projects — promote call-outs, free quotes, or maintenance check packages.",
+    industries: [
+      "trade",
+      "tradie",
+      "plumber",
+      "electrician",
+      "carpenter",
+      "builder",
+      "roofing",
+      "handyman",
+      "landscap",
+      "construction",
+      "home",
+      "professional",
+    ],
+    audienceHints: ["homeowner", "renovat", "property manager", "landlord"],
+    priority: "medium",
   },
   {
     date: "06-30",
     title: "EOFY",
     category: "seasonal",
     prompt:
-      "End of financial year — tax-time services, EOFY clearance sales, or B2B account renewals.",
-    industries: ["retail", "supermarket", "health", "dental", "convenience"],
-    priority: "medium",
+      "End of financial year — tax-time services, asset write-offs, B2B renewals, or optional clearance for retailers.",
+    industries: [
+      "professional",
+      "accountant",
+      "bookkeep",
+      "trade",
+      "tradie",
+      "plumber",
+      "electrician",
+      "builder",
+      "b2b",
+      "consult",
+      "retail",
+    ],
+    audienceHints: ["business owner", "sme", "tax", "bas", "gst"],
+    priority: "high",
+  },
+  {
+    date: "07-01",
+    endDate: "07-31",
+    title: "Tax time for professionals",
+    category: "industry",
+    prompt:
+      "Tax time — promote BAS/tax prep, bookkeeping catch-up, or professional services packages for local SMEs.",
+    industries: ["professional", "accountant", "bookkeep", "lawyer", "consult", "financial", "b2b"],
+    audienceHints: ["business owner", "sme", "tax", "bas"],
+    priority: "high",
   },
   {
     date: "07-01",
@@ -96,7 +213,8 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "School holidays are on — family packages, kids-eat-free, rainy-day activities, or road-trip stopover deals.",
-    industries: ["accommodation", "hospitality", "cafe", "food", "retail", "supermarket"],
+    industries: ["accommodation", "hospitality", "cafe", "food", "restaurant", "retail", "supermarket"],
+    excludeIndustries: [...TRADE_EXCLUDE, "b2b", "accountant", "bookkeep"],
     priority: "high",
   },
   {
@@ -105,7 +223,8 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "Father's Day — gift ideas, pub lunch specials, or experience vouchers.",
-    industries: ["retail", "cafe", "food", "florist", "accommodation"],
+    industries: ["retail", "cafe", "food", "restaurant", "florist", "accommodation", "hospitality", "pub"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "high",
   },
   {
@@ -115,7 +234,8 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "local",
     prompt:
       "Grand final season — game-day catering, watch-party bookings, or team-colour promotions.",
-    industries: ["cafe", "food", "retail", "supermarket", "convenience"],
+    industries: ["cafe", "food", "restaurant", "retail", "supermarket", "convenience", "pub", "hospitality"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "medium",
   },
   {
@@ -125,16 +245,52 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "local",
     prompt:
       "Spring festivals and cellar-door weekends — promote regional stays, group bookings, and event tie-ins.",
-    industries: ["accommodation", "hospitality", "cafe", "food"],
+    industries: ["accommodation", "hospitality", "cafe", "food", "restaurant", "hotel"],
     priority: "medium",
+  },
+  {
+    date: "10-01",
+    endDate: "03-31",
+    title: "Wet season / storm prep",
+    category: "industry",
+    prompt:
+      "Storm and wet-season prep — gutter checks, roof inspections, emergency call-out readiness, or before/after case studies.",
+    industries: [
+      "trade",
+      "tradie",
+      "plumber",
+      "electrician",
+      "roofer",
+      "roofing",
+      "builder",
+      "handyman",
+      "landscap",
+      "construction",
+      "home",
+    ],
+    audienceHints: ["homeowner", "property manager", "strata", "landlord"],
+    priority: "high",
+  },
+  {
+    date: "10-28",
+    endDate: "11-15",
+    title: "Diwali",
+    category: "seasonal",
+    prompt:
+      "Diwali — festive menus, gift hampers, lights/rangoli visuals, or community celebration posts for relevant audiences.",
+    industries: CULTURAL_HOSP_RETAIL,
+    audienceHints: ["indian", "hindu", "south asian", "diwali", "multicultural", "asian", "diaspora"],
+    excludeIndustries: TRADE_EXCLUDE,
+    priority: "high",
   },
   {
     date: "11-04",
     title: "Melbourne Cup",
     category: "local",
     prompt:
-      "Melbourne Cup day — luncheon packages, fascinator promos, or long-weekend getaway bundles.",
-    industries: ["cafe", "food", "accommodation", "hospitality", "florist"],
+      "Melbourne Cup day — luncheon packages, fascinator / fashion promos, or long-weekend getaway bundles.",
+    industries: ["cafe", "food", "restaurant", "accommodation", "hospitality", "pub", "retail", "florist", "beauty"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "medium",
   },
   {
@@ -143,17 +299,30 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "Black Friday / Cyber Monday — tease early-access lists, bundle deals, and click-and-collect.",
-    industries: ["retail", "supermarket", "convenience", "florist"],
+    industries: ["retail", "supermarket", "convenience", "florist", "beauty", "ecommerce"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "high",
   },
   {
     date: "12-01",
     endDate: "12-24",
-    title: "Christmas retail rush",
+    title: "Christmas trading",
     category: "seasonal",
     prompt:
       "Christmas trading — gift guides, extended hours, catering pre-orders, and last-shipping cutoffs.",
-    industries: ["retail", "supermarket", "convenience", "florist", "cafe", "food"],
+    industries: ["retail", "supermarket", "convenience", "florist", "cafe", "food", "restaurant", "beauty"],
+    excludeIndustries: TRADE_EXCLUDE,
+    priority: "high",
+  },
+  {
+    date: "12-26",
+    endDate: "12-31",
+    title: "Boxing Day sales",
+    category: "seasonal",
+    prompt:
+      "Boxing Day sales — clearance pushes, click-and-collect, and post-Christmas gift exchanges.",
+    industries: ["retail", "supermarket", "convenience", "florist", "ecommerce", "beauty"],
+    excludeIndustries: TRADE_EXCLUDE,
     priority: "high",
   },
   {
@@ -163,11 +332,62 @@ const AU_SEASONAL_EVENTS: Omit<SeasonalPrompt, "id">[] = [
     category: "seasonal",
     prompt:
       "Peak summer — direct-booking pushes, pool/outdoor amenities, and highway stopover offers.",
-    industries: ["accommodation", "hospitality", "cafe", "food"],
+    industries: ["accommodation", "hospitality", "cafe", "food", "restaurant", "hotel"],
     priority: "high",
   },
 ];
 
+export interface CompanyRelevanceContext {
+  industries: string[];
+  demographics: string;
+  serviceAreas: string[];
+  businessType?: string;
+}
+
+const BUSINESS_TYPE_INDUSTRY_HINTS: Record<string, string[]> = {
+  restaurant_cafe: ["restaurant", "cafe", "food", "hospitality"],
+  retail: ["retail"],
+  hotel: ["hotel", "accommodation", "hospitality"],
+  professional: ["professional"],
+  other: [],
+};
+
+/** Build relevance keywords from Brand Brain fields for seasonal / promo filtering. */
+export function companyRelevanceContext(company: Company): CompanyRelevanceContext {
+  const p = company.profile;
+  const bt = p.businessType;
+  const industries = [
+    ...(bt ? BUSINESS_TYPE_INDUSTRY_HINTS[bt] ?? [bt] : []),
+    bt,
+    p.industry,
+    p.natureOfBusiness,
+    ...(p.services ?? []),
+  ]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase().trim());
+
+  const demographics = [p.targetCustomers, p.natureOfBusiness, ...(p.services ?? [])]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase().trim())
+    .join(" ");
+
+  return {
+    industries: [...new Set(industries.filter(Boolean))],
+    demographics,
+    serviceAreas: [...(p.serviceAreas ?? [])],
+    businessType: bt,
+  };
+}
+
+function isRelevanceContext(v: unknown): v is CompanyRelevanceContext {
+  return (
+    !!v &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    Array.isArray((v as CompanyRelevanceContext).industries) &&
+    typeof (v as CompanyRelevanceContext).demographics === "string"
+  );
+}
 function isoInMonth(iso: string, monthKey: string): boolean {
   return iso.slice(0, 7) === monthKey;
 }
@@ -217,17 +437,55 @@ function resolveEventDate(ev: { date: string }, monthKey: string): string {
 
 function industryMatches(promptTags: string[], industries: string[]): boolean {
   if (!promptTags.length || !industries.length) return false;
-  return promptTags.some((tag) =>
-    industries.some(
-      (ind) => ind.includes(tag) || tag.includes(ind.split(/\s+/)[0] ?? ""),
-    ),
-  );
+  return promptTags.some((tag) => {
+    const t = tag.toLowerCase();
+    return industries.some((ind) => {
+      const i = ind.toLowerCase();
+      return i.includes(t) || t.includes(i.split(/\s+/)[0] ?? "");
+    });
+  });
+}
+
+function audienceMatches(hints: string[] | undefined, demographics: string): boolean {
+  if (!hints?.length || !demographics.trim()) return false;
+  const hay = demographics.toLowerCase();
+  return hints.some((h) => hay.includes(h.toLowerCase()));
+}
+
+/**
+ * Whether a seasonal/cultural prompt should be suggested for this company.
+ * Untagged public-holiday style prompts (no industries / audienceHints) stay
+ * as soft trading notes. Tagged prompts must match industry OR audience hints,
+ * and must not hit excludeIndustries.
+ */
+export function isPromptRelevantToCompany(
+  prompt: Pick<SeasonalPrompt, "industries" | "audienceHints" | "excludeIndustries" | "category">,
+  ctx: CompanyRelevanceContext,
+): boolean {
+  const industries = ctx.industries.map((i) => i.toLowerCase()).filter(Boolean);
+  const demo = (ctx.demographics ?? "").toLowerCase();
+  // Also scan industry strings for audience-style matches (e.g. services text).
+  const corpus = `${demo} ${industries.join(" ")}`.trim();
+
+  if (prompt.excludeIndustries?.length && industryMatches(prompt.excludeIndustries, industries)) {
+    return false;
+  }
+
+  const tagged = (prompt.industries?.length ?? 0) > 0 || (prompt.audienceHints?.length ?? 0) > 0;
+  if (!tagged) {
+    // Untagged = public holiday / generic trading note — keep (soft, not hard-sell).
+    return true;
+  }
+
+  const indOk = industryMatches(prompt.industries ?? [], industries);
+  const audOk = audienceMatches(prompt.audienceHints, corpus);
+  return indOk || audOk;
 }
 
 /** AU public holidays + seasonal/local prompts for a calendar month. */
 export function seasonalPromptsForMonth(
   monthKey: string,
-  industries?: string[],
+  industriesOrCtx?: string[] | CompanyRelevanceContext,
   opts?: { relevantOnly?: boolean },
 ): SeasonalPrompt[] {
   const prompts: SeasonalPrompt[] = [];
@@ -241,7 +499,8 @@ export function seasonalPromptsForMonth(
       category: "holiday",
       prompt: `Public holiday (${name}) — adjust hours, acknowledge the day, or plan content around reduced trading.`,
       industries: [],
-      priority: "medium",
+      // Soft trading note — not a cultural hard-sell.
+      priority: "low",
     });
   }
 
@@ -254,7 +513,17 @@ export function seasonalPromptsForMonth(
     });
   }
 
-  const norm = (industries ?? []).map((i) => i.toLowerCase()).filter(Boolean);
+  const ctx: CompanyRelevanceContext | null = isRelevanceContext(industriesOrCtx)
+    ? industriesOrCtx
+    : industriesOrCtx?.length
+      ? {
+          industries: industriesOrCtx.map((i) => i.toLowerCase()).filter(Boolean),
+          demographics: "",
+          serviceAreas: [],
+        }
+      : null;
+
+  const norm = ctx?.industries ?? [];
   let scored = prompts.map((p) => {
     if (!norm.length || !p.industries.length) return p;
     return industryMatches(p.industries, norm)
@@ -262,15 +531,9 @@ export function seasonalPromptsForMonth(
       : p;
   });
 
-  // When viewing one client, hide industry prompts that don't match them.
-  // Holidays and untagged events stay (they're calendar facts).
-  if (opts?.relevantOnly && norm.length) {
-    scored = scored.filter(
-      (p) =>
-        p.category === "holiday" ||
-        p.industries.length === 0 ||
-        industryMatches(p.industries, norm),
-    );
+  // Company-scoped: keep only relevant tagged prompts; untagged holidays stay as trading notes.
+  if (opts?.relevantOnly && ctx && (norm.length || ctx.demographics.trim())) {
+    scored = scored.filter((p) => isPromptRelevantToCompany(p, ctx));
   }
 
   const order = { high: 0, medium: 1, low: 2 };
@@ -549,15 +812,19 @@ export async function buildCalendarIntelligence(
   opts?: {
     companyIds?: string[];
     industries?: string[];
+    /** Richer Brand Brain context for cultural / demographic filtering. */
+    relevance?: CompanyRelevanceContext;
     platform?: string;
-    /** When true, drop seasonal prompts that don't match the given industries. */
+    /** When true, drop seasonal prompts that don't match the company. */
     relevantOnly?: boolean;
   },
 ): Promise<CalendarIntelligenceBundle> {
   const clock = resolveQueueClock(tenant);
-  const seasonalPrompts = seasonalPromptsForMonth(monthKey, opts?.industries, {
-    relevantOnly: opts?.relevantOnly,
-  });
+  const seasonalPrompts = seasonalPromptsForMonth(
+    monthKey,
+    opts?.relevance ?? opts?.industries,
+    { relevantOnly: opts?.relevantOnly },
+  );
   const optimalWindows = await optimalPostWindows(tenantId, {
     companyIds: opts?.companyIds,
     platform: opts?.platform,

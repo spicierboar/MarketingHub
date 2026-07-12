@@ -13,7 +13,8 @@ import { assertAdminCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
 import { assertCompanyQuota } from "@/lib/billing";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
-import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
+import { enqueueManagedDeliveryForCompany, supersedeOpenManagedDeliveryRuns } from "@/lib/managed-service/delivery-runner";
+import { notifyClientException } from "@/lib/managed-service/exception-notify";
 import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
 import { onboardingScore } from "@/lib/types";
 import { id, now } from "@/lib/utils";
@@ -23,9 +24,17 @@ import {
   type CompanyStatus,
   type CompanyProfile,
   type ManagedServiceLevel,
+  type ManagedServiceSettings,
+  type MarketingPackageId,
   type SocialLink,
   type UploadedAsset,
 } from "@/lib/types";
+import {
+  customModulesEqual,
+  isMarketingPackageId,
+  resolveCompanyPackage,
+  resolveSelectionForPackage,
+} from "@/lib/marketing-packages";
 
 const SERVICE_LEVELS: ManagedServiceLevel[] = [
   "approval",
@@ -339,6 +348,122 @@ export async function saveManagedServiceLevelAction(formData: FormData) {
         });
       }
     }
+  }
+
+  revalidatePath(`/companies/${companyId}`);
+}
+
+export async function saveMarketingPackageAction(formData: FormData) {
+  const companyId = String(formData.get("companyId") || "");
+  const user = await assertAdminCompanyAccess(companyId);
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("Company not found");
+
+  const idRaw = String(formData.get("marketingPackageId") || "").trim();
+  if (!isMarketingPackageId(idRaw)) throw new Error("Invalid marketing package");
+  const marketingPackageId = idRaw as MarketingPackageId;
+
+  const tenant = await getTenant(user.tenantId);
+  const { serviceLevel, customModules } = resolveSelectionForPackage(
+    tenant,
+    marketingPackageId,
+    formData,
+  );
+  const prev = company.profile.managedService;
+  const prevPackageId = (prev?.marketingPackageId ?? "basic") as MarketingPackageId;
+
+  const packageChanged =
+    prevPackageId !== marketingPackageId ||
+    (marketingPackageId === "custom" &&
+      !customModulesEqual(prev?.customModules, customModules));
+
+  const oldResolved = resolveCompanyPackage(company, tenant);
+  const nextMs: ManagedServiceSettings = {
+    ...(prev ?? { serviceLevel }),
+    serviceLevel,
+    marketingPackageId,
+    customModules,
+  };
+  if (packageChanged) {
+    // Stripe package Checkout / proration not wired — stamp for ops; no fake charges.
+    nextMs.packageChangePendingBilling = true;
+    delete nextMs.implementationPlanEmailedAt;
+  }
+  const newResolved = resolveCompanyPackage(
+    { ...company, profile: { ...company.profile, managedService: nextMs } },
+    tenant,
+  );
+  const billingDirection =
+    newResolved.priceAudMonthly > oldResolved.priceAudMonthly
+      ? "upgrade"
+      : newResolved.priceAudMonthly < oldResolved.priceAudMonthly
+        ? "downgrade"
+        : "lateral";
+
+  await updateCompany(companyId, {
+    profile: {
+      ...company.profile,
+      managedService: nextMs,
+    },
+  });
+
+  await logAction(user, "company.marketing_package_set", {
+    targetType: "company",
+    targetId: companyId,
+    companyId,
+    detail:
+      marketingPackageId === "custom"
+        ? `custom · ${serviceLevel}`
+        : `${marketingPackageId} · ${serviceLevel}`,
+  });
+
+  if (packageChanged) {
+    await logAction(user, "company.marketing_package_changed", {
+      targetType: "company",
+      targetId: companyId,
+      companyId,
+      detail: [
+        `${oldResolved.id}→${newResolved.id}`,
+        `A$${oldResolved.priceAudMonthly}→A$${newResolved.priceAudMonthly}`,
+        billingDirection,
+        "packageChangePendingBilling",
+        // Next: Stripe proration / Checkout + credit note for downgrades.
+      ].join(" · "),
+    });
+
+    const managed =
+      serviceLevel === "managed_exceptions" || serviceLevel === "fully_managed";
+    if (managed && company.status !== "archived" && tenant?.onboardingCompletedAt) {
+      await supersedeOpenManagedDeliveryRuns(user.tenantId, companyId);
+      const run = await enqueueManagedDeliveryForCompany({
+        tenantId: user.tenantId,
+        companyId,
+        onboardingCompletedAt: tenant.onboardingCompletedAt,
+        serviceLevel,
+        reason: "package_change",
+      });
+      await logAction(user, "managed_delivery.enqueued", {
+        targetType: "managed_delivery_run",
+        targetId: run.id,
+        companyId,
+        detail: `package_change eligible=${run.strategyEligibleAt} due=${run.strategyDueAt}`,
+      });
+
+      try {
+        await notifyClientException({
+          tenantId: user.tenantId,
+          companyId,
+          kind: "package_change",
+          subject: `Your implementation plan is being updated for ${newResolved.name}`,
+          body: `We've started updating your marketing implementation plan for the ${newResolved.name} package (A$${newResolved.priceAudMonthly}/mo). You'll get another email when the refreshed plan is ready — nothing publishes without your approval.`,
+        });
+      } catch {
+        /* soft no-op */
+      }
+    }
+
+    revalidatePath(`/companies/${companyId}`);
+    redirect(`/companies/${companyId}?package=updated`);
   }
 
   revalidatePath(`/companies/${companyId}`);

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
+import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 
@@ -13,8 +13,8 @@ const LINKS = [
   },
   {
     href: "/client/calendar",
-    label: "Calendar",
-    blurb: "See what is planned and ask for a move if timing needs to change.",
+    label: "Schedule",
+    blurb: "Glance at what is planned. Ask us if timing needs to change.",
   },
   {
     href: "/client/requests/new",
@@ -23,9 +23,9 @@ const LINKS = [
   },
 ] as const;
 
+/** Folded into Account — kept for deep links, not primary nav. */
 export default async function ClientHelpPage() {
-  const { companyId } = await requirePortalUser();
-  const company = await getCompany(companyId);
+  await requirePortalUser();
 
   return (
     <div>
@@ -34,10 +34,11 @@ export default async function ClientHelpPage() {
         explainerId="client-help"
         explainer="How your managed marketing service works — approvals, asks, billing, and what we handle for you."
       />
+      <ClientAccountLinks />
 
       <div className="space-y-8 p-6">
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">How it works</h2>
+          <h2 className="text-sm font-semibold">How it works</h2>
           <Card>
             <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
               <p>
@@ -51,17 +52,12 @@ export default async function ClientHelpPage() {
               <p>
                 Nothing goes live without the usual checks. AI never publishes or spends on its own.
               </p>
-              <p>
-                We also work on <strong className="font-medium text-foreground">AI discovery</strong> —
-                setting up your online presence so tools like ChatGPT are more likely to recommend
-                you. That improves your odds; it is never a guaranteed listing.
-              </p>
             </CardContent>
           </Card>
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Useful links</h2>
+          <h2 className="text-sm font-semibold">Useful links</h2>
           <ul className="grid gap-3 sm:grid-cols-2">
             {LINKS.map((item) => (
               <li key={item.href}>
@@ -79,7 +75,7 @@ export default async function ClientHelpPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Need a hand?</h2>
+          <h2 className="text-sm font-semibold">Need a hand?</h2>
           <Card>
             <CardContent className="space-y-4 p-6">
               <p className="text-sm text-muted-foreground">
@@ -87,9 +83,12 @@ export default async function ClientHelpPage() {
               </p>
               <p>
                 <Link href="/client/requests/new" className={buttonClasses()}>
-                  Ask us for something
+                  Ask us
                 </Link>
               </p>
+              <Link href="/client/account" className="text-xs text-primary hover:underline">
+                Back to Account →
+              </Link>
             </CardContent>
           </Card>
         </section>

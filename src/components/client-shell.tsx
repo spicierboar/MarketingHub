@@ -5,18 +5,12 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   Home,
-  Inbox,
   CheckSquare,
   LogOut,
-  BarChart3,
   CalendarDays,
   CreditCard,
-  Image,
-  LifeBuoy,
   Menu,
   X,
-  Building2,
-  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -27,48 +21,60 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
   /** Short label for mobile quick strip */
   short?: string;
+  /** Extra path prefixes that keep this item active */
+  matchPrefixes?: string[];
 };
 
-/** Review first, then account, then support — matches managed-service mental model. */
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+/**
+ * Wave A — four review surfaces only.
+ * Promos / Files / Profile / Help stay reachable via deep links or Account.
+ */
+const NAV_ITEMS: NavItem[] = [
+  { href: "/client", label: "Needs you", icon: Home, short: "Home" },
   {
-    label: "Review",
-    items: [
-      { href: "/client", label: "Home", icon: Home, short: "Home" },
-      { href: "/client/approvals", label: "Approvals", icon: CheckSquare, short: "Approve" },
-      { href: "/client/promos", label: "Promotions", icon: Megaphone, short: "Promos" },
-      { href: "/client/calendar", label: "Calendar", icon: CalendarDays, short: "Calendar" },
-      { href: "/client/reports", label: "Results", icon: BarChart3, short: "Results" },
-    ],
+    href: "/client/approvals",
+    label: "Approvals",
+    icon: CheckSquare,
+    short: "Approve",
   },
   {
+    href: "/client/calendar",
+    label: "Schedule & results",
+    icon: CalendarDays,
+    short: "Schedule",
+    matchPrefixes: ["/client/calendar", "/client/reports", "/client/schedule"],
+  },
+  {
+    href: "/client/account",
     label: "Account",
-    items: [
-      { href: "/client/assets", label: "Files", icon: Image, short: "Files" },
-      { href: "/client/profile", label: "Business", icon: Building2, short: "Business" },
-      { href: "/client/payments", label: "Billing", icon: CreditCard, short: "Billing" },
-    ],
-  },
-  {
-    label: "Support",
-    items: [
-      { href: "/client/requests", label: "Ask us", icon: Inbox, short: "Ask" },
-      { href: "/client/help", label: "Help", icon: LifeBuoy, short: "Help" },
+    icon: CreditCard,
+    short: "Account",
+    matchPrefixes: [
+      "/client/account",
+      "/client/payments",
+      "/client/billing",
+      "/client/requests",
+      "/client/assets",
+      "/client/help",
+      "/client/profile",
     ],
   },
 ];
 
-const MOBILE_QUICK = [
-  "/client/approvals",
-  "/client/calendar",
-  "/client/reports",
-  "/client/payments",
-] as const;
+/** Mobile quick strip: Approvals · Schedule · Results · Account */
+const MOBILE_QUICK: { href: string; label: string }[] = [
+  { href: "/client/approvals", label: "Approvals" },
+  { href: "/client/calendar", label: "Schedule" },
+  { href: "/client/reports", label: "Results" },
+  { href: "/client/account", label: "Account" },
+];
 
-function isActive(pathname: string, href: string) {
-  return (
-    pathname === href ||
-    (href !== "/client" && pathname.startsWith(href + "/"))
+function isActive(pathname: string, item: NavItem) {
+  if (pathname === item.href) return true;
+  if (item.href === "/client") return false;
+  const prefixes = item.matchPrefixes ?? [item.href];
+  return prefixes.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 }
 
@@ -80,37 +86,28 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   return (
-    <>
-      {NAV_GROUPS.map((group) => (
-        <div key={group.label} className="mb-2.5">
-          <p className="mb-0.5 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-            {group.label}
-          </p>
-          <div className="space-y-0.5">
-            {group.items.map((item) => {
-              const active = isActive(pathname, item.href);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onNavigate}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-accent text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </>
+    <div className="space-y-0.5">
+      {NAV_ITEMS.map((item) => {
+        const active = isActive(pathname, item);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+              active
+                ? "bg-accent text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            {item.label}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
@@ -132,10 +129,6 @@ export function ClientShell({
   const brandStyle = branding?.accentColor
     ? ({ ["--primary"]: branding.accentColor } as React.CSSProperties)
     : undefined;
-
-  const quickItems = NAV_GROUPS.flatMap((g) => g.items).filter((i) =>
-    (MOBILE_QUICK as readonly string[]).includes(i.href),
-  );
 
   return (
     <div className="flex min-h-screen flex-1" style={brandStyle}>
@@ -215,18 +208,18 @@ export function ClientShell({
 
         {!mobileOpen && (
           <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-2 py-1.5 md:hidden">
-            {quickItems.map((item) => (
+            {MOBILE_QUICK.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
                   "shrink-0 rounded-md px-2.5 py-1 text-center text-[11px] font-medium",
-                  isActive(pathname, item.href)
+                  pathname === item.href || pathname.startsWith(`${item.href}/`)
                     ? "bg-accent text-primary"
                     : "bg-muted text-muted-foreground",
                 )}
               >
-                {item.short ?? item.label}
+                {item.label}
               </Link>
             ))}
           </div>

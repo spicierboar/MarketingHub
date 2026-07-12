@@ -10,23 +10,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate, titleCase } from "@/lib/utils";
-import { listCompanies } from "@/lib/db";
+import { getTenant, listCompanies, listScheduledPosts } from "@/lib/db";
 import { buildLocalDashboard } from "@/lib/analytics";
 import { buildAgencyOpsBundle } from "@/lib/agency-ops";
 import { buildTenantExecDash } from "@/lib/exec-dash";
-import { AgencyAlertsList } from "@/components/agency-ops-panel";
+import { listOpenOpportunitiesForTenant } from "@/lib/ai-mos";
+import { isDue } from "@/lib/publish-queue";
+import { resolveQueueClock } from "@/lib/tenant-timezone";
+import {
+  AgencyAlertsList,
+  AgencyWorkloadChips,
+  type AttentionExtra,
+} from "@/components/agency-ops-panel";
 import { ExecutiveClientAccordion } from "@/components/executive-client-accordion";
 import { onboardingScore } from "@/lib/types";
 import type { AgencyAlert } from "@/lib/agency-ops";
 import type { AiMosOpportunity, Company } from "@/lib/types";
-
-type AttentionItem = {
-  id: string;
-  title: string;
-  detail: string;
-  href: string;
-  kind: "approval" | "review" | "health" | "ai_mos" | "onboarding";
-};
 
 function verbTitleForAlert(alert: AgencyAlert): string {
   switch (alert.kind) {
@@ -45,6 +44,19 @@ function verbTitleForAlert(alert: AgencyAlert): string {
     default:
       return alert.title;
   }
+}
+
+function verbTitleForAiMos(opp: AiMosOpportunity, companyName: string): string {
+  const kindLabel: Record<AiMosOpportunity["kind"], string> = {
+    health_decline: "Health decline",
+    calendar_gap: "Calendar gap",
+    publishing_cadence: "Cadence slip",
+    recommendation_signal: "Recommendation",
+    approval_bottleneck: "Approval bottleneck",
+    review_signal: "Review signal",
+    loyalty_signal: "Loyalty signal",
+  };
+  return `${kindLabel[opp.kind] ?? "Signal"} — ${companyName}`;
 }
 
 function nextSpielStep(company: Company | undefined, admin: boolean): {
@@ -73,44 +85,6 @@ function nextSpielStep(company: Company | undefined, admin: boolean): {
   };
 }
 
-function buildAttentionItems(input: {
-  alerts: AgencyAlert[];
-  aiMos: AiMosOpportunity[];
-  companyNames: Map<string, string>;
-  limit?: number;
-}): AttentionItem[] {
-  const limit = input.limit ?? 6;
-  const items: AttentionItem[] = [];
-
-  for (const alert of input.alerts) {
-    items.push({
-      id: `alert-${alert.id}`,
-      title: verbTitleForAlert(alert),
-      detail: alert.detail,
-      href: alert.href,
-      kind:
-        alert.kind === "health_attention"
-          ? "health"
-          : alert.kind === "overdue_client_review"
-            ? "review"
-            : "approval",
-    });
-  }
-
-  for (const opp of input.aiMos) {
-    const name = input.companyNames.get(opp.companyId) ?? "Client";
-    items.push({
-      id: `aimos-${opp.id}`,
-      title: verbTitleForAiMos(opp, name),
-      detail: opp.diagnosis.slice(0, 140),
-      href: "/ai-mos",
-      kind: "ai_mos",
-    });
-  }
-
-  return items.slice(0, limit);
-}
-
 export default async function DashboardPage() {
   const user = await requireUser();
   const admin = isAdmin(user);
@@ -118,32 +92,46 @@ export default async function DashboardPage() {
   const requests = await visibleRequests(user);
   const content = await visibleContent(user);
   const companyById = new Map((await listCompanies(user.tenantId)).map((c) => [c.id, c]));
+  const scope = await accessibleCompanyIds(user);
 
   const local = admin
     ? null
-    : await buildLocalDashboard(user.tenantId, await accessibleCompanyIds(user));
+    : await buildLocalDashboard(user.tenantId, scope);
 
-  const [agencyOps, execRows] = await Promise.all([
+  const [agencyOps, execRows, aiMosOpen, tenant, posts] = await Promise.all([
     admin ? buildAgencyOpsBundle(user.tenantId) : Promise.resolve(null),
     admin ? buildTenantExecDash(user.tenantId) : Promise.resolve([]),
+    admin
+      ? listOpenOpportunitiesForTenant(user.tenantId, scope, 8)
+      : Promise.resolve([] as AiMosOpportunity[]),
+    admin ? getTenant(user.tenantId) : Promise.resolve(null),
+    admin ? listScheduledPosts(user.tenantId) : Promise.resolve([]),
   ]);
 
   const firstCompany = companies[0];
   const nextUp = nextSpielStep(firstCompany, admin);
 
-  const attention = admin
-    ? buildAttentionItems({
-        alerts: agencyOps?.alerts ?? [],
-        aiMos: [],
-        companyNames: new Map(companies.map((c) => [c.id, c.name])),
-      })
-    : (local?.missingOnboarding ?? []).slice(0, 6).map((m) => ({
-        id: `onboard-${m.company}`,
-        title: `Complete onboarding — ${m.company}`,
-        detail: `Missing ${m.missing.length} item(s): ${m.missing.slice(0, 3).join(", ")}`,
-        href: "/dashboard",
-        kind: "onboarding" as const,
-      }));
+  const companyNames = new Map(companies.map((c) => [c.id, c.name]));
+  const aiMosExtras: AttentionExtra[] = aiMosOpen.map((opp) => {
+    const name = companyNames.get(opp.companyId) ?? "Client";
+    return {
+      id: `aimos-${opp.id}`,
+      title: verbTitleForAiMos(opp, name),
+      detail: opp.diagnosis.slice(0, 140),
+      href: "/ai-mos",
+      companyName: name,
+    };
+  });
+
+  let publishDue = 0;
+  let publishFailed = 0;
+  if (admin && tenant) {
+    const clock = resolveQueueClock(tenant);
+    publishDue = posts.filter(
+      (p) => p.status === "scheduled" && isDue(p, clock.today, clock.hhmm),
+    ).length;
+    publishFailed = posts.filter((p) => p.status === "failed").length;
+  }
 
   const recentRequests = requests.slice(0, 5);
   const recentContent = content.slice(0, 5);
@@ -171,6 +159,70 @@ export default async function DashboardPage() {
       </PageHeader>
 
       <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-5">
+        {admin && agencyOps && (
+          <section>
+            <div className="mb-2">
+              <h2 className="text-sm font-semibold">Workload</h2>
+              <p className="text-xs text-muted-foreground">
+                Portfolio queues and publish health at a glance.
+              </p>
+            </div>
+            <AgencyWorkloadChips
+              workload={agencyOps.workload}
+              publishDue={publishDue}
+              publishFailed={publishFailed}
+            />
+          </section>
+        )}
+
+        <section>
+          <div className="mb-2 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Exceptions</h2>
+              <p className="text-xs text-muted-foreground">
+                Quality holds, overdue approvals, client waits, credit, reconnects, AI signals.
+              </p>
+            </div>
+            {admin && (
+              <Link href="/approvals" className="text-xs text-primary hover:underline">
+                Queue
+              </Link>
+            )}
+          </div>
+          {admin ? (
+            <AgencyAlertsList
+              alerts={(agencyOps?.alerts ?? []).slice(0, 6).map((a) => ({
+                ...a,
+                title: verbTitleForAlert(a),
+              }))}
+              extras={aiMosExtras.slice(0, 4)}
+            />
+          ) : (local?.missingOnboarding ?? []).length === 0 ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+              Delivery is on track — no exceptions right now.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {(local?.missingOnboarding ?? []).slice(0, 6).map((m) => (
+                <li key={`onboard-${m.company}`}>
+                  <Link
+                    href="/dashboard"
+                    className="flex items-start justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-muted"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">Complete onboarding — {m.company}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Missing {m.missing.length} item(s): {m.missing.slice(0, 3).join(", ")}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">open →</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {nextUp && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2.5">
             <div className="min-w-0">
@@ -185,52 +237,6 @@ export default async function DashboardPage() {
             </Link>
           </div>
         )}
-
-        <section>
-          <div className="mb-2 flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">Exceptions</h2>
-              <p className="text-xs text-muted-foreground">
-                Quality holds, overdue approvals, client waits, credit, reconnects.
-              </p>
-            </div>
-            {admin && (
-              <Link href="/approvals" className="text-xs text-primary hover:underline">
-                Queue
-              </Link>
-            )}
-          </div>
-          {attention.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-              Delivery is on track — no exceptions right now.
-            </p>
-          ) : admin ? (
-            <AgencyAlertsList
-              alerts={(agencyOps?.alerts ?? []).slice(0, 6).map((a) => ({
-                ...a,
-                title: verbTitleForAlert(a),
-              }))}
-              extras={[]}
-            />
-          ) : (
-            <ul className="space-y-1.5">
-              {attention.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={item.href}
-                    className="flex items-start justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-muted"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium">{item.title}</p>
-                      <p className="text-[11px] text-muted-foreground">{item.detail}</p>
-                    </div>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">open →</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
 
         {admin && (
           <Card id="clients">

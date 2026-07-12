@@ -31,6 +31,7 @@ function num(fd: FormData, key: string): number {
 function revalidateBilling() {
   revalidatePath("/client/payments");
   revalidatePath("/client/billing");
+  revalidatePath("/client/account");
 }
 
 async function requestOrigin(): Promise<string> {

@@ -21,6 +21,7 @@ import {
 import {
   buildCalendarIntelligence,
   businessTypeLabel,
+  companyRelevanceContext,
   distinctBusinessTypes,
   filterPortfolioEntries,
   portfolioSummary,
@@ -147,12 +148,14 @@ export default async function CalendarPage({
   const focusCompanies = fCompany
     ? companies.filter((c) => c.id === fCompany)
     : companies;
+  const focusCompany = focusCompanies[0];
   const industries = focusCompanies
     .map((c) => c.profile.industry ?? "")
     .filter(Boolean);
   const intelligence = await buildCalendarIntelligence(tenant, user.tenantId, month, {
     companyIds: fCompany ? [fCompany] : [...companyIds],
     industries,
+    relevance: focusCompany && fCompany ? companyRelevanceContext(focusCompany) : undefined,
     platform: fPlatform || undefined,
     // One client selected → only show seasonal prompts relevant to them (+ holidays).
     relevantOnly: Boolean(fCompany),

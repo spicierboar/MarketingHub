@@ -239,6 +239,10 @@ import {
   checkDismissAudited as checkCalendarAssistDismissAudited,
 } from "@/lib/selftest/calendar-assist";
 import {
+  checkRestaurantSeesDiwali,
+  checkTradieDoesNotSeeDiwali,
+} from "@/lib/selftest/seasonal-relevance";
+import {
   checkApplyPrefillsProfile,
   checkConsentRequired,
   checkSchemaOrgExtraction,
@@ -286,14 +290,20 @@ import { checkOptedOutContactBlocked } from "@/lib/selftest/privacy-dsr";
 import {
   checkManagedDeliveryEnqueueDueWithin24h,
   checkManagedDeliveryNeverAutoPublish,
+  checkManagedDeliveryPlanEmailIdempotent,
   checkManagedDeliveryProcessNoSchedule,
+  checkManagedDeliveryPromoteThreshold,
+  checkManagedDeliveryPromotesToActive,
+  checkManagedDeliveryRespects6hFloor,
   checkManagedExceptionNotifyNoThrow,
 } from "@/lib/selftest/managed-delivery";
 import {
+  checkAutoProgressListsCampaignPlannedReady,
   checkAutoProgressSkipsApprovalLevel,
   checkScheduleApprovedAuthorityOnlyFullyManaged,
 } from "@/lib/selftest/managed-auto-progress";
 import {
+  checkRollingCalendarAutoDraftsWhenManaged,
   checkRollingCalendarMaintainAddsSuggestionsOnly,
   checkRollingCalendarNeedsTopUpWhenEmpty,
 } from "@/lib/selftest/rolling-calendar";
@@ -1030,6 +1040,10 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("calendarAssist.adAlignment", () => checkBuildAdAlignmentDrafts());
 
+    await expect("seasonalRelevance.restaurantSeesDiwali", () => checkRestaurantSeesDiwali());
+
+    await expect("seasonalRelevance.tradieSkipsDiwali", () => checkTradieDoesNotSeeDiwali());
+
     await expect("calendarAssist.acceptDraftOnly", () =>
       checkCalendarAssistAcceptDraftOnly(companyA.id, ownerAUser.id, tenantAId!),
     );
@@ -1152,14 +1166,26 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("managedDelivery.enqueueDueWithin24h", () =>
       checkManagedDeliveryEnqueueDueWithin24h(),
     );
+    await expect("managedDelivery.respects6hFloor", () =>
+      checkManagedDeliveryRespects6hFloor(),
+    );
     await expect("managedDelivery.processNoSchedule", () =>
       checkManagedDeliveryProcessNoSchedule(),
+    );
+    await expect("managedDelivery.planEmailIdempotent", () =>
+      checkManagedDeliveryPlanEmailIdempotent(),
     );
     await expect("managedDelivery.neverAutoPublish", () =>
       checkManagedDeliveryNeverAutoPublish(),
     );
     await expect("managedDelivery.exceptionNotifyNoThrow", () =>
       checkManagedExceptionNotifyNoThrow(),
+    );
+    await expect("managedDelivery.promoteThreshold", () =>
+      checkManagedDeliveryPromoteThreshold(),
+    );
+    await expect("managedDelivery.promotesToActive", () =>
+      checkManagedDeliveryPromotesToActive(),
     );
 
     await expect("rollingCalendar.needsTopUpWhenEmpty", () =>
@@ -1168,12 +1194,18 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("rollingCalendar.maintainAddsSuggestionsOnly", () =>
       checkRollingCalendarMaintainAddsSuggestionsOnly(),
     );
+    await expect("rollingCalendar.autoDraftsWhenManaged", () =>
+      checkRollingCalendarAutoDraftsWhenManaged(),
+    );
 
     await expect("managedAutoProgress.scheduleApprovedAuthority", () =>
       checkScheduleApprovedAuthorityOnlyFullyManaged(),
     );
     await expect("managedAutoProgress.skipsApprovalLevel", () =>
       checkAutoProgressSkipsApprovalLevel(),
+    );
+    await expect("managedAutoProgress.listsCampaignPlannedReady", () =>
+      checkAutoProgressListsCampaignPlannedReady(),
     );
 
     await expect("spendApproval.applyRequiresAccept", () => checkSpendApplyRequiresApproval());

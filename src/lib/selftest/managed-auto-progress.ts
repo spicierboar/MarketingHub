@@ -2,17 +2,25 @@
 
 import {
   addMembership,
+  createCampaign,
+  createCampaignDraftScheduleItem,
   createCompany,
+  createContent,
   createTenant,
   createUser,
+  getCompany,
   purgeTenant,
   updateCompany,
+  updateContent,
 } from "@/lib/db";
 import {
   canAutoExecuteLowRisk,
   defaultServiceLevel,
 } from "@/lib/managed-service/authority";
-import { progressManagedSchedulesForCompany } from "@/lib/managed-service/auto-progress";
+import {
+  listApprovedCampaignPlannedReadyToSchedule,
+  progressManagedSchedulesForCompany,
+} from "@/lib/managed-service/auto-progress";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 import type { ActingUser, User } from "@/lib/types";
 
@@ -85,6 +93,118 @@ export async function checkAutoProgressSkipsApprovalLevel(): Promise<{
     return {
       ok,
       detail: `scheduled=${result.scheduled} blocked=${result.blocked} skipped=${result.skipped}`,
+    };
+  } finally {
+    await purgeTenant(t.id);
+  }
+}
+
+/** Approved campaign draft-schedule rows surface as schedule candidates. */
+export async function checkAutoProgressListsCampaignPlannedReady(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const t = await createTenant({
+    name: `Auto Progress Planned ${Date.now()}`,
+    kind: "agency",
+    plan: "starter",
+    status: "active",
+    timezone: "Australia/Sydney",
+  });
+  const userRow = await createUser({
+    email: `ap-planned-${Date.now()}@example.dev`,
+    name: "Planned Admin",
+    role: "admin",
+  });
+  await addMembership({ tenantId: t.id, userId: userRow.id, role: "owner" });
+  const company = await createCompany({
+    tenantId: t.id,
+    name: "Planned Co",
+    createdBy: userRow.id,
+  });
+  await updateCompany(company.id, {
+    status: "ai_ready",
+    profile: {
+      ...company.profile,
+      managedService: { serviceLevel: "fully_managed" },
+    },
+  });
+
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+
+  try {
+    const campaign = await createCampaign({
+      companyId: company.id,
+      name: "Planned Pack",
+      objective: "awareness",
+      audience: "locals",
+      serviceFocus: "social",
+      channels: ["Facebook"],
+      durationDays: 30,
+      startDate: tomorrow,
+      offerId: null,
+      keyMessage: "Hello",
+      status: "draft",
+      requestId: null,
+      createdById: userRow.id,
+      approvedById: null,
+      approvedAt: null,
+    });
+    const content = await createContent({
+      companyId: company.id,
+      requestId: null,
+      type: "social_post",
+      title: "Planned post",
+      body: "A short approved post for the calendar.",
+      status: "ai_draft",
+      createdById: userRow.id,
+      campaignId: campaign.id,
+    });
+    await updateContent(content.id, {
+      status: "approved",
+      approvedById: userRow.id,
+      approvedAt: new Date().toISOString(),
+    });
+    await createCampaignDraftScheduleItem({
+      campaignId: campaign.id,
+      companyId: company.id,
+      campaignItemId: null,
+      contentId: content.id,
+      planVersionId: null,
+      scheduledDate: tomorrow,
+      scheduledTime: "11:00",
+      platform: "Facebook",
+      title: content.title,
+      status: "draft",
+      createdById: userRow.id,
+    });
+
+    const ready = await listApprovedCampaignPlannedReadyToSchedule(
+      t.id,
+      company.id,
+      8,
+    );
+    const listOk =
+      ready.length === 1 &&
+      ready[0]!.contentId === content.id &&
+      ready[0]!.source === "campaign_planned" &&
+      ready[0]!.date === tomorrow;
+
+    // managed_exceptions must still schedule 0 even with ready rows (P0 lock)
+    const refreshed = await getCompany(company.id);
+    await updateCompany(company.id, {
+      profile: {
+        ...refreshed!.profile,
+        managedService: { serviceLevel: "managed_exceptions" },
+      },
+    });
+    const user = acting(userRow, t.id);
+    const skippedLevel = await progressManagedSchedulesForCompany(user, company.id);
+    const levelOk = skippedLevel.scheduled === 0;
+
+    return {
+      ok: listOk && levelOk,
+      detail: `ready=${ready.length} date=${ready[0]?.date ?? "none"} meScheduled=${skippedLevel.scheduled}`,
     };
   } finally {
     await purgeTenant(t.id);

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { AgencyAlert } from "@/lib/agency-ops";
+import type { AgencyAlert, AgencyWorkloadSummary } from "@/lib/agency-ops";
 import { Badge } from "@/components/ui/badge";
 
 const ALERT_TONE: Record<AgencyAlert["kind"], "warning" | "danger" | "info"> = {
@@ -8,6 +8,7 @@ const ALERT_TONE: Record<AgencyAlert["kind"], "warning" | "danger" | "info"> = {
   health_attention: "info",
   credit_low: "danger",
   reconnect_needed: "warning",
+  quality_hold: "warning",
 };
 
 const ALERT_LABEL: Record<AgencyAlert["kind"], string> = {
@@ -16,6 +17,7 @@ const ALERT_LABEL: Record<AgencyAlert["kind"], string> = {
   health_attention: "Health",
   credit_low: "Top up",
   reconnect_needed: "Reconnect",
+  quality_hold: "Needs attention",
 };
 
 export type AttentionExtra = {
@@ -25,6 +27,80 @@ export type AttentionExtra = {
   href: string;
   companyName: string;
 };
+
+/**
+ * Compact workload chips for Agency Home — portfolio queue totals at a glance.
+ */
+export function AgencyWorkloadChips({
+  workload,
+  publishDue = 0,
+  publishFailed = 0,
+}: {
+  workload: AgencyWorkloadSummary;
+  publishDue?: number;
+  publishFailed?: number;
+}) {
+  const chips: { label: string; value: number; href: string; tone?: "danger" | "warning" | "info" }[] = [
+    {
+      label: "Pending approvals",
+      value: workload.pendingApprovals,
+      href: "/approvals",
+      tone: workload.overdueApprovals > 0 ? "danger" : undefined,
+    },
+    {
+      label: "Overdue",
+      value: workload.overdueApprovals,
+      href: "/approvals",
+      tone: workload.overdueApprovals > 0 ? "danger" : undefined,
+    },
+    {
+      label: "Client reviews",
+      value: workload.pendingClientReviews,
+      href: "/approvals",
+      tone: workload.pendingClientReviews > 0 ? "warning" : undefined,
+    },
+    {
+      label: "Client asks",
+      value: workload.openRequests,
+      href: "/requests",
+    },
+    {
+      label: "Health attention",
+      value: workload.clientsNeedingAttention,
+      href: "/dashboard#clients",
+      tone: workload.clientsNeedingAttention > 0 ? "info" : undefined,
+    },
+    {
+      label: "Due to publish",
+      value: publishDue,
+      href: "/publishing",
+      tone: publishDue > 0 ? "warning" : undefined,
+    },
+    {
+      label: "Failed publish",
+      value: publishFailed,
+      href: "/publishing",
+      tone: publishFailed > 0 ? "danger" : undefined,
+    },
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <Link
+          key={chip.label}
+          href={chip.href}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+        >
+          <span className="text-muted-foreground">{chip.label}</span>
+          <Badge tone={chip.value > 0 ? chip.tone ?? "neutral" : "neutral"}>
+            {chip.value}
+          </Badge>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Actionable attention list for the decluttered dashboard.

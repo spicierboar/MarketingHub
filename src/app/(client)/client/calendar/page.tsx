@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany, listContent, listScheduledPosts } from "@/lib/db";
+import {
+  getCompany,
+  listCalendarAssistSuggestions,
+  listCampaignDraftScheduleItems,
+  listCampaigns,
+  listContent,
+  listScheduledPosts,
+} from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
+import { ClientScheduleTabs } from "@/components/client-schedule-tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -10,8 +18,8 @@ import { now, titleCase, formatDate } from "@/lib/utils";
 import type { ScheduledPostStatus } from "@/lib/types";
 import { selectionsNotOnCalendar } from "@/lib/promo-requests";
 import {
-  cancelClientScheduleAction,
-  rescheduleClientPostAction,
+  askPauseClientPostAction,
+  askRescheduleClientPostAction,
 } from "./actions";
 
 function statusTone(status: ScheduledPostStatus): "primary" | "success" | "warning" | "danger" | "neutral" | "info" {
@@ -55,6 +63,27 @@ function formatDay(isoDate: string): string {
   });
 }
 
+type CalendarRow =
+  | {
+      kind: "live";
+      id: string;
+      date: string;
+      time?: string | null;
+      title: string;
+      platform: string;
+      status: ScheduledPostStatus;
+      postId: string;
+    }
+  | {
+      kind: "planned";
+      id: string;
+      date: string;
+      time?: string | null;
+      title: string;
+      platform: string;
+      source: "draft_schedule" | "implementation_plan";
+    };
+
 export default async function ClientCalendarPage({
   searchParams,
 }: {
@@ -66,34 +95,90 @@ export default async function ClientCalendarPage({
     ? params.month!
     : now().slice(0, 7);
 
-  const [allPosts, content, company] = await Promise.all([
+  const [allPosts, content, company, campaigns, assists] = await Promise.all([
     listScheduledPosts(user.tenantId),
     listContent(user.tenantId),
     getCompany(companyId),
+    listCampaigns(user.tenantId),
+    listCalendarAssistSuggestions(user.tenantId, [companyId], "open"),
   ]);
   const pendingPromos = company ? selectionsNotOnCalendar(company) : [];
   const titleById = new Map(
     content.filter((c) => c.companyId === companyId).map((c) => [c.id, c.title]),
   );
 
-  const posts = allPosts
-    .filter(
-      (p) =>
-        p.companyId === companyId &&
-        p.status !== "cancelled" &&
-        p.scheduledDate.slice(0, 7) === month,
-    )
-    .sort((a, b) =>
-      `${a.scheduledDate}${a.scheduledTime ?? ""}`.localeCompare(
-        `${b.scheduledDate}${b.scheduledTime ?? ""}`,
-      ),
-    );
+  const livePosts = allPosts.filter(
+    (p) =>
+      p.companyId === companyId &&
+      p.status !== "cancelled" &&
+      p.scheduledDate.slice(0, 7) === month,
+  );
 
-  const byDate = new Map<string, typeof posts>();
-  for (const post of posts) {
-    const list = byDate.get(post.scheduledDate) ?? [];
-    list.push(post);
-    byDate.set(post.scheduledDate, list);
+  const companyCampaigns = campaigns.filter((c) => c.companyId === companyId);
+  const draftSchedules = (
+    await Promise.all(companyCampaigns.map((c) => listCampaignDraftScheduleItems(c.id)))
+  ).flat();
+
+  const liveContentIds = new Set(livePosts.map((p) => p.contentId));
+  const rows: CalendarRow[] = [
+    ...livePosts.map((p) => ({
+      kind: "live" as const,
+      id: p.id,
+      date: p.scheduledDate,
+      time: p.scheduledTime,
+      title: titleById.get(p.contentId) ?? "Untitled post",
+      platform: p.platform,
+      status: p.status,
+      postId: p.id,
+    })),
+  ];
+
+  for (const d of draftSchedules) {
+    if (d.scheduledDate.slice(0, 7) !== month) continue;
+    // Skip if already represented by a live scheduled post for same content.
+    if (d.contentId && liveContentIds.has(d.contentId)) continue;
+    rows.push({
+      kind: "planned",
+      id: `cds-${d.id}`,
+      date: d.scheduledDate,
+      time: d.scheduledTime,
+      title: d.title || "Planned post",
+      platform: d.platform,
+      source: "draft_schedule",
+    });
+  }
+
+  for (const s of assists) {
+    if (s.companyId !== companyId) continue;
+    if (s.proposedDate.slice(0, 7) !== month) continue;
+    if (s.kind !== "implementation_plan" && s.kind !== "seasonal_prompt") continue;
+    // Avoid duplicating draft-schedule titles on the same date.
+    const dup = rows.some(
+      (r) =>
+        r.date === s.proposedDate &&
+        r.title.toLowerCase() === s.title.toLowerCase(),
+    );
+    if (dup) continue;
+    rows.push({
+      kind: "planned",
+      id: `assist-${s.id}`,
+      date: s.proposedDate,
+      time: s.proposedTime,
+      title: s.title,
+      platform: s.platform,
+      source: "implementation_plan",
+    });
+  }
+
+  rows.sort((a, b) =>
+    `${a.date}${a.time ?? ""}`.localeCompare(`${b.date}${b.time ?? ""}`),
+  );
+
+  const byDate = new Map<string, CalendarRow[]>();
+  for (const row of rows) {
+    const list = byDate.get(row.date) ?? [];
+    list.push(row);
+    byDate.set(row.date, list);
   }
   const dates = [...byDate.keys()].sort();
 
@@ -103,9 +188,9 @@ export default async function ClientCalendarPage({
   return (
     <div>
       <PageHeader
-        title="Your calendar"
+        title="Schedule & results"
         explainerId="client-calendar"
-        explainer="What's planned for your channels. We handle strategy and scheduling — ask us here only if timing needs to change."
+        explainer="Glance at what's planned. Timing changes go to your team as an Ask — we handle the schedule."
       >
         <div className="flex items-center gap-2">
           <Link href={`/client/calendar?month=${prev}`} className={buttonClasses("outline", "sm")}>
@@ -118,6 +203,8 @@ export default async function ClientCalendarPage({
         </div>
       </PageHeader>
 
+      <ClientScheduleTabs />
+
       <div className="space-y-6 p-6">
         {pendingPromos.length > 0 && (
           <Card className="border-amber-200 bg-amber-50/50">
@@ -126,20 +213,15 @@ export default async function ClientCalendarPage({
                 Promotions not on this calendar yet
               </p>
               <p className="text-xs text-amber-900/80">
-                You requested these ready-made promos — they stay separate from strategy until we
-                place them into delivery.
+                These stay off the calendar until we place them into delivery.
               </p>
               <ul className="space-y-1 text-sm text-amber-950">
                 {pendingPromos.map((s) => (
                   <li key={s.id}>
-                    {s.templateName} · {formatDate(s.startDate)} → {formatDate(s.endDate)} ·{" "}
-                    {s.channels.join(", ")}
+                    {s.templateName} · {formatDate(s.startDate)} → {formatDate(s.endDate)}
                   </li>
                 ))}
               </ul>
-              <Link href="/client/promos" className="text-xs text-primary hover:underline">
-                Manage promotions →
-              </Link>
             </CardContent>
           </Card>
         )}
@@ -155,52 +237,76 @@ export default async function ClientCalendarPage({
             <section key={date}>
               <h2 className="mb-3 text-sm font-semibold text-muted-foreground">{formatDay(date)}</h2>
               <div className="space-y-3">
-                {(byDate.get(date) ?? []).map((post) => (
-                  <Card key={post.id}>
-                    <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 space-y-1">
-                        <p className="font-medium">
-                          {titleById.get(post.contentId) ?? "Untitled post"}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                          <span>{titleCase(post.platform)}</span>
-                          {post.scheduledTime ? <span>· {post.scheduledTime}</span> : null}
-                          <Badge tone={statusTone(post.status)}>{titleCase(post.status)}</Badge>
+                {(byDate.get(date) ?? []).map((row) =>
+                  row.kind === "live" ? (
+                    <Card key={row.id}>
+                      <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 space-y-1">
+                          <p className="font-medium">{row.title}</p>
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                            <span>{titleCase(row.platform)}</span>
+                            {row.time ? <span>· {row.time}</span> : null}
+                            <Badge tone={statusTone(row.status)}>{titleCase(row.status)}</Badge>
+                          </div>
                         </div>
-                      </div>
 
-                      {post.status === "scheduled" ? (
-                        <div className="flex flex-col gap-2 sm:items-end">
-                          <form action={rescheduleClientPostAction} className="flex flex-wrap items-end gap-2">
-                            <input type="hidden" name="postId" value={post.id} />
-                            <div>
-                              <label className="mb-1 block text-xs text-muted-foreground" htmlFor={`date-${post.id}`}>
-                                Move to
-                              </label>
-                              <Input
-                                id={`date-${post.id}`}
-                                type="date"
-                                name="date"
-                                defaultValue={post.scheduledDate}
-                                required
-                                className="h-9 w-auto"
-                              />
-                            </div>
-                            <Button type="submit" size="sm" variant="outline">
-                              Ask to move
-                            </Button>
-                          </form>
-                          <form action={cancelClientScheduleAction}>
-                            <input type="hidden" name="postId" value={post.id} />
-                            <Button type="submit" size="sm" variant="ghost">
-                              Pause this post
-                            </Button>
-                          </form>
+                        {row.status === "scheduled" ? (
+                          <div className="flex flex-col gap-2 sm:max-w-xs sm:items-end">
+                            <p className="text-[11px] text-muted-foreground sm:text-right">
+                              Need a change? We&apos;ll handle it — send an Ask.
+                            </p>
+                            <form
+                              action={askRescheduleClientPostAction}
+                              className="flex flex-wrap items-end gap-2"
+                            >
+                              <input type="hidden" name="postId" value={row.postId} />
+                              <div>
+                                <label
+                                  className="mb-1 block text-xs text-muted-foreground"
+                                  htmlFor={`date-${row.postId}`}
+                                >
+                                  Preferred date
+                                </label>
+                                <Input
+                                  id={`date-${row.postId}`}
+                                  type="date"
+                                  name="date"
+                                  defaultValue={row.date}
+                                  className="h-9 w-auto"
+                                />
+                              </div>
+                              <Button type="submit" size="sm" variant="outline">
+                                Ask to move
+                              </Button>
+                            </form>
+                            <form action={askPauseClientPostAction}>
+                              <input type="hidden" name="postId" value={row.postId} />
+                              <Button type="submit" size="sm" variant="ghost">
+                                Ask to pause
+                              </Button>
+                            </form>
+                          </div>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card key={row.id}>
+                      <CardContent className="flex flex-col gap-2 p-4">
+                        <p className="font-medium">{row.title}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <span>{titleCase(row.platform)}</span>
+                          {row.time ? <span>· {row.time}</span> : null}
+                          <Badge tone="info">
+                            {row.source === "implementation_plan" ? "Plan" : "Planned"}
+                          </Badge>
                         </div>
-                      ) : null}
-                    </CardContent>
-                  </Card>
-                ))}
+                        <p className="text-xs text-muted-foreground">
+                          Proposed date — nothing goes live until approved.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ),
+                )}
               </div>
             </section>
           ))

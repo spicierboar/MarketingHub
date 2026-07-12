@@ -84,11 +84,15 @@ function buildTools(
     { href: `/publishing?${q}`, label: "Publishing" },
   ];
 
+  const vertical = verticalTools(companyId, businessType, activeAddons);
+
+  // Ops-verb groups. Automate stays lean — unfinished Grow modules stay out of
+  // the strip so the agency desk doesn't look like a module zoo.
   const groups: ToolGroup[] = [
     {
-      id: "create",
-      label: "Create",
-      hint: "Draft and produce",
+      id: "produce",
+      label: "Produce",
+      hint: "Draft and package",
       items: [
         { href: `/studio?${q}`, label: "Studio" },
         { href: `/assets?${q}`, label: "Assets" },
@@ -98,20 +102,20 @@ function buildTools(
     },
     {
       id: "brand",
-      label: "Brand & setup",
+      label: "Brand",
       hint: "Profile that steers AI",
       items: [
-        { href: `${base}/brand-brain`, label: "Brand Brain", match: "prefix" },
-        { href: `${base}/services`, label: "Services", match: "prefix" },
-        { href: `${base}/offers`, label: "Offers", match: "prefix" },
-        { href: `${base}/governance`, label: "Governance", match: "prefix" },
-        { href: `${base}/local-seo`, label: "Local SEO & AI", match: "prefix" },
+        { href: `${base}/brand-brain`, label: "Brand Brain", match: "prefix" as const },
+        { href: `${base}/services`, label: "Services", match: "prefix" as const },
+        { href: `${base}/offers`, label: "Offers", match: "prefix" as const },
+        { href: `${base}/governance`, label: "Governance", match: "prefix" as const },
+        { href: `${base}/local-seo`, label: "Local SEO & AI", match: "prefix" as const },
       ],
     },
     {
-      id: "engage",
-      label: "Engage",
-      hint: "Inbox and reputation",
+      id: "channels",
+      label: "Channels",
+      hint: "Inbox, social, reputation",
       items: [
         { href: `/inbox?${q}`, label: "Social inbox" },
         { href: `/social?${q}`, label: "Social" },
@@ -121,27 +125,21 @@ function buildTools(
       ],
     },
     {
-      id: "grow",
-      label: "Grow",
-      hint: "Channels and automation",
+      id: "automate",
+      label: "Automate",
+      hint: "Workflows and learning loops",
       items: [
-        { href: `/email-marketing?${q}`, label: "Email" },
-        { href: `/sms?${q}`, label: "SMS" },
-        { href: `/loyalty?${q}`, label: "Loyalty" },
-        { href: `/crm?${q}`, label: "CRM" },
-        { href: `/cms?${q}`, label: "CMS" },
-        { href: `/funnel?${q}`, label: "Funnels" },
         { href: `/workflows?${q}`, label: "Workflows" },
         { href: `/automations?${q}`, label: "Automations" },
         { href: `/learning?${q}`, label: "Learning" },
       ],
     },
-  ];
+  ].filter((g) => g.items.length > 0);
 
   return {
     primary,
     groups,
-    vertical: verticalTools(companyId, businessType, activeAddons),
+    vertical,
   };
 }
 

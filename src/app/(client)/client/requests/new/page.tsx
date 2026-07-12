@@ -1,106 +1,65 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/page-header";
+import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Field, Input, Textarea } from "@/components/ui/form";
 import { createClientRequestAction } from "../../../actions";
 
-const REQUEST_TYPES = [
-  ["social_post", "Social media post"], ["campaign", "Campaign"], ["blog_article", "Blog article"],
-  ["email_newsletter", "Email newsletter"], ["ad_copy", "Ad copy"], ["landing_page", "Landing page"],
-  ["website_copy", "Website update / page copy"], ["faq", "FAQ update"], ["brochure_copy", "Brochure or flyer copy"],
-  ["video_script", "Video script"], ["creative_request", "Creative request"],
-] as const;
-
-const CONSENT_FIELDS = [
-  ["customerNamed", "A customer is named"], ["customerInPhotos", "A customer appears in photos/videos"],
-  ["consentObtained", "Consent has been obtained"], ["mentionsPricing", "Pricing is mentioned"],
-  ["mentionsOffer", "A discount or offer is mentioned"], ["performanceClaims", "Performance claims are being made"],
-] as const;
-
+/**
+ * Wave A — plain-language message + optional files.
+ * Heavy brief / offer / CTA / consent stay as hidden defaults for backend compatibility.
+ */
 export default async function ClientNewRequestPage() {
   await requirePortalUser();
 
   return (
     <div>
       <PageHeader
-        title="Ask us for something"
+        title="Ask us"
         explainerId="client-request-new"
-        explainer="Tell us what you need — we'll already have your company details. This creates a ticket the agency will handle."
+        explainer="Tell us what you need in plain language. We'll already have your company details."
       />
-      <div className="mx-auto max-w-3xl p-6">
+      <ClientAccountLinks />
+      <div className="mx-auto max-w-xl p-6">
         <form action={createClientRequestAction}>
           <Card>
             <CardContent className="space-y-5 p-6">
-              <Field label="Request type" htmlFor="requestType">
-                <Select id="requestType" name="requestType" required defaultValue="social_post">
-                  {REQUEST_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </Select>
-              </Field>
-              <Field label="Topic / key message" htmlFor="topic">
-                <Input id="topic" name="topic" required placeholder="e.g. Winter offer" />
-              </Field>
-              <Field label="Notes" htmlFor="notes">
-                <Textarea id="notes" name="notes" required placeholder="Tell us what you need…" />
-              </Field>
+              {/* Backend defaults — demoted from primary UI */}
+              <input type="hidden" name="requestType" value="creative_request" />
+              <input type="hidden" name="urgency" value="normal" />
               <input type="hidden" name="objective" value="" />
-              <div className="grid gap-5 sm:grid-cols-3">
-                <Field label="Preferred date" htmlFor="preferredDate">
-                  <Input id="preferredDate" name="preferredDate" type="date" />
-                </Field>
-                <Field label="Preferred time" htmlFor="preferredTime">
-                  <Input id="preferredTime" name="preferredTime" type="time" />
-                </Field>
-                <Field label="Urgency" htmlFor="urgency">
-                  <Select id="urgency" name="urgency" defaultValue="normal">
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </Select>
-                </Field>
-              </div>
-              <Field label="Supporting files" htmlFor="files">
+
+              <Field label="Message" htmlFor="notes">
+                <Textarea
+                  id="notes"
+                  name="notes"
+                  required
+                  rows={6}
+                  placeholder="What do you need? Timing, photos, a correction — anything."
+                />
+              </Field>
+              <Field
+                label="Short subject (optional)"
+                htmlFor="topic"
+                hint="Leave blank and we’ll use the start of your message"
+              >
+                <Input id="topic" name="topic" placeholder="e.g. New opening hours" />
+              </Field>
+              <Field label="Attach files (optional)" htmlFor="files">
                 <Input id="files" name="files" type="file" multiple />
               </Field>
-              <details className="rounded-md border border-border p-4">
-                <summary className="cursor-pointer text-sm font-medium">Add more detail (optional)</summary>
-                <div className="mt-4 space-y-5">
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <Field label="Target audience" htmlFor="targetAudience">
-                      <Input id="targetAudience" name="targetAudience" />
-                    </Field>
-                    <Field label="Platform" htmlFor="platform">
-                      <Input id="platform" name="platform" placeholder="Facebook, Instagram…" />
-                    </Field>
-                    <Field label="Offer" htmlFor="offer">
-                      <Input id="offer" name="offer" />
-                    </Field>
-                    <Field label="Call to action" htmlFor="callToAction">
-                      <Input id="callToAction" name="callToAction" />
-                    </Field>
-                  </div>
-                  <fieldset className="rounded-md border border-border p-4">
-                    <legend className="px-1 text-sm font-medium">Consent &amp; compliance</legend>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {CONSENT_FIELDS.map(([name, label]) => (
-                        <label key={name} className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <input type="checkbox" name={name} className="h-4 w-4 rounded border-input" />
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                </div>
-              </details>
             </CardContent>
           </Card>
           <div className="mt-4 flex items-center justify-end gap-2">
-            <Link href="/client/requests" className="text-sm text-muted-foreground hover:text-foreground">
+            <Link
+              href="/client/requests"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
               Cancel
             </Link>
-            <Button type="submit">Send to your team</Button>
+            <Button type="submit">Send</Button>
           </div>
         </form>
       </div>

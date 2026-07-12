@@ -2,21 +2,14 @@ import { requirePortalUser } from "@/lib/auth/rbac";
 import { listAssetsForCompany } from "@/lib/db";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
+import { ClientAccountLinks } from "@/components/client-account-links";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Field, Input } from "@/components/ui/form";
 import { titleCase } from "@/lib/utils";
 import { createClientAssetAction } from "./actions";
-
-const ASSET_TYPES: [string, string][] = [
-  ["image", "Image"],
-  ["logo", "Logo"],
-  ["video", "Video"],
-  ["graphic", "Graphic"],
-  ["document", "Document"],
-  ["audio", "Audio"],
-];
+import Link from "next/link";
 
 const STATUS_LABEL: Record<string, string> = {
   pending_approval: "Waiting for review",
@@ -43,6 +36,7 @@ function statusTone(status: string): "neutral" | "primary" | "success" | "warnin
   return "neutral";
 }
 
+/** Deep-link / Account sub-route — demoted from primary nav. Simplified file drop. */
 export default async function ClientAssetsPage() {
   const { user, companyId } = await requirePortalUser();
   const assets = await listAssetsForCompany(companyId);
@@ -53,17 +47,17 @@ export default async function ClientAssetsPage() {
       <PageHeader
         title="Your photos & files"
         explainerId="client-files"
-        explainer="Share logos, photos, and files for us to use. We review materials before they appear in your marketing."
+        explainer="Share a photo or logo for us to review. We handle how it gets used in your marketing."
       />
+      <ClientAccountLinks />
 
       <div className="space-y-8 p-6">
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Your files</h2>
+          <h2 className="text-sm font-semibold">Your files</h2>
           {assets.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-sm text-muted-foreground">
-                No files yet. Share a photo or logo below — we&apos;ll review it before using it in
-                your marketing.
+                No files yet. Share a photo below — we&apos;ll review it before using it.
               </CardContent>
             </Card>
           ) : (
@@ -76,9 +70,7 @@ export default async function ClientAssetsPage() {
                   <div className="min-w-0">
                     <p className="font-medium">{a.name}</p>
                     <p className="text-muted-foreground">
-                      {a.assetType}
-                      {a.fileName ? ` · ${a.fileName}` : ""}
-                      {" · "}
+                      {a.fileName ? `${a.fileName} · ` : ""}
                       Uploaded {formatDate(a.createdAt)}
                     </p>
                   </div>
@@ -105,78 +97,68 @@ export default async function ClientAssetsPage() {
           )}
         </section>
 
-        <details className="rounded-lg border border-border bg-card">
-          <summary className="cursor-pointer px-6 py-4 text-lg font-semibold">Share a file</summary>
-          <div className="border-t border-border px-6 pb-6 pt-4">
-            {!canStore ? (
-              <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                File storage isn&apos;t set up yet — you can still register a name for us, but the
-                file itself can&apos;t be uploaded until storage is configured.
-              </p>
-            ) : null}
-            <form action={createClientAssetAction} className="space-y-5">
-              <input type="hidden" name="companyId" value={companyId} />
-              <Field label="Name" htmlFor="name">
-                <Input
-                  id="name"
-                  name="name"
-                  required
-                  placeholder="e.g. Shopfront photo"
-                  defaultValue=""
-                />
-              </Field>
-              <Field label="Description" htmlFor="description">
-                <Textarea
-                  id="description"
-                  name="description"
-                  className="min-h-16"
-                  placeholder="Optional notes for your team"
-                />
-              </Field>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Type" htmlFor="assetType">
-                  <Select id="assetType" name="assetType" defaultValue="image">
-                    {ASSET_TYPES.map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </Select>
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">Share a photo</h2>
+          <Card>
+            <CardContent className="p-6">
+              {!canStore ? (
+                <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  File storage isn&apos;t set up yet — you can still register a name for us.
+                </p>
+              ) : null}
+              <form action={createClientAssetAction} className="space-y-5">
+                <input type="hidden" name="companyId" value={companyId} />
+                <input type="hidden" name="assetType" value="image" />
+                <Field label="Name" htmlFor="name">
+                  <Input
+                    id="name"
+                    name="name"
+                    required
+                    placeholder="e.g. Shopfront photo"
+                  />
                 </Field>
                 <Field
                   label="File"
                   htmlFor="file"
-                  hint={canStore ? "Optional — attach the image or document" : "Unavailable until storage is configured"}
+                  hint={
+                    canStore
+                      ? "Optional — attach the image or document"
+                      : "Unavailable until storage is configured"
+                  }
                 >
                   <Input
                     id="file"
                     name="file"
                     type="file"
                     disabled={!canStore}
-                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                    accept="image/*,video/*,.pdf"
                   />
                 </Field>
-              </div>
-              <label className="flex items-start gap-2 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  name="consentObtained"
-                  className="mt-0.5 h-4 w-4 rounded border-input"
-                />
-                <span>
-                  If people appear in this file, I confirm we have their consent to use it in
-                  marketing.
-                </span>
-              </label>
-              <div className="flex justify-end">
-                <Button type="submit">Submit for review</Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Signed in as {user.name}. New uploads stay pending until we approve them.
-              </p>
-            </form>
-          </div>
-        </details>
+                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    name="consentObtained"
+                    className="mt-0.5 h-4 w-4 rounded border-input"
+                  />
+                  <span>
+                    If people appear in this file, I confirm we have their consent to use it in
+                    marketing.
+                  </span>
+                </label>
+                <div className="flex justify-end">
+                  <Button type="submit">Submit for review</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Signed in as {user.name}. New uploads stay pending until we approve them. Or{" "}
+                  <Link href="/client/requests/new" className="text-primary hover:underline">
+                    Ask us
+                  </Link>{" "}
+                  with a note.
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </div>
   );

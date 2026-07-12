@@ -142,6 +142,7 @@ export async function createClientAssetAction(formData: FormData) {
   }
 
   revalidatePath("/client/assets");
+  revalidatePath("/client/account");
 }
 
 export async function uploadClientAssetMediaAction(formData: FormData) {
@@ -192,4 +193,5 @@ export async function uploadClientAssetMediaAction(formData: FormData) {
     detail: `${file.name} · ${Math.round(bytes.length / 1024)} KB`,
   });
   revalidatePath("/client/assets");
+  revalidatePath("/client/account");
 }

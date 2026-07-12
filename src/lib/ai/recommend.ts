@@ -5,6 +5,7 @@
 
 import { buildReport } from "@/lib/analytics";
 import {
+  companyRelevanceContext,
   detectCalendarGap,
   detectPublishingCadence,
   seasonalPromptsForMonth,
@@ -208,7 +209,9 @@ export async function generateForCompany(company: Company): Promise<Recommendati
   const calGap = detectCalendarGap(scheduledPosts, cid, today);
   if (calGap) {
     const monthKey = today.slice(0, 7);
-    const seasonal = seasonalPromptsForMonth(monthKey, [company.profile.industry ?? ""]).slice(0, 1)[0];
+    const seasonal = seasonalPromptsForMonth(monthKey, companyRelevanceContext(company), {
+      relevantOnly: true,
+    }).slice(0, 1)[0];
     const gapDetail =
       calGap.scheduledCount === 0
         ? `No posts scheduled in the next ${calGap.lookaheadDays} days`

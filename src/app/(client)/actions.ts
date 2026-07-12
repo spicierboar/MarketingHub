@@ -30,20 +30,28 @@ export async function createClientRequestAction(formData: FormData) {
       uploadedAt: now(),
     }));
 
+  const notes = String(formData.get("notes") || "").trim();
+  const topicRaw = String(formData.get("topic") || "").trim();
+  const topic =
+    topicRaw ||
+    (notes ? notes.slice(0, 80).replace(/\s+/g, " ") : "") ||
+    "Message to agency";
+  if (!notes && !topicRaw) throw new Error("A message is required");
+
   const req = await createRequest({
     companyId,
     requesterId: user.id,
-    requestType: String(formData.get("requestType") || "social_post") as RequestType,
+    requestType: String(formData.get("requestType") || "creative_request") as RequestType,
     objective: String(formData.get("objective") || "").trim(),
     targetAudience: String(formData.get("targetAudience") || "").trim() || undefined,
     platform: String(formData.get("platform") || "").trim() || undefined,
-    topic: String(formData.get("topic") || "").trim(),
+    topic,
     offer: String(formData.get("offer") || "").trim() || undefined,
     callToAction: String(formData.get("callToAction") || "").trim() || undefined,
     preferredDate: String(formData.get("preferredDate") || "") || undefined,
     preferredTime: String(formData.get("preferredTime") || "") || undefined,
     urgency: String(formData.get("urgency") || "normal") as Urgency,
-    notes: String(formData.get("notes") || "").trim() || undefined,
+    notes: notes || undefined,
     consent: {
       customerNamed: bool(formData, "customerNamed"),
       customerInPhotos: bool(formData, "customerInPhotos"),

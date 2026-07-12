@@ -16,6 +16,7 @@ import {
 } from "@/lib/db";
 import { logAction } from "@/lib/audit";
 import {
+  companyRelevanceContext,
   detectCalendarGap,
   detectPublishingCadence,
   optimalPostWindows,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/calendar-intelligence";
 import { addDaysIso } from "@/lib/calendar-utils";
 import type {
+  ActingUser,
   AdCampaign,
   CalendarAssistSuggestion,
   Company,
@@ -179,7 +181,7 @@ export function buildCalendarAssistDrafts(args: {
   ads?: AdCampaign[];
 }): CalendarAssistSuggestionDraft[] {
   const { company, todayIso, posts, windows, ads = [] } = args;
-  const industries = company.profile.industry ? [company.profile.industry] : [];
+  const relevance = companyRelevanceContext(company);
   const drafts: CalendarAssistSuggestionDraft[] = [];
   const usedDates = new Set<string>();
 
@@ -192,7 +194,7 @@ export function buildCalendarAssistDrafts(args: {
   }
 
   for (const monthKey of monthKeysInRange(todayIso, SCAN_LOOKAHEAD_DAYS)) {
-    for (const p of seasonalPromptsForMonth(monthKey, industries)) {
+    for (const p of seasonalPromptsForMonth(monthKey, relevance, { relevantOnly: true })) {
       if (p.date < todayIso || p.date > addDays(todayIso, SCAN_LOOKAHEAD_DAYS)) continue;
       if (usedDates.has(p.date)) continue;
       const platform = pickPlatform(company, windows);
@@ -446,4 +448,75 @@ export async function listAssistReadyToSchedule(
     if (ready.length >= limit) break;
   }
   return ready;
+}
+
+/** Cap auto-accept → draft → quality-route per company / tick slice. */
+export const MAX_AUTO_DRAFT_ASSISTS_PER_PASS = 10;
+
+/**
+ * Auto-accept open calendar-assist suggestions into ai_draft content, then
+ * apply quality routing. Never schedules or publishes — critique/scheduleOne
+ * gates remain untouched. Caller must already have checked
+ * canAutoExecuteLowRisk(level, "draft_content").
+ */
+export async function autoDraftOpenCalendarAssistSuggestions(
+  actor: ActingUser,
+  companyId: string,
+  opts?: { limit?: number; origin?: string },
+): Promise<{ accepted: number; routed: number; failed: number }> {
+  const limit = Math.max(0, opts?.limit ?? MAX_AUTO_DRAFT_ASSISTS_PER_PASS);
+  if (limit === 0) return { accepted: 0, routed: 0, failed: 0 };
+
+  const company = await getCompany(companyId);
+  if (!company || company.tenantId !== actor.tenantId) {
+    return { accepted: 0, routed: 0, failed: 0 };
+  }
+
+  const open = await listCalendarAssistSuggestions(company.tenantId, [companyId], "open");
+  const slice = open.slice(0, limit);
+  const origin =
+    opts?.origin?.trim().replace(/\/+$/, "") ||
+    process.env.APP_ORIGIN?.trim().replace(/\/+$/, "") ||
+    "http://localhost:3000";
+
+  // Lazy import avoids a hard cycle (quality-routing ↔ calendar-assist callers).
+  const { applyQualityRoutingAfterDraft } = await import(
+    "@/lib/managed-service/quality-routing"
+  );
+
+  let accepted = 0;
+  let routed = 0;
+  let failed = 0;
+
+  for (const suggestion of slice) {
+    try {
+      const contentId = await acceptCalendarAssistSuggestion(suggestion, actor);
+      accepted += 1;
+      try {
+        await applyQualityRoutingAfterDraft({
+          contentId,
+          actor,
+          origin,
+          platform: suggestion.platform,
+        });
+        routed += 1;
+      } catch {
+        // Draft still created; routing failure is non-fatal for this pass.
+        failed += 1;
+      }
+    } catch {
+      failed += 1;
+    }
+  }
+
+  if (accepted > 0) {
+    await logAction(actor, "calendar_assist.auto_drafted", {
+      targetType: "company",
+      targetId: companyId,
+      companyId,
+      detail: `accepted=${accepted} routed=${routed} failed=${failed}`,
+    });
+  }
+
+  return { accepted, routed, failed };
 }

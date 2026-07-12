@@ -15,7 +15,6 @@ import {
   buildCalendarAssistDrafts,
   dismissCalendarAssistSuggestion,
 } from "@/lib/ai/calendar-assist";
-import { seasonalPromptsForMonth } from "@/lib/calendar-intelligence";
 import type { AdCampaign, Company, User } from "@/lib/types";
 
 export function stubCalendarAssistCompany(overrides: Partial<Company> = {}): Company {
@@ -49,8 +48,6 @@ function todayIso(): string {
 export async function checkBuildCalendarAssistDrafts(): Promise<{ ok: boolean; detail: string }> {
   const company = stubCalendarAssistCompany();
   const today = todayIso();
-  const month = today.slice(0, 7);
-  const prompts = seasonalPromptsForMonth(month, [company.profile.industry ?? ""]);
   const drafts = buildCalendarAssistDrafts({
     company,
     todayIso: today,

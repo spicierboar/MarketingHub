@@ -14,6 +14,7 @@ import { stripeConfigured } from "@/lib/billing";
 import { planFor } from "@/lib/plans";
 import { AD_PLATFORMS } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
+import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -68,6 +69,7 @@ export default async function ClientPaymentsPage() {
         explainerId="client-billing"
         explainer="Account credit, plan overview, and advertising budget. Top up credit or manage your saved card here."
       />
+      <ClientAccountLinks />
 
       <div className="space-y-5 p-4 sm:p-5">
         <section className="space-y-3">
@@ -145,6 +147,22 @@ export default async function ClientPaymentsPage() {
                 <p className="mb-3 text-sm font-medium">Auto top-up</p>
                 <form action={saveClientAutoTopUpAction} className="space-y-4">
                   <input type="hidden" name="companyId" value={companyId} />
+                  {/* Preserve advanced limits with current values — UI is on/off + amount only */}
+                  <input
+                    type="hidden"
+                    name="topUpTriggerBalanceUsd"
+                    value={wallet.topUpTriggerBalanceUsd}
+                  />
+                  <input
+                    type="hidden"
+                    name="maxTopUpAmountUsd"
+                    value={wallet.maxTopUpAmountUsd}
+                  />
+                  <input
+                    type="hidden"
+                    name="maxTopUpPerDay"
+                    value={wallet.maxTopUpPerDay}
+                  />
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -162,54 +180,20 @@ export default async function ClientPaymentsPage() {
                         : "Complete a card top-up first so a payment method is saved; until then demo mode simulates the credit."
                       : "Demo mode simulates ledger credit only — no card is charged."}
                   </p>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Field label="Trigger balance (AUD)" htmlFor="triggerBal">
-                      <Input
-                        id="triggerBal"
-                        name="topUpTriggerBalanceUsd"
-                        type="number"
-                        min="0"
-                        step="1"
-                        defaultValue={wallet.topUpTriggerBalanceUsd}
-                        required
-                      />
-                    </Field>
-                    <Field label="Top-up amount (AUD)" htmlFor="topUpAmt">
-                      <Input
-                        id="topUpAmt"
-                        name="topUpAmountUsd"
-                        type="number"
-                        min="1"
-                        step="1"
-                        defaultValue={wallet.topUpAmountUsd}
-                        required
-                      />
-                    </Field>
-                    <Field label="Max top-up amount (AUD)" htmlFor="maxTopUp">
-                      <Input
-                        id="maxTopUp"
-                        name="maxTopUpAmountUsd"
-                        type="number"
-                        min="1"
-                        step="1"
-                        defaultValue={wallet.maxTopUpAmountUsd}
-                        required
-                      />
-                    </Field>
-                    <Field label="Max top-ups per day" htmlFor="maxPerDay">
-                      <Input
-                        id="maxPerDay"
-                        name="maxTopUpPerDay"
-                        type="number"
-                        min="1"
-                        step="1"
-                        defaultValue={wallet.maxTopUpPerDay}
-                        required
-                      />
-                    </Field>
-                  </div>
+                  <Field label="Top-up amount (AUD)" htmlFor="topUpAmt">
+                    <Input
+                      id="topUpAmt"
+                      name="topUpAmountUsd"
+                      type="number"
+                      min="1"
+                      step="1"
+                      defaultValue={wallet.topUpAmountUsd}
+                      className="w-36"
+                      required
+                    />
+                  </Field>
                   <Button type="submit" size="sm" variant="outline">
-                    Save auto top-up settings
+                    Save auto top-up
                   </Button>
                 </form>
               </div>

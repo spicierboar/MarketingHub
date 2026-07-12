@@ -5,10 +5,21 @@
 //   • NEVER auto-spend or activate promotions
 //   • Only when canAutoExecuteLowRisk(level, "schedule_approved") — fully_managed
 //   • Live publish flags stay OFF; demo still creates scheduled_post rows
+//   • Sources: assist-ready accepted drafts AND approved campaign-builder
+//     planned-date / draft-schedule rows
 
 import { logAction } from "@/lib/audit";
-import { listAssistReadyToSchedule } from "@/lib/ai/calendar-assist";
-import { getCompany, listCompanies } from "@/lib/db";
+import {
+  assistAcceptedContentNotScheduled,
+  listAssistReadyToSchedule,
+} from "@/lib/ai/calendar-assist";
+import {
+  getCompany,
+  getContent,
+  listCampaignDraftScheduleItems,
+  listCampaigns,
+  listCompanies,
+} from "@/lib/db";
 import {
   canAutoExecuteLowRisk,
 } from "@/lib/managed-service/authority";
@@ -19,15 +30,101 @@ import type { ActingUser, ManagedServiceLevel } from "@/lib/types";
 /** Cap how many fully_managed companies we progress per tenant tick. */
 const MAX_COMPANIES_PER_TICK = 10;
 
+/** Cap schedule attempts per company per call (assist + campaign planned). */
+const MAX_SCHEDULE_PER_COMPANY = 8;
+
 function serviceLevelOf(company: {
   profile: { managedService?: { serviceLevel?: ManagedServiceLevel } };
 }): ManagedServiceLevel | null {
   return company.profile.managedService?.serviceLevel ?? null;
 }
 
+export type ManagedScheduleCandidate = {
+  contentId: string;
+  platform: string;
+  date: string;
+  time?: string | null;
+  source: "assist" | "campaign_planned";
+  sourceId: string;
+};
+
 /**
- * For one fully_managed company: schedule assist-ready approved content via
- * scheduleOne (critique gate). Returns counts of scheduled / blocked / skipped.
+ * Approved campaign-builder draft-schedule rows ready for scheduleOne:
+ * content approved, has a planned date, not already scheduled.
+ */
+export async function listApprovedCampaignPlannedReadyToSchedule(
+  tenantId: string,
+  companyId: string,
+  limit = MAX_SCHEDULE_PER_COMPANY,
+  excludeContentIds?: ReadonlySet<string>,
+): Promise<ManagedScheduleCandidate[]> {
+  const campaigns = (await listCampaigns(tenantId)).filter(
+    (c) => c.companyId === companyId,
+  );
+  const ready: ManagedScheduleCandidate[] = [];
+  const seen = new Set<string>(excludeContentIds ? [...excludeContentIds] : []);
+
+  for (const campaign of campaigns) {
+    if (ready.length >= limit) break;
+    const drafts = await listCampaignDraftScheduleItems(campaign.id);
+    for (const draft of drafts) {
+      if (ready.length >= limit) break;
+      if (!draft.contentId || !draft.scheduledDate) continue;
+      if (seen.has(draft.contentId)) continue;
+      const content = await getContent(draft.contentId);
+      if (!content || content.companyId !== companyId) continue;
+      if (content.status !== "approved") continue;
+      if (!(await assistAcceptedContentNotScheduled(tenantId, content.id))) continue;
+      seen.add(content.id);
+      ready.push({
+        contentId: content.id,
+        platform: draft.platform || "Facebook",
+        date: draft.scheduledDate,
+        time: draft.scheduledTime,
+        source: "campaign_planned",
+        sourceId: draft.id,
+      });
+    }
+  }
+
+  return ready;
+}
+
+async function collectReadyToSchedule(
+  tenantId: string,
+  companyId: string,
+  limit: number,
+): Promise<ManagedScheduleCandidate[]> {
+  const assistReady = await listAssistReadyToSchedule(tenantId, [companyId], limit);
+  const fromAssist: ManagedScheduleCandidate[] = assistReady
+    .filter((item) => Boolean(item.suggestion.proposedDate))
+    .map((item) => ({
+      contentId: item.contentId,
+      platform: item.platform,
+      date: item.suggestion.proposedDate,
+      time: item.suggestion.proposedTime,
+      source: "assist" as const,
+      sourceId: item.suggestion.id,
+    }));
+
+  const used = new Set(fromAssist.map((c) => c.contentId));
+  const remaining = Math.max(0, limit - fromAssist.length);
+  const fromCampaign =
+    remaining > 0
+      ? await listApprovedCampaignPlannedReadyToSchedule(
+          tenantId,
+          companyId,
+          remaining,
+          used,
+        )
+      : [];
+
+  return [...fromAssist, ...fromCampaign].slice(0, limit);
+}
+
+/**
+ * For one fully_managed company: schedule assist-ready + approved campaign
+ * planned-date content via scheduleOne (critique gate).
  */
 export async function progressManagedSchedulesForCompany(
   actor: ActingUser,
@@ -42,7 +139,11 @@ export async function progressManagedSchedulesForCompany(
   if (level !== "fully_managed") return zeros;
   if (!canAutoExecuteLowRisk(level, "schedule_approved")) return zeros;
 
-  const ready = await listAssistReadyToSchedule(company.tenantId, [companyId], 8);
+  const ready = await collectReadyToSchedule(
+    company.tenantId,
+    companyId,
+    MAX_SCHEDULE_PER_COMPANY,
+  );
   if (ready.length === 0) return zeros;
 
   let scheduled = 0;
@@ -50,25 +151,24 @@ export async function progressManagedSchedulesForCompany(
   let skipped = 0;
 
   for (const item of ready) {
-    const { suggestion, contentId, platform } = item;
-    if (!suggestion.proposedDate) {
+    if (!item.date) {
       skipped += 1;
       continue;
     }
     try {
       await scheduleOne({
-        contentId,
-        platform,
-        date: suggestion.proposedDate,
-        time: suggestion.proposedTime,
+        contentId: item.contentId,
+        platform: item.platform,
+        date: item.date,
+        time: item.time ?? undefined,
         userId: actor.id,
         tenantId: company.tenantId,
       });
       await logAction(actor, "managed_schedule.auto_scheduled", {
         targetType: "content",
-        targetId: contentId,
+        targetId: item.contentId,
         companyId,
-        detail: `platform=${platform} date=${suggestion.proposedDate} assist=${suggestion.id}`,
+        detail: `platform=${item.platform} date=${item.date} source=${item.source}:${item.sourceId}`,
       });
       scheduled += 1;
     } catch {
@@ -95,7 +195,7 @@ export async function progressManagedSchedulesForCompany(
 }
 
 /**
- * Progress assist-ready schedules for up to MAX_COMPANIES_PER_TICK fully_managed
+ * Progress ready schedules for up to MAX_COMPANIES_PER_TICK fully_managed
  * companies in the tenant. Returns total scheduled count.
  */
 export async function progressManagedSchedulesForTenant(

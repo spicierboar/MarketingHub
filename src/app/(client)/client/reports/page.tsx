@@ -2,6 +2,7 @@ import { requirePortalUser } from "@/lib/auth/rbac";
 import { getTenant } from "@/lib/db";
 import { buildClientRoiReport, buildClientReportSummary } from "@/lib/client-reports";
 import { PageHeader } from "@/components/page-header";
+import { ClientScheduleTabs } from "@/components/client-schedule-tabs";
 import { Card, CardContent } from "@/components/ui/card";
 
 const n = (x: number) => x.toLocaleString("en-AU");
@@ -41,11 +42,12 @@ export default async function ClientReportsPage() {
   return (
     <div>
       <PageHeader
-        title="How things are going"
+        title="Schedule & results"
         explainerId="client-results"
         explainer="Results for your marketing — leads, estimated revenue, and what’s working. Ask us if something looks off."
         description={`${report.periodLabel} · ${report.companyName}`}
       />
+      <ClientScheduleTabs />
       <div className="space-y-4 p-4 sm:p-5">
         <Card>
           <CardContent className="p-4">
