@@ -1521,6 +1521,15 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
       return { ok: r.a && !r.b && r.c, detail: `cost3=${r.a} cost3again=${r.b} cost2=${r.c} (want true,false,true)` };
     });
     }); // end runInServiceContext
+  } catch (e) {
+    // Provisioning (createTenant etc.) sits outside expect() — on an empty
+    // staging DB (migrations not applied) that throw used to escape the suite
+    // and become an opaque Next.js 500. Record it as a failed check instead.
+    checks.push({
+      name: "isolation.suite",
+      ok: false,
+      detail: `threw: ${e instanceof Error ? e.message : String(e)}`,
+    });
   } finally {
     // Always tear both tenants down — even if provisioning/asserting threw — so
     // the fixture never leaks throwaway data into the store it's protecting.

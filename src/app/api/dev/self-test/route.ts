@@ -11,6 +11,11 @@
 //   • secret unset + non-production → open (dev convenience: `curl` it locally).
 //   • secret unset + production → refused (403) so it can't be probed in prod
 //     without an operator explicitly enabling it.
+//
+// Staging Preview note: a failed check OR a suite throw both return HTTP 500
+// with a JSON body (never an opaque Next.js HTML 500). Inspect `checks`,
+// `suiteErrors`, and `diag` — missing migrations / service role usually show
+// up as createTenant / relation errors in those fields.
 
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
@@ -28,7 +33,20 @@ import { runLocalSeoSelfTest } from "@/lib/selftest/local-seo";
 import { runLearningSelfTest } from "@/lib/selftest/learning";
 import { runRagSelfTest } from "@/lib/selftest/rag";
 import { runAiMosSelfTest } from "@/lib/selftest/ai-mos";
-import { devToolsOpen } from "@/lib/env";
+import { appEnv, devToolsOpen } from "@/lib/env";
+import { isSupabaseConfigured } from "@/lib/db/supabase";
+
+/** Preview/staging suites hit real Supabase — allow up to 60s on Vercel. */
+export const maxDuration = 60;
+
+type SuiteReport = {
+  ok: boolean;
+  passed: number;
+  failed: number;
+  purgeFailed: string[];
+  durationMs: number;
+  checks: { name: string; ok: boolean; detail?: string }[];
+};
 
 function constantTimeEquals(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -55,36 +73,115 @@ function authorize(req: NextRequest): { ok: true } | { ok: false; status: number
   return { ok: true };
 }
 
+function diagnostics() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  let supabaseHost: string | null = null;
+  try {
+    supabaseHost = url ? new URL(url).host : null;
+  } catch {
+    supabaseHost = "invalid-url";
+  }
+  return {
+    appEnv: appEnv(),
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    supabaseConfigured: isSupabaseConfigured(),
+    hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
+    supabaseHost,
+    hint:
+      "If checks fail with relation/table errors: apply numbered supabase/migrations (0001→0045) to the staging project. " +
+      "If this URL redirects to Vercel SSO: disable Deployment Protection for Preview, or use a bypass token.",
+  };
+}
+
+function crashedSuite(name: string, err: unknown): SuiteReport {
+  const detail = err instanceof Error ? err.message : String(err);
+  return {
+    ok: false,
+    passed: 0,
+    failed: 1,
+    purgeFailed: [],
+    durationMs: 0,
+    checks: [{ name: `${name}.suiteCrashed`, ok: false, detail }],
+  };
+}
+
+async function settle(
+  name: string,
+  fn: () => Promise<SuiteReport>,
+): Promise<{ name: string; report: SuiteReport; error?: string }> {
+  try {
+    return { name, report: await fn() };
+  } catch (e) {
+    return {
+      name,
+      report: crashedSuite(name, e),
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
 async function handle(req: NextRequest) {
   const auth = authorize(req);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const [iso, portal, reports, publicApi, crm, cms, funnel, loyalty, bookings, execDash, localSeo, learning, rag, aiMos] = await Promise.all([
-    runIsolationSelfTest(),
-    runPortalSelfTest(),
-    runClientReportsSelfTest(),
-    runPublicApiSelfTest(),
-    runCrmSelfTest(),
-    runCmsSelfTest(),
-    runFunnelSelfTest(),
-    runLoyaltySelfTest(),
-    runBookingsSelfTest(),
-    runExecDashSelfTest(),
-    runLocalSeoSelfTest(),
-    runLearningSelfTest(),
-    runRagSelfTest(),
-    runAiMosSelfTest(),
-  ]);
-  const checks = [...iso.checks, ...portal.checks, ...reports.checks, ...publicApi.checks, ...crm.checks, ...cms.checks, ...funnel.checks, ...loyalty.checks, ...bookings.checks, ...execDash.checks, ...localSeo.checks, ...learning.checks, ...rag.checks, ...aiMos.checks];
-  const failed = checks.filter((c) => !c.ok).length;
-  const report = {
-    ok: iso.ok && portal.ok && reports.ok && publicApi.ok && crm.ok && cms.ok && funnel.ok && loyalty.ok && bookings.ok && execDash.ok && localSeo.ok && learning.ok && rag.ok && aiMos.ok,
-    passed: checks.length - failed,
-    failed,
-    purgeFailed: [...iso.purgeFailed, ...portal.purgeFailed, ...reports.purgeFailed, ...publicApi.purgeFailed, ...crm.purgeFailed, ...cms.purgeFailed, ...funnel.purgeFailed, ...loyalty.purgeFailed, ...bookings.purgeFailed, ...execDash.purgeFailed, ...localSeo.purgeFailed, ...learning.purgeFailed, ...rag.purgeFailed, ...aiMos.purgeFailed],
-    durationMs: iso.durationMs + portal.durationMs + reports.durationMs + publicApi.durationMs + crm.durationMs + cms.durationMs + funnel.durationMs + loyalty.durationMs + bookings.durationMs + execDash.durationMs + localSeo.durationMs + learning.durationMs + rag.durationMs + aiMos.durationMs,
-    checks,
-  };
-  return NextResponse.json(report, { status: report.ok ? 200 : 500 });
+  if (!auth.ok) {
+    return NextResponse.json(
+      { error: auth.error, diag: diagnostics() },
+      { status: auth.status },
+    );
+  }
+
+  const startedAt = Date.now();
+  try {
+    const settled = await Promise.all([
+      settle("isolation", runIsolationSelfTest),
+      settle("portal", runPortalSelfTest),
+      settle("clientReports", runClientReportsSelfTest),
+      settle("publicApi", runPublicApiSelfTest),
+      settle("crm", runCrmSelfTest),
+      settle("cms", runCmsSelfTest),
+      settle("funnel", runFunnelSelfTest),
+      settle("loyalty", runLoyaltySelfTest),
+      settle("bookings", runBookingsSelfTest),
+      settle("execDash", runExecDashSelfTest),
+      settle("localSeo", runLocalSeoSelfTest),
+      settle("learning", runLearningSelfTest),
+      settle("rag", runRagSelfTest),
+      settle("aiMos", runAiMosSelfTest),
+    ]);
+
+    const checks = settled.flatMap((s) => s.report.checks);
+    const failed = checks.filter((c) => !c.ok).length;
+    const suiteErrors = settled
+      .filter((s) => s.error)
+      .map((s) => ({ suite: s.name, error: s.error! }));
+    const report = {
+      ok: settled.every((s) => s.report.ok) && suiteErrors.length === 0,
+      passed: checks.length - failed,
+      failed,
+      purgeFailed: settled.flatMap((s) => s.report.purgeFailed),
+      durationMs: Date.now() - startedAt,
+      suiteErrors,
+      diag: diagnostics(),
+      checks,
+    };
+    return NextResponse.json(report, { status: report.ok ? 200 : 500 });
+  } catch (e) {
+    // Last-resort: never let an unhandled throw become an opaque HTML 500.
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: message,
+        passed: 0,
+        failed: 1,
+        purgeFailed: [],
+        durationMs: Date.now() - startedAt,
+        suiteErrors: [{ suite: "handler", error: message }],
+        diag: diagnostics(),
+        checks: [{ name: "handler.crashed", ok: false, detail: message }],
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export const GET = handle;

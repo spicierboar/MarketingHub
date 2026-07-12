@@ -37,11 +37,32 @@ function authorize(req: NextRequest): { ok: true } | { ok: false; status: number
   return { ok: true };
 }
 
+/** Queue fixture hits real Supabase on staging — allow up to 60s on Vercel. */
+export const maxDuration = 60;
+
 async function handle(req: NextRequest) {
   const auth = authorize(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const report = await runQueueSelfTest();
-  return NextResponse.json(report, { status: report.ok ? 200 : 500 });
+  try {
+    const report = await runQueueSelfTest();
+    return NextResponse.json(report, { status: report.ok ? 200 : 500 });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: message,
+        passed: 0,
+        failed: 1,
+        purgeFailed: [],
+        durationMs: 0,
+        checks: [{ name: "queue.suiteCrashed", ok: false, detail: message }],
+        hint:
+          "If this mentions a missing relation/table: apply numbered supabase/migrations (0001→0045) to the staging project.",
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export const GET = handle;
