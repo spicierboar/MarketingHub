@@ -9,13 +9,20 @@ import { enrichExtractedWithBusinessType } from "@/lib/signup-prefill-templates"
 import type { Company, CompanyProfile, SocialLink } from "@/lib/types";
 import tls from "node:tls";
 
+// Optional on older @types/node (Vercel builds); runtime may still expose them.
+type TlsWithSystemCa = typeof tls & {
+  getCACertificates?: (type?: string) => string[];
+  setDefaultCACertificates?: (certs: readonly string[]) => void;
+};
+
 // On Windows / corporate SSL, Node's default Mozilla CA bundle often fails leaf
 // verification. Prefer the OS trust store for outbound HTML fetches (matches
 // `node --use-system-ca` used by `dev:supabase`). Safe no-op when unavailable.
 try {
-  const systemCerts = tls.getCACertificates?.("system");
+  const tlsCa = tls as TlsWithSystemCa;
+  const systemCerts = tlsCa.getCACertificates?.("system");
   if (systemCerts?.length) {
-    tls.setDefaultCACertificates?.(systemCerts);
+    tlsCa.setDefaultCACertificates?.(systemCerts);
   }
 } catch {
   /* older Node or restricted env */
