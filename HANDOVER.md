@@ -1,28 +1,38 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-12, **c1c30a0 SHIPPED · 0043+0044 PASTED** · **W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-12, **c1c30a0 SHIPPED · LARGE UX TREE UNCOMMITTED** · **0045 PASTE?** · **W6 WAITING**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 6**) · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 8** after this handover) · live flags **OFF**
 >
 > | Item | Status | Notes |
 > |------|--------|-------|
 > | Automation-first + packages + 6h–24h delivery | **COMMITTED** `c1c30a0` | Basic $349 / Pro $649 / Blast $999 / Custom · ads media always extra |
 > | **Migrations 0043 + 0044** | **PASTED** | `marketing_package_catalog` · delivery eligibleAt / email stamp / enqueue_reason |
+> | **Migration 0045** | **PASTE IF NOT DONE** | `0045_tenant_promo_industries.sql` (+ any owner paste batch for 0045) |
+> | UX / polish / New Client / Approvals look-ahead | **UNCOMMITTED** | large tree beyond `c1c30a0` — no invented hashes |
 > | W6 | WAITING | do not flip `*_LIVE` |
 >
-> ### Just finished
-> - Owner pasted `_owner_paste_0043_0044_batch.sql`
+> ### Just finished (uncommitted — do not invent commit hashes)
+> - Marketing packages modal list/edit · agency sidebar Settings hub · Client asks under Clients
+> - Content hub AI modals · promo Add industry + Add promo rename · requests voice copy
+> - Company overview declutter + social dedupe · Publishing ops-first · Client asks title/empty state
+> - Company-scoped strip + Working on {client} · chip-row Brand/Produce/Channels/Ads on all `?company=` pages
+> - Client Account extra work requests · form UX placeholders/dropdowns platform-wide (multiple passes)
+> - New Client website-first scrape / Back / add-on gating / package+card copy
+> - Approvals look-ahead calendar (−7…+21) · LocalSeoQaDraftSpec fix · demo server flaky/restarts
 >
-> **Owner migrations:** 0043 + 0044 **done**. Do not re-paste.
+> **Owner migrations:** 0043 + 0044 **done**. **0045** — paste if not done.
 >
 > **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. No commit unless asked. Exclude `_owner_paste_*`.
 >
-> **Demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · Agency Settings → Marketing packages · Client Approvals / Account
+> **Demo:** `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · New Client · Approvals look-ahead · client Account extra work · Agency Settings → Marketing packages
 >
 > **NEXT:**
-> 1. Demo proof (package pick · eligibility window · Agency Home / client review surfaces)
-> 2. Push `main` when asked (ahead by 6)
-> 3. Stripe package products/proration later · park Google
+> 1. Commit UX/polish tree when asked (exclude integrator temps / `_owner_paste_*`)
+> 2. Paste **0045** if not done
+> 3. Demo New Client + Approvals look-ahead + client extra work
+> 4. Push `main` when asked · W6 Google still waiting
+> 5. Optional: Stripe package billing for Extra promos · denser form leftovers if any
 >
 > **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover
 >
@@ -34,16 +44,15 @@
 >
 > ---
 >
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-12, **c1c30a0 SHIPPED · 0043+0044 PASTED**) — archived
+>
+> Automation-first + packages shipped @ `c1c30a0`; 0043+0044 pasted. Large UX/polish tree continued uncommitted — see block above.
+>
+> ---
+>
 > ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-12, **c1c30a0 SHIPPED · 0043+0044 PASTE**) — archived
 >
-> Migrations were pending — now pasted (see block above).
->
->
-> **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
->
-> **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
->
-> **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+> Migrations were pending — then pasted.
 >
 > ---
 >
