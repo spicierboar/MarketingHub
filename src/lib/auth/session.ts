@@ -193,12 +193,17 @@ async function startStagingSupabaseSession(userId: string): Promise<void> {
     throw new Error(error?.message ?? "Failed to mint staging session link.");
   }
 
-  const { error: verifyError } = await sb.auth.verifyOtp({
+  const { data: verified, error: verifyError } = await sb.auth.verifyOtp({
     token_hash: tokenHash,
     type: "email",
   });
   if (verifyError) {
     throw new Error(verifyError.message);
+  }
+  if (!verified.session) {
+    throw new Error(
+      "Staging session mint returned no session — auth cookies were not set.",
+    );
   }
 }
 

@@ -41,9 +41,12 @@ export async function getServerSupabase(): Promise<SupabaseClient | null> {
             for (const { name, value, options } of cookiesToSet) {
               jar.set(name, value, options);
             }
-          } catch {
-            // Called from a Server Component where cookies are read-only —
-            // safe to ignore; the middleware/route handler refreshes the session.
+          } catch (err) {
+            // next/headers throws this from Server Components (read-only).
+            // In Server Actions / Route Handlers cookie writes must surface.
+            const msg = err instanceof Error ? err.message : String(err);
+            if (/Cookies can only be modified/i.test(msg)) return;
+            throw err;
           }
         },
       },

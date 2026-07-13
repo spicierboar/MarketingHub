@@ -18,9 +18,15 @@ const DEMO_LOGINS = [
   { email: "liam@brightspark.dev", label: "Client — review & approve only" },
 ] as const;
 
-export default async function DevToolsPage() {
+export default async function DevToolsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ error?: string; seeded?: string; cleared?: string }>;
+}) {
   if (!devToolsOpen()) redirect("/login");
 
+  const params = (await searchParams) ?? {};
+  const error = typeof params.error === "string" ? params.error.trim() : "";
   const demo = localDemoEnabled();
   const staging = appEnv() === "staging";
   const quickLoginOk = demo || staging;
@@ -44,6 +50,15 @@ export default async function DevToolsPage() {
           </Link>
         </p>
       </div>
+
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          {error}
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="space-y-3 p-6">

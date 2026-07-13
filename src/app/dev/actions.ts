@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import {
   addMembership,
   createTenant,
@@ -10,13 +11,18 @@ import {
   listTenants,
   membershipsForUser,
 } from "@/lib/db";
-import { startSession, endSession, getCurrentUser, setActiveTenant } from "@/lib/auth/session";
+import { startSession, endSession, setActiveTenant } from "@/lib/auth/session";
 import { postLoginRedirectPath } from "@/lib/auth/rbac";
 import { resetStore } from "@/lib/db/store";
 import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
 import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
-import type { Tenant, User } from "@/lib/types";
+import type { ActingUser, Tenant, TenantMember, User } from "@/lib/types";
+import { TENANT_ROLE_TIER } from "@/lib/types";
+
+function failQuickLogin(message: string): never {
+  redirect(`/dev?error=${encodeURIComponent(message.slice(0, 300))}`);
+}
 
 function assertDevTools() {
   if (!devToolsOpen()) {
@@ -78,12 +84,12 @@ async function resolveStagingTenant(): Promise<Tenant> {
   if (named) return named;
   const active = tenants.find((t) => t.status === "active") ?? tenants[0];
   if (active) return active;
+  // Omit timezone — DB default (0013/0035) applies; avoids fail on partial schemas.
   return createTenant({
     name: "Staging Agency",
     kind: "agency",
     plan: "agency",
     status: "active",
-    timezone: "Australia/Sydney",
   });
 }
 
@@ -142,8 +148,14 @@ async function ensureStagingUser(email: string): Promise<User> {
         name: nameFromEmail(email),
         role: "admin",
       });
-    } catch {
-      user = await linkExistingAuthUser(email);
+    } catch (createErr) {
+      try {
+        user = await linkExistingAuthUser(email);
+      } catch (linkErr) {
+        const a = createErr instanceof Error ? createErr.message : String(createErr);
+        const b = linkErr instanceof Error ? linkErr.message : String(linkErr);
+        throw new Error(`Could not provision ${email}: ${a} | ${b}`);
+      }
     }
   }
   if (!user.active) throw new Error("Account deactivated.");
@@ -156,34 +168,67 @@ async function ensureStagingUser(email: string): Promise<User> {
       userId: user.id,
       role: "owner",
     });
-    await setActiveTenant(user.id, tenant.id);
   }
   return user;
 }
 
+function actingFromMembership(user: User, m: TenantMember): ActingUser {
+  return {
+    ...user,
+    tenantId: m.tenantId,
+    tenantRole: m.role,
+    role: TENANT_ROLE_TIER[m.role],
+    roleTitle: m.roleTitle,
+    capabilities: m.capabilities,
+  };
+}
+
 /** Instant login as a seeded demo user, or provision + sign in on staging. */
 export async function quickLoginAction(formData: FormData): Promise<void> {
-  assertQuickLoginAllowed();
-  const email = String(formData.get("email") || "").trim();
-  if (!email) throw new Error("Email is required.");
+  try {
+    assertQuickLoginAllowed();
+    const email = String(formData.get("email") || "").trim();
+    if (!email) throw new Error("Email is required.");
 
-  let user: User | undefined;
-  if (localDemoEnabled()) {
-    user = await getUserByEmail(email);
-    if (!user) throw new Error(`No seeded account for ${email}`);
-    if (!user.active) throw new Error("Account deactivated.");
-  } else {
-    // Staging + Supabase: look up or provision a minimal agency owner.
-    user = await ensureStagingUser(email);
+    let user: User;
+    if (localDemoEnabled()) {
+      const found = await getUserByEmail(email);
+      if (!found) throw new Error(`No seeded account for ${email}`);
+      if (!found.active) throw new Error("Account deactivated.");
+      user = found;
+    } else {
+      // Staging + Supabase: look up or provision a minimal agency owner.
+      user = await ensureStagingUser(email);
+    }
+
+    const memberships = [...(await membershipsForUser(user.id))].sort((a, b) =>
+      a.tenantId.localeCompare(b.tenantId),
+    );
+    const membership = memberships[0];
+    if (!membership) {
+      throw new Error(
+        `No tenant membership for ${email}. Provisioning failed — check tenants / tenant_members.`,
+      );
+    }
+
+    await startSession(user.id);
+    // Set active tenant after auth cookies so a single response carries both.
+    await setActiveTenant(user.id, membership.tenantId);
+
+    await logAction(user, "user.login", {
+      tenantId: membership.tenantId,
+      detail:
+        appEnv() === "staging" && isSupabaseConfigured()
+          ? "Staging /dev quick-login (no magic link)"
+          : "Dev tools quick-login",
+    });
+
+    // Do not call getCurrentUser() here — verifyOtp cookies may not be readable
+    // until the next request. Redirect from DB membership instead.
+    redirect(await postLoginRedirectPath(actingFromMembership(user, membership)));
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "Quick login failed";
+    failQuickLogin(msg);
   }
-
-  await startSession(user.id);
-  await logAction(user, "user.login", {
-    detail:
-      appEnv() === "staging" && isSupabaseConfigured()
-        ? "Staging /dev quick-login (no magic link)"
-        : "Dev tools quick-login",
-  });
-  const acting = await getCurrentUser();
-  redirect(acting ? await postLoginRedirectPath(acting) : "/dashboard");
 }
