@@ -58,7 +58,10 @@ local cannot call Meta/Google. Does not affect the in-memory demo path.
 4. **`CC_SELFTEST_SECRET`** — set in **production** so an operator/CI can still run the
    self-test/queue-test there with the secret; leave unset in staging (open).
 5. **`APP_ORIGIN`** — set per environment to that environment's canonical URL (closes
-   host-header spoofing on OAuth/Stripe redirects).
+   host-header spoofing on OAuth/Stripe redirects). On Vercel Preview, prefer the
+   stable **branch** alias (`*-git-staging-*.vercel.app`), not a per-deploy hash URL.
+   Magic-link / SSO auth redirects use the live request host on Preview
+   (`resolveAuthRedirectOrigin`) so PKCE still works if `APP_ORIGIN` is stale.
 
 ## Local coding (short)
 

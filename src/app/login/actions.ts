@@ -7,11 +7,11 @@ import { startSession, endSession, getCurrentUser } from "@/lib/auth/session";
 import { postLoginRedirectPath } from "@/lib/auth/rbac";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
-import { resolveOrigin } from "@/lib/origin";
+import { resolveAuthRedirectOrigin } from "@/lib/origin";
 
-async function requestOrigin(): Promise<string> {
+async function authRedirectOrigin(): Promise<string> {
   const h = await headers();
-  return resolveOrigin((k) => h.get(k));
+  return resolveAuthRedirectOrigin((k) => h.get(k));
 }
 
 // Passwordless sign-in.
@@ -27,7 +27,7 @@ export async function signIn(_prev: unknown, formData: FormData) {
   if (isSupabaseConfigured()) {
     const sb = await getServerSupabase();
     if (!sb) return { error: "Auth is not available right now." };
-    const origin = await requestOrigin();
+    const origin = await authRedirectOrigin();
     const { error } = await sb.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${origin}/auth/callback` },
@@ -64,7 +64,7 @@ export async function signInWithOAuth(provider: "google" | "azure") {
   if (!isSupabaseConfigured()) return;
   const sb = await getServerSupabase();
   if (!sb) return;
-  const origin = await requestOrigin();
+  const origin = await authRedirectOrigin();
   const { data } = await sb.auth.signInWithOAuth({
     provider,
     options: { redirectTo: `${origin}/auth/callback` },

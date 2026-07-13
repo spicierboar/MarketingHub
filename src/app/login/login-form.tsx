@@ -42,6 +42,8 @@ export function LoginForm() {
     setClientError(null);
     setClientMessage(null);
 
+    // PKCE: code verifier is stored in a cookie on this origin. emailRedirectTo
+    // must match window.location.origin so /auth/callback can exchange the code.
     const { error } = await sb.auth.signInWithOtp({
       email: trimmed,
       options: {

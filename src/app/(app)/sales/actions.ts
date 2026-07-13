@@ -44,7 +44,7 @@ import {
   resolvePackageById,
   resolveSelectionForPackage,
 } from "@/lib/marketing-packages";
-import { resolveOrigin } from "@/lib/origin";
+import { resolveOrigin, resolveAuthRedirectOrigin } from "@/lib/origin";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { ensureAndKickManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
 import { localDemoEnabled } from "@/lib/env";
@@ -68,6 +68,11 @@ const BUSINESS_TYPES: BusinessType[] = [
 async function requestOrigin(): Promise<string> {
   const h = await headers();
   return resolveOrigin((k) => h.get(k));
+}
+
+async function authRedirectOrigin(): Promise<string> {
+  const h = await headers();
+  return resolveAuthRedirectOrigin((k) => h.get(k));
 }
 
 function text(fd: FormData, key: string): string | undefined {
@@ -586,7 +591,7 @@ export async function provisionClientAction(formData: FormData) {
   if (isSupabaseConfigured()) {
     const sb = await getServerSupabase();
     if (sb) {
-      const origin = await requestOrigin();
+      const origin = await authRedirectOrigin();
       await sb.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: `${origin}/auth/callback` },

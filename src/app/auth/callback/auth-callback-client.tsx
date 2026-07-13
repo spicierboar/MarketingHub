@@ -7,6 +7,7 @@ import { createBrowserSupabase } from "@/lib/db/supabase-browser";
 
 // PKCE code exchange must run in the browser — the code verifier lives in
 // document.cookie from signInWithOtp, which the server route cannot read.
+// That cookie is host-bound: Continue must be on the same hostname as /auth/callback.
 export function AuthCallbackClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -15,12 +16,20 @@ export function AuthCallbackClient() {
     const code = searchParams.get("code");
     const tokenHash = searchParams.get("token_hash");
     const type = searchParams.get("type");
+    const errorParam = searchParams.get("error");
+    const errorCode = searchParams.get("error_code");
     const nextParam = searchParams.get("next") ?? "/auth/complete";
     const next = nextParam.startsWith("/") ? nextParam : "/auth/complete";
 
+    if (errorParam || errorCode) {
+      const reason = errorCode || errorParam || "auth";
+      router.replace(`/login?error=auth&reason=${encodeURIComponent(reason)}`);
+      return;
+    }
+
     const sb = createBrowserSupabase();
     if (!sb) {
-      router.replace("/login?error=auth");
+      router.replace("/login?error=auth&reason=config");
       return;
     }
 
@@ -28,7 +37,8 @@ export function AuthCallbackClient() {
       if (code) {
         const { error } = await sb.auth.exchangeCodeForSession(code);
         if (error) {
-          router.replace("/login?error=auth");
+          const reason = error.code || error.message || "exchange";
+          router.replace(`/login?error=auth&reason=${encodeURIComponent(reason)}`);
           return;
         }
       } else if (tokenHash && type) {
@@ -37,11 +47,12 @@ export function AuthCallbackClient() {
           type: type as EmailOtpType,
         });
         if (error) {
-          router.replace("/login?error=auth");
+          const reason = error.code || error.message || "otp";
+          router.replace(`/login?error=auth&reason=${encodeURIComponent(reason)}`);
           return;
         }
       } else {
-        router.replace("/login?error=auth");
+        router.replace("/login?error=auth&reason=missing");
         return;
       }
 

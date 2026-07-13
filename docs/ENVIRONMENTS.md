@@ -1,169 +1,266 @@
 # Three environments — Local · Staging · Live
 
-Owner-facing map of how Marketing Command Centre is meant to run. Code details
-and `appEnv()` rules live in [`DEPLOYMENT.md`](./DEPLOYMENT.md); production
-cutover steps live in [`OWNER-LIVE-CUTOVER.md`](./OWNER-LIVE-CUTOVER.md).
+**Audience:** Owner / operator creating environments from scratch.  
+**Honest status (2026-07-12):** Day-to-day work has been **laptop-only**. There is
+**no staging environment yet**. You create staging this week; live is a **later**
+step (not a blocker for staging).
 
-| Env | Purpose | Typical URL |
-|-----|---------|-------------|
-| **Local** | Day-to-day coding | `http://127.0.0.1:3002` |
-| **Staging** | Shared preview before live — real-ish backends, **no** production data/charges | Vercel Preview URL or `staging.mangotickle.com.au` |
-| **Live** | Production clients | `https://mangotickle.com.au` |
+Code details: [`DEPLOYMENT.md`](./DEPLOYMENT.md). Live go-live later:
+[`OWNER-LIVE-CUTOVER.md`](./OWNER-LIVE-CUTOVER.md).
 
-**Hard rule:** Isolation between staging and live is **separate Supabase projects**
-(different `NEXT_PUBLIC_SUPABASE_URL`). Never point Preview/staging at the live DB.
+| Env | Purpose | Typical URL | Status |
+|-----|---------|-------------|--------|
+| **Local** | Coding on your laptop | `http://127.0.0.1:3002` | **You already use this** |
+| **Staging** | Shared cloud preview — real-ish backends, **no** client charges / live data | A Vercel Preview URL (or later `staging.mangotickle.com.au`) | **Create this first** |
+| **Live** | Real clients | `https://mangotickle.com.au` | Optional later (site may already exist — see §3) |
 
-**Hard rule:** Keep all cutover `*_LIVE` flags **OFF** on staging (and on live until
-Phase 4 GO in `OWNER-LIVE-CUTOVER.md`). W6 Google still waiting — do not flip.
+**Hard rule:** Staging and live use **separate Supabase projects** (different
+`NEXT_PUBLIC_SUPABASE_URL`). Never put live DB keys in Preview/staging.
+
+**Hard rule:** Keep all cutover `*_LIVE` flags **OFF** on staging (and on live
+until Phase 4 GO in `OWNER-LIVE-CUTOVER.md`). Do not flip them “to test UX”.
 
 ---
 
-## 1. Local (coding)
+## Recommended path (greenfield this week)
 
-### How to run
+Simplest stack for this Next.js + Supabase app:
+
+1. Keep coding on the laptop (`scripts/dev-3002.ps1`).
+2. Create accounts if you do not already have them: **Vercel** (free) + a **new
+   Supabase project** named for staging. GitHub repo already exists:
+   `spicierboar/MarketingHub`.
+3. Import that repo into Vercel (or open the existing Vercel project if you
+   already deploy mangotickle.com.au there).
+4. Create the staging Supabase project → paste migrations → put **staging** keys
+   only under Vercel **Preview** env vars.
+5. Deploy from the existing GitHub branch **`staging`** (`origin/staging` @
+   `b0fc47b`).
+6. Open the Preview URL → smoke-test.
+7. Live later — Production env + live Supabase; park `*_LIVE`.
+
+You do **not** need a custom domain for the first staging deploy. Vercel gives
+you a URL automatically.
+
+---
+
+## 1. Local (coding) — keep doing this
 
 ```powershell
 cd F:\MarketingHub\command-centre
-npm install   # first time
+npm install   # first time only
 
-# Preferred demo path (port 3002 + local demo auth):
 powershell -ExecutionPolicy Bypass -File scripts\dev-3002.ps1
 # → http://127.0.0.1:3002/login
-
-# Or foreground:
-$env:CC_LOCAL_DEMO='true'; $env:NEXT_PUBLIC_CC_LOCAL_DEMO='true'
-npm run dev -- -p 3002
 ```
-
-`scripts/dev-3002.ps1` starts a detached Next.js process with demo flags and logs
-to `.next-dev-3002.log`.
-
-### What local uses
 
 | Item | Local value |
 |------|-------------|
-| Data | In-memory seed when `CC_LOCAL_DEMO=true` (even if Supabase keys exist in `.env.local`) |
-| Auth | Demo personas / `/dev` quick login — no magic-link OTP |
-| Stripe | Mock checkout OK when price IDs / secret unset |
-| Publishing / ads / analytics | Simulated (`*_LIVE` unset) |
-| `APP_ORIGIN` | Omit, or `http://127.0.0.1:3002` |
-| `CC_ENV` | Omit (defaults to development) |
+| Data | In-memory seed when `CC_LOCAL_DEMO=true` |
+| Auth | Demo personas / `/dev` quick login |
+| Stripe | Mock checkout OK when keys unset |
+| Publishing / ads | Simulated (`*_LIVE` unset) |
+| Cloud accounts | **None required** |
 
-Optional: point `.env.local` at a **non-production** Supabase project and run
-`npm run dev:supabase` (corporate TLS). Do **not** use the live project
-`hrwkshspqeulgrmpqtpx` for casual coding.
+Do **not** point casual local coding at the live Supabase project
+`hrwkshspqeulgrmpqtpx`.
 
 ---
 
-## 2. Staging (shared preview)
+## 2. Staging — create from scratch (do this week)
 
-### What exists in this repo today
+### What the repo already has (code only — not a live staging site)
 
-- `src/lib/env.ts` — `VERCEL_ENV=preview` → `appEnv() === "staging"` (ribbon + open
-  `/api/dev/self-test` / queue-test).
-- `vercel.json` — hourly cron `/api/cron/tick` (runs on each deployment).
-- One GitHub remote: `origin` → `https://github.com/spicierboar/MarketingHub.git`
-  (branch **`main`**). No GitHub Actions workflows in-repo; deploy is **Vercel**.
-- Live Supabase project id (production only): `hrwkshspqeulgrmpqtpx`.
-- Docs already describe Preview = staging (`DEPLOYMENT.md`). A dedicated
-  **`staging` branch** is the preferred trigger for a stable preview URL.
+- GitHub: `https://github.com/spicierboar/MarketingHub.git`
+- Branch **`staging`** already pushed: `origin/staging` @ `b0fc47b`
+- `vercel.json` — hourly cron `/api/cron/tick` (works once Vercel hosts the app)
+- `src/lib/env.ts` — when Vercel sets `VERCEL_ENV=preview`, the app shows
+  **STAGING** and keeps `/api/dev/self-test` open
+- **No** in-repo GitHub Actions / Docker / Netlify / Railway deploy — hosting is
+  meant to be **Vercel**
 
-### Recommended model (fits existing infra)
+### Step-by-step (owner checklist)
 
-**One Vercel project** · Production = live · Preview = staging:
+#### A. Accounts
 
-1. Create a **second Supabase project** (e.g. `command-centre-staging`).
-2. Paste migrations `0001` → current (same order as live) into the staging SQL editor.
-3. In Vercel → Settings → Environment Variables, scope keys:
-   - **Preview** → staging Supabase trio + Stripe **test** keys + `*_LIVE` unset/`false`
-   - **Production** → live Supabase + live Stripe (when ready) — see cutover doc
-4. Create / push a **`staging` branch** (owner action if credentials needed):
+1. **GitHub** — you already have the repo. Confirm you can open
+   `https://github.com/spicierboar/MarketingHub` and see branch `staging`.
+2. **Vercel** — go to [vercel.com](https://vercel.com), sign up / log in with
+   GitHub (Hobby/free is fine).
+3. **Supabase** — go to [supabase.com](https://supabase.com), create a **new**
+   project for staging only, e.g. `command-centre-staging` (region close to you,
+   e.g. Sydney). Save the database password in your password manager.
 
-   ```powershell
-   git checkout main
-   git pull origin main   # when you intend to update staging from main
-   git checkout -B staging
-   git push -u origin staging
-   ```
+#### B. Create staging database schema (paste migrations)
 
-   Vercel Preview deploys on push to `staging` (and on PRs). Optional: add custom
-   domain `staging.mangotickle.com.au` → Preview in Vercel Domains.
+In Supabase → your **staging** project → **SQL Editor**:
 
-5. Set Preview `APP_ORIGIN` to that staging URL (no trailing slash).
-6. Smoke: open the Preview URL → fuchsia **STAGING** ribbon →
-   `GET /api/dev/self-test` and `/api/dev/queue-test` should be **200 / all green**.
+1. Open each file under `F:\MarketingHub\command-centre\supabase\migrations\`
+   in filename order (`0001_…`, `0002_…`, … through `0045_…`).
+2. Paste the full contents into the SQL editor and **Run**.
+3. Skip any `_owner_paste_*.sql` helper files — those are not the numbered
+   migrations.
+4. If a later migration errors because an earlier one was skipped, go back and
+   apply the missing numbered file first.
 
-### Staging must stay OFF / safe
+Same order you would use for live. Staging starts empty — that is correct.
+
+#### C. Connect the GitHub repo to Vercel
+
+1. Vercel → **Add New… → Project**.
+2. Import **`spicierboar/MarketingHub`**.
+3. Framework: **Next.js** (auto). Root directory: repo root (where
+   `package.json` is).
+4. **Production Branch:** `main` (for **later** live — you can leave Production
+   undeployed / unfinished for now).
+5. Do **not** hit Deploy yet until Preview env vars are set (or deploy once,
+   then set vars and redeploy — either works).
+
+**If mangotickle.com.au already shows in your Vercel dashboard:** use that
+**same project**. Do not create a second project unless you intentionally want
+two. You still need a **new Supabase staging project** and **Preview**-scoped
+env vars.
+
+#### D. Vercel environment variables (Preview = staging)
+
+Vercel → Project → **Settings → Environment Variables**.
+
+For each variable below, set scope to **Preview** only (not Production yet):
+
+| Variable | Staging (Preview) value |
+|----------|-------------------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Staging project URL (Settings → API) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Staging anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Staging service_role key (**never** the live one) |
+| `APP_ORIGIN` | Prefer the **stable branch Preview URL** (contains `-git-staging-`), not a one-off `*-xxxxx.vercel.app` deployment URL. Or leave blank — auth redirects use the live request host on Preview |
+| `CRON_SECRET` | Any long random string (password manager) |
+| `CC_TZ_OFFSET_MINUTES` | `600` (AEST) |
+| `STRIPE_SECRET_KEY` | Optional: Stripe **test** key `sk_test_…` only — or omit (mock OK) |
+| `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` / `VISUALS_LIVE` | **unset** or `false` |
+| `CC_LOCAL_DEMO` / `NEXT_PUBLIC_CC_LOCAL_DEMO` | **unset** (staging uses real Supabase auth, not laptop demo) |
+
+Leave **Production** env vars alone until you deliberately set up live.
+
+#### E. Deploy the `staging` branch
+
+1. Vercel → Project → **Settings → Git**: confirm the repo is linked.
+2. Push is already done: `origin/staging` @ `b0fc47b`. If Vercel did not auto-
+   deploy Preview, open **Deployments → Create Deployment** and choose branch
+   **`staging`**.
+3. Wait for the build (green).
+4. Open the deployment → copy the **branch** Preview URL (see below), not only
+   the per-deployment hash URL.
+5. Set Preview `APP_ORIGIN` to that **branch** URL (no trailing slash) → Redeploy
+   (optional but recommended for OAuth/Stripe; magic-link auth uses the live
+   request host on Preview even if `APP_ORIGIN` is stale).
+6. Optional later: Domains → add `staging.mangotickle.com.au` → assign to
+   Preview.
+
+#### Stable branch Preview URL (use this for login)
+
+Vercel gives every deploy a unique URL (`https://<project>-<hash>-<team>.vercel.app`)
+that **changes every push**. Opening Continue on one host and the email link on
+another breaks magic-link login (PKCE cookie is host-bound →
+“Sign-in link invalid or expired” / `otp_expired`).
+
+Prefer the **branch alias**, which stays stable for `staging`:
+
+`https://<project-name>-git-staging-<team-slug>.vercel.app`
+
+How to find it:
+
+1. Vercel → Project → **Deployments**.
+2. Open the latest **`staging`** deployment.
+3. Under domains / aliases, copy the URL that contains **`-git-staging-`**
+   (not the long hash-only deployment URL).
+4. Bookmark that URL and always request + open magic links there.
+
+#### F. Smoke-test staging
+
+1. Open the **branch** Preview URL — you should see a fuchsia **STAGING** ribbon.
+2. Visit `https://YOUR-BRANCH-URL/api/dev/self-test` → expect **200 / all green**.
+3. Visit `https://YOUR-BRANCH-URL/api/dev/queue-test` → expect **200 / all green**.
+4. **Magic-link login** (staging Supabase `ccgkbyboobctqjhjiejt`):
+   - Supabase → Authentication → URL Configuration:
+     - **Site URL** = the same **branch** Preview URL (step above).
+     - **Redirect URLs** include the wildcard already added
+       (`https://*-<team>.vercel.app/**`) **and**
+       `https://<branch-url>/auth/callback`.
+   - In the browser: open the **branch** URL → `/login` → Continue → open the
+     email **in that same browser** (do not switch to a phone mail app / another
+     Preview host).
+5. If login still fails with `otp_expired`, request a fresh link (links are
+   single-use) and confirm Site URL is not an old deployment hash URL.
+
+### Staging must stay safe
 
 | Flag / key | Staging |
 |------------|---------|
-| `PUBLISHING_LIVE`, `ADS_LIVE`, `ANALYTICS_LIVE`, `VISUALS_LIVE`, … | **OFF** |
-| Stripe | **Test-mode** keys only (`sk_test_…`) |
-| Supabase | Staging project only — never live |
-| `CC_LOCAL_DEMO` | **OFF** (real auth against staging Supabase) |
-| Production data | Never copy client PII from live without a deliberate, documented scrub |
-
-Code also soft-blocks publishing / local-SEO live on `appEnv() === "staging"`, and
-refuses cutover live flags when `APP_ORIGIN` looks like localhost (see `env.ts`).
+| `*_LIVE` cutover flags | **OFF** |
+| Stripe | **Test** keys only — or omit |
+| Supabase | **Staging project only** — never live `hrwkshspqeulgrmpqtpx` |
+| Live client data | Do not copy production PII into staging |
 
 ---
 
-## 3. Live (production)
+## 3. Live (production) — later, not this week’s blocker
 
-Canonical origin: **`https://mangotickle.com.au`** (`mangotickle.com` → redirect).
+**What we know:** `https://mangotickle.com.au` currently answers on **Vercel**
+(HTTP 200). That means *some* Vercel project + DNS already points at the domain.
+It does **not** mean staging exists, and it does **not** mean you should touch
+Production env vars while building staging.
 
-| Item | Live |
-|------|------|
-| Branch | Vercel **Production** ← `main` |
-| Supabase | `hrwkshspqeulgrmpqtpx` |
-| Ribbon | None |
-| Dev-tools | Locked unless `CC_SELFTEST_SECRET` |
-| `*_LIVE` | Stay **false** until Phase 4 GO (`OWNER-LIVE-CUTOVER.md`) — Google billing still blocked |
-| Stripe | Live keys only when you intentionally take real payments; package price IDs `STRIPE_PRICE_PACKAGE_*` |
+| Item | Live (when you are ready) |
+|------|---------------------------|
+| Host | Same Vercel project · **Production** ← branch `main` |
+| URL | `https://mangotickle.com.au` |
+| Supabase | Live project `hrwkshspqeulgrmpqtpx` (Production env only) |
+| `*_LIVE` | Stay **false** until Phase 4 GO |
+| Full checklist | [`OWNER-LIVE-CUTOVER.md`](./OWNER-LIVE-CUTOVER.md) |
 
-Full DNS / Resend / Meta / Google checklist: **`docs/OWNER-LIVE-CUTOVER.md`**.
+Until cutover is intentional: do not flip live flags; do not point Preview at
+the live database.
+
+**Option B (if live were on another host):** add a second app/service on that
+same platform for staging, with its own env file + separate Supabase project,
+and set `CC_ENV=staging` explicitly. This repo has no Docker/Netlify/Railway
+config — for MarketingHub, **Vercel Preview is the recommended Option A**.
 
 ---
 
-## Env var matrix (checklist)
+## Env var matrix
 
 | Variable | Local | Staging (Preview) | Live (Production) |
 |----------|-------|-------------------|-------------------|
-| `CC_ENV` | omit / `development` | omit (`VERCEL_ENV=preview`) or `staging` | omit (`VERCEL_ENV=production`) |
-| `CC_LOCAL_DEMO` + `NEXT_PUBLIC_CC_LOCAL_DEMO` | **`true`** for demo | unset | unset (ignored in production anyway) |
-| `APP_ORIGIN` | omit or `http://127.0.0.1:3002` | staging URL | `https://mangotickle.com.au` |
-| `NEXT_PUBLIC_SUPABASE_*` + `SUPABASE_SERVICE_ROLE_KEY` | omit (demo) or staging project | **staging** project | **live** project |
+| `CC_ENV` | omit | omit (`VERCEL_ENV=preview`) | omit (`VERCEL_ENV=production`) |
+| `CC_LOCAL_DEMO` + `NEXT_PUBLIC_CC_LOCAL_DEMO` | **`true`** | unset | unset |
+| `APP_ORIGIN` | omit or `http://127.0.0.1:3002` | Branch Preview URL (`*-git-staging-*`) | `https://mangotickle.com.au` |
+| Supabase trio | omit (demo) | **staging** project | **live** project |
 | `CRON_SECRET` | optional | set | set |
 | `CC_SELFTEST_SECRET` | omit | omit (devtools open) | set |
-| `RESEND_API_KEY` / `EMAIL_FROM` | omit | optional test domain | production domain |
-| `ANTHROPIC_API_KEY` | optional | optional | optional |
-| Stripe `STRIPE_SECRET_KEY` / webhook / `STRIPE_PRICE_*` | omit → mock | **test** keys | **live** keys when ready |
-| `PUBLISHING_TOKEN_KEY` | omit | optional | set before OAuth cutover |
-| `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` / `VISUALS_LIVE` | OFF | **OFF** | OFF until Phase 4 |
-| OAuth `META_*` / `GOOGLE_OAUTH_*` | omit | omit or test apps | set in prep; used at Phase 4 |
-| `ABN_LOOKUP_GUID` | optional | optional (live ABR allowed in staging/dev when GUID set) | needs `ABN_LOOKUP_LIVE=true` in production |
-| `ABN_LOOKUP_LIVE` | n/a | n/a (dev/staging already allow when GUID set) | `true` only when you want live ABR in prod |
-| `CC_TZ_OFFSET_MINUTES` | optional | `600` (AEST) | `600` |
+| Stripe | omit → mock | **test** keys | live keys when ready |
+| `*_LIVE` | OFF | **OFF** | OFF until Phase 4 |
+| `CC_TZ_OFFSET_MINUTES` | optional | `600` | `600` |
 
-Copy-paste templates: **`.env.example`** (Local / Staging / Live sections).
+Templates: **`.env.example`**.
 
 ---
 
-## Actions only the owner can do
+## What NOT to do
 
-1. **Vercel** — confirm project linked to `spicierboar/MarketingHub`; Production = `main`; Preview env vars scoped; optional `staging.` domain.
-2. **Create Supabase staging project** — new project + paste migrations; never share live service-role key with Preview.
-3. **`git push -u origin staging`** — if the remote branch does not exist yet (needs GitHub credentials).
-4. **DNS / TLS** — `mangotickle.com.au` (+ optional staging subdomain).
-5. **Stripe** — test vs live keys; webhook endpoints per environment (`/api/billing/webhook`).
-6. **Google / Meta** — billing, App Review, OAuth redirect URIs for **live** origin (parked until cutover).
-7. **Flip `*_LIVE`** — only after Phase 4 GO/NO-GO; never “to test UX”.
+1. Do **not** put live Supabase URL / service_role key in Preview.
+2. Do **not** set `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` / `VISUALS_LIVE`
+   to test staging.
+3. Do **not** use live Stripe (`sk_live_…`) on staging.
+4. Do **not** turn on `CC_LOCAL_DEMO` on Vercel (that is laptop-only).
+5. Do **not** treat “live site exists” as “staging is done” — staging is a
+   separate Preview + separate Supabase project.
 
 ---
 
 ## Related
 
-- [`DEPLOYMENT.md`](./DEPLOYMENT.md) — `appEnv()` contract, Vercel Production vs Preview
-- [`OWNER-LIVE-CUTOVER.md`](./OWNER-LIVE-CUTOVER.md) — mangotickle.com.au phased go-live
+- [`DEPLOYMENT.md`](./DEPLOYMENT.md) — `appEnv()` contract
+- [`OWNER-LIVE-CUTOVER.md`](./OWNER-LIVE-CUTOVER.md) — live phased go-live (later)
 - [`PRODUCTION.md`](./PRODUCTION.md) — broader production wiring
 - `src/lib/env.ts` — `appEnv()`, `localDemoEnabled()`, `liveIntegrationsAllowed()`
