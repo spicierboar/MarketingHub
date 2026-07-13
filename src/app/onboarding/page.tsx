@@ -67,7 +67,12 @@ function Stepper({ step }: { step: Step }) {
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string; checkout?: string; prefilled?: string }>;
+  searchParams: Promise<{
+    step?: string;
+    checkout?: string;
+    prefilled?: string;
+    msg?: string;
+  }>;
 }) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
@@ -130,7 +135,24 @@ export default async function OnboardingPage({
         ? "Partial prefill — some public signals were thin. Review and complete any blank required fields."
         : params.prefilled === "0"
           ? "Website lookup did not return much. Fill the fields manually, or try another URL."
-          : null;
+          : params.prefilled === "err"
+            ? params.msg?.trim() ||
+              "Could not prefill from that website. Check the URL and consent, then try again."
+            : null;
+  const prefillBannerTone =
+    params.prefilled === "0" || params.prefilled === "err"
+      ? ("warning" as const)
+      : ("success" as const);
+
+  const detailsFieldsKey = [
+    params.prefilled ?? "",
+    tenant.onboarding?.website ?? "",
+    tenant.onboarding?.abn ?? "",
+    tenant.onboarding?.industry ?? "",
+    tenant.onboarding?.natureOfBusiness ?? "",
+    tenant.onboarding?.contactPhone ?? "",
+    tenant.onboarding?.notes ?? "",
+  ].join("|");
 
   const packages = listActivePackagesForSignup(tenant).map((p) => ({
     id: p.id,
@@ -185,8 +207,10 @@ export default async function OnboardingPage({
                 Google listing signals, then review ABN and contact details.
               </p>
               <OnboardingDetailsFields
+                key={detailsFieldsKey}
                 showWebsiteScrape
                 prefillBanner={prefillBanner}
+                prefillBannerTone={prefillBannerTone}
                 defaults={{
                   abn: tenant.onboarding?.abn,
                   industry: tenant.onboarding?.industry,

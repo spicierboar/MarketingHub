@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import {
   createCompany,
   currentTerms,
@@ -81,20 +82,28 @@ function deriveCompanyName(input: {
  * Prefill details from website scrape + enrich + Google Places (GBP-style listing).
  * Stays on the details step so the owner can review filled fields.
  */
+function prefillErrorRedirect(message: string): never {
+  redirect(
+    `/onboarding?step=details&prefilled=err&msg=${encodeURIComponent(message)}`,
+  );
+}
+
 export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
-  if (!tenant) throw new Error("Tenant not found.");
+  if (!tenant) prefillErrorRedirect("Tenant not found.");
 
   const websiteRaw = text(formData, "website");
   const consent =
     formData.get("consent") === "on" || formData.get("consent") === "true";
-  if (!websiteRaw) throw new Error("Enter a website URL to prefill.");
+  if (!websiteRaw) prefillErrorRedirect("Enter a website URL to prefill.");
   if (!consent) {
-    throw new Error("Confirm consent before scraping the website.");
+    prefillErrorRedirect("Confirm consent before scraping the website.");
   }
   const website = normaliseHttpUrl(websiteRaw);
-  if (!website) throw new Error("Enter a valid website URL (e.g. example.com).");
+  if (!website) {
+    prefillErrorRedirect("Enter a valid website URL (e.g. example.com).");
+  }
 
   const prev = tenant.onboarding ?? {};
   const seedName =
@@ -103,147 +112,156 @@ export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
     text(formData, "contactName") ||
     "Business";
 
-  const synthetic: Company = {
-    id: `onboarding_${tenant.id}`,
-    tenantId: tenant.id,
-    name: seedName,
-    status: "draft_onboarding",
-    profile: { ...emptyProfile(), website },
-    documents: [],
-    createdBy: user.id,
-    createdAt: now(),
-    updatedAt: now(),
-  };
+  try {
+    const synthetic: Company = {
+      id: `onboarding_${tenant.id}`,
+      tenantId: tenant.id,
+      name: seedName,
+      status: "draft_onboarding",
+      profile: { ...emptyProfile(), website },
+      documents: [],
+      createdBy: user.id,
+      createdAt: now(),
+      updatedAt: now(),
+    };
 
-  const scrape = await scrapeAndApplyInitialProfile({
-    company: synthetic,
-    website,
-    actorId: user.id,
-  });
+    const scrape = await scrapeAndApplyInitialProfile({
+      company: synthetic,
+      website,
+      actorId: user.id,
+    });
 
-  const profile = scrape.profile;
-  const place = await matchPlace({
-    name:
-      profile.legalName?.trim() ||
-      profile.tradingNames?.trim() ||
-      seedName,
-    suburb: profile.serviceAreas?.[0],
-    region: "Australia",
-  });
-  const placeHints = place ? placeMatchToExtractedHints(place) : null;
+    const profile = scrape.profile;
+    const place = await matchPlace({
+      name:
+        profile.legalName?.trim() ||
+        profile.tradingNames?.trim() ||
+        seedName,
+      suburb: profile.serviceAreas?.[0],
+      region: "Australia",
+    });
+    const placeHints = place ? placeMatchToExtractedHints(place) : null;
 
-  const industryId =
-    (prev.industry && isValidOnboardingIndustry(prev.industry)
-      ? prev.industry
-      : undefined) ||
-    mapIndustryFromText(
-      profile.industry,
-      placeHints?.industry,
-      place?.category,
-      profile.natureOfBusiness,
-    );
+    const industryId =
+      (prev.industry && isValidOnboardingIndustry(prev.industry)
+        ? prev.industry
+        : undefined) ||
+      mapIndustryFromText(
+        profile.industry,
+        placeHints?.industry,
+        place?.category,
+        profile.natureOfBusiness,
+      );
 
-  const natureSignal =
-    profile.natureOfBusiness ||
-    placeHints?.industry ||
-    place?.category ||
-    undefined;
-  const natureId = industryId
-    ? mapNatureIdFromText(industryId, natureSignal, profile.industry)
-    : undefined;
-  const natureOfBusiness =
-    (industryId && natureId
-      ? resolveNatureLabel(industryId, natureId)
-      : undefined) ||
-    profile.natureOfBusiness?.trim() ||
-    prev.natureOfBusiness;
+    const natureSignal =
+      profile.natureOfBusiness ||
+      placeHints?.industry ||
+      place?.category ||
+      undefined;
+    const natureId = industryId
+      ? mapNatureIdFromText(industryId, natureSignal, profile.industry)
+      : undefined;
+    const natureOfBusiness =
+      (industryId && natureId
+        ? resolveNatureLabel(industryId, natureId)
+        : undefined) ||
+      profile.natureOfBusiness?.trim() ||
+      prev.natureOfBusiness;
 
-  let abn = prev.abn;
-  if (!abn) {
-    const abrName =
-      profile.legalName?.trim() ||
-      profile.tradingNames?.trim() ||
-      seedName;
-    try {
-      const abr = await lookupAbn(abrName);
-      if (abr?.abn) abn = abr.abn;
-    } catch {
-      /* ABN soft-fill only */
+    let abn = prev.abn;
+    if (!abn) {
+      const abrName =
+        profile.legalName?.trim() ||
+        profile.tradingNames?.trim() ||
+        seedName;
+      try {
+        const abr = await lookupAbn(abrName);
+        if (abr?.abn) abn = abr.abn;
+      } catch {
+        /* ABN soft-fill only */
+      }
     }
-  }
 
-  const noteBits = [
-    profile.natureOfBusiness?.trim(),
-    place?.formattedAddress
-      ? `Address (public listing): ${place.formattedAddress}`
-      : undefined,
-    place?.openingHoursText?.length
-      ? `Hours: ${place.openingHoursText.slice(0, 3).join("; ")}`
-      : profile.tradingHours
-        ? `Hours: ${profile.tradingHours}`
+    const noteBits = [
+      profile.natureOfBusiness?.trim(),
+      place?.formattedAddress
+        ? `Address (public listing): ${place.formattedAddress}`
         : undefined,
-  ].filter(Boolean);
+      place?.openingHoursText?.length
+        ? `Hours: ${place.openingHoursText.slice(0, 3).join("; ")}`
+        : profile.tradingHours
+          ? `Hours: ${profile.tradingHours}`
+          : undefined,
+    ].filter(Boolean);
 
-  const onboarding: TenantOnboarding = {
-    ...prev,
-    website,
-    scrapeConsentAt: prev.scrapeConsentAt ?? now(),
-    companyName:
-      profile.legalName?.trim() ||
-      profile.tradingNames?.trim() ||
-      prev.companyName ||
-      seedName,
-    abn: abn || prev.abn,
-    industry: industryId || prev.industry,
-    natureOfBusiness: natureOfBusiness || prev.natureOfBusiness,
-    contactPhone:
-      profile.phone?.trim() ||
-      place?.phone?.trim() ||
-      prev.contactPhone ||
-      text(formData, "contactPhone") ||
-      undefined,
-    contactEmail:
-      profile.email?.trim() ||
-      prev.contactEmail ||
-      text(formData, "contactEmail") ||
-      user.email,
-    contactName:
-      prev.contactName ||
-      text(formData, "contactName") ||
-      user.name,
-    notes:
-      prev.notes ||
-      (noteBits.length ? noteBits.join(" · ") : undefined),
-  };
+    const onboarding: TenantOnboarding = {
+      ...prev,
+      website,
+      scrapeConsentAt: prev.scrapeConsentAt ?? now(),
+      companyName:
+        profile.legalName?.trim() ||
+        profile.tradingNames?.trim() ||
+        prev.companyName ||
+        seedName,
+      abn: abn || prev.abn,
+      industry: industryId || prev.industry,
+      natureOfBusiness: natureOfBusiness || prev.natureOfBusiness,
+      contactPhone:
+        profile.phone?.trim() ||
+        place?.phone?.trim() ||
+        prev.contactPhone ||
+        text(formData, "contactPhone") ||
+        undefined,
+      contactEmail:
+        profile.email?.trim() ||
+        prev.contactEmail ||
+        text(formData, "contactEmail") ||
+        user.email,
+      contactName:
+        prev.contactName ||
+        text(formData, "contactName") ||
+        user.name,
+      notes:
+        prev.notes ||
+        (noteBits.length ? noteBits.join(" · ") : undefined),
+    };
 
-  await updateTenant(user.tenantId, {
-    kind: "business_group",
-    onboarding,
-    ...(onboarding.companyName && onboarding.companyName !== tenant.name
-      ? { name: onboarding.companyName }
-      : {}),
-  });
+    await updateTenant(user.tenantId, {
+      kind: "business_group",
+      onboarding,
+      ...(onboarding.companyName && onboarding.companyName !== tenant.name
+        ? { name: onboarding.companyName }
+        : {}),
+    });
 
-  const filled = [
-    onboarding.abn && "ABN",
-    onboarding.industry && "industry",
-    onboarding.natureOfBusiness && "nature",
-    onboarding.contactPhone && "phone",
-    onboarding.contactEmail && "email",
-    place && "Google listing",
-  ].filter(Boolean);
+    const filled = [
+      onboarding.abn && "ABN",
+      onboarding.industry && "industry",
+      onboarding.natureOfBusiness && "nature",
+      onboarding.contactPhone && "phone",
+      onboarding.contactEmail && "email",
+      place && "Google listing",
+    ].filter(Boolean);
 
-  await logAction(user, "onboarding.website_prefill", {
-    detail: `scrape=${scrape.mode} fields=${scrape.fieldCount} places=${place?.mode ?? "none"} filled=${filled.join(",") || "none"}`,
-  });
+    await logAction(user, "onboarding.website_prefill", {
+      detail: `scrape=${scrape.mode} fields=${scrape.fieldCount} places=${place?.mode ?? "none"} filled=${filled.join(",") || "none"}`,
+    });
 
-  const status =
-    scrape.mode === "failed" && !place
-      ? "0"
-      : scrape.fieldCount > 0 || place
-        ? "1"
-        : "partial";
-  redirect(`/onboarding?step=details&prefilled=${status}`);
+    const status =
+      scrape.mode === "failed" && !place
+        ? "0"
+        : scrape.fieldCount > 0 || place
+          ? "1"
+          : "partial";
+    redirect(`/onboarding?step=details&prefilled=${status}`);
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const message =
+      e instanceof Error && e.message
+        ? e.message
+        : "Could not prefill from that website. Try again or fill fields manually.";
+    prefillErrorRedirect(message);
+  }
 }
 
 /**

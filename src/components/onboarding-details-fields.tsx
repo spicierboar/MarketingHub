@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
 import { useMemo, useState } from "react";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
@@ -24,13 +25,31 @@ type Props = {
   showWebsiteScrape?: boolean;
   /** Shown after a successful / partial website prefill. */
   prefillBanner?: string | null;
+  prefillBannerTone?: "success" | "warning";
 };
+
+function PrefillSubmitButton({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button
+      type="submit"
+      formAction={prefillOnboardingFromWebsiteAction}
+      formNoValidate
+      variant="outline"
+      size="sm"
+      disabled={disabled || pending}
+    >
+      {pending ? "Prefilling…" : "Prefill from website"}
+    </Button>
+  );
+}
 
 /** Website-first details; optional scrape prefill via Places + AI/template enrich. */
 export function OnboardingDetailsFields({
   defaults,
   showWebsiteScrape = false,
   prefillBanner,
+  prefillBannerTone = "success",
 }: Props) {
   const initialIndustry =
     defaults?.industry &&
@@ -62,7 +81,13 @@ export function OnboardingDetailsFields({
   return (
     <div className="space-y-4">
       {prefillBanner ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+        <p
+          className={
+            prefillBannerTone === "warning"
+              ? "rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+              : "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950"
+          }
+        >
           {prefillBanner}
         </p>
       ) : null}
@@ -100,15 +125,11 @@ export function OnboardingDetailsFields({
                   website (and related public listings) for onboarding.
                 </span>
               </label>
-              <Button
-                type="submit"
-                formAction={prefillOnboardingFromWebsiteAction}
-                variant="outline"
-                size="sm"
-                disabled={!consentChecked}
-              >
-                Prefill from website
-              </Button>
+              {/*
+                formNoValidate: Prefill must not be blocked by empty required
+                ABN/industry/contact fields further down the same form.
+              */}
+              <PrefillSubmitButton disabled={!consentChecked} />
             </>
           ) : (
             <p className="text-xs text-muted-foreground">
