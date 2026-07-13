@@ -62,8 +62,7 @@ export async function signUpAction(_prev: unknown, formData: FormData) {
   await startSession(user.id);
   // Land them in the workspace they just created (they may belong to others).
   await setActiveTenant(user.id, tenant.id);
-  // New tenant → straight into onboarding (details → marketing package →
-  // optional workspace plan for agencies → T&C). The (app) gate would route
-  // here anyway; redirecting directly is smoother.
+  // New tenant → client onboarding (details → marketing package → T&C).
+  // Agency SaaS / white-label signup is parked — we are the agency; signup = client.
   redirect("/onboarding");
 }

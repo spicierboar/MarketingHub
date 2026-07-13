@@ -16,11 +16,18 @@ type Props = {
     contactEmail?: string;
     contactPhone?: string;
     notes?: string;
+    website?: string;
+    scrapeConsent?: boolean;
   };
+  /** Agency: optional website + scrape consent (applied when onboarding finishes). */
+  showWebsiteScrape?: boolean;
 };
 
 /** Cascading Industry → Nature of business for workspace onboarding step 1. */
-export function OnboardingDetailsFields({ defaults }: Props) {
+export function OnboardingDetailsFields({
+  defaults,
+  showWebsiteScrape = false,
+}: Props) {
   const initialIndustry =
     defaults?.industry &&
     ONBOARDING_INDUSTRIES.some((o) => o.id === defaults.industry)
@@ -28,6 +35,11 @@ export function OnboardingDetailsFields({ defaults }: Props) {
       : "";
 
   const [industry, setIndustry] = useState(initialIndustry);
+  const [website, setWebsite] = useState(defaults?.website ?? "");
+  const [consentChecked, setConsentChecked] = useState(
+    !!defaults?.scrapeConsent,
+  );
+  const willScrape = showWebsiteScrape && website.trim().length > 0;
 
   const natures = useMemo(() => naturesForIndustry(industry), [industry]);
 
@@ -133,6 +145,46 @@ export function OnboardingDetailsFields({ defaults }: Props) {
           />
         </Field>
       </div>
+      {showWebsiteScrape ? (
+        <div className="space-y-3 rounded-md border border-border p-4">
+          <Field
+            label="Website (optional)"
+            htmlFor="website"
+            hint="Public pages help pre-fill your workspace company profile when you finish onboarding."
+          >
+            <Input
+              id="website"
+              name="website"
+              type="text"
+              inputMode="url"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              placeholder="https://example.com or example.com"
+            />
+          </Field>
+          {willScrape ? (
+            <label className="flex items-start gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                name="consent"
+                value="on"
+                required
+                className="mt-1"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+              />
+              <span>
+                I consent to collecting publicly available information from this
+                website for onboarding.
+              </span>
+            </label>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No website yet — you can continue and fill the profile later.
+            </p>
+          )}
+        </div>
+      ) : null}
       <Field
         label="Anything we should know? (optional)"
         htmlFor="notes"

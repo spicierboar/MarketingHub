@@ -64,6 +64,13 @@ export interface TenantOnboarding {
   contactEmail?: string;
   contactPhone?: string;
   notes?: string;
+  /**
+   * Agency workspace website (optional). With scrapeConsentAt, public pages are
+   * scraped when onboarding creates the primary company (same path as New Client).
+   */
+  website?: string;
+  /** ISO timestamp when the owner confirmed scrape consent for `website`. */
+  scrapeConsentAt?: string;
   /** Client marketing package (company delivery SKU) — persisted until a company exists. */
   marketingPackageId?: MarketingPackageId;
   /** Module picks when marketingPackageId is `"custom"`. */

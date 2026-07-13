@@ -1,10 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import {
   createCompany,
   currentTerms,
+  getCompany,
   getTenant,
   hasAcceptedTerms,
   listCompanies,
@@ -13,12 +13,6 @@ import {
   updateTenant,
 } from "@/lib/db";
 import { requireTenantOwnerRaw } from "@/lib/auth/rbac";
-import {
-  createCheckoutSession,
-  stripeConfigured,
-  useMockPackageCheckout,
-} from "@/lib/billing";
-import { resolveOrigin } from "@/lib/origin";
 import { clientIp } from "@/lib/ratelimit";
 import { logAction } from "@/lib/audit";
 import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
@@ -28,7 +22,6 @@ import {
   resolveSelectionForPackage,
 } from "@/lib/marketing-packages";
 import { now } from "@/lib/utils";
-import { PLANS } from "@/lib/plans";
 import { parseAbnInput } from "@/lib/company-identity";
 import { verifyAbnStatusAgainstAbr } from "@/lib/abn-lookup";
 import {
@@ -37,23 +30,16 @@ import {
   isValidOnboardingIndustry,
   resolveNatureLabel,
 } from "@/lib/onboarding-industries";
+import { normaliseHttpUrl, scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
 import type {
   ManagedServiceLevel,
   MarketingPackageCustomModules,
   MarketingPackageId,
-  PlanId,
   TenantOnboarding,
 } from "@/lib/types";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
-}
-
-function nextAfterDetails(kind: string | undefined): string {
-  // Agency SaaS signup: workspace plan next (no client marketing package here).
-  if (kind === "agency") return "/onboarding?step=workspace";
-  // Business-group tenants pick a client marketing package for their company.
-  return "/onboarding?step=package";
 }
 
 /** Workspace/company display name when legal name is not collected. */
@@ -71,7 +57,11 @@ function deriveCompanyName(input: {
   return "Workspace";
 }
 
-// Step 1 — capture the client's business + contact details.
+/**
+ * Step 1 — business (client) details.
+ * For now every self-serve signup is our client — never an agency SaaS tenant.
+ * Multi-agency / white-label signup is parked.
+ */
 export async function saveOnboardingDetailsAction(formData: FormData) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
@@ -94,7 +84,6 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
     throw new Error("Contact name and contact email are required.");
   }
 
-  // Soft ABR status check (no trading-name field on this step). Soft-skips without GUID.
   const abrGate = await verifyAbnStatusAgainstAbr(abnParsed.abn);
   if (!abrGate.ok) throw new Error(abrGate.error);
 
@@ -104,8 +93,26 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
     contactName,
   });
 
+  const websiteRaw = text(formData, "website");
+  const consent =
+    formData.get("consent") === "on" || formData.get("consent") === "true";
+  if (websiteRaw && !consent) {
+    throw new Error(
+      "Confirm consent to scrape public website data, or leave the website blank.",
+    );
+  }
+  let website: string | undefined;
+  if (websiteRaw) {
+    const normalised = normaliseHttpUrl(websiteRaw);
+    if (!normalised) {
+      throw new Error("Enter a valid website URL (e.g. example.com).");
+    }
+    website = normalised;
+  }
+
+  const prev = tenant?.onboarding ?? {};
   const onboarding: TenantOnboarding = {
-    ...(tenant?.onboarding ?? {}),
+    ...prev,
     companyName,
     abn: abnParsed.abn,
     industry,
@@ -114,27 +121,33 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
     contactEmail,
     contactPhone: text(formData, "contactPhone") || undefined,
     notes: text(formData, "notes") || undefined,
+    website,
+    scrapeConsentAt: website
+      ? prev.scrapeConsentAt && prev.website === website
+        ? prev.scrapeConsentAt
+        : now()
+      : undefined,
   };
 
-  await updateTenant(user.tenantId, { onboarding });
+  // Force client workspace — we are the agency; signup = our client.
+  await updateTenant(user.tenantId, {
+    kind: "business_group",
+    onboarding,
+  });
   await logAction(user, "onboarding.details_saved", {
     detail:
       abrGate.mode === "skipped"
-        ? `${companyName} · ABN ${abnParsed.abn} (abr=${abrGate.warning ?? "skipped"})`
-        : `${companyName} · ABN ${abnParsed.abn} (abr=verified)`,
+        ? `${companyName} · ABN ${abnParsed.abn} (abr=${abrGate.warning ?? "skipped"})${website ? ` · site=${website}` : ""}`
+        : `${companyName} · ABN ${abnParsed.abn} (abr=verified)${website ? ` · site=${website}` : ""}`,
   });
-  redirect(nextAfterDetails(tenant?.kind));
+  redirect("/onboarding?step=package");
 }
 
-// Business-group only — pick a client marketing package (company delivery SKU).
-// Agency tenants skip this; they choose packages per client on New Client / Add Client.
+/** Client marketing package (Basic / Pro / Blast / Custom). */
 export async function selectOnboardingPackageAction(formData: FormData) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
   if (!tenant) throw new Error("Tenant not found.");
-  if (tenant.kind === "agency") {
-    redirect("/onboarding?step=workspace");
-  }
 
   const idRaw = text(formData, "marketingPackageId");
   if (!isMarketingPackageId(idRaw)) throw new Error("Unknown marketing package.");
@@ -151,7 +164,10 @@ export async function selectOnboardingPackageAction(formData: FormData) {
     marketingPackageId,
     customModules,
   };
-  await updateTenant(user.tenantId, { onboarding });
+  await updateTenant(user.tenantId, {
+    kind: "business_group",
+    onboarding,
+  });
   await logAction(user, "onboarding.marketing_package_selected", {
     detail:
       marketingPackageId === "custom"
@@ -161,77 +177,19 @@ export async function selectOnboardingPackageAction(formData: FormData) {
   redirect("/onboarding?step=terms");
 }
 
-// Agency only — workspace / agency SaaS plan for tenant billing + card capture.
-export async function selectOnboardingPlanAction(formData: FormData) {
-  const user = await requireTenantOwnerRaw();
-  const tenant = await getTenant(user.tenantId);
-  if (!tenant) throw new Error("Tenant not found.");
-  if (tenant.kind !== "agency") {
-    redirect("/onboarding?step=package");
-  }
-
-  const plan = text(formData, "plan") as PlanId;
-  if (!(plan in PLANS)) throw new Error("Unknown plan.");
-
-  const mockCheckout = useMockPackageCheckout();
-  if (!mockCheckout && stripeConfigured()) {
-    const h = await headers();
-    const origin = resolveOrigin((k) => h.get(k));
-    const url = await createCheckoutSession(tenant, plan, origin, {
-      successPath: "/onboarding?step=terms&checkout=success",
-      cancelPath: "/onboarding?step=workspace&checkout=cancelled",
-    });
-    if (url) redirect(url); // → Stripe Checkout (card capture)
-    // Stripe configured but session couldn't be created — fall through to demo.
-  }
-
-  await updateTenant(user.tenantId, { plan });
-  await logAction(user, "onboarding.plan_selected", { detail: plan });
-  // Staging / local demo: show mock card step (same pattern as New Client package).
-  redirect("/onboarding?step=payment");
-}
-
-/** Demo payment step after workspace plan (no live charge). */
-export async function completeOnboardingPlanPaymentAction(formData: FormData) {
-  const user = await requireTenantOwnerRaw();
-  const tenant = await getTenant(user.tenantId);
-  if (!tenant) throw new Error("Tenant not found.");
-  if (tenant.kind !== "agency") redirect("/onboarding?step=terms");
-
-  const cardName = text(formData, "cardName");
-  await logAction(user, "onboarding.plan_payment_mock", {
-    detail: `${tenant.plan}${cardName ? ` · ${cardName}` : ""} (demo — no charge)`,
-  });
-  redirect("/onboarding?step=terms");
-}
-
-// Final step — accept terms and finish onboarding.
+/** Final step — accept terms and finish onboarding (client path only). */
 export async function completeOnboardingAction() {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
   if (!tenant) throw new Error("Tenant not found.");
 
-  const isAgency = tenant.kind === "agency";
-
-  // Business-group tenants must pick a marketing package; agencies do that per client.
-  if (!isAgency && !tenant.onboarding?.marketingPackageId) {
+  if (!tenant.onboarding?.marketingPackageId) {
     redirect("/onboarding?step=package");
   }
 
-  // Agency must have chosen a workspace plan.
-  if (isAgency && !(tenant.plan in PLANS)) {
-    redirect("/onboarding?step=workspace");
-  }
-
-  // Card gate: live Stripe agency checkout must leave a subscription.
-  // Mock / demo path skips this (plan applied without Stripe customer).
-  if (
-    isAgency &&
-    stripeConfigured() &&
-    !useMockPackageCheckout() &&
-    !tenant.stripeSubscriptionId
-  ) {
-    redirect("/onboarding?step=workspace");
+  // Ensure client kind even if provisioned as agency earlier.
+  if (tenant.kind !== "business_group") {
+    await updateTenant(user.tenantId, { kind: "business_group" });
   }
 
   const terms = await currentTerms();
@@ -250,9 +208,7 @@ export async function completeOnboardingAction() {
   const completedAt = now();
   await updateTenant(user.tenantId, { onboardingCompletedAt: completedAt });
   await logAction(user, "onboarding.completed", {
-    detail: isAgency
-      ? `agency · plan=${tenant.plan}`
-      : (tenant.onboarding.marketingPackageId ?? "done"),
+    detail: tenant.onboarding.marketingPackageId ?? "done",
   });
 
   const packageId = tenant.onboarding?.marketingPackageId;
@@ -268,7 +224,6 @@ export async function completeOnboardingAction() {
     (c) => c.status !== "archived",
   );
 
-  // Self-serve: no company yet — create the primary from onboarding details.
   if (companies.length === 0) {
     const company = await createCompany({
       tenantId: user.tenantId,
@@ -307,8 +262,6 @@ export async function completeOnboardingAction() {
         : selection.serviceLevel;
   }
 
-  // Write profile identity onto the primary company; marketing package only when
-  // one was chosen (business-group). Agencies assign packages on New Client.
   for (let i = 0; i < companies.length; i++) {
     const company = companies[i]!;
     const isPrimary = i === 0;
@@ -337,6 +290,7 @@ export async function completeOnboardingAction() {
               ...(draft.contactEmail && !company.profile.email
                 ? { email: draft.contactEmail }
                 : {}),
+              ...(draft.website ? { website: draft.website } : {}),
             }
           : {}),
         managedService: isPrimary
@@ -355,6 +309,34 @@ export async function completeOnboardingAction() {
             : { serviceLevel: level },
       },
     });
+
+    if (isPrimary && draft.website && draft.scrapeConsentAt) {
+      const fresh = await getCompany(company.id);
+      if (fresh) {
+        const result = await scrapeAndApplyInitialProfile({
+          company: fresh,
+          website: draft.website,
+          actorId: user.id,
+        });
+        await updateCompany(company.id, { profile: result.profile });
+        if (result.mode !== "failed") {
+          await logAction(user, "auto_onboarding.scraped", {
+            targetType: "company",
+            targetId: company.id,
+            companyId: company.id,
+            detail: `mode=${result.mode} fields=${result.fieldCount} onboarding=1`,
+          });
+        }
+        if (result.fieldCount > 0) {
+          await logAction(user, "auto_onboarding.applied", {
+            targetType: "company",
+            targetId: company.id,
+            companyId: company.id,
+            detail: `fields=${result.fieldCount} onboarding=1`,
+          });
+        }
+      }
+    }
 
     if (isPrimary && packageId) {
       await logAction(user, "company.marketing_package_set", {
