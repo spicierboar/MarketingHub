@@ -59,7 +59,7 @@ function Stepper({ step }: { step: Step }) {
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string; checkout?: string }>;
+  searchParams: Promise<{ step?: string; checkout?: string; prefilled?: string }>;
 }) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
@@ -86,7 +86,6 @@ export default async function OnboardingPage({
   if (requested === "details") step = "details";
   if (requested === "package" && detailsDone) step = "package";
   if (requested === "terms" && detailsDone && packageDone) step = "terms";
-  // Legacy agency bookmarks → client package path.
   if (
     params.step === "who" ||
     params.step === "workspace" ||
@@ -95,6 +94,15 @@ export default async function OnboardingPage({
   ) {
     step = !detailsDone ? "details" : !packageDone ? "package" : "terms";
   }
+
+  const prefillBanner =
+    params.prefilled === "1"
+      ? "We pre-filled what we could from your website, public pages, and Google listing signals. Check everything below, then Continue."
+      : params.prefilled === "partial"
+        ? "Partial prefill — some public signals were thin. Review and complete any blank required fields."
+        : params.prefilled === "0"
+          ? "Website lookup did not return much. Fill the fields manually, or try another URL."
+          : null;
 
   const terms = await currentTerms();
   const packages = listActivePackagesForSignup(tenant).map((p) => ({
@@ -129,11 +137,12 @@ export default async function OnboardingPage({
           {step === "details" && (
             <form action={saveOnboardingDetailsAction} className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Tell us about your business. Add a website (optional) so we can
-                pre-fill your profile from public pages.
+                Start with your website (optional). Prefill pulls public pages plus
+                Google listing signals, then review ABN and contact details.
               </p>
               <OnboardingDetailsFields
                 showWebsiteScrape
+                prefillBanner={prefillBanner}
                 defaults={{
                   abn: tenant.onboarding?.abn,
                   industry: tenant.onboarding?.industry,

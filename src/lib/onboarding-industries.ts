@@ -127,3 +127,86 @@ export function industryLabel(industryId: string | undefined): string | undefine
   if (!industryId) return undefined;
   return ONBOARDING_INDUSTRIES.find((o) => o.id === industryId)?.label ?? industryId;
 }
+
+/**
+ * Best-effort map free-text industry / Places category → onboarding industry id.
+ * Used after website scrape + Places enrichment.
+ */
+export function mapIndustryFromText(
+  ...signals: Array<string | undefined | null>
+): OnboardingIndustryId | undefined {
+  const blob = signals
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (!blob.trim()) return undefined;
+
+  const rules: { id: OnboardingIndustryId; keys: string[] }[] = [
+    {
+      id: "restaurant_cafe",
+      keys: ["cafe", "café", "coffee", "restaurant", "dining", "bistro", "bakery"],
+    },
+    {
+      id: "fast_food",
+      keys: ["fast food", "takeaway", "take-away", "qsr", "burger", "pizza", "fried chicken"],
+    },
+    {
+      id: "hotel",
+      keys: ["hotel", "motel", "accommodation", "lodging", "resort", "guesthouse", "b&b"],
+    },
+    {
+      id: "retail",
+      keys: ["retail", "shop", "store", "grocery", "supermarket", "ecommerce", "e-commerce"],
+    },
+    {
+      id: "fitness",
+      keys: ["gym", "fitness", "yoga", "pilates", "personal train"],
+    },
+    {
+      id: "beauty_salon",
+      keys: ["salon", "barber", "beauty", "spa", "nails", "hairdress"],
+    },
+    {
+      id: "professional",
+      keys: [
+        "dentist",
+        "lawyer",
+        "solicitor",
+        "accountant",
+        "plumber",
+        "electrician",
+        "consult",
+        "clinic",
+        "physiotherap",
+        "professional",
+        "trade",
+      ],
+    },
+  ];
+
+  for (const rule of rules) {
+    if (rule.keys.some((k) => blob.includes(k))) return rule.id;
+  }
+  return "other";
+}
+
+/** Pick closest nature id for an industry from free-text nature / category. */
+export function mapNatureIdFromText(
+  industryId: string,
+  ...signals: Array<string | undefined | null>
+): string | undefined {
+  const list = naturesForIndustry(industryId);
+  if (!list.length) return undefined;
+  const blob = signals
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (!blob.trim()) return list[list.length - 1]?.id;
+
+  for (const n of list) {
+    const labelBits = n.label.toLowerCase().split(/[^a-z0-9]+/);
+    if (labelBits.some((b) => b.length > 3 && blob.includes(b))) return n.id;
+    if (blob.includes(n.id.replace(/_/g, " "))) return n.id;
+  }
+  return list[0]?.id;
+}
