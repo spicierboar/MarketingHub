@@ -1,53 +1,68 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-12, **c1c30a0 SHIPPED · LARGE UX TREE UNCOMMITTED** · **0045 PASTE?** · **W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-13, **STAGING LIVE @ `d9a2bad` · INTERNAL PRICING IN PROGRESS · W6 WAITING**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `main` (**ahead origin by 8** after this handover) · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` (= `origin/staging` @ **`d9a2bad`**) · Vercel Preview = staging · live flags **OFF**
 >
-> | Item | Status | Notes |
-> |------|--------|-------|
-> | Automation-first + packages + 6h–12h delivery | **COMMITTED** `c1c30a0` | Basic $349 / Pro $649 / Blast $999 / Custom a-la-carte · ads media always extra |
-> | **Migrations 0043 + 0044** | **PASTED** | `marketing_package_catalog` · delivery eligibleAt / email stamp / enqueue_reason |
-> | **Migration 0045** | **PASTE IF NOT DONE** | `0045_tenant_promo_industries.sql` (+ any owner paste batch for 0045) |
-> | UX / polish / New Client / Approvals look-ahead | **UNCOMMITTED** | large tree beyond `c1c30a0` — no invented hashes |
-> | W6 | WAITING | do not flip `*_LIVE` |
+> ### STATE
+> | Item | Status |
+> |------|--------|
+> | Git tip | **`d9a2bad`** on `staging` / `origin/staging` (UX polish `b0fc47b` + tls / self-test / PKCE / quick-login / ABN onboarding / agency package drop / Custom a-la-carte) |
+> | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
+> | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live `hrwkshspqeulgrmpqtpx`) · migrations **0001–0045** pasted via `_owner_paste_staging_batch{1,2,3}.sql` |
+> | Staging login | Magic link rate-limited → use **`/dev` staging quick login** (Sign in with email) |
+> | `main` | Local may be ahead of `origin/main`; **do not push main/live** until owner asks |
+> | Live / mangotickle.com.au / `*_LIVE` | **PARKED** · W6 Google still waiting |
 >
-> ### Just finished (uncommitted — do not invent commit hashes)
-> - **Custom marketing packages = a-la-carte unit rates** (owner fix): sum of line items; package minimum A$349 only as explicit top-up when sum is lower; rates tuned so Pro-like volume ≥ Pro SKU; soft undercut warning; builder shows live breakdown + unit prices
-> - Marketing packages modal list/edit · agency sidebar Settings hub · Client asks under Clients
-> - Content hub AI modals · promo Add industry + Add promo rename · requests voice copy
-> - Company overview declutter + social dedupe · Publishing ops-first · Client asks title/empty state
-> - Company-scoped strip + Working on {client} · chip-row Brand/Produce/Channels/Ads on all `?company=` pages
-> - Client Account extra work requests · form UX placeholders/dropdowns platform-wide (multiple passes)
-> - New Client website-first scrape / Back / add-on gating / package+card copy
-> - **New Client Checkout restored** — Package → Checkout (mock demo payment clears `packageChangePendingBilling`; live Stripe when `STRIPE_PRICE_PACKAGE_*` + keys) → Client login
-> - Scrape smarter: whole-page social URLs (FB/IG/TikTok/YT/LI/X/GBP), no SEO title → trading names, no invented Pty Ltd / offers
-> - Approvals look-ahead calendar (−7…+21) · LocalSeoQaDraftSpec fix · demo server flaky/restarts
+> ### DONE this wave
+> - Large UX/polish shipped (`b0fc47b`): New Client scrape identity, packages/checkout, strategy hubs, visuals quotas, env docs
+> - Staging hardening: tls CA types, self-test JSON errors, magic-link PKCE host fix, `/dev` staging quick-login
+> - Agency onboarding: ABN + industry + nature cascades; **Marketing package step removed** (order: Your details → Workspace plan → Payment → Terms); client packages stay on New Client
+> - Custom marketing packages = **transparent a-la-carte** line items (`d9a2bad`); named Basic/Pro/Blast remain; agency SaaS Starter/Agency/Scale separate
+> - Staging Supabase + Vercel Preview live; migrations 0001–0045 on staging
 >
-> **Owner migrations:** 0043 + 0044 **done**. **0045** — paste if not done.
+> ### IN PROGRESS — owner priority
+> - **Internal unit pricing** (cost + sell) for most atomic units (channels individually, etc.)
+> - Recommended internal **costs** proposed (A$75/hr labour assumption) — **sell prices NOT finalized by owner**
+> - Offering gap: sheet incomplete — missing Local SEO/GEO, strategy-as-SKU, CRM/CMS/loyalty/funnel, reporting, client asks, etc. as priced SKUs (features exist in product)
+> - Wire finalized rates into Custom rate card / package catalog when owner locks numbers
 >
-> **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. No commit unless asked. Exclude `_owner_paste_*`.
+> ### NEXT (ordered)
+> 1. **Finalize internal cost + sell rates** with owner (atomic units + fill offering gaps)
+> 2. **Wire rates** into Custom rate card / marketing package catalog (sell side; keep cost internal)
+> 3. **Optional:** website capture + scrape on agency `/onboarding` details step — **not implemented yet** (New Client scrape exists; agency details has ABN/industry only)
+> 4. Smoke staging (quick-login → onboarding → New Client → Custom builder)
+> 5. Later: push `main` / live cutover when asked · W6 Google still waiting · set `STRIPE_PRICE_PACKAGE_*` when ready
 >
-> **Demo:** `scripts/dev-3002.ps1` or `npx next dev -p 3002` + `CC_LOCAL_DEMO=true` · New Client (Website → Profile → Package → **Checkout** → Client login) · Approvals look-ahead · client Account extra work · Agency Settings → Marketing packages
+> ### How to resume
+> - **Human:** open staging URL → `/dev` quick login → continue pricing discussion or smoke flows above.
+> - **Agent:** `READ HANDOVER.md` (this block) + `docs/ENVIRONMENTS.md` · branch `staging` · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps · owner applies SQL via Notepad paste only.
 >
-> **Envs:** Local / Staging / Live — **`docs/ENVIRONMENTS.md`** (matrix + owner actions). Deploy contract: `docs/DEPLOYMENT.md`. Live cutover: `docs/OWNER-LIVE-CUTOVER.md`. Soft-block: `liveIntegrationsAllowed()` refuses cutover `*_LIVE` on staging / local demo / localhost `APP_ORIGIN`.
+> ### Resume in a new Cursor chat
+> Paste:
+> ```
+> Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
+> STATE: staging @ d9a2bad (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; live/W6 parked.
+> IN PROGRESS: internal unit pricing (cost+sell); sell not finalized; offering gaps.
+> NEXT: finalize rates → wire rate card → optional agency onboarding website scrape → smoke staging → later main/live.
+> Login: staging /dev quick-login (magic link rate-limited). No *_LIVE.
+> ```
 >
-> **NEXT:**
-> 1. Commit UX/polish tree when asked (exclude integrator temps / `_owner_paste_*`)
-> 2. Paste **0045** if not done
-> 3. Demo New Client checkout (mock) + Approvals look-ahead + client extra work
-> 4. Push `main` when asked · W6 Google still waiting
-> 5. **Pending — live Stripe package prices / proration:** set `STRIPE_PRICE_PACKAGE_*` when ready; webhook `kind=marketing_package` + session-verify settle are wired (demo mock still OK; do not invent charges)
-> 6. Optional: denser form leftovers if any
-> 7. **Owner env setup (greenfield):** laptop only today — **create** first staging (Vercel account/import + new Supabase staging project + Preview env + deploy `origin/staging`) — see **`docs/ENVIRONMENTS.md`** (create-from-scratch, not “use existing Preview”)
+> **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. Exclude `_owner_paste_*`, `scripts/*.snip`, integrator temps from commits.
 >
-> **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover · **first staging environment** (no staging cloud yet; live mangotickle.com.au may already answer on Vercel — do not block staging on live polish)
+> **Envs:** Local / Staging / Live — **`docs/ENVIRONMENTS.md`**. Deploy: `docs/DEPLOYMENT.md`. Live cutover: `docs/OWNER-LIVE-CUTOVER.md`. Soft-block: `liveIntegrationsAllowed()` refuses cutover `*_LIVE` on staging / local demo / localhost `APP_ORIGIN`.
 >
 > **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
 >
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-12, **c1c30a0 SHIPPED · LARGE UX TREE UNCOMMITTED** · **0045 PASTE?** · **W6 WAITING**) — archived
+>
+> Pre-staging block: UX tree was uncommitted on `main`; staging cloud not yet created. Superseded — staging now live @ `d9a2bad`; UX committed through Custom a-la-carte.
 >
 > ---
 >
