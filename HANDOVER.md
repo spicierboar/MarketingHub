@@ -6,13 +6,14 @@
 >
 > | Item | Status | Notes |
 > |------|--------|-------|
-> | Automation-first + packages + 6h–12h delivery | **COMMITTED** `c1c30a0` | Basic $349 / Pro $649 / Blast $999 / Custom · ads media always extra |
+> | Automation-first + packages + 6h–12h delivery | **COMMITTED** `c1c30a0` | Basic $349 / Pro $649 / Blast $999 / Custom a-la-carte · ads media always extra |
 > | **Migrations 0043 + 0044** | **PASTED** | `marketing_package_catalog` · delivery eligibleAt / email stamp / enqueue_reason |
 > | **Migration 0045** | **PASTE IF NOT DONE** | `0045_tenant_promo_industries.sql` (+ any owner paste batch for 0045) |
 > | UX / polish / New Client / Approvals look-ahead | **UNCOMMITTED** | large tree beyond `c1c30a0` — no invented hashes |
 > | W6 | WAITING | do not flip `*_LIVE` |
 >
 > ### Just finished (uncommitted — do not invent commit hashes)
+> - **Custom marketing packages = a-la-carte unit rates** (owner fix): sum of line items; package minimum A$349 only as explicit top-up when sum is lower; rates tuned so Pro-like volume ≥ Pro SKU; soft undercut warning; builder shows live breakdown + unit prices
 > - Marketing packages modal list/edit · agency sidebar Settings hub · Client asks under Clients
 > - Content hub AI modals · promo Add industry + Add promo rename · requests voice copy
 > - Company overview declutter + social dedupe · Publishing ops-first · Client asks title/empty state
@@ -38,9 +39,9 @@
 > 4. Push `main` when asked · W6 Google still waiting
 > 5. **Pending — live Stripe package prices / proration:** set `STRIPE_PRICE_PACKAGE_*` when ready; webhook `kind=marketing_package` + session-verify settle are wired (demo mock still OK; do not invent charges)
 > 6. Optional: denser form leftovers if any
-> 7. **Owner env setup (when ready):** Supabase staging project + Vercel Preview env scope + `git push -u origin staging` — see `docs/ENVIRONMENTS.md`
+> 7. **Owner env setup (greenfield):** laptop only today — **create** first staging (Vercel account/import + new Supabase staging project + Preview env + deploy `origin/staging`) — see **`docs/ENVIRONMENTS.md`** (create-from-scratch, not “use existing Preview”)
 >
-> **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover · staging Supabase + Preview env vars (optional until shared QA)
+> **Owner waiting:** Google Cloud billing · Meta App Review · Phase 4 cutover · **first staging environment** (no staging cloud yet; live mangotickle.com.au may already answer on Vercel — do not block staging on live polish)
 >
 > **▶ STANDING INSTRUCTION — owner applies migrations (no psql/CLI/PAT):** give the full Notepad path.
 >

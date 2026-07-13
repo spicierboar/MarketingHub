@@ -62,32 +62,61 @@ export interface ResolvedCompanyPackage {
   customModuleRates?: Record<string, number>;
 }
 
-/** Custom package monthly floor (Basic). Ad media spend is never included. */
+/**
+ * Custom package minimum monthly commitment (Basic SKU price).
+ * Applied only when the line-item sum is below this — shown as its own
+ * “Package minimum” line so buyers cannot assemble a token package for pennies.
+ * Named Basic/Pro/Blast remain fixed bundle SKUs (discounted vs a-la-carte).
+ */
 export const CUSTOM_FLOOR_AUD = 349;
 
 /**
- * Platform default Custom rate card — amounts added to the **monthly** fee.
+ * Platform default Custom rate card — published unit prices (AUD / month).
+ * Total = sum of selected line items (not a discounted bundle).
+ * Tuned so reconstructing Pro-like volume (4 channels + 16 posts) ≥ Pro A$649,
+ * and full Basic/Pro/Blast equivalents via Custom cost more than the named SKUs.
+ * - `channel` — per selected channel / month
  * - `postsPerMonth` — per post / month
  * - `campaignsPerQuarter` / `promosPerQuarter` — per campaign or promo / quarter
- *   (do not also multiply by monthly averages; builders collect quarter counts)
+ *   (builders collect quarter counts; do not also multiply by monthly averages)
+ * - `adsManagement` / `fullyManaged` — flat monthly add-ons
  * Agency catalog `customModuleRates` overrides individual keys.
  */
 export const DEFAULT_CUSTOM_MODULE_RATES: Readonly<Record<string, number>> = {
-  channel: 40,
-  postsPerMonth: 25,
-  campaignsPerQuarter: 55,
-  promosPerQuarter: 80,
-  adsManagement: 150,
-  fullyManaged: 75,
+  channel: 55,
+  postsPerMonth: 32,
+  campaignsPerQuarter: 85,
+  promosPerQuarter: 110,
+  adsManagement: 200,
+  fullyManaged: 120,
+};
+
+export type CustomPackageLineItem = {
+  key: string;
+  label: string;
+  /** Units selected (channels, posts, campaigns/quarter, …). */
+  quantity: number;
+  /** Published unit rate (AUD). */
+  unitAud: number;
+  /** quantity × unitAud (AUD). */
+  totalAud: number;
 };
 
 export type CustomPackageQuote = {
-  /** Billed monthly price after floor. */
+  /** Billed monthly price (sum of lines, including package minimum when applied). */
   priceAudMonthly: number;
-  /** Sum of modules before floor. */
+  /** Sum of module lines before package minimum. */
   rawAud: number;
+  /** True when package minimum top-up was added. */
   floorApplied: boolean;
   floorAud: number;
+  /** Transparent per-item breakdown (unit prices visible). */
+  lines: CustomPackageLineItem[];
+  /**
+   * Soft warning when Custom total is below a named tier while inclusions
+   * exceed that tier (rates should make this rare; still surfaces edge cases).
+   */
+  undercutWarning: string | null;
 };
 
 /** Custom UI collects campaigns/promos per quarter; storage uses monthly averages. */
@@ -117,72 +146,220 @@ function moduleRate(rates: Record<string, number>, ...keys: string[]): number {
   return 0;
 }
 
+function pushLine(
+  lines: CustomPackageLineItem[],
+  key: string,
+  label: string,
+  quantity: number,
+  unitAud: number,
+): number {
+  if (quantity <= 0 || unitAud <= 0) return 0;
+  const totalAud = Math.round(quantity * unitAud);
+  lines.push({ key, label, quantity, unitAud, totalAud });
+  return totalAud;
+}
+
+const SERVICE_LEVEL_RANK: Record<ManagedServiceLevel, number> = {
+  approval: 0,
+  managed_exceptions: 1,
+  fully_managed: 2,
+};
+
 /**
- * Quote Custom package monthly fee from modules + rate card.
+ * True when Custom inclusions beat a named package on at least one dimension
+ * without falling short on the others (channels, posts, campaigns, promos,
+ * ads management, service level).
+ */
+export function customModulesExceedPackage(
+  modules: MarketingPackageCustomModules,
+  named: Pick<
+    MarketingPackageDef,
+    | "channels"
+    | "postsPerMonth"
+    | "campaignsPerMonth"
+    | "promosIncludedPerMonth"
+    | "adsManagementIncluded"
+    | "defaultServiceLevel"
+  >,
+): boolean {
+  const chOk = modules.channels.length >= named.channels.length;
+  const postsOk = modules.postsPerMonth >= named.postsPerMonth;
+  const campOk = modules.campaignsPerMonth >= named.campaignsPerMonth;
+  const promoOk =
+    modules.promosIncludedPerMonth >= named.promosIncludedPerMonth;
+  const adsOk =
+    !named.adsManagementIncluded || modules.adsManagementIncluded;
+  const levelOk =
+    SERVICE_LEVEL_RANK[modules.serviceLevel] >=
+    SERVICE_LEVEL_RANK[named.defaultServiceLevel];
+
+  if (!chOk || !postsOk || !campOk || !promoOk || !adsOk || !levelOk) {
+    return false;
+  }
+
+  return (
+    modules.channels.length > named.channels.length ||
+    modules.postsPerMonth > named.postsPerMonth ||
+    modules.campaignsPerMonth > named.campaignsPerMonth ||
+    modules.promosIncludedPerMonth > named.promosIncludedPerMonth ||
+    (modules.adsManagementIncluded && !named.adsManagementIncluded) ||
+    SERVICE_LEVEL_RANK[modules.serviceLevel] >
+      SERVICE_LEVEL_RANK[named.defaultServiceLevel]
+  );
+}
+
+function undercutWarningFor(
+  modules: MarketingPackageCustomModules,
+  priceAudMonthly: number,
+  catalog?: Pick<Tenant, "marketingPackageCatalog"> | null,
+): string | null {
+  for (const id of ["pro", "blast"] as const) {
+    const named = resolvePackageById(catalog ?? null, id);
+    if (
+      priceAudMonthly < named.priceAudMonthly &&
+      customModulesExceedPackage(modules, named)
+    ) {
+      return `This Custom mix exceeds ${named.name} inclusions but quotes below A$${named.priceAudMonthly}/mo — consider the ${named.name} package or raise modules.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Quote Custom package monthly fee from modules + published unit rates.
  * Campaigns & promos are priced per **quarter** (converted from stored monthly averages).
  * Does not include ads media spend (always extra / prepaid).
- * Floored at Basic (or a higher agency floor).
+ * Total = sum of line items; if sum &lt; floor, adds an explicit “Package minimum” line.
  */
 export function quoteCustomPackagePrice(
   modules: MarketingPackageCustomModules,
   agencyRates?: Record<string, number> | null,
   floorAud: number = CUSTOM_FLOOR_AUD,
+  catalog?: Pick<Tenant, "marketingPackageCatalog"> | null,
 ): CustomPackageQuote {
   const rates = mergeCustomModuleRates(agencyRates);
   const floor = Math.max(CUSTOM_FLOOR_AUD, floorAud);
+  const lines: CustomPackageLineItem[] = [];
 
   // Stored as monthly averages (e.g. 1/3 = 1/quarter); price from quarter counts.
+  const channelCount = modules.channels.length;
+  const posts = Math.max(0, modules.postsPerMonth);
   const campaignsPerQuarter = Math.max(0, modules.campaignsPerMonth) * 3;
   const promosPerQuarter = Math.max(0, modules.promosIncludedPerMonth) * 3;
 
-  let raw =
-    modules.channels.length *
-      moduleRate(rates, "channel", "channels", "perChannel") +
-    Math.max(0, modules.postsPerMonth) *
-      moduleRate(rates, "postsPerMonth", "post", "posts") +
-    campaignsPerQuarter *
-      moduleRate(
-        rates,
-        "campaignsPerQuarter",
-        "campaignsPerMonth",
-        "campaign",
-        "campaigns",
-      ) +
-    promosPerQuarter *
-      moduleRate(
-        rates,
-        "promosPerQuarter",
-        "promosIncludedPerMonth",
-        "promo",
-        "promos",
-      );
+  let raw = 0;
+  raw += pushLine(
+    lines,
+    "channel",
+    "Channels",
+    channelCount,
+    moduleRate(rates, "channel", "channels", "perChannel"),
+  );
+  raw += pushLine(
+    lines,
+    "postsPerMonth",
+    "Posts / month",
+    posts,
+    moduleRate(rates, "postsPerMonth", "post", "posts"),
+  );
+  raw += pushLine(
+    lines,
+    "campaignsPerQuarter",
+    "Campaigns / quarter",
+    campaignsPerQuarter,
+    moduleRate(
+      rates,
+      "campaignsPerQuarter",
+      "campaignsPerMonth",
+      "campaign",
+      "campaigns",
+    ),
+  );
+  raw += pushLine(
+    lines,
+    "promosPerQuarter",
+    "Promos / quarter",
+    promosPerQuarter,
+    moduleRate(
+      rates,
+      "promosPerQuarter",
+      "promosIncludedPerMonth",
+      "promo",
+      "promos",
+    ),
+  );
 
   if (modules.adsManagementIncluded) {
-    raw += moduleRate(rates, "adsManagement", "adsManagementIncluded");
+    raw += pushLine(
+      lines,
+      "adsManagement",
+      "Ads management",
+      1,
+      moduleRate(rates, "adsManagement", "adsManagementIncluded"),
+    );
   }
   if (modules.serviceLevel === "fully_managed") {
-    raw += moduleRate(rates, "fullyManaged", "serviceLevel_fully_managed");
+    raw += pushLine(
+      lines,
+      "fullyManaged",
+      "Service level: fully managed",
+      1,
+      moduleRate(rates, "fullyManaged", "serviceLevel_fully_managed"),
+    );
   } else if (modules.serviceLevel === "managed_exceptions") {
-    raw += moduleRate(
-      rates,
+    raw += pushLine(
+      lines,
       "managedExceptions",
-      "serviceLevel_managed_exceptions",
+      "Service level: managed exceptions",
+      1,
+      moduleRate(
+        rates,
+        "managedExceptions",
+        "serviceLevel_managed_exceptions",
+      ),
     );
   } else if (modules.serviceLevel === "approval") {
-    raw += moduleRate(rates, "approval", "serviceLevel_approval");
+    raw += pushLine(
+      lines,
+      "approval",
+      "Service level: approval",
+      1,
+      moduleRate(rates, "approval", "serviceLevel_approval"),
+    );
   }
 
   for (const id of modules.addonIds) {
-    raw += moduleRate(rates, id, `addon_${id}`);
+    raw += pushLine(
+      lines,
+      `addon_${id}`,
+      `Add-on: ${id}`,
+      1,
+      moduleRate(rates, id, `addon_${id}`),
+    );
   }
 
   const rawAud = Math.round(raw);
-  const priceAudMonthly = Math.max(floor, rawAud);
+  let priceAudMonthly = rawAud;
+  const floorApplied = rawAud < floor;
+  if (floorApplied) {
+    const topUp = floor - rawAud;
+    lines.push({
+      key: "packageMinimum",
+      label: `Package minimum (A$${floor})`,
+      quantity: 1,
+      unitAud: topUp,
+      totalAud: topUp,
+    });
+    priceAudMonthly = floor;
+  }
+
   return {
     priceAudMonthly,
     rawAud,
-    floorApplied: rawAud < floor,
+    floorApplied,
     floorAud: floor,
+    lines,
+    undercutWarning: undercutWarningFor(modules, priceAudMonthly, catalog),
   };
 }
 
@@ -192,7 +369,7 @@ export function quoteCustomPackagePrice(
  * - Basic ($349): light — ~1 image per post, 2 short videos
  * - Pro ($649): medium — ~1 image per post, 4 short videos
  * - Blast ($999): higher free pool; AI video also package-included (unlimited via includedAddonIds)
- * - Custom: at least Basic floor (modules may raise via customModules.*QuotaPerMonth)
+ * - Custom: a-la-carte line items (modules may raise via customModules.*QuotaPerMonth)
  * Ads media always extra (never included in these quotas).
  */
 export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> = {
@@ -254,7 +431,7 @@ export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> 
     name: "Custom",
     priceAudMonthly: CUSTOM_FLOOR_AUD,
     blurb:
-      "Build your own from modules. Floor ≥ Basic (A$349) including 8 AI images + 2 short videos/mo. Ads media always extra.",
+      "A-la-carte modules at published unit rates (sum of line items). Minimum commitment A$349/mo. Includes 8 AI images + 2 short videos/mo floor. Ads media always extra.",
     channels: [],
     postsPerMonth: 0,
     campaignsPerMonth: 0,
@@ -365,6 +542,7 @@ export function resolveCompanyPackage(
       mods,
       catalogPkg.customModuleRates,
       catalogPkg.priceAudMonthly,
+      tenant,
     );
     const imageQuota = Math.max(
       catalogPkg.imageQuotaPerMonth,

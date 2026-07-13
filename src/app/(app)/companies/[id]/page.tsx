@@ -321,6 +321,7 @@ export default async function CompanyOnboardingPage({
                 name: pkg.name,
                 priceAudMonthly: pkg.priceAudMonthly,
                 active: pkg.active,
+                customModuleRates: pkg.customModuleRates,
               }))}
               action={saveMarketingPackageAction}
             />
@@ -1255,6 +1256,7 @@ export default async function CompanyOnboardingPage({
                   name: pkg.name,
                   priceAudMonthly: pkg.priceAudMonthly,
                   active: pkg.active,
+                  customModuleRates: pkg.customModuleRates,
                 }))}
                 action={saveMarketingPackageAction}
               />

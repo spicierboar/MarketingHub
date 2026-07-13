@@ -266,7 +266,7 @@ function PackageEditModal({
           <Field
             label="Custom module rates (JSON)"
             htmlFor={`rates-${pkg.id}`}
-            hint='Overrides defaults (channel:40, postsPerMonth:25, campaignsPerQuarter:55, promosPerQuarter:80, adsManagement:150, fullyManaged:75). Campaigns/promos rates are per quarter. e.g. {"postsPerMonth":30,"adsManagement":200}'
+            hint='Overrides defaults (channel:55, postsPerMonth:32, campaignsPerQuarter:85, promosPerQuarter:110, adsManagement:200, fullyManaged:120). Unit rates — Custom total = sum of line items. Campaigns/promos per quarter. e.g. {"postsPerMonth":35,"adsManagement":220}'
           >
             <Textarea
               id={`rates-${pkg.id}`}
@@ -278,7 +278,7 @@ function PackageEditModal({
                   ? JSON.stringify(pkg.customModuleRates)
                   : ""
               }
-              placeholder='{"postsPerMonth":25}'
+              placeholder='{"postsPerMonth":32}'
             />
           </Field>
         ) : null}

@@ -8,6 +8,7 @@ import {
   CUSTOM_CHANNEL_OPTIONS,
   CUSTOM_FLOOR_AUD,
   customChannelLabel,
+  mergeCustomModuleRates,
   monthlyToQuarterlyCount,
   quarterlyToMonthlyRate,
   quoteCustomPackagePrice,
@@ -40,6 +41,10 @@ function formatPromos(n: number): string {
   if (n > 0 && n < 1) return "1 / quarter";
   if (n === 1) return "1 / mo";
   return `${n} / mo`;
+}
+
+function money(n: number) {
+  return `A$${n}`;
 }
 
 function defaultCustomModules(
@@ -85,6 +90,10 @@ export function OnboardingPackagePicker({
   );
 
   const customCatalog = packages.find((p) => p.id === "custom");
+  const rates = useMemo(
+    () => mergeCustomModuleRates(customCatalog?.customModuleRates),
+    [customCatalog?.customModuleRates],
+  );
   const customQuote = useMemo(
     () =>
       quoteCustomPackagePrice(
@@ -146,12 +155,15 @@ export function OnboardingPackagePicker({
                 ) : null}
               </div>
               <span className="mt-1 text-2xl font-bold">
-                A${price}
+                {money(price)}
                 <span className="text-sm font-normal text-muted-foreground">/mo</span>
               </span>
-              {p.id === "custom" && customQuote.floorApplied ? (
+              {p.id === "custom" ? (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Basic floor applies (modules A${customQuote.rawAud})
+                  Sum of line items
+                  {customQuote.floorApplied
+                    ? ` · minimum ${money(customQuote.floorAud)}`
+                    : null}
                 </p>
               ) : null}
               {p.id !== "custom" ? (
@@ -196,18 +208,23 @@ export function OnboardingPackagePicker({
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="text-sm font-medium">Build your Custom package</p>
               <p className="text-sm font-semibold">
-                Estimated A${customQuote.priceAudMonthly}
+                Estimated {money(customQuote.priceAudMonthly)}
                 <span className="font-normal text-muted-foreground">/mo</span>
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              Pick modules below. Campaigns &amp; promos are per quarter. Floor ≥
-              Basic (A${CUSTOM_FLOOR_AUD}). Ad spend is always extra.
-              {customQuote.floorApplied
-                ? ` Module total A$${customQuote.rawAud} — Basic floor applies.`
-                : null}
+              Each module is priced individually at the rates below. Monthly total is
+              the sum of line items
+              {customQuote.floorAud > 0
+                ? ` (minimum commitment ${money(customQuote.floorAud)}/mo when the sum is lower)`
+                : ""}
+              . Named Basic / Pro / Blast stay fixed bundle prices. Ad spend is always
+              extra.
             </p>
-            <Field label="Channels" hint="Where we should publish for your brand">
+            <Field
+              label="Channels"
+              hint={`${money(rates.channel ?? 0)} each / mo`}
+            >
               <div className="flex flex-wrap gap-3">
                 {CUSTOM_CHANNEL_OPTIONS.map((ch) => (
                   <label key={ch} className="inline-flex items-center gap-1.5 text-sm">
@@ -227,7 +244,11 @@ export function OnboardingPackagePicker({
               </div>
             </Field>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Posts / mo" htmlFor="customPosts" hint="Typical Basic ≈ 8">
+              <Field
+                label="Posts / mo"
+                htmlFor="customPosts"
+                hint={`${money(rates.postsPerMonth ?? 0)} each · Basic ≈ 8`}
+              >
                 <Input
                   id="customPosts"
                   name="customPostsPerMonth"
@@ -247,7 +268,7 @@ export function OnboardingPackagePicker({
               <Field
                 label="Campaigns / quarter"
                 htmlFor="customCampaigns"
-                hint="Themed campaign slots per quarter"
+                hint={`${money(rates.campaignsPerQuarter ?? 0)} each / quarter`}
               >
                 <Input
                   id="customCampaigns"
@@ -270,7 +291,7 @@ export function OnboardingPackagePicker({
               <Field
                 label="Promos / quarter"
                 htmlFor="customPromos"
-                hint="Ready-made promos included per quarter"
+                hint={`${money(rates.promosPerQuarter ?? 0)} each / quarter`}
               >
                 <Input
                   id="customPromos"
@@ -294,7 +315,11 @@ export function OnboardingPackagePicker({
             <Field
               label="Service level"
               htmlFor="customServiceLevel"
-              hint="How hands-on approvals should be"
+              hint={
+                (rates.fullyManaged ?? 0) > 0
+                  ? `Fully managed +${money(rates.fullyManaged ?? 0)}/mo`
+                  : "How hands-on approvals should be"
+              }
             >
               <Select
                 id="customServiceLevel"
@@ -309,7 +334,9 @@ export function OnboardingPackagePicker({
               >
                 <option value="approval">Approval</option>
                 <option value="managed_exceptions">Managed exceptions</option>
-                <option value="fully_managed">Fully managed</option>
+                <option value="fully_managed">
+                  Fully managed (+{money(rates.fullyManaged ?? 0)}/mo)
+                </option>
               </Select>
             </Field>
             <label className="inline-flex items-center gap-2 text-sm">
@@ -326,11 +353,49 @@ export function OnboardingPackagePicker({
                 }
                 className="h-4 w-4"
               />
-              Ads management included
+              Ads management (+{money(rates.adsManagement ?? 0)}/mo)
               <span className="text-xs text-muted-foreground">
                 (media always extra)
               </span>
             </label>
+
+            {customQuote.lines.length > 0 ? (
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <p className="text-xs font-medium text-foreground">Monthly breakdown</p>
+                <ul className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                  {customQuote.lines.map((line) => (
+                    <li
+                      key={line.key}
+                      className="flex items-baseline justify-between gap-3"
+                    >
+                      <span>
+                        {line.label}
+                        {line.quantity > 1 ||
+                        line.key === "channel" ||
+                        line.key === "postsPerMonth" ||
+                        line.key === "campaignsPerQuarter" ||
+                        line.key === "promosPerQuarter"
+                          ? ` · ${line.quantity} × ${money(line.unitAud)}`
+                          : ` · ${money(line.unitAud)}`}
+                      </span>
+                      <span className="shrink-0 font-medium text-foreground">
+                        {money(line.totalAud)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 flex items-baseline justify-between border-t border-border pt-2 text-sm font-semibold text-foreground">
+                  <span>Total / mo</span>
+                  <span>{money(customQuote.priceAudMonthly)}</span>
+                </p>
+              </div>
+            ) : null}
+
+            {customQuote.undercutWarning ? (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                {customQuote.undercutWarning}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

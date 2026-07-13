@@ -15,7 +15,7 @@ Hard locks: critique · OAuth-only · **ad media spend always extra** · AI neve
 | **Basic** | **A$349** / company / month |
 | **Pro** | **A$649** / company / month |
 | **Blast** | **A$999** / company / month |
-| **Custom** | Priced from modules; floor ≥ Basic (A$349) |
+| **Custom** | A-la-carte unit rates (sum of line items); package minimum A$349 only when sum is lower |
 | **Ads** | **Any ad cost is extra** on every package — media via client prepaid credit. Package may include *management* of ads (Blast / Custom opt-in) but never media. |
 | **Agency config** | Packages are **editable inside the agency app** (prices, channels, cadence, promos, active flag, Custom modules). Tenant overrides platform defaults. |
 | **Cultural fit** | Posts, campaigns, and promos are planned around **festivals/holidays relevant to that business** (industry, business type, demographics, service areas). Example: Diwali → hospitality/retail; not a typical tradie. |
@@ -60,10 +60,20 @@ Hard locks: critique · OAuth-only · **ad media spend always extra** · AI neve
 | **Service level** | `fully_managed` |
 | **Add-ons** | AI video included; others à la carte |
 
-### 4. Custom — “Build your own”
+### 4. Custom — “Build your own” (a-la-carte)
 
-Modules (agency-editable rate card): channels · cadence · campaign slots · promo allowance · ads management on/off · service level · add-ons.  
-Media spend still always extra. Floor ≥ A$349.
+Not a discounted bundle. Each module is a priced line item; **monthly total = sum of lines**.
+
+| Module | Default unit rate (AUD) |
+|--------|-------------------------|
+| Channel | **55** / channel / mo |
+| Posts | **32** / post / mo |
+| Campaigns | **85** / campaign / quarter |
+| Promos | **110** / promo / quarter |
+| Ads management | **200** / mo flat |
+| Fully managed upgrade | **120** / mo flat |
+
+If the sum is below **A$349**, an explicit **Package minimum** top-up brings the quote to A$349 (cannot assemble a token package for pennies). Named Basic / Pro / Blast remain fixed SKUs (the deal vs reconstructing the same volume a-la-carte). Soft warning when a Custom mix exceeds Pro/Blast inclusions but quotes below that tier. Media spend still always extra. Agency catalog can override unit rates.
 
 ---
 
