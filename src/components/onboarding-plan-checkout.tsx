@@ -3,15 +3,15 @@
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 
-/** Demo / staging card capture for agency workspace SaaS plan (no live charge). */
+/** Demo / staging card capture for client marketing package (no live charge). */
 export function OnboardingPlanCheckout({
-  planName,
+  packageName,
   priceAudMonthly,
   mockMode,
   cancelled,
   action,
 }: {
-  planName: string;
+  packageName: string;
   priceAudMonthly: number;
   mockMode: boolean;
   cancelled?: boolean;
@@ -21,8 +21,7 @@ export function OnboardingPlanCheckout({
     <div className="space-y-5">
       {cancelled && (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-          Checkout was cancelled — pick a plan again or complete the demo payment
-          below.
+          Checkout was cancelled — complete the demo payment below to finish setup.
         </p>
       )}
 
@@ -30,8 +29,8 @@ export function OnboardingPlanCheckout({
         <p className="font-medium text-foreground">Order summary</p>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span>
-            Workspace plan:{" "}
-            <span className="font-medium text-foreground">{planName}</span>
+            Marketing package:{" "}
+            <span className="font-medium text-foreground">{packageName}</span>
           </span>
           <span className="font-semibold text-foreground">
             ${priceAudMonthly}
@@ -39,9 +38,8 @@ export function OnboardingPlanCheckout({
           </span>
         </div>
         <p className="text-muted-foreground">
-          This is your agency SaaS subscription (how many client companies you can
-          manage). Client marketing packages (Basic / Pro / Blast) are chosen later
-          when you add a client. Card details are never stored in Command Centre.
+          Ads media spend is always extra and prepaid. Card details are never
+          stored in Command Centre.
         </p>
       </div>
 
@@ -51,8 +49,8 @@ export function OnboardingPlanCheckout({
             <span className="font-medium text-foreground">Demo payment</span>
             <span className="text-muted-foreground">
               {" "}
-              — Stripe live charges are off here. Completing this step records the
-              plan selection and continues to terms (no real card charge).
+              — Stripe live charges are off here. Completing this step records
+              the package selection and finishes setup (no real card charge).
             </span>
           </div>
           <Field
@@ -102,7 +100,7 @@ export function OnboardingPlanCheckout({
       ) : (
         <p className="text-sm text-muted-foreground">
           You should have been redirected to Stripe Checkout. If you cancelled,
-          go back and choose a workspace plan again.
+          go back and accept terms again, then retry payment.
         </p>
       )}
     </div>

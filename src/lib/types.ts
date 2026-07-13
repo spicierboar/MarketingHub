@@ -75,6 +75,11 @@ export interface TenantOnboarding {
   marketingPackageId?: MarketingPackageId;
   /** Module picks when marketingPackageId is `"custom"`. */
   customModules?: MarketingPackageCustomModules;
+  /**
+   * Demo / staging mock card step completed (no live charge). Set before
+   * onboardingCompletedAt; card details are never persisted.
+   */
+  paymentMockAt?: string;
 }
 
 export interface Tenant {

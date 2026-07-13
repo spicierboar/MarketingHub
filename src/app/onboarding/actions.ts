@@ -366,8 +366,8 @@ export async function selectOnboardingPackageAction(formData: FormData) {
   redirect("/onboarding?step=terms");
 }
 
-/** Final step — accept terms and finish onboarding (client path only). */
-export async function completeOnboardingAction() {
+/** Step 3 — accept terms, then continue to payment (client path only). */
+export async function acceptOnboardingTermsAction() {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
   if (!tenant) throw new Error("Tenant not found.");
@@ -394,6 +394,46 @@ export async function completeOnboardingAction() {
     });
   }
 
+  redirect("/onboarding?step=payment");
+}
+
+/**
+ * Step 4 — demo/mock card (no live charge), then finish onboarding.
+ * Ads media is always extra; card fields are never persisted.
+ */
+export async function completeOnboardingPaymentAction(formData: FormData) {
+  const user = await requireTenantOwnerRaw();
+  const tenant = await getTenant(user.tenantId);
+  if (!tenant) throw new Error("Tenant not found.");
+
+  if (!tenant.onboarding?.marketingPackageId) {
+    redirect("/onboarding?step=package");
+  }
+
+  const terms = await currentTerms();
+  if (terms && !(await hasAcceptedTerms(user.id, terms.version))) {
+    redirect("/onboarding?step=terms");
+  }
+
+  // Ensure client kind even if provisioned as agency earlier.
+  if (tenant.kind !== "business_group") {
+    await updateTenant(user.tenantId, { kind: "business_group" });
+  }
+
+  const cardName = text(formData, "cardName");
+  const paymentMockAt = now();
+  const onboarding: TenantOnboarding = {
+    ...(tenant.onboarding ?? {}),
+    paymentMockAt,
+  };
+  await updateTenant(user.tenantId, {
+    kind: "business_group",
+    onboarding,
+  });
+  await logAction(user, "onboarding.package_payment_mock", {
+    detail: `${tenant.onboarding.marketingPackageId}${cardName ? ` · ${cardName}` : ""} (demo — no charge; ads media extra)`,
+  });
+
   const completedAt = now();
   await updateTenant(user.tenantId, { onboardingCompletedAt: completedAt });
   await logAction(user, "onboarding.completed", {
@@ -401,7 +441,7 @@ export async function completeOnboardingAction() {
   });
 
   const packageId = tenant.onboarding?.marketingPackageId;
-  const draft = tenant.onboarding ?? {};
+  const draft = onboarding;
   const primaryName =
     draft.companyName?.trim() ||
     deriveCompanyName({

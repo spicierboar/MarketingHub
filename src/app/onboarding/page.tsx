@@ -1,25 +1,33 @@
 import { redirect } from "next/navigation";
 import { requireTenantOwnerRaw } from "@/lib/auth/rbac";
 import { currentTerms, getTenant, hasAcceptedTerms } from "@/lib/db";
+import { useMockPackageCheckout } from "@/lib/billing";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { listActivePackagesForSignup } from "@/lib/marketing-packages";
+import {
+  listActivePackagesForSignup,
+  quoteCustomPackagePrice,
+  resolvePackageById,
+} from "@/lib/marketing-packages";
 import { OnboardingPackagePicker } from "@/components/onboarding-package-picker";
 import { OnboardingDetailsFields } from "@/components/onboarding-details-fields";
+import { OnboardingPlanCheckout } from "@/components/onboarding-plan-checkout";
 import {
-  completeOnboardingAction,
+  acceptOnboardingTermsAction,
+  completeOnboardingPaymentAction,
   saveOnboardingDetailsAction,
   selectOnboardingPackageAction,
 } from "./actions";
 
-type Step = "details" | "package" | "terms";
+type Step = "details" | "package" | "terms" | "payment";
 
 function Stepper({ step }: { step: Step }) {
   const steps: { key: Step; label: string }[] = [
     { key: "details", label: "Your details" },
     { key: "package", label: "Marketing package" },
     { key: "terms", label: "Accept terms" },
+    { key: "payment", label: "Payment" },
   ];
   const idx = steps.findIndex((s) => s.key === step);
   return (
@@ -53,7 +61,7 @@ function Stepper({ step }: { step: Step }) {
 /**
  * Client onboarding only (for now).
  * We are the agency — whoever signs up is our client.
- * Path: details (+ optional website scrape) → marketing package → terms.
+ * Path: details (+ optional website scrape) → marketing package → terms → payment.
  * Multi-agency / white-label SaaS signup is parked.
  */
 export default async function OnboardingPage({
@@ -67,6 +75,7 @@ export default async function OnboardingPage({
   if (tenant.onboardingCompletedAt) redirect("/dashboard");
 
   const params = await searchParams;
+  const terms = await currentTerms();
   const detailsDone = !!(
     tenant.onboarding?.abn &&
     tenant.onboarding?.industry &&
@@ -75,24 +84,43 @@ export default async function OnboardingPage({
     tenant.onboarding?.contactEmail
   );
   const packageDone = !!tenant.onboarding?.marketingPackageId;
+  const termsDone =
+    !terms || (await hasAcceptedTerms(user.id, terms.version));
+  const mockCheckout = useMockPackageCheckout();
 
   const requested = params.step as Step | undefined;
   let step: Step = !detailsDone
     ? "details"
     : !packageDone
       ? "package"
-      : "terms";
+      : !termsDone
+        ? "terms"
+        : "payment";
 
   if (requested === "details") step = "details";
   if (requested === "package" && detailsDone) step = "package";
   if (requested === "terms" && detailsDone && packageDone) step = "terms";
   if (
+    requested === "payment" &&
+    detailsDone &&
+    packageDone &&
+    termsDone
+  ) {
+    step = "payment";
+  }
+  // Parked agency SaaS path — never surface Workspace plan here.
+  if (
     params.step === "who" ||
     params.step === "workspace" ||
-    params.step === "payment" ||
     params.step === "plan"
   ) {
-    step = !detailsDone ? "details" : !packageDone ? "package" : "terms";
+    step = !detailsDone
+      ? "details"
+      : !packageDone
+        ? "package"
+        : !termsDone
+          ? "terms"
+          : "payment";
   }
 
   const prefillBanner =
@@ -104,7 +132,6 @@ export default async function OnboardingPage({
           ? "Website lookup did not return much. Fill the fields manually, or try another URL."
           : null;
 
-  const terms = await currentTerms();
   const packages = listActivePackagesForSignup(tenant).map((p) => ({
     id: p.id,
     name: p.name,
@@ -120,6 +147,23 @@ export default async function OnboardingPage({
     defaultServiceLevel: p.defaultServiceLevel,
     customModuleRates: p.customModuleRates,
   }));
+
+  const packageId = tenant.onboarding?.marketingPackageId;
+  const catalogPkg = packageId
+    ? resolvePackageById(tenant, packageId)
+    : null;
+  let paymentPackageName = catalogPkg?.name ?? "Marketing package";
+  let paymentPrice = catalogPkg?.priceAudMonthly ?? 0;
+  if (packageId === "custom" && catalogPkg && tenant.onboarding?.customModules) {
+    const quote = quoteCustomPackagePrice(
+      tenant.onboarding.customModules,
+      catalogPkg.customModuleRates,
+      catalogPkg.priceAudMonthly,
+      tenant,
+    );
+    paymentPrice = quote.priceAudMonthly;
+    paymentPackageName = `${catalogPkg.name} (custom)`;
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center p-6">
@@ -179,7 +223,7 @@ export default async function OnboardingPage({
           {step === "terms" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Finally, please review and accept our terms to finish setting up.
+                Review and accept our terms, then continue to payment.
               </p>
               {tenant.onboarding?.marketingPackageId ? (
                 <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -210,13 +254,14 @@ export default async function OnboardingPage({
                   </div>
                   {(await hasAcceptedTerms(user.id, terms.version)) && (
                     <p className="text-xs text-emerald-600">
-                      You&apos;ve already accepted this version — just finish below.
+                      You&apos;ve already accepted this version — continue to
+                      payment below.
                     </p>
                   )}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No terms are configured yet — you can finish setup.
+                  No terms are configured yet — you can continue to payment.
                 </p>
               )}
               <div className="flex items-center justify-between">
@@ -226,10 +271,34 @@ export default async function OnboardingPage({
                 >
                   ← Back
                 </a>
-                <form action={completeOnboardingAction}>
-                  <Button type="submit">Accept &amp; finish setup</Button>
+                <form action={acceptOnboardingTermsAction}>
+                  <Button type="submit">
+                    {terms ? "Accept & continue to payment →" : "Continue to payment →"}
+                  </Button>
                 </form>
               </div>
+            </div>
+          )}
+
+          {step === "payment" && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Enter card details to finish setup
+                {mockCheckout ? " (demo — no live charge)" : ""}.
+              </p>
+              <OnboardingPlanCheckout
+                packageName={paymentPackageName}
+                priceAudMonthly={paymentPrice}
+                mockMode={mockCheckout}
+                cancelled={params.checkout === "cancelled"}
+                action={completeOnboardingPaymentAction}
+              />
+              <a
+                href="/onboarding?step=terms"
+                className="text-xs text-muted-foreground hover:underline"
+              >
+                ← Back to terms
+              </a>
             </div>
           )}
         </CardContent>
