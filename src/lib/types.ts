@@ -48,7 +48,18 @@ export interface CompanyEntitlement {
 // + business identity; the card + billing address are collected by Stripe
 // Checkout, never stored here.
 export interface TenantOnboarding {
-  companyName?: string; // legal / trading name of the client business
+  /**
+   * Display / company name for the primary client account.
+   * Derived at signup from ABR legal name, tenant name, or contact — not collected
+   * as a separate “legal name” field on the wizard.
+   */
+  companyName?: string;
+  /** AU ABN (11 digits, display-formatted). Required on self-serve details step. */
+  abn?: string;
+  /** Platform industry id (promo catalog) or label. */
+  industry?: string;
+  /** Nature-of-business subcategory label (depends on industry). */
+  natureOfBusiness?: string;
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;

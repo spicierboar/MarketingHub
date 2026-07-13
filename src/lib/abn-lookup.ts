@@ -394,6 +394,77 @@ export async function lookupAbn(abnOrName: string): Promise<AbnLookupResult | nu
 }
 
 /**
+ * Soft/hard ABN status gate (no trading-name match).
+ * Soft-skip when ABR is not live / GUID missing / network fails.
+ * Hard-block invalid or cancelled ABN when live ABR responds.
+ * Returns `legalName` when live lookup succeeds — useful for signup without a
+ * separate legal-name field.
+ */
+export async function verifyAbnStatusAgainstAbr(
+  abn: string,
+): Promise<AbrIdentityGateResult> {
+  const digits = normaliseAbnDigits(abn);
+  if (digits.length !== 11) {
+    return {
+      ok: false,
+      code: "invalid_abn",
+      error: "ABN must be 11 digits (spaces optional), e.g. 51 824 753 556.",
+    };
+  }
+
+  if (!abnLookupLive()) {
+    return {
+      ok: true,
+      mode: "skipped",
+      warning:
+        "ABR verification skipped (not live / no GUID) — create allowed; set ABN_LOOKUP_GUID to verify.",
+    };
+  }
+
+  let live: Awaited<ReturnType<typeof lookupAbnLive>>;
+  try {
+    live = await lookupAbnLive(digits);
+  } catch {
+    return {
+      ok: true,
+      mode: "skipped",
+      warning: "ABR verification skipped (lookup failed) — create allowed.",
+    };
+  }
+
+  if (!live.result) {
+    if (live.emptyClass === "invalid") {
+      return {
+        ok: false,
+        code: "invalid_abn",
+        error:
+          "That ABN was not found on the Australian Business Register. Check the number and try again.",
+      };
+    }
+    return {
+      ok: true,
+      mode: "skipped",
+      warning: "ABR verification skipped (lookup unavailable) — create allowed.",
+    };
+  }
+
+  const result = live.result;
+  if (isCancelledStatus(result.status)) {
+    return {
+      ok: false,
+      code: "cancelled_abn",
+      error: `ABN ${result.abn} is cancelled on the ABR and cannot be used for a new client.`,
+    };
+  }
+
+  return {
+    ok: true,
+    mode: "live",
+    legalName: result.legalName,
+  };
+}
+
+/**
  * Gate for create / identity update: verify business name + ABN against live ABR.
  *
  * Soft-skip (ok + warning) when ABR is not live, GUID missing, or network fails —

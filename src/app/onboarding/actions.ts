@@ -25,6 +25,14 @@ import {
 } from "@/lib/marketing-packages";
 import { now } from "@/lib/utils";
 import { PLANS } from "@/lib/plans";
+import { parseAbnInput } from "@/lib/company-identity";
+import { verifyAbnStatusAgainstAbr } from "@/lib/abn-lookup";
+import {
+  businessTypeFromOnboardingIndustry,
+  industryLabel,
+  isValidOnboardingIndustry,
+  resolveNatureLabel,
+} from "@/lib/onboarding-industries";
 import type {
   ManagedServiceLevel,
   MarketingPackageCustomModules,
@@ -43,23 +51,73 @@ function nextAfterPackage(kind: string | undefined): string {
   return "/onboarding?step=terms";
 }
 
+/** Workspace/company display name when legal name is not collected. */
+function deriveCompanyName(input: {
+  abrLegalName?: string;
+  tenantName?: string;
+  contactName?: string;
+}): string {
+  const abr = input.abrLegalName?.trim();
+  if (abr) return abr;
+  const tenant = input.tenantName?.trim();
+  if (tenant) return tenant;
+  const contact = input.contactName?.trim();
+  if (contact) return `${contact}'s workspace`;
+  return "Workspace";
+}
+
 // Step 1 — capture the client's business + contact details.
 export async function saveOnboardingDetailsAction(formData: FormData) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
+
+  const abnParsed = parseAbnInput(text(formData, "abn"));
+  if (!abnParsed.ok) throw new Error(abnParsed.error);
+  if (!abnParsed.abn) throw new Error("ABN is required.");
+
+  const industry = text(formData, "industry");
+  if (!isValidOnboardingIndustry(industry)) {
+    throw new Error("Choose a valid industry.");
+  }
+  const natureRaw = text(formData, "natureOfBusiness");
+  const natureOfBusiness = resolveNatureLabel(industry, natureRaw);
+  if (!natureOfBusiness) throw new Error("Nature of business is required.");
+
+  const contactName = text(formData, "contactName");
+  const contactEmail = text(formData, "contactEmail");
+  if (!contactName || !contactEmail) {
+    throw new Error("Contact name and contact email are required.");
+  }
+
+  // Soft ABR status check (no trading-name field on this step). Soft-skips without GUID.
+  const abrGate = await verifyAbnStatusAgainstAbr(abnParsed.abn);
+  if (!abrGate.ok) throw new Error(abrGate.error);
+
+  const companyName = deriveCompanyName({
+    abrLegalName: abrGate.mode === "live" ? abrGate.legalName : undefined,
+    tenantName: tenant?.name,
+    contactName,
+  });
+
   const onboarding: TenantOnboarding = {
     ...(tenant?.onboarding ?? {}),
-    companyName: text(formData, "companyName") || undefined,
-    contactName: text(formData, "contactName") || undefined,
-    contactEmail: text(formData, "contactEmail") || undefined,
+    companyName,
+    abn: abnParsed.abn,
+    industry,
+    natureOfBusiness,
+    contactName,
+    contactEmail,
     contactPhone: text(formData, "contactPhone") || undefined,
     notes: text(formData, "notes") || undefined,
   };
-  if (!onboarding.companyName || !onboarding.contactName || !onboarding.contactEmail) {
-    throw new Error("Business name, contact name and contact email are required.");
-  }
+
   await updateTenant(user.tenantId, { onboarding });
-  await logAction(user, "onboarding.details_saved", { detail: onboarding.companyName });
+  await logAction(user, "onboarding.details_saved", {
+    detail:
+      abrGate.mode === "skipped"
+        ? `${companyName} · ABN ${abnParsed.abn} (abr=${abrGate.warning ?? "skipped"})`
+        : `${companyName} · ABN ${abnParsed.abn} (abr=verified)`,
+  });
   redirect("/onboarding?step=package");
 }
 
@@ -168,15 +226,23 @@ export async function completeOnboardingAction() {
       ? customModules.serviceLevel
       : selection.serviceLevel;
 
+  const draft = tenant.onboarding;
+  const primaryName =
+    draft.companyName?.trim() ||
+    deriveCompanyName({
+      tenantName: tenant.name,
+      contactName: draft.contactName,
+    });
+
   let companies = (await listCompanies(user.tenantId)).filter(
     (c) => c.status !== "archived",
   );
 
   // Self-serve: no company yet — create the primary from onboarding details.
-  if (companies.length === 0 && tenant.onboarding.companyName) {
+  if (companies.length === 0) {
     const company = await createCompany({
       tenantId: user.tenantId,
-      name: tenant.onboarding.companyName,
+      name: primaryName,
       createdBy: user.id,
     });
     await logAction(user, "company.created", {
@@ -188,8 +254,13 @@ export async function completeOnboardingAction() {
     companies = [company];
   }
 
-  // Write marketing package onto the primary (first) company; ensure others at
-  // least have a service level for managed delivery enqueue.
+  const industryId = draft.industry;
+  const industryDisplay =
+    industryLabel(industryId) ?? industryId ?? undefined;
+  const businessType = businessTypeFromOnboardingIndustry(industryId);
+
+  // Write marketing package + profile identity onto the primary (first) company;
+  // ensure others at least have a service level for managed delivery enqueue.
   for (let i = 0; i < companies.length; i++) {
     const company = companies[i]!;
     const isPrimary = i === 0;
@@ -199,8 +270,27 @@ export async function completeOnboardingAction() {
       : (prev?.serviceLevel ?? defaultServiceLevel());
 
     await updateCompany(company.id, {
+      ...(isPrimary && primaryName && company.name !== primaryName
+        ? { name: primaryName }
+        : {}),
       profile: {
         ...company.profile,
+        ...(isPrimary
+          ? {
+              ...(draft.abn ? { abn: draft.abn } : {}),
+              ...(industryDisplay ? { industry: industryDisplay } : {}),
+              ...(draft.natureOfBusiness
+                ? { natureOfBusiness: draft.natureOfBusiness }
+                : {}),
+              businessType,
+              ...(draft.contactPhone && !company.profile.phone
+                ? { phone: draft.contactPhone }
+                : {}),
+              ...(draft.contactEmail && !company.profile.email
+                ? { email: draft.contactEmail }
+                : {}),
+            }
+          : {}),
         managedService: isPrimary
           ? {
               ...(prev ?? { serviceLevel: level }),

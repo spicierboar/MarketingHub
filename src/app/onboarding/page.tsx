@@ -4,11 +4,11 @@ import { currentTerms, getTenant, hasAcceptedTerms } from "@/lib/db";
 import { stripeConfigured } from "@/lib/billing";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/form";
 import { formatDate } from "@/lib/utils";
 import { PLANS, PLAN_ORDER } from "@/lib/plans";
 import { listActivePackagesForSignup } from "@/lib/marketing-packages";
 import { OnboardingPackagePicker } from "@/components/onboarding-package-picker";
+import { OnboardingDetailsFields } from "@/components/onboarding-details-fields";
 import {
   completeOnboardingAction,
   saveOnboardingDetailsAction,
@@ -81,7 +81,9 @@ export default async function OnboardingPage({
   const params = await searchParams;
   const showWorkspace = tenant.kind === "agency";
   const detailsDone = !!(
-    tenant.onboarding?.companyName &&
+    tenant.onboarding?.abn &&
+    tenant.onboarding?.industry &&
+    tenant.onboarding?.natureOfBusiness &&
     tenant.onboarding?.contactName &&
     tenant.onboarding?.contactEmail
   );
@@ -141,60 +143,17 @@ export default async function OnboardingPage({
           {step === "details" && (
             <form action={saveOnboardingDetailsAction} className="space-y-4">
               <p className="text-sm text-muted-foreground">Tell us about your business.</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Business / legal name"
-                  htmlFor="companyName"
-                  hint="As it should appear on invoices and the portal"
-                >
-                  <Input
-                    id="companyName"
-                    name="companyName"
-                    required
-                    defaultValue={tenant.onboarding?.companyName ?? tenant.name}
-                    placeholder="e.g. Harbourview Hospitality Pty Ltd"
-                  />
-                </Field>
-                <Field label="Primary contact name" htmlFor="contactName">
-                  <Input
-                    id="contactName"
-                    name="contactName"
-                    required
-                    defaultValue={tenant.onboarding?.contactName ?? user.name}
-                    placeholder="e.g. Sam Nguyen"
-                  />
-                </Field>
-                <Field label="Contact email" htmlFor="contactEmail">
-                  <Input
-                    id="contactEmail"
-                    name="contactEmail"
-                    type="email"
-                    required
-                    defaultValue={tenant.onboarding?.contactEmail ?? user.email}
-                    placeholder="owner@harbourviewcafe.com.au"
-                  />
-                </Field>
-                <Field label="Contact phone (optional)" htmlFor="contactPhone">
-                  <Input
-                    id="contactPhone"
-                    name="contactPhone"
-                    defaultValue={tenant.onboarding?.contactPhone}
-                    placeholder="04xx xxx xxx"
-                  />
-                </Field>
-              </div>
-              <Field
-                label="Anything we should know? (optional)"
-                htmlFor="notes"
-                hint="Industry, goals, number of brands — plain language"
-              >
-                <Input
-                  id="notes"
-                  name="notes"
-                  defaultValue={tenant.onboarding?.notes}
-                  placeholder="e.g. Café in Bondi — want more weekday lunch trade"
-                />
-              </Field>
+              <OnboardingDetailsFields
+                defaults={{
+                  abn: tenant.onboarding?.abn,
+                  industry: tenant.onboarding?.industry,
+                  natureOfBusiness: tenant.onboarding?.natureOfBusiness,
+                  contactName: tenant.onboarding?.contactName ?? user.name,
+                  contactEmail: tenant.onboarding?.contactEmail ?? user.email,
+                  contactPhone: tenant.onboarding?.contactPhone,
+                  notes: tenant.onboarding?.notes,
+                }}
+              />
               <Button type="submit">Continue →</Button>
             </form>
           )}
