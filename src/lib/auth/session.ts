@@ -22,7 +22,12 @@ import {
   membershipsForUser,
   revokeSession,
 } from "@/lib/db";
-import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
+import {
+  getServerSupabase,
+  getServiceSupabase,
+  isSupabaseConfigured,
+} from "@/lib/db/supabase";
+import { appEnv } from "@/lib/env";
 import type { ActingUser, RoleTitle, TenantMember, User } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 
@@ -148,10 +153,17 @@ async function getSupabaseUser(): Promise<ActingUser | null> {
   });
 }
 
-// Demo-only: start a passwordless cookie session in the user's default tenant.
-// In production Supabase issues the session via magic link / OAuth / passkey.
+// Demo / staging quick-login: start a session without sending email.
+//   • Local demo: cookie-backed passwordless session.
+//   • Staging (Supabase): admin generateLink + verifyOtp — no email sent, so
+//     magic-link rate limits cannot block /dev quick login. Never in production.
 export async function startSession(userId: string): Promise<void> {
-  if (isSupabaseConfigured()) return;
+  if (isSupabaseConfigured()) {
+    if (appEnv() === "staging") {
+      await startStagingSupabaseSession(userId);
+    }
+    return;
+  }
   const memberships = await membershipsForUser(userId);
   const session = await createSessionRecord(userId, memberships[0]?.tenantId);
   const jar = await cookies();
@@ -162,6 +174,32 @@ export async function startSession(userId: string): Promise<void> {
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24 * 7,
   });
+}
+
+/** Mint a Supabase Auth session on staging without delivering email. */
+async function startStagingSupabaseSession(userId: string): Promise<void> {
+  const user = await getUser(userId);
+  if (!user?.email) throw new Error("User not found for staging session.");
+  const svc = getServiceSupabase();
+  const sb = await getServerSupabase();
+  if (!svc || !sb) throw new Error("Supabase is not available for staging session.");
+
+  const { data, error } = await svc.auth.admin.generateLink({
+    type: "magiclink",
+    email: user.email,
+  });
+  const tokenHash = data?.properties?.hashed_token;
+  if (error || !tokenHash) {
+    throw new Error(error?.message ?? "Failed to mint staging session link.");
+  }
+
+  const { error: verifyError } = await sb.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: "email",
+  });
+  if (verifyError) {
+    throw new Error(verifyError.message);
+  }
 }
 
 export async function endSession(): Promise<void> {
