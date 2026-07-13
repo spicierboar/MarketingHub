@@ -13,7 +13,11 @@ import {
   updateTenant,
 } from "@/lib/db";
 import { requireTenantOwnerRaw } from "@/lib/auth/rbac";
-import { createCheckoutSession, stripeConfigured } from "@/lib/billing";
+import {
+  createCheckoutSession,
+  stripeConfigured,
+  useMockPackageCheckout,
+} from "@/lib/billing";
 import { resolveOrigin } from "@/lib/origin";
 import { clientIp } from "@/lib/ratelimit";
 import { logAction } from "@/lib/audit";
@@ -45,10 +49,11 @@ function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 
-function nextAfterPackage(kind: string | undefined): string {
-  // Agency tenants still pick a workspace SaaS plan for tenant billing.
+function nextAfterDetails(kind: string | undefined): string {
+  // Agency SaaS signup: workspace plan next (no client marketing package here).
   if (kind === "agency") return "/onboarding?step=workspace";
-  return "/onboarding?step=terms";
+  // Business-group tenants pick a client marketing package for their company.
+  return "/onboarding?step=package";
 }
 
 /** Workspace/company display name when legal name is not collected. */
@@ -118,14 +123,18 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
         ? `${companyName} · ABN ${abnParsed.abn} (abr=${abrGate.warning ?? "skipped"})`
         : `${companyName} · ABN ${abnParsed.abn} (abr=verified)`,
   });
-  redirect("/onboarding?step=package");
+  redirect(nextAfterDetails(tenant?.kind));
 }
 
-// Step 2 — pick a client marketing package (company delivery SKU).
+// Business-group only — pick a client marketing package (company delivery SKU).
+// Agency tenants skip this; they choose packages per client on New Client / Add Client.
 export async function selectOnboardingPackageAction(formData: FormData) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
   if (!tenant) throw new Error("Tenant not found.");
+  if (tenant.kind === "agency") {
+    redirect("/onboarding?step=workspace");
+  }
 
   const idRaw = text(formData, "marketingPackageId");
   if (!isMarketingPackageId(idRaw)) throw new Error("Unknown marketing package.");
@@ -149,51 +158,80 @@ export async function selectOnboardingPackageAction(formData: FormData) {
         ? `custom · ${serviceLevel}`
         : `${marketingPackageId} · ${serviceLevel}`,
   });
-  redirect(nextAfterPackage(tenant.kind));
-}
-
-// Step 2b (agency only) — workspace / agency SaaS plan for tenant billing.
-export async function selectOnboardingPlanAction(formData: FormData) {
-  const user = await requireTenantOwnerRaw();
-  const plan = text(formData, "plan") as PlanId;
-  if (!(plan in PLANS)) throw new Error("Unknown plan.");
-
-  if (stripeConfigured()) {
-    const tenant = await getTenant(user.tenantId);
-    const h = await headers();
-    const origin = resolveOrigin((k) => h.get(k));
-    if (tenant) {
-      const url = await createCheckoutSession(tenant, plan, origin, {
-        successPath: "/onboarding?step=terms&checkout=success",
-        cancelPath: "/onboarding?step=workspace&checkout=cancelled",
-      });
-      if (url) redirect(url); // → Stripe Checkout (card capture)
-    }
-    // Stripe configured but session couldn't be created — fall through to demo apply.
-  }
-  await updateTenant(user.tenantId, { plan });
-  await logAction(user, "onboarding.plan_selected", { detail: plan });
   redirect("/onboarding?step=terms");
 }
 
-// Final step — accept terms and finish onboarding; write package onto company.
+// Agency only — workspace / agency SaaS plan for tenant billing + card capture.
+export async function selectOnboardingPlanAction(formData: FormData) {
+  const user = await requireTenantOwnerRaw();
+  const tenant = await getTenant(user.tenantId);
+  if (!tenant) throw new Error("Tenant not found.");
+  if (tenant.kind !== "agency") {
+    redirect("/onboarding?step=package");
+  }
+
+  const plan = text(formData, "plan") as PlanId;
+  if (!(plan in PLANS)) throw new Error("Unknown plan.");
+
+  const mockCheckout = useMockPackageCheckout();
+  if (!mockCheckout && stripeConfigured()) {
+    const h = await headers();
+    const origin = resolveOrigin((k) => h.get(k));
+    const url = await createCheckoutSession(tenant, plan, origin, {
+      successPath: "/onboarding?step=terms&checkout=success",
+      cancelPath: "/onboarding?step=workspace&checkout=cancelled",
+    });
+    if (url) redirect(url); // → Stripe Checkout (card capture)
+    // Stripe configured but session couldn't be created — fall through to demo.
+  }
+
+  await updateTenant(user.tenantId, { plan });
+  await logAction(user, "onboarding.plan_selected", { detail: plan });
+  // Staging / local demo: show mock card step (same pattern as New Client package).
+  redirect("/onboarding?step=payment");
+}
+
+/** Demo payment step after workspace plan (no live charge). */
+export async function completeOnboardingPlanPaymentAction(formData: FormData) {
+  const user = await requireTenantOwnerRaw();
+  const tenant = await getTenant(user.tenantId);
+  if (!tenant) throw new Error("Tenant not found.");
+  if (tenant.kind !== "agency") redirect("/onboarding?step=terms");
+
+  const cardName = text(formData, "cardName");
+  await logAction(user, "onboarding.plan_payment_mock", {
+    detail: `${tenant.plan}${cardName ? ` · ${cardName}` : ""} (demo — no charge)`,
+  });
+  redirect("/onboarding?step=terms");
+}
+
+// Final step — accept terms and finish onboarding.
 export async function completeOnboardingAction() {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
   if (!tenant) throw new Error("Tenant not found.");
 
-  // Require a marketing package before finish.
-  if (!tenant.onboarding?.marketingPackageId) {
+  const isAgency = tenant.kind === "agency";
+
+  // Business-group tenants must pick a marketing package; agencies do that per client.
+  if (!isAgency && !tenant.onboarding?.marketingPackageId) {
     redirect("/onboarding?step=package");
   }
 
-  // Card gate: agency tenants that went through workspace Stripe Checkout must
-  // have a subscription. Business-group tenants pick a marketing package only
-  // (media/SaaS checkout for packages ships separately).
-  if (stripeConfigured() && tenant.kind === "agency") {
-    if (!tenant.stripeSubscriptionId) {
-      redirect("/onboarding?step=workspace");
-    }
+  // Agency must have chosen a workspace plan.
+  if (isAgency && !(tenant.plan in PLANS)) {
+    redirect("/onboarding?step=workspace");
+  }
+
+  // Card gate: live Stripe agency checkout must leave a subscription.
+  // Mock / demo path skips this (plan applied without Stripe customer).
+  if (
+    isAgency &&
+    stripeConfigured() &&
+    !useMockPackageCheckout() &&
+    !tenant.stripeSubscriptionId
+  ) {
+    redirect("/onboarding?step=workspace");
   }
 
   const terms = await currentTerms();
@@ -212,21 +250,13 @@ export async function completeOnboardingAction() {
   const completedAt = now();
   await updateTenant(user.tenantId, { onboardingCompletedAt: completedAt });
   await logAction(user, "onboarding.completed", {
-    detail: tenant.onboarding.marketingPackageId,
+    detail: isAgency
+      ? `agency · plan=${tenant.plan}`
+      : (tenant.onboarding.marketingPackageId ?? "done"),
   });
 
-  const packageId = tenant.onboarding.marketingPackageId;
-  const selection = resolveSelectionForPackage(tenant, packageId);
-  const customModules: MarketingPackageCustomModules | undefined =
-    packageId === "custom"
-      ? (tenant.onboarding.customModules ?? selection.customModules)
-      : undefined;
-  const serviceLevel: ManagedServiceLevel =
-    packageId === "custom" && customModules
-      ? customModules.serviceLevel
-      : selection.serviceLevel;
-
-  const draft = tenant.onboarding;
+  const packageId = tenant.onboarding?.marketingPackageId;
+  const draft = tenant.onboarding ?? {};
   const primaryName =
     draft.companyName?.trim() ||
     deriveCompanyName({
@@ -259,8 +289,26 @@ export async function completeOnboardingAction() {
     industryLabel(industryId) ?? industryId ?? undefined;
   const businessType = businessTypeFromOnboardingIndustry(industryId);
 
-  // Write marketing package + profile identity onto the primary (first) company;
-  // ensure others at least have a service level for managed delivery enqueue.
+  let selection:
+    | ReturnType<typeof resolveSelectionForPackage>
+    | undefined;
+  let customModules: MarketingPackageCustomModules | undefined;
+  let serviceLevel: ManagedServiceLevel = defaultServiceLevel();
+
+  if (packageId) {
+    selection = resolveSelectionForPackage(tenant, packageId);
+    customModules =
+      packageId === "custom"
+        ? (draft.customModules ?? selection.customModules)
+        : undefined;
+    serviceLevel =
+      packageId === "custom" && customModules
+        ? customModules.serviceLevel
+        : selection.serviceLevel;
+  }
+
+  // Write profile identity onto the primary company; marketing package only when
+  // one was chosen (business-group). Agencies assign packages on New Client.
   for (let i = 0; i < companies.length; i++) {
     const company = companies[i]!;
     const isPrimary = i === 0;
@@ -292,19 +340,23 @@ export async function completeOnboardingAction() {
             }
           : {}),
         managedService: isPrimary
-          ? {
-              ...(prev ?? { serviceLevel: level }),
-              serviceLevel: level,
-              marketingPackageId: packageId,
-              customModules,
-            }
+          ? packageId
+            ? {
+                ...(prev ?? { serviceLevel: level }),
+                serviceLevel: level,
+                marketingPackageId: packageId,
+                customModules,
+              }
+            : prev
+              ? prev
+              : { serviceLevel: level }
           : prev
             ? prev
             : { serviceLevel: level },
       },
     });
 
-    if (isPrimary) {
+    if (isPrimary && packageId) {
       await logAction(user, "company.marketing_package_set", {
         targetType: "company",
         targetId: company.id,

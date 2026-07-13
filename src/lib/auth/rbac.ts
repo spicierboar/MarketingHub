@@ -124,7 +124,7 @@ export async function requireUserRaw(): Promise<ActingUser> {
 // closes that hole. The two gate routes use requireUserRaw to avoid a loop.
 async function enforceOnboardingAndTerms(user: ActingUser): Promise<void> {
   const tenant = await getTenant(user.tenantId);
-  // A not-yet-onboarded tenant's OWNER must finish onboarding (details → tier →
+  // A not-yet-onboarded tenant's OWNER must finish onboarding (details → plan →
   // card → T&C) before doing anything.
   if (tenant && !tenant.onboardingCompletedAt && isTenantOwner(user)) {
     redirect("/onboarding");

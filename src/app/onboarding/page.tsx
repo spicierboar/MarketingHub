@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireTenantOwnerRaw } from "@/lib/auth/rbac";
 import { currentTerms, getTenant, hasAcceptedTerms } from "@/lib/db";
-import { stripeConfigured } from "@/lib/billing";
+import { stripeConfigured, useMockPackageCheckout } from "@/lib/billing";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
@@ -9,30 +9,42 @@ import { PLANS, PLAN_ORDER } from "@/lib/plans";
 import { listActivePackagesForSignup } from "@/lib/marketing-packages";
 import { OnboardingPackagePicker } from "@/components/onboarding-package-picker";
 import { OnboardingDetailsFields } from "@/components/onboarding-details-fields";
+import { OnboardingPlanCheckout } from "@/components/onboarding-plan-checkout";
 import {
   completeOnboardingAction,
+  completeOnboardingPlanPaymentAction,
   saveOnboardingDetailsAction,
   selectOnboardingPackageAction,
   selectOnboardingPlanAction,
 } from "./actions";
 
-type Step = "details" | "package" | "workspace" | "terms";
+type Step = "details" | "package" | "workspace" | "payment" | "terms";
 
 function Stepper({
   step,
-  showWorkspace,
+  isAgency,
+  showPayment,
 }: {
   step: Step;
-  showWorkspace: boolean;
+  isAgency: boolean;
+  /** Mock/demo card step (live Stripe captures card off-site after plan pick). */
+  showPayment: boolean;
 }) {
-  const steps: { key: Step; label: string }[] = [
-    { key: "details", label: "Your details" },
-    { key: "package", label: "Marketing package" },
-    ...(showWorkspace
-      ? [{ key: "workspace" as const, label: "Workspace plan" }]
-      : []),
-    { key: "terms", label: "Accept terms" },
-  ];
+  // Agency SaaS signup ≠ client marketing packages (those are New Client / Add Client).
+  const steps: { key: Step; label: string }[] = isAgency
+    ? [
+        { key: "details", label: "Your details" },
+        { key: "workspace", label: "Workspace plan" },
+        ...(showPayment
+          ? [{ key: "payment" as const, label: "Payment" }]
+          : []),
+        { key: "terms", label: "Accept terms" },
+      ]
+    : [
+        { key: "details", label: "Your details" },
+        { key: "package", label: "Marketing package" },
+        { key: "terms", label: "Accept terms" },
+      ];
   const idx = steps.findIndex((s) => s.key === step);
   return (
     <ol className="mb-6 flex flex-wrap items-center gap-2 text-sm">
@@ -62,15 +74,13 @@ function Stepper({
   );
 }
 
-// Client-onboarding wizard (self-serve AND agency-assisted). The (app) gate
-// routes a not-yet-onboarded owner here; the same wizard serves an
-// agency-provisioned tenant (its details/plan are pre-filled, so the client just
-// confirms + accepts terms). Owner-only; lives outside the (app) layout so the
-// onboarding gate can't loop.
+// Workspace onboarding wizard. Agency tenants: details → SaaS plan → payment → terms.
+// Business-group tenants: details → marketing package → terms.
+// Client marketing packages (Basic/Pro/Blast) for agencies are chosen on New Client.
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string }>;
+  searchParams: Promise<{ step?: string; checkout?: string }>;
 }) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
@@ -79,7 +89,8 @@ export default async function OnboardingPage({
   if (tenant.onboardingCompletedAt) redirect("/dashboard");
 
   const params = await searchParams;
-  const showWorkspace = tenant.kind === "agency";
+  const isAgency = tenant.kind === "agency";
+  const mockPlanCheckout = useMockPackageCheckout();
   const detailsDone = !!(
     tenant.onboarding?.abn &&
     tenant.onboarding?.industry &&
@@ -88,22 +99,46 @@ export default async function OnboardingPage({
     tenant.onboarding?.contactEmail
   );
   const packageDone = !!tenant.onboarding?.marketingPackageId;
+  // Agency plan is "done" once a known plan is set (seed default is starter —
+  // treat explicit selection via audit as optional; require plan in PLANS which
+  // always holds for seeded tenants). After details, always show workspace.
+  const planSelected = isAgency && !!(tenant.plan && tenant.plan in PLANS);
 
   // Resolve the step: an explicit ?step wins (if its prerequisites are met),
   // else the first incomplete step.
   const requested = params.step as Step | undefined;
-  let step: Step = !detailsDone ? "details" : !packageDone ? "package" : showWorkspace ? "workspace" : "terms";
+  let step: Step;
+  if (!detailsDone) {
+    step = "details";
+  } else if (isAgency) {
+    // Agency never sees marketing package. After details → workspace → payment → terms.
+    // Payment is skipped when returning from live Stripe (checkout=success → terms).
+    if (params.checkout === "success") {
+      step = "terms";
+    } else {
+      step = "workspace";
+    }
+  } else {
+    step = !packageDone ? "package" : "terms";
+  }
+
   if (requested === "details") step = "details";
-  if (requested === "package" && detailsDone) step = "package";
-  if (requested === "workspace" && detailsDone && packageDone && showWorkspace) {
-    step = "workspace";
+  if (requested === "package" && detailsDone && !isAgency) step = "package";
+  if (requested === "workspace" && detailsDone && isAgency) step = "workspace";
+  if (requested === "payment" && detailsDone && isAgency && planSelected) {
+    step = "payment";
   }
   // Legacy ?step=plan → workspace (agency) or package (business group).
   if (params.step === "plan" && detailsDone) {
-    step = showWorkspace && packageDone ? "workspace" : "package";
+    step = isAgency ? "workspace" : "package";
   }
-  if (requested === "terms" && detailsDone && packageDone) {
-    step = "terms";
+  if (requested === "terms" && detailsDone) {
+    if (isAgency || packageDone) step = "terms";
+  }
+
+  // Agency: ignore stale ?step=package bookmarks.
+  if (isAgency && (requested === "package" || step === "package")) {
+    step = "workspace";
   }
 
   const terms = await currentTerms();
@@ -123,8 +158,11 @@ export default async function OnboardingPage({
     customModuleRates: p.customModuleRates,
   }));
 
-  const backFromTerms = showWorkspace
-    ? "/onboarding?step=workspace"
+  const selectedPlan = PLANS[tenant.plan] ?? PLANS.starter;
+  const backFromTerms = isAgency
+    ? mockPlanCheckout
+      ? "/onboarding?step=payment"
+      : "/onboarding?step=workspace"
     : "/onboarding?step=package";
 
   return (
@@ -138,7 +176,11 @@ export default async function OnboardingPage({
       </div>
       <Card>
         <CardContent className="p-6">
-          <Stepper step={step} showWorkspace={showWorkspace} />
+          <Stepper
+            step={step}
+            isAgency={isAgency}
+            showPayment={mockPlanCheckout || !stripeConfigured()}
+          />
 
           {step === "details" && (
             <form action={saveOnboardingDetailsAction} className="space-y-4">
@@ -158,7 +200,7 @@ export default async function OnboardingPage({
             </form>
           )}
 
-          {step === "package" && (
+          {step === "package" && !isAgency && (
             <div className="space-y-4">
               <OnboardingPackagePicker
                 packages={packages}
@@ -175,16 +217,24 @@ export default async function OnboardingPage({
             </div>
           )}
 
-          {step === "workspace" && showWorkspace && (
+          {step === "workspace" && isAgency && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Choose a <span className="font-medium">Workspace / Agency plan</span>{" "}
-                for this tenant (how many client companies you can manage). This is
-                separate from the client marketing package you just picked.
-                {stripeConfigured()
-                  ? " You'll enter your card securely on the next screen (Stripe) — we never store card details."
-                  : " Card capture runs through Stripe in production; in this demo the plan is applied directly."}
+                — how many client companies this agency can manage. Client marketing
+                packages (Basic / Pro / Blast) are selected later when you add a
+                client, not during agency signup.
+                {mockPlanCheckout
+                  ? " Next you'll enter card details in a demo payment step (no live charge)."
+                  : stripeConfigured()
+                    ? " You'll enter your card securely on Stripe Checkout — we never store card details."
+                    : " Card capture runs through Stripe in production; here the plan is applied via a demo payment step."}
               </p>
+              {params.checkout === "cancelled" && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  Stripe Checkout was cancelled — choose a plan to try again.
+                </p>
+              )}
               <div className="grid gap-3 sm:grid-cols-3">
                 {PLAN_ORDER.map((id) => {
                   const p = PLANS[id];
@@ -217,10 +267,28 @@ export default async function OnboardingPage({
                 })}
               </div>
               <a
-                href="/onboarding?step=package"
+                href="/onboarding?step=details"
                 className="text-xs text-muted-foreground hover:underline"
               >
-                ← Back to marketing package
+                ← Back to details
+              </a>
+            </div>
+          )}
+
+          {step === "payment" && isAgency && (
+            <div className="space-y-4">
+              <OnboardingPlanCheckout
+                planName={selectedPlan.name}
+                priceAudMonthly={selectedPlan.priceAudMonthly}
+                mockMode={mockPlanCheckout || !stripeConfigured()}
+                cancelled={params.checkout === "cancelled"}
+                action={completeOnboardingPlanPaymentAction}
+              />
+              <a
+                href="/onboarding?step=workspace"
+                className="text-xs text-muted-foreground hover:underline"
+              >
+                ← Back to workspace plan
               </a>
             </div>
           )}
@@ -231,7 +299,16 @@ export default async function OnboardingPage({
                 Finally, please review and accept our terms to finish setting up your
                 workspace.
               </p>
-              {tenant.onboarding?.marketingPackageId ? (
+              {isAgency ? (
+                <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  Workspace plan:{" "}
+                  <span className="font-medium text-foreground">
+                    {selectedPlan.name}
+                  </span>{" "}
+                  (A${selectedPlan.priceAudMonthly}/mo). Marketing packages for each
+                  client are chosen when you add them.
+                </p>
+              ) : tenant.onboarding?.marketingPackageId ? (
                 <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                   Marketing package:{" "}
                   <span className="font-medium text-foreground">
@@ -244,6 +321,11 @@ export default async function OnboardingPage({
                   . Ad spend is always extra.
                 </p>
               ) : null}
+              {params.checkout === "success" && (
+                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  Payment received — accept terms below to finish.
+                </p>
+              )}
               {terms ? (
                 <>
                   <div className="flex items-center gap-2">
