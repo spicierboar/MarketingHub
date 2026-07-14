@@ -341,7 +341,11 @@ import {
   checkNameAbnIdentityDuplicate,
 } from "@/lib/selftest/client-profile";
 import { checkFormValidationBasics } from "@/lib/selftest/form-validation";
-import { checkLegalPublishOnCorruptedAgencySeat, checkPlatformAgencyResolve } from "@/lib/selftest/platform-agency";
+import {
+  checkLegalPublishOnAgencyAdminSeat,
+  checkLegalPublishOnCorruptedAgencySeat,
+  checkPlatformAgencyResolve,
+} from "@/lib/selftest/platform-agency";
 import {
   checkLogRecordsDedupeKey,
   checkRetrySkipsWhenAlreadyPublished,
@@ -1287,6 +1291,7 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
     await expect("platformAgency.resolve", () => checkPlatformAgencyResolve());
     await expect("platformAgency.legalPublishHeal", () => checkLegalPublishOnCorruptedAgencySeat());
+    await expect("platformAgency.legalPublishAdmin", () => checkLegalPublishOnAgencyAdminSeat());
 
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());
 

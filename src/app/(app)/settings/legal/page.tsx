@@ -155,9 +155,11 @@ function LegalDocPanel({
           <div className="rounded-md border border-border bg-muted/40 p-4 text-sm">
             <p className="font-medium text-foreground">You can&apos;t publish from this workspace</p>
             <p className="mt-1 text-muted-foreground">
-              Platform legal documents are published by the <strong>agency owner</strong> (on the
-              agency seat) or a <strong>platform admin</strong>. Client workspace owners can view
-              versions but cannot publish.
+              Platform Terms &amp; Privacy are published from the <strong>agency</strong> ops seat
+              (agency owner/admin) or by a <strong>platform admin</strong>. If the header shows a
+              client / holding workspace, switch to the agency seat (e.g. Staging Agency) via the
+              workspace switcher, or sign in again with staging <code className="text-xs">/dev</code>{" "}
+              quick-login. Client workspace owners can view versions but cannot publish.
             </p>
           </div>
         )}

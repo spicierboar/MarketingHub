@@ -1,47 +1,45 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-14, **STAGING · 0046 PASTED · LEGAL PUBLISHER HEALED · SMOKE LEGAL · PRICING PARKED · W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-14, **STAGING · LEGAL PUBLISH LOCKOUT FIXED · CLIENTS EMPTY · PRICING PARKED · W6 WAITING**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` · Vercel Preview = staging · live flags **OFF**
 >
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`1660e14`** (= `origin/staging`) |
+> | Git tip | **`(set after push)`** (= `origin/staging`) · do not commit `_owner_paste_*` / pricing xlsx / logs |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
-> | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** (`legal_docs_kind`) — owner confirmed |
-> | Staging login | Magic link rate-limited → **`/dev` staging quick login** (prefer agency seat e.g. `development@tglt.com.au`) |
-> | Tenant name | **Staging Agency** (repaired; do **not** rename agency to Viya — Viya is a **client**) |
-> | Vercel Preview Protection | **OFF** (owner) so staging URL works without Vercel auth |
+> | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** |
+> | Staging login | **`/dev`** quick login · agency seat `development@tglt.com.au` |
+> | Tenant name | **Staging Agency** (header OK) · Clients list **empty** — no Viya yet (do **not** rename agency → Viya) |
+> | Legal | Smoke PASS earlier; **false “client workspace” publish lockout fixed** (prefer signed-in agency seat + DB owner/admin after heal) — re-verify Settings → Terms & Privacy editors after deploy |
 > | Live / mangotickle.com.au / `*_LIVE` | **PARKED** · W6 Google still waiting |
 >
 > ### DONE this wave (verify SHAs on `origin/staging`)
-> - **Client-only onboarding:** details → package → terms → payment; website-first + Prefill (`formNoValidate` fix); agency vs client tenancy — platform **agency seat**; new clients under **Staging Agency** (not rename agency → Viya)
-> - **Staging deploy recovery:** `024203e` typecheck fail → follow-up **`51db48d`** live; tenant name repaired to Staging Agency
-> - **Portal form validations** (demo payment Luhn etc.) ~`54b8768`
-> - **Legal docs:** Terms + Privacy (`kind`), Settings `/settings/legal`, Format with AI, force re-accept + email on publish, Settings hub tile + sidebar · tip through **`a8893e2`**
-> - **Legal publisher heal:** **`4887a38`** — agency Legal publish when seat kind/membership corrupted (shipped; no longer the active bug)
-> - Migration **0046** · **PASTED** on staging (owner confirmed “I ran the sqls”) · source was `_owner_paste_0046_legal_docs_kind.sql` (exclude `_owner_paste_*` from commits)
-> - **Pricing sheet** earlier: `docs/unit-pricing-simple.xlsx` (cost-only review; margin later) — **parked** mid-owner review
+> - **Legal publish lockout fix:** agency Settings → Terms & Privacy no longer denied as “client workspace” when seat is agency but session/admin/orphan resolve was wrong
+> - **Legal smoke (staging):** Terms v1 + Privacy v1 published → accept-terms → dashboard (prior session)
+> - Prior: onboarding, deploy recovery, portal validations, legal docs, publisher heal `4887a38`, 0046 pasted
+> - **Pricing sheet:** `docs/unit-pricing-simple.xlsx` (cost-only) — **parked** mid-owner review
 >
 > ### IN PROGRESS / NEXT (ordered)
-> 1. **Smoke legal flow:** `/dev` → Staging Agency header → Clients (Viya as client) → Settings → Terms & Privacy (editors + Format with AI) → **publish** → **accept-terms** gate
-> 2. Finish internal unit pricing (Excel review → finalize sell/margin later → wire rate card)
-> 3. Optional: more portal validation / `RESEND_API_KEY` for legal emails
-> 4. Later: main/live; multi-agency white-label; W6 Google waiting
+> 1. After Vercel Preview deploys: confirm Legal publish editors visible on Staging Agency
+> 2. **Create Viya as a client** under Staging Agency — keep agency name Staging Agency
+> 3. Finish internal unit pricing (Excel review → sell/margin later → wire rate card)
+> 4. Optional: `RESEND_API_KEY` for legal update emails
+> 5. Later: main/live; multi-agency white-label; W6 Google waiting
 >
 > ### How to resume
-> - **Human:** staging `/dev` quick login → Settings → Terms & Privacy → publish → confirm accept-terms. 0046 already pasted; publisher heal already on `4887a38`
-> - **Agent:** `READ HANDOVER.md` · branch `staging` · smoke Settings/legal publish + accept-terms · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps
+> - **Human:** re-check Legal editors after deploy; unit pricing Excel; or add Viya client under Staging Agency
+> - **Agent:** `READ HANDOVER.md` · branch `staging` · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps / pricing xlsx unless asked
 >
 > ### Resume in a new Cursor chat
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ 1660e14 (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; live/W6 parked.
-> IN PROGRESS: smoke Settings/legal publish + accept-terms; unit pricing parked.
-> NEXT: smoke /dev → Staging Agency → Clients (Viya) → Settings → Terms & Privacy publish → accept-terms → pricing Excel → optional RESEND → later main/live + W6.
-> Login: staging /dev quick-login. No *_LIVE.
+> STATE: staging @ tip in HANDOVER (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; legal smoke PASS; legal publish lockout FIXED; Clients empty (no Viya); live/W6 parked.
+> IN PROGRESS: confirm Legal editors after deploy; unit pricing parked; optional add Viya client under Staging Agency.
+> NEXT: pricing Excel review → sell/margin later → optional RESEND → later main/live + W6. Or onboard Viya as client (do not rename agency).
+> Login: staging /dev quick-login (development@tglt.com.au). No *_LIVE.
 > ```
 >
 > **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. Exclude `_owner_paste_*`, `scripts/*.snip`, integrator temps from commits. Owner applies SQL via Notepad paste only.
@@ -56,9 +54,21 @@
 >
 > ---
 >
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-14, **STAGING · LEGAL SMOKE PASS · CLIENTS EMPTY · PRICING PARKED · W6 WAITING**) — archived
+>
+> Legal smoke PASS; then false publish lockout on agency Settings/legal. Superseded by LEGAL PUBLISH LOCKOUT FIXED block above.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-14, **STAGING · 0046 PASTED · LEGAL PUBLISHER HEALED · SMOKE LEGAL**) — archived
+>
+> Smoke legal was next; completed Terms+Privacy publish + accept-terms on staging. Superseded by LEGAL SMOKE PASS block above.
+>
+> ---
+>
 > ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-14, **STAGING · LEGAL PUBLISHER RBAC BUG · 0046 PASTE?**) — archived
 >
-> Publisher heal shipped @ `4887a38`; owner confirmed 0046 pasted. Superseded by smoke-legal next above.
+> Publisher heal shipped @ `4887a38`; owner confirmed 0046 pasted. Superseded by smoke-legal then smoke-pass blocks above.
 >
 > ---
 >

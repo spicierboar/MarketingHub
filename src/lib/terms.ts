@@ -15,29 +15,48 @@ import { logAction } from "@/lib/audit";
 import { now } from "@/lib/utils";
 import type { ActingUser, LegalDocKind, TermsVersion } from "@/lib/types";
 
+/** Agency ops roles that may publish platform legal docs (DB membership, not session stamp). */
+function isAgencyPublisherRole(role: string | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
 /**
- * Who may publish platform Terms / Privacy: platform admins, and owners of an
- * agency seat (including the platform agency after kind repair on staging).
- * Client (business_group) owners can view but not publish.
+ * Who may publish platform Terms / Privacy: platform admins, and agency ops
+ * (owner/admin) on the platform agency seat — including after kind repair and
+ * leftover-admin promote outside production.
  *
- * Always heals the platform-agency seat first so a signed-in Staging Agency
- * owner is not blocked by a corrupted `kind` or leftover admin membership.
+ * Client (business_group) seats cannot publish. Session `tenantRole` alone is
+ * not trusted: stale admin stamps + orphan duplicate agency rows caused the
+ * false “You can’t publish from this workspace” lockout.
  */
 export async function canPublishLegalDocs(user: ActingUser): Promise<boolean> {
   if (isPlatformAdmin(user)) return true;
 
   const { agency, active } = await ensurePlatformAgencyPublisherContext(user);
 
-  // Prefer DB membership role after staging promote (session stamp may lag).
+  // DB membership after heal/promote — session stamp may still say "admin".
   const agencyMem = await getMembership(agency.id, user.id);
-  if (agencyMem?.role === "owner") return true;
+  if (agency?.kind === "agency" && isAgencyPublisherRole(agencyMem?.role)) {
+    return true;
+  }
 
-  if (!isTenantOwner(user)) return false;
+  // Signed-in seat after in-place name/kind heal (duplicate Staging Agency rows).
+  if (active && active.id !== agency.id && active.kind === "agency") {
+    const activeMem = await getMembership(active.id, user.id);
+    if (isAgencyPublisherRole(activeMem?.role)) return true;
+  }
 
-  // Any agency-kind seat owner (including after in-place name heal).
-  if (active?.kind === "agency") return true;
+  // Last resort: re-read active id from session tenant (heal returned stale active).
   const tenant = await getTenant(user.tenantId);
-  return tenant?.kind === "agency";
+  if (tenant?.kind === "agency") {
+    const mem = await getMembership(tenant.id, user.id);
+    if (isAgencyPublisherRole(mem?.role)) return true;
+    // Session owner stamp only when DB membership is missing but seat is agency
+    // (demo/edge) — still never allow business_group.
+    if (isTenantOwner(user)) return true;
+  }
+
+  return false;
 }
 
 function escapeHtml(s: string): string {

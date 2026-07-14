@@ -63,3 +63,27 @@ export async function checkLegalPublishOnCorruptedAgencySeat() {
     await updateTenant(agency.id, { kind: priorKind === "agency" ? "agency" : "agency" });
   }
 }
+
+/**
+ * Leftover agency *admin* (session still stamped admin) must publish after heal
+ * promotes DB membership — mirrors the staging Legal lockout.
+ */
+export async function checkLegalPublishOnAgencyAdminSeat() {
+  const agency = await resolvePlatformAgencyTenant();
+  const suffix = Date.now();
+  const userRow = await createUser({
+    email: `agency-admin-legal-${suffix}@selftest.dev`,
+    name: "Agency Admin Legal",
+    role: "admin",
+  });
+  await addMembership({ tenantId: agency.id, userId: userRow.id, role: "admin" });
+
+  // Session stamp lags as admin; gate must trust DB after ensure/promote.
+  const allowed = await canPublishLegalDocs(acting(userRow, agency.id, "admin"));
+  return {
+    ok: allowed === true,
+    detail: allowed
+      ? "canPublish for agency admin (DB role after heal)"
+      : "expected canPublish=true for agency admin on agency seat",
+  };
+}

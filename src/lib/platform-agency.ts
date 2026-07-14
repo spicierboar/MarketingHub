@@ -16,7 +16,7 @@ import {
 } from "@/lib/db";
 import { appEnv, localDemoEnabled } from "@/lib/env";
 import { now } from "@/lib/utils";
-import type { ActingUser, Tenant } from "@/lib/types";
+import type { ActingUser, Tenant, TenantRole } from "@/lib/types";
 
 /** Canonical display name for the platform agency in each env. */
 export function platformAgencyCanonicalName(): string {
@@ -33,12 +33,40 @@ function preferByName(tenants: Tenant[], name: string): Tenant | undefined {
   );
 }
 
+/** Ops seat names that historically meant “the agency” on staging/demo. */
+function looksLikePlatformAgencyName(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  if (!n) return false;
+  const canonical = platformAgencyCanonicalName().trim().toLowerCase();
+  if (n === canonical) return true;
+  return (
+    n === "staging agency" ||
+    n === "brightspark marketing" ||
+    n === "marketing command centre"
+  );
+}
+
+function isPlausiblePlatformAgencySeat(t: Tenant, activeCount: number): boolean {
+  if (t.status !== "active") return false;
+  if (t.kind === "agency") return true;
+  if (looksLikePlatformAgencyName(t.name)) return true;
+  // Staging: sole active tenant is the ops seat even if kind/name were corrupted.
+  return appEnv() === "staging" && activeCount === 1;
+}
+
 /**
  * Resolve (and if needed repair/create) the single platform agency tenant.
  * Never deletes data — repairs kind/name/onboardingCompletedAt forward when
  * a prior client-onboarding bug renamed or re-kinded the agency row.
+ *
+ * When `preferTenantId` is the signed-in seat and that row is a plausible
+ * platform agency, prefer it over an alphabetically-first duplicate name —
+ * otherwise Legal heal promotes the wrong orphan row and the real seat stays
+ * stuck as “client workspace”.
  */
-export async function resolvePlatformAgencyTenant(): Promise<Tenant> {
+export async function resolvePlatformAgencyTenant(
+  preferTenantId?: string,
+): Promise<Tenant> {
   const canonical = platformAgencyCanonicalName();
   const tenants = await listTenants();
   const active = tenants.filter((t) => t.status === "active");
@@ -54,7 +82,17 @@ export async function resolvePlatformAgencyTenant(): Promise<Tenant> {
       ? active[0]
       : undefined;
 
+  const preferred =
+    preferTenantId != null
+      ? active.find(
+          (t) =>
+            t.id === preferTenantId &&
+            isPlausiblePlatformAgencySeat(t, active.length),
+        )
+      : undefined;
+
   let hit =
+    preferred ||
     preferByName(active, canonical) ||
     active.find((t) => t.kind === "agency") ||
     stagingCorruptedSeat ||
@@ -83,6 +121,7 @@ export async function resolvePlatformAgencyTenant(): Promise<Tenant> {
     if (
       isStagingSingle ||
       stagingCorruptedSeat?.id === hit.id ||
+      preferred?.id === hit.id ||
       (isCanonicalMiss && (hit.kind === "agency" || repairs.kind === "agency"))
     ) {
       repairs.name = canonical;
@@ -109,43 +148,42 @@ export async function resolvePlatformAgencyTenant(): Promise<Tenant> {
 
 /** True when this tenant id is the platform agency seat. */
 export async function isPlatformAgencyTenant(tenantId: string): Promise<boolean> {
-  const agency = await resolvePlatformAgencyTenant();
+  const agency = await resolvePlatformAgencyTenant(tenantId);
   return agency.id === tenantId;
 }
 
-/** Ops seat names that historically meant “the agency” on staging/demo. */
-function looksLikePlatformAgencyName(name: string): boolean {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  const canonical = platformAgencyCanonicalName().trim().toLowerCase();
-  if (n === canonical) return true;
-  return (
-    n === "staging agency" ||
-    n === "brightspark marketing" ||
-    n === "marketing command centre"
-  );
+/** Promote leftover admin → owner on non-production so Legal publish is not blocked. */
+async function promoteAgencyOpsIfNeeded(
+  tenantId: string,
+  userId: string,
+): Promise<TenantRole | undefined> {
+  const m = await getMembership(tenantId, userId);
+  if (!m) return undefined;
+  if (m.role === "owner") return "owner";
+  // Staging/dev: leftover invites often landed as admin. Legal requires an
+  // agency ops seat — promote rather than stranding Settings as “client”.
+  if (appEnv() !== "production" && m.role === "admin") {
+    await updateMembership(tenantId, userId, { role: "owner" });
+    return "owner";
+  }
+  return m.role;
 }
 
 /**
  * Repair the signed-in seat when it is the platform agency under a wrong
- * `kind`/`name`, and (on staging) promote an existing agency membership to
- * owner so Legal publish is not blocked by a leftover admin row.
+ * `kind`/`name`, and (outside production) promote leftover admin membership
+ * so Legal publish is not blocked by session/admin lag or duplicate agency rows.
  *
  * Call from Settings / Legal loads and staging quick-login — never deletes data.
  */
 export async function ensurePlatformAgencyPublisherContext(
   user: ActingUser,
 ): Promise<{ agency: Tenant; active: Tenant | undefined }> {
-  const agency = await resolvePlatformAgencyTenant();
+  // Prefer the signed-in seat when it is the real ops row (avoids promoting an
+  // orphan duplicate also named “Staging Agency”).
+  const agency = await resolvePlatformAgencyTenant(user.tenantId);
 
-  // Staging ops accounts often landed as admin from earlier invites; Legal
-  // publish requires owner. Promote only the platform-agency membership.
-  if (appEnv() === "staging") {
-    const m = await getMembership(agency.id, user.id);
-    if (m && m.role !== "owner") {
-      await updateMembership(agency.id, user.id, { role: "owner" });
-    }
-  }
+  await promoteAgencyOpsIfNeeded(agency.id, user.id);
 
   let active = await getTenant(user.tenantId);
   if (
@@ -167,8 +205,11 @@ export async function ensurePlatformAgencyPublisherContext(
     if (Object.keys(repairs).length > 0) {
       active = (await updateTenant(active.id, repairs)) ?? active;
     }
+    await promoteAgencyOpsIfNeeded(active.id, user.id);
   } else if (active && active.id === agency.id && active.kind !== "agency") {
     active = agency;
+  } else if (active && active.id === agency.id) {
+    await promoteAgencyOpsIfNeeded(active.id, user.id);
   }
 
   return { agency, active };
