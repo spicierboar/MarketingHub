@@ -7,7 +7,7 @@
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`(set after push)`** (= `origin/staging`) · do not commit `_owner_paste_*` / pricing xlsx / logs |
+> | Git tip | **`e9b372a`** (= `origin/staging` after push) · do not commit `_owner_paste_*` / pricing xlsx / logs |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
 > | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** |
 > | Staging login | **`/dev`** quick login · agency seat `development@tglt.com.au` |
@@ -36,7 +36,7 @@
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ tip in HANDOVER (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; legal smoke PASS; legal publish lockout FIXED; Clients empty (no Viya); live/W6 parked.
+> STATE: staging @ e9b372a (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; legal smoke PASS; legal publish lockout FIXED; Clients empty (no Viya); live/W6 parked.
 > IN PROGRESS: confirm Legal editors after deploy; unit pricing parked; optional add Viya client under Staging Agency.
 > NEXT: pricing Excel review → sell/margin later → optional RESEND → later main/live + W6. Or onboard Viya as client (do not rename agency).
 > Login: staging /dev quick-login (development@tglt.com.au). No *_LIVE.
