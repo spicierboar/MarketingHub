@@ -41,11 +41,21 @@ export async function resolvePlatformAgencyTenant(): Promise<Tenant> {
   const tenants = await listTenants();
   const active = tenants.filter((t) => t.status === "active");
 
+  // Staging: client onboarding once renamed the only ops seat (e.g. to "Viya" or
+  // an ABR legal name) and flipped kind to business_group. Prefer that row over
+  // creating a second agency while orphaning existing client companies.
+  const stagingCorruptedSeat =
+    appEnv() === "staging" &&
+    active.length === 1 &&
+    active[0]!.kind !== "agency" &&
+    preferByName(active, canonical) == null
+      ? active[0]
+      : undefined;
+
   let hit =
     preferByName(active, canonical) ||
     active.find((t) => t.kind === "agency") ||
-    // Staging quick-login may have renamed the only agency row to a client name
-    // (e.g. "Viya") while flipping kind to business_group — recover that row.
+    stagingCorruptedSeat ||
     (appEnv() === "staging" && active.length === 1 ? active[0] : undefined);
 
   if (!hit) {
@@ -66,15 +76,24 @@ export async function resolvePlatformAgencyTenant(): Promise<Tenant> {
     // or staging single-tenant corruption). Never rename BrightSpark seed when
     // env asks for a different name and BrightSpark already matches seed id.
     const isStagingSingle = appEnv() === "staging" && active.length === 1;
-    const isCanonicalMiss = hit.name !== canonical && preferByName(active, canonical) == null;
-    if (isStagingSingle || (isCanonicalMiss && hit.kind === "agency")) {
+    const isCanonicalMiss =
+      hit.name !== canonical && preferByName(active, canonical) == null;
+    if (
+      isStagingSingle ||
+      stagingCorruptedSeat?.id === hit.id ||
+      (isCanonicalMiss && (hit.kind === "agency" || repairs.kind === "agency"))
+    ) {
       repairs.name = canonical;
     } else if (hit.name !== canonical && hit.kind !== "agency") {
       repairs.name = canonical;
     }
   }
   if (!hit.onboardingCompletedAt) repairs.onboardingCompletedAt = now();
-  if (hit.plan === "starter" && appEnv() === "staging") {
+  if (
+    appEnv() === "staging" &&
+    (hit.plan === "starter" || repairs.kind === "agency") &&
+    hit.plan !== "agency"
+  ) {
     // Staging ops seat — prefer agency plan headroom for many clients.
     repairs.plan = "agency";
   }

@@ -61,6 +61,7 @@ import { appEnv } from "@/lib/env";
 import type {
   ActingUser,
   Company,
+  CompanyProfile,
   ManagedServiceLevel,
   MarketingPackageCustomModules,
   MarketingPackageId,
