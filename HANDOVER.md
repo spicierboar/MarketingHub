@@ -7,7 +7,7 @@
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`43d2508`+** — always verify `git rev-parse --short origin/staging` |
+> | Git tip | **`a4d6aba`** + tip-SHA sync commit — confirm `git rev-parse --short origin/staging` |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
 > | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0045** + **paste 0046** (`legal_docs_kind`) if not yet applied |
 > | Staging login | Magic link rate-limited → **`/dev` staging quick login** (prefer agency seat e.g. `development@tglt.com.au`) |
@@ -39,7 +39,7 @@
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ 43d2508 (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; live/W6 parked.
+> STATE: staging tip (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; live/W6 parked.
 > IN PROGRESS: fix legal publisher gate (agency owner already on Staging Agency — RBAC/UI bug, not seat switch); confirm 0046 paste; unit pricing parked.
 > NEXT: fix legal Settings/publish for agency owner → 0046 if needed → smoke Clients (Viya) + accept-terms → pricing Excel → optional RESEND → later main/live + W6.
 > Login: staging /dev quick-login. No *_LIVE.
