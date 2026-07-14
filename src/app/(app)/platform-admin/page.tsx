@@ -18,14 +18,14 @@ import {
 // workspaces. Gated to the platformAdmin flag.
 export default async function PlatformAdminPage() {
   await requirePlatformAdmin();
-  const versions = await listTermsVersions();
+  const versions = await listTermsVersions("terms");
   const current = versions.find((v) => v.active);
 
   return (
     <div>
       <PageHeader
         title="Platform admin"
-        description="Publish Terms & Conditions and provision client workspaces. Platform-operator only — no tenant data is shown here."
+        description="Publish Terms & Conditions and provision client workspaces. Platform-operator only — no tenant data is shown here. Privacy Policy and full legal editors live under Settings → Terms & Privacy Policy."
       />
       <div className="grid gap-6 p-6 lg:grid-cols-2">
         {/* Terms & Conditions */}

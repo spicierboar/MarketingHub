@@ -56,7 +56,7 @@ import type {
   RestaurantOrder,
   Recommendation, RecommendationDismissRecord, LearningHypothesis, LearningLesson, RoleTitle, ScheduledPost, ScheduledPostStatus, SecuritySettings, ServiceRecord,
   SocialMention, SocialResponseDraft, CompanyReview, ReviewRequestCampaign, Task, Tenant, TenantMember,
-  TermsVersion, TermsAcceptance, User, UtmLink,
+  LegalDocKind, TermsVersion, TermsAcceptance, User, UtmLink,
   EmailTemplate, EmailSubscriber, EmailCampaign,
   CmsPage, CmsPageVersion, CmsSeoMetadata, CmsUpdateRequest,
   RagKnowledgeSource, RagKnowledgeVersion,
@@ -185,39 +185,89 @@ export const supabaseRepo = {
     return data ? toDomain<Tenant>(data) : undefined;
   },
 
-  // Terms & Conditions — platform-level (svc, like identity/audit). Ids passed
-  // in are always session-derived (publisher = platform admin, acceptor = the
-  // session user), so svc() never touches a caller-supplied cross-tenant id.
-  async listTermsVersions(): Promise<TermsVersion[]> {
+  // Legal docs (terms + privacy) — platform-level (svc, like identity/audit).
+  // Ids passed in are always session-derived (publisher = agency owner /
+  // platform admin, acceptor = the session user), so svc() never touches a
+  // caller-supplied cross-tenant id.
+  async listTermsVersions(kind?: LegalDocKind): Promise<TermsVersion[]> {
     const sb = svc(); if (!sb) return [];
-    const { data } = await sb.from("terms_versions").select("*").order("version", { ascending: false });
-    return many<TermsVersion>(data);
+    let q = sb.from("terms_versions").select("*").order("version", { ascending: false });
+    if (kind) q = q.eq("kind", kind);
+    const { data } = await q;
+    return many<TermsVersion>(data).map((v) => ({
+      ...v,
+      kind: v.kind === "privacy" ? "privacy" : "terms",
+    }));
+  },
+  async currentLegalDoc(kind: LegalDocKind): Promise<TermsVersion | undefined> {
+    const sb = svc(); if (!sb) return undefined;
+    const { data } = await sb
+      .from("terms_versions")
+      .select("*")
+      .eq("active", true)
+      .eq("kind", kind)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return undefined;
+    const v = toDomain<TermsVersion>(data);
+    return { ...v, kind: v.kind === "privacy" ? "privacy" : "terms" };
   },
   async currentTerms(): Promise<TermsVersion | undefined> {
-    const sb = svc(); if (!sb) return undefined;
-    const { data } = await sb.from("terms_versions").select("*").eq("active", true).order("version", { ascending: false }).limit(1).maybeSingle();
-    return data ? toDomain<TermsVersion>(data) : undefined;
+    return this.currentLegalDoc("terms");
   },
   async publishTermsVersion(input: Omit<TermsVersion, "id" | "version" | "active" | "publishedAt">): Promise<TermsVersion> {
     const sb = svc(); if (!sb) throw new Error("Supabase not configured");
-    const { data: rows } = await sb.from("terms_versions").select("version").order("version", { ascending: false }).limit(1);
+    const kind = input.kind === "privacy" ? "privacy" : "terms";
+    const { data: rows } = await sb
+      .from("terms_versions")
+      .select("version")
+      .eq("kind", kind)
+      .order("version", { ascending: false })
+      .limit(1);
     const nextVersion = (rows && rows[0] ? Number((rows[0] as Row).version) : 0) + 1;
-    // Insert the new active version FIRST, then supersede the OTHERS — a failed
-    // insert must never leave zero active versions (which would disable the gate).
-    const { data, error } = await sb.from("terms_versions").insert({ ...toRow(input), version: nextVersion, active: true, published_at: now() }).select("*").single();
+    // Insert the new active version FIRST, then supersede others of the SAME kind —
+    // a failed insert must never leave zero active docs (which would disable the gate).
+    const { data, error } = await sb
+      .from("terms_versions")
+      .insert({ ...toRow({ ...input, kind }), version: nextVersion, active: true, published_at: now() })
+      .select("*")
+      .single();
     if (error) throw new Error("publishTermsVersion: " + error.message);
-    await sb.from("terms_versions").update({ active: false }).eq("active", true).neq("id", (data as Row).id as string);
-    return toDomain<TermsVersion>(data);
+    await sb
+      .from("terms_versions")
+      .update({ active: false })
+      .eq("active", true)
+      .eq("kind", kind)
+      .neq("id", (data as Row).id as string);
+    const v = toDomain<TermsVersion>(data);
+    return { ...v, kind };
   },
   async recordTermsAcceptance(input: Omit<TermsAcceptance, "id" | "acceptedAt">): Promise<TermsAcceptance> {
     const sb = svc(); if (!sb) throw new Error("Supabase not configured");
-    const { data, error } = await sb.from("terms_acceptances").insert({ ...toRow(input), accepted_at: now() }).select("*").single();
+    const kind = input.kind === "privacy" ? "privacy" : "terms";
+    const { data, error } = await sb
+      .from("terms_acceptances")
+      .insert({ ...toRow({ ...input, kind }), accepted_at: now() })
+      .select("*")
+      .single();
     if (error) throw new Error("recordTermsAcceptance: " + error.message);
-    return toDomain<TermsAcceptance>(data);
+    const a = toDomain<TermsAcceptance>(data);
+    return { ...a, kind };
   },
-  async hasAcceptedTerms(userId: string, version: number): Promise<boolean> {
+  async hasAcceptedTerms(
+    userId: string,
+    version: number,
+    kind: LegalDocKind = "terms",
+  ): Promise<boolean> {
     const sb = svc(); if (!sb) return false;
-    const { data } = await sb.from("terms_acceptances").select("id").eq("user_id", userId).eq("version", version).limit(1);
+    const { data } = await sb
+      .from("terms_acceptances")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("version", version)
+      .eq("kind", kind)
+      .limit(1);
     return !!(data && data.length > 0);
   },
   async updateTermsVersion(id: string, patch: Partial<TermsVersion>): Promise<TermsVersion | undefined> {

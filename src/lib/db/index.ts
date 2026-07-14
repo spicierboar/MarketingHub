@@ -115,6 +115,7 @@ import type {
   ScheduledPost,
   ScheduledPostStatus,
   SecuritySettings,
+  LegalDocKind,
   TermsVersion,
   TermsAcceptance,
   ServiceRecord,
@@ -171,52 +172,98 @@ export async function getTenantByStripeCustomer(
   return db().tenants.find((t) => t.stripeCustomerId === customerId);
 }
 
-// ---- Terms & Conditions (versioned, platform-level) + acceptance --------------
+// ---- Legal docs (versioned, platform-level) + acceptance ----------------------
 //
-// Platform-global — NOT tenant-scoped. currentTerms = the active version with
-// the highest number; publishing bumps the number, deactivates prior versions,
-// and thereby forces every user to re-accept (the /accept-terms gate checks
-// hasAcceptedTerms(userId, currentVersion)).
-export async function listTermsVersions(): Promise<TermsVersion[]> {
-  if (isSupabaseConfigured()) return supabaseRepo.listTermsVersions();
-  return [...db().termsVersions].sort((a, b) => b.version - a.version);
+// Platform-global — NOT tenant-scoped. Each kind ('terms' | 'privacy') has its
+// own active version; publishing bumps that kind's number, deactivates prior
+// versions of the SAME kind, and forces re-accept via /accept-terms.
+
+function normaliseLegalDoc(v: TermsVersion): TermsVersion {
+  return { ...v, kind: v.kind === "privacy" ? "privacy" : "terms" };
 }
-export async function currentTerms(): Promise<TermsVersion | undefined> {
-  if (isSupabaseConfigured()) return supabaseRepo.currentTerms();
+
+export async function listTermsVersions(kind?: LegalDocKind): Promise<TermsVersion[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listTermsVersions(kind);
+  const rows = [...db().termsVersions].map(normaliseLegalDoc);
+  const filtered = kind ? rows.filter((v) => v.kind === kind) : rows;
+  return filtered.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+    return b.version - a.version;
+  });
+}
+export async function currentLegalDoc(kind: LegalDocKind): Promise<TermsVersion | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.currentLegalDoc(kind);
   return db()
-    .termsVersions.filter((v) => v.active)
+    .termsVersions.map(normaliseLegalDoc)
+    .filter((v) => v.active && v.kind === kind)
     .sort((a, b) => b.version - a.version)[0];
+}
+/** @deprecated Prefer currentLegalDoc("terms") — kept for call-site compatibility. */
+export async function currentTerms(): Promise<TermsVersion | undefined> {
+  return currentLegalDoc("terms");
+}
+export async function currentPrivacy(): Promise<TermsVersion | undefined> {
+  return currentLegalDoc("privacy");
+}
+/** Docs the user still must accept (current active terms and/or privacy). */
+export async function pendingLegalDocs(userId: string): Promise<TermsVersion[]> {
+  const pending: TermsVersion[] = [];
+  for (const kind of ["terms", "privacy"] as const) {
+    const doc = await currentLegalDoc(kind);
+    if (doc && !(await hasAcceptedTerms(userId, doc.version, kind))) {
+      pending.push(doc);
+    }
+  }
+  return pending;
 }
 export async function publishTermsVersion(
   input: Omit<TermsVersion, "id" | "version" | "active" | "publishedAt">,
 ): Promise<TermsVersion> {
-  if (isSupabaseConfigured()) return supabaseRepo.publishTermsVersion(input);
+  const kind: LegalDocKind = input.kind === "privacy" ? "privacy" : "terms";
+  if (isSupabaseConfigured()) return supabaseRepo.publishTermsVersion({ ...input, kind });
   const s = db();
-  const nextVersion = s.termsVersions.reduce((m, v) => Math.max(m, v.version), 0) + 1;
-  // Insert the new active version FIRST, then supersede the OTHERS — so a failed
-  // insert can never leave zero active versions (which would disable the gate).
+  const nextVersion =
+    s.termsVersions
+      .map(normaliseLegalDoc)
+      .filter((v) => v.kind === kind)
+      .reduce((m, v) => Math.max(m, v.version), 0) + 1;
+  // Insert the new active version FIRST, then supersede others of the SAME kind —
+  // so a failed insert can never leave zero active docs (which would disable the gate).
   const rec: TermsVersion = {
     ...input,
+    kind,
     id: id("tv"),
     version: nextVersion,
     active: true,
     publishedAt: now(),
   };
   s.termsVersions.push(rec);
-  for (const v of s.termsVersions) if (v.id !== rec.id) v.active = false;
+  for (const v of s.termsVersions) {
+    if (v.id !== rec.id && normaliseLegalDoc(v).kind === kind) v.active = false;
+  }
   return rec;
 }
 export async function recordTermsAcceptance(
   input: Omit<TermsAcceptance, "id" | "acceptedAt">,
 ): Promise<TermsAcceptance> {
-  if (isSupabaseConfigured()) return supabaseRepo.recordTermsAcceptance(input);
-  const rec: TermsAcceptance = { ...input, id: id("ta"), acceptedAt: now() };
+  const kind: LegalDocKind = input.kind === "privacy" ? "privacy" : "terms";
+  if (isSupabaseConfigured()) return supabaseRepo.recordTermsAcceptance({ ...input, kind });
+  const rec: TermsAcceptance = { ...input, kind, id: id("ta"), acceptedAt: now() };
   db().termsAcceptances.push(rec);
   return rec;
 }
-export async function hasAcceptedTerms(userId: string, version: number): Promise<boolean> {
-  if (isSupabaseConfigured()) return supabaseRepo.hasAcceptedTerms(userId, version);
-  return db().termsAcceptances.some((a) => a.userId === userId && a.version === version);
+export async function hasAcceptedTerms(
+  userId: string,
+  version: number,
+  kind: LegalDocKind = "terms",
+): Promise<boolean> {
+  if (isSupabaseConfigured()) return supabaseRepo.hasAcceptedTerms(userId, version, kind);
+  return db().termsAcceptances.some(
+    (a) =>
+      a.userId === userId &&
+      a.version === version &&
+      (a.kind === kind || (!a.kind && kind === "terms")),
+  );
 }
 export async function updateTermsVersion(
   id: string,

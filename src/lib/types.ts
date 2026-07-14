@@ -130,36 +130,45 @@ export interface TenantBranding {
   approvalMessage?: string; // note shown to clients on the approval page
 }
 
-// ---- Terms & Conditions (versioned) ------------------------------------------
+// ---- Legal docs: Terms & Conditions + Privacy Policy (versioned) ------------
 //
-// Platform-level (not tenant-scoped): one set of terms governs every customer.
-// Publishing a new version supersedes the prior (marks it inactive) and bumps
-// the monotonic version number; the CURRENT terms = the active version with the
-// highest number. Every user must accept the current version before using the
-// app (the /accept-terms gate), so a new version forces re-acceptance from all.
+// Platform-level (not tenant-scoped): one set of T&Cs and one Privacy Policy
+// govern every customer. Each document has an independent monotonic version
+// sequence per `kind`. Publishing a new version supersedes the prior of the
+// SAME kind (marks it inactive). The CURRENT doc for a kind = the active row
+// with the highest version. Every user must accept the current T&Cs AND (when
+// published) the current Privacy Policy before using the app (/accept-terms),
+// so a new version forces re-acceptance. Agency Settings publishers use the
+// same platform docs (single agency for now); tenant-scoped white-label can
+// layer on later without breaking this gate.
+export type LegalDocKind = "terms" | "privacy";
+
 export interface TermsVersion {
   id: string;
-  version: number; // monotonic; current = highest active
+  kind: LegalDocKind; // 'terms' | 'privacy' — independent version sequences
+  version: number; // monotonic per kind; current = highest active of that kind
   title: string;
-  body: string; // full terms text
+  body: string; // full document text
   summary?: string; // "what changed" — shown to users + used in the update email
   effectiveDate: string; // ISO date
   active: boolean; // superseded versions keep active=false for history/audit
   publishedById: string;
   publishedAt: string;
-  // Set when the "terms updated" broadcast email was sent for this version
+  // Set when the "updated" broadcast email was sent for this version
   // (best-effort on publish; re-sendable). notifiedCount = recipients emailed.
   notifiedAt?: string;
   notifiedCount?: number;
 }
 
-// A record that a specific user accepted a specific terms version. Platform
-// terms bind the user (global identity); tenantId is the acceptance context for
-// audit + tenant-scoped export/purge.
+// A record that a specific user accepted a specific legal-doc version. Platform
+// docs bind the user (global identity); tenantId is the acceptance context for
+// audit + tenant-scoped export/purge. `kind` disambiguates terms vs privacy
+// version numbers.
 export interface TermsAcceptance {
   id: string;
   userId: string;
   tenantId: string;
+  kind: LegalDocKind;
   version: number;
   acceptedAt: string;
   ip?: string;

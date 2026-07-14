@@ -1,27 +1,30 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { currentTerms, hasAcceptedTerms, recordTermsAcceptance } from "@/lib/db";
+import { pendingLegalDocs, recordTermsAcceptance } from "@/lib/db";
 import { requireUserRaw } from "@/lib/auth/rbac";
 import { clientIp } from "@/lib/ratelimit";
 import { logAction } from "@/lib/audit";
+import { legalDocLabel } from "@/lib/terms";
 
-// Record the current user's acceptance of the CURRENT terms version, then send
-// them into the app. Version is read server-side from currentTerms() — never
-// trusted from the form — so a user can only ever accept the live version.
+// Record the current user's acceptance of every PENDING legal doc (current
+// Terms and/or Privacy), then send them into the app. Versions are read
+// server-side via pendingLegalDocs() — never trusted from the form — so a user
+// can only ever accept the live version of each kind.
 export async function acceptTermsAction() {
   const user = await requireUserRaw();
-  const terms = await currentTerms();
-  if (!terms) redirect("/dashboard");
-  if (!(await hasAcceptedTerms(user.id, terms.version))) {
+  const pending = await pendingLegalDocs(user.id);
+  const ip = await clientIp();
+  for (const doc of pending) {
     await recordTermsAcceptance({
       userId: user.id,
       tenantId: user.tenantId,
-      version: terms.version,
-      ip: await clientIp(),
+      kind: doc.kind,
+      version: doc.version,
+      ip,
     });
-    await logAction(user, "terms.accepted", {
-      detail: `Accepted Terms v${terms.version}`,
+    await logAction(user, doc.kind === "privacy" ? "privacy.accepted" : "terms.accepted", {
+      detail: `Accepted ${legalDocLabel(doc.kind)} v${doc.version}`,
     });
   }
   redirect("/dashboard");

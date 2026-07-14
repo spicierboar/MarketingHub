@@ -35,6 +35,7 @@ export async function publishTermsVersionAction(formData: FormData) {
     throw new Error("Title, body and effective date are required.");
   }
   const version = await publishTermsVersion({
+    kind: "terms",
     title,
     body,
     summary: summary || undefined,
@@ -48,6 +49,7 @@ export async function publishTermsVersionAction(formData: FormData) {
   const h = await headers();
   await broadcastTermsUpdate(user, version, resolveOrigin((k) => h.get(k)));
   revalidatePath("/platform-admin");
+  revalidatePath("/settings/legal");
 }
 
 // Re-send the "terms updated" email for the CURRENT version — for when Resend

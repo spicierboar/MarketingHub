@@ -13,11 +13,10 @@
 import { redirect } from "next/navigation";
 import {
   accessForUser,
-  currentTerms,
   getCompany,
   getMembership,
   getTenant,
-  hasAcceptedTerms,
+  pendingLegalDocs,
   listCompanies,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -140,9 +139,9 @@ async function enforceOnboardingAndTerms(user: ActingUser): Promise<void> {
   ) {
     redirect("/onboarding");
   }
-  // Everyone must have accepted the CURRENT terms version.
-  const terms = await currentTerms();
-  if (terms && !(await hasAcceptedTerms(user.id, terms.version))) {
+  // Everyone must have accepted the CURRENT terms AND privacy (when published).
+  const pending = await pendingLegalDocs(user.id);
+  if (pending.length > 0) {
     redirect("/accept-terms");
   }
 }

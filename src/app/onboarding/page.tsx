@@ -95,7 +95,7 @@ export default async function OnboardingPage({
   );
   const packageDone = !!tenant.onboarding?.marketingPackageId;
   const termsDone =
-    !terms || (await hasAcceptedTerms(user.id, terms.version));
+    !terms || (await hasAcceptedTerms(user.id, terms.version, "terms"));
   const mockCheckout = useMockPackageCheckout();
 
   const requested = params.step as Step | undefined;
@@ -282,7 +282,7 @@ export default async function OnboardingPage({
                   <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                     {terms.body}
                   </div>
-                  {(await hasAcceptedTerms(user.id, terms.version)) && (
+                  {(await hasAcceptedTerms(user.id, terms.version, "terms")) && (
                     <p className="text-xs text-emerald-600">
                       You&apos;ve already accepted this version — continue to
                       payment below.

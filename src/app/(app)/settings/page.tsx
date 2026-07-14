@@ -16,6 +16,7 @@ import {
   MessageSquareCode,
   Code2,
   ScrollText,
+  FileText,
   Landmark,
   type LucideIcon,
 } from "lucide-react";
@@ -79,6 +80,13 @@ const SECTIONS: HubSection[] = [
         label: "Privacy",
         description: "Consents, retention, and data subject requests.",
         icon: Lock,
+      },
+      {
+        href: "/settings/legal",
+        label: "Terms & Privacy Policy",
+        description: "Publish versioned T&Cs and Privacy Policy; notify clients.",
+        icon: FileText,
+        ownerOnly: true,
       },
       {
         href: "/audit",

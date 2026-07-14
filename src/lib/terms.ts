@@ -1,62 +1,81 @@
-// Terms-update broadcast (Phase B).
+// Legal-doc update broadcast (Terms & Privacy).
 //
-// When a new Terms version is published, email every active client that the
-// terms changed and that they'll be asked to re-accept on next sign-in. Fires
-// best-effort on publish and is re-sendable from Platform Admin (e.g. if Resend
-// wasn't configured at publish time). Env-gated: with no RESEND_API_KEY the
-// recipients are counted but nothing is sent, so the demo still records the
-// intent. The force-re-acceptance gate (requireUser) is the actual enforcement;
-// this email is the courtesy heads-up.
+// When a new Terms or Privacy version is published, email every active client
+// that the document changed and that they'll be asked to re-accept on next
+// sign-in. Fires best-effort on publish and is re-sendable from Settings /
+// Platform Admin. Env-gated: with no RESEND_API_KEY the recipients are counted
+// but nothing is sent. The force-re-acceptance gate (requireUser) is the actual
+// enforcement; this email is the courtesy heads-up.
 
 import { listActiveRecipients, updateTermsVersion } from "@/lib/db";
 import { emailConfigured, sendBulkEmail } from "@/lib/email";
 import { logAction } from "@/lib/audit";
 import { now } from "@/lib/utils";
-import type { ActingUser, TermsVersion } from "@/lib/types";
+import type { ActingUser, LegalDocKind, TermsVersion } from "@/lib/types";
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
 
-function termsEmailHtml(version: TermsVersion, name: string, origin: string): string {
+export function legalDocLabel(kind: LegalDocKind): string {
+  return kind === "privacy" ? "Privacy Policy" : "Terms of Service";
+}
+
+function legalDocEmailHtml(version: TermsVersion, name: string, origin: string): string {
+  const label = legalDocLabel(version.kind);
   const summary = version.summary ? `<p><strong>What changed:</strong> ${escapeHtml(version.summary)}</p>` : "";
+  const link =
+    version.kind === "privacy"
+      ? `<p><a href="${origin}/accept-terms">Review and accept →</a></p>`
+      : `<p><a href="${origin}/terms">Read the full terms →</a></p>`;
   return `<p>Hi ${escapeHtml(name || "there")},</p>
-<p>We've updated our Terms of Service (version ${version.version}, effective ${escapeHtml(version.effectiveDate)}).</p>
+<p>We've updated our ${escapeHtml(label)} (version ${version.version}, effective ${escapeHtml(version.effectiveDate)}).</p>
 ${summary}
-<p>The next time you sign in you'll be asked to review and accept the updated terms before continuing.</p>
-<p><a href="${origin}/terms">Read the full terms →</a></p>
+<p>The next time you sign in you'll be asked to review and accept the updated document before continuing.</p>
+${link}
 <p style="color:#888">Marketing Command Centre</p>`;
 }
 
-// Send the "terms updated" email to every active recipient. Records notifiedAt/
-// notifiedCount on the version and audits the outcome. Never throws — a mail
-// failure must not undo a successful publish.
+/** @deprecated Prefer broadcastLegalDocUpdate — kept for platform-admin call sites. */
 export async function broadcastTermsUpdate(
   actor: ActingUser,
   version: TermsVersion,
   origin: string,
 ): Promise<{ recipients: number; sent: number; failed: number; emailConfigured: boolean }> {
-  // WHOLLY best-effort: the terms version is already durably published before we
+  return broadcastLegalDocUpdate(actor, version, origin);
+}
+
+// Send the "legal doc updated" email to every active recipient. Records notifiedAt/
+// notifiedCount on the version and audits the outcome. Never throws — a mail
+// failure must not undo a successful publish.
+export async function broadcastLegalDocUpdate(
+  actor: ActingUser,
+  version: TermsVersion,
+  origin: string,
+): Promise<{ recipients: number; sent: number; failed: number; emailConfigured: boolean }> {
+  // WHOLLY best-effort: the version is already durably published before we
   // get here, so NOTHING in the broadcast (recipient gather, send, stamp, audit)
   // may throw out of the caller — a transient blip must not make a successful
   // publish look failed (which would tempt a retry → duplicate version).
   try {
+    const label = legalDocLabel(version.kind);
     const recipients = await listActiveRecipients();
     const messages = recipients.map((r) => ({
       to: r.email,
-      subject: `Our Terms of Service have been updated (v${version.version})`,
-      html: termsEmailHtml(version, r.name, origin),
+      subject: `Our ${label} has been updated (v${version.version})`,
+      html: legalDocEmailHtml(version, r.name, origin),
     }));
     const result = await sendBulkEmail(messages);
     await updateTermsVersion(version.id, { notifiedAt: now(), notifiedCount: result.sent });
-    await logAction(actor, "terms.notified", {
+    const auditAction = version.kind === "privacy" ? "privacy.notified" : "terms.notified";
+    await logAction(actor, auditAction, {
       detail: emailConfigured()
-        ? `Terms v${version.version}: emailed ${result.sent}/${recipients.length} client(s)${result.failed ? `, ${result.failed} failed` : ""}`
-        : `Terms v${version.version}: ${recipients.length} recipient(s) — email NOT sent (RESEND_API_KEY not configured)`,
+        ? `${label} v${version.version}: emailed ${result.sent}/${recipients.length} client(s)${result.failed ? `, ${result.failed} failed` : ""}`
+        : `${label} v${version.version}: ${recipients.length} recipient(s) — email NOT sent (RESEND_API_KEY not configured)`,
     });
     return { recipients: recipients.length, sent: result.sent, failed: result.failed, emailConfigured: emailConfigured() };
   } catch (err) {
-    console.error("[terms] broadcast failed (publish already succeeded):", err);
+    console.error("[legal-docs] broadcast failed (publish already succeeded):", err);
     return { recipients: 0, sent: 0, failed: 0, emailConfigured: emailConfigured() };
   }
 }

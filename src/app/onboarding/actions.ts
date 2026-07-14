@@ -603,10 +603,11 @@ export async function acceptOnboardingTermsAction() {
   }
 
   const terms = await currentTerms();
-  if (terms && !(await hasAcceptedTerms(user.id, terms.version))) {
+  if (terms && !(await hasAcceptedTerms(user.id, terms.version, "terms"))) {
     await recordTermsAcceptance({
       userId: user.id,
       tenantId: user.tenantId,
+      kind: "terms",
       version: terms.version,
       ip: await clientIp(),
     });
@@ -632,7 +633,7 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
   }
 
   const terms = await currentTerms();
-  if (terms && !(await hasAcceptedTerms(user.id, terms.version))) {
+  if (terms && !(await hasAcceptedTerms(user.id, terms.version, "terms"))) {
     redirect("/onboarding?step=terms");
   }
 

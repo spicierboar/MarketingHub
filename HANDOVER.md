@@ -1,51 +1,46 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-13, **STAGING LIVE @ `d9a2bad` · INTERNAL PRICING IN PROGRESS · W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-14, **STAGING · LEGAL DOCS (T&C + PRIVACY) · INTERNAL PRICING IN PROGRESS · W6 WAITING**)
 >
-> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` (= `origin/staging` @ **`d9a2bad`**) · Vercel Preview = staging · live flags **OFF**
+> **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` · Vercel Preview = staging · live flags **OFF**
 >
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`d9a2bad`** on `staging` / `origin/staging` (UX polish `b0fc47b` + tls / self-test / PKCE / quick-login / ABN onboarding / agency package drop / Custom a-la-carte) |
+> | Git tip | see `origin/staging` after legal-docs push |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
-> | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live `hrwkshspqeulgrmpqtpx`) · migrations **0001–0045** pasted via `_owner_paste_staging_batch{1,2,3}.sql` |
-> | Staging login | Magic link rate-limited → use **`/dev` staging quick login** (Sign in with email) |
-> | `main` | Local may be ahead of `origin/main`; **do not push main/live** until owner asks |
+> | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0045** + **paste 0046** (`legal_docs_kind`) if not yet applied |
+> | Staging login | Magic link rate-limited → use **`/dev` staging quick login** |
 > | Live / mangotickle.com.au / `*_LIVE` | **PARKED** · W6 Google still waiting |
 >
 > ### DONE this wave
-> - Large UX/polish shipped (`b0fc47b`): New Client scrape identity, packages/checkout, strategy hubs, visuals quotas, env docs
-> - Staging hardening: tls CA types, self-test JSON errors, magic-link PKCE host fix, `/dev` staging quick-login
-> - Agency onboarding: ABN + industry + nature cascades; **Marketing package step removed** (order: Your details → Workspace plan → Payment → Terms); client packages stay on New Client
-> - Custom marketing packages = **transparent a-la-carte** line items (`d9a2bad`); named Basic/Pro/Blast remain; agency SaaS Starter/Agency/Scale separate
-> - Staging Supabase + Vercel Preview live; migrations 0001–0045 on staging
+> - Agency Settings → **Terms & Privacy Policy** (`/settings/legal`): versioned publish for T&Cs + Privacy; email clients (best-effort); force re-accept at `/accept-terms`
+> - Design: **platform-global** docs with `kind` (`terms` \| `privacy`) — single agency; extends existing 0007 gate (not tenant-scoped white-label)
+> - Migration **0046_legal_docs_kind.sql** · owner paste: `supabase/migrations/_owner_paste_0046_legal_docs_kind.sql` (exclude `_owner_paste_*` from commits)
+> - Self-test: `legalDocs.independentVersionsAndGate`
 >
 > ### IN PROGRESS — owner priority
-> - **Internal unit pricing** (cost + sell) for most atomic units (channels individually, etc.)
-> - Recommended internal **costs** proposed (A$75/hr labour assumption) — **sell prices NOT finalized by owner**
-> - Offering gap: sheet incomplete — missing Local SEO/GEO, strategy-as-SKU, CRM/CMS/loyalty/funnel, reporting, client asks, etc. as priced SKUs (features exist in product)
-> - Wire finalized rates into Custom rate card / package catalog when owner locks numbers
+> - **Internal unit pricing** (cost + sell) for most atomic units
+> - Wire finalized rates into Custom rate card when owner locks numbers
 >
 > ### NEXT (ordered)
-> 1. **Finalize internal cost + sell rates** with owner (atomic units + fill offering gaps)
-> 2. **Wire rates** into Custom rate card / marketing package catalog (sell side; keep cost internal)
-> 3. **Optional:** website capture + scrape on agency `/onboarding` details step — **not implemented yet** (New Client scrape exists; agency details has ABN/industry only)
-> 4. Smoke staging (quick-login → onboarding → New Client → Custom builder)
-> 5. Later: push `main` / live cutover when asked · W6 Google still waiting · set `STRIPE_PRICE_PACKAGE_*` when ready
+> 1. Owner paste **0046** on staging Supabase if not applied
+> 2. Smoke: Settings → Legal → publish Privacy → client login gated at `/accept-terms`
+> 3. Finalize internal cost + sell rates → wire rate card
+> 4. Later: push `main` / live cutover when asked · W6 Google still waiting
 >
 > ### How to resume
-> - **Human:** open staging URL → `/dev` quick login → continue pricing discussion or smoke flows above.
-> - **Agent:** `READ HANDOVER.md` (this block) + `docs/ENVIRONMENTS.md` · branch `staging` · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps · owner applies SQL via Notepad paste only.
+> - **Human:** staging `/dev` quick login → Settings → Terms & Privacy Policy; apply 0046 paste if needed
+> - **Agent:** `READ HANDOVER.md` · branch `staging` · never flip `*_LIVE` · never commit `_owner_paste_*`
 >
 > ### Resume in a new Cursor chat
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ d9a2bad (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; live/W6 parked.
-> IN PROGRESS: internal unit pricing (cost+sell); sell not finalized; offering gaps.
-> NEXT: finalize rates → wire rate card → optional agency onboarding website scrape → smoke staging → later main/live.
-> Login: staging /dev quick-login (magic link rate-limited). No *_LIVE.
+> STATE: staging; Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; paste 0046 if needed; live/W6 parked.
+> IN PROGRESS: internal unit pricing; legal docs shipped (platform kind=terms|privacy).
+> NEXT: paste 0046 → smoke Settings legal + accept-terms → finalize rates → wire rate card.
+> Login: staging /dev quick-login. No *_LIVE.
 > ```
 >
 > **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. Exclude `_owner_paste_*`, `scripts/*.snip`, integrator temps from commits.
@@ -57,6 +52,12 @@
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-13, **STAGING LIVE @ `d9a2bad` · INTERNAL PRICING IN PROGRESS · W6 WAITING**) — archived
+>
+> Staging live; UX/Custom a-la-carte; pricing wave. Superseded by legal-docs + tip advances on staging.
 >
 > ---
 >

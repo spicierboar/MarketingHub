@@ -88,7 +88,7 @@ function diagnostics() {
     hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     supabaseHost,
     hint:
-      "If checks fail with relation/table errors: apply numbered supabase/migrations (0001→0045) to the staging project. " +
+      "If checks fail with relation/table errors: apply numbered supabase/migrations (0001→0046) to the staging project. " +
       "If this URL redirects to Vercel SSO: disable Deployment Protection for Preview, or use a bypass token.",
   };
 }

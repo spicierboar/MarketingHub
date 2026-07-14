@@ -2109,12 +2109,13 @@ function seed(): DataStore {
       updatedAt: t,
     })),
     automationRuns: [],
-    // Terms & Conditions: one active version (v1). Seeded demo users have all
-    // accepted it, so they aren't gated; a NEW signup (no acceptance) hits the
-    // /accept-terms gate, and publishing v2 forces everyone to re-accept.
+    // Legal docs: active Terms v1 + Privacy v1. Seeded demo users have accepted
+    // both, so they aren't gated; a NEW signup (no acceptance) hits /accept-terms,
+    // and publishing a new version of either kind forces everyone to re-accept.
     termsVersions: [
       {
         id: "tv_1",
+        kind: "terms" as const,
         version: 1,
         title: "Terms of Service",
         body:
@@ -2124,6 +2125,21 @@ function seed(): DataStore {
           "card by the platform; we charge only our subscription and any management " +
           "fee. See the full terms on the /terms page.",
         summary: "Initial terms.",
+        effectiveDate: "2026-07-05",
+        active: true,
+        publishedById: "u_admin",
+        publishedAt: t,
+      },
+      {
+        id: "tv_priv_1",
+        kind: "privacy" as const,
+        version: 1,
+        title: "Privacy Policy",
+        body:
+          "This Privacy Policy explains how Marketing Command Centre collects, uses, " +
+          "and shares personal information when you use the platform. Contact us for " +
+          "data subject requests (access, erasure, marketing opt-out).",
+        summary: "Initial privacy policy.",
         effectiveDate: "2026-07-05",
         active: true,
         publishedById: "u_admin",
@@ -2139,13 +2155,24 @@ function seed(): DataStore {
       ["u_sasha", "t_bright"],
       ["u_liam", "t_bright"],
       ["u_jordan", "t_wattle"],
-    ].map(([userId, tenantId]) => ({
-      id: `ta_${userId}`,
-      userId,
-      tenantId,
-      version: 1,
-      acceptedAt: t,
-    })),
+    ].flatMap(([userId, tenantId]) => [
+      {
+        id: `ta_${userId}_terms`,
+        userId,
+        tenantId,
+        kind: "terms" as const,
+        version: 1,
+        acceptedAt: t,
+      },
+      {
+        id: `ta_${userId}_privacy`,
+        userId,
+        tenantId,
+        kind: "privacy" as const,
+        version: 1,
+        acceptedAt: t,
+      },
+    ]),
     audit: [
       {
         id: "a_seed",
