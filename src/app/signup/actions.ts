@@ -11,16 +11,14 @@ import { setActiveTenant, startSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/db/supabase";
 import { assertPublicRate, clientIp } from "@/lib/ratelimit";
 import { logAction } from "@/lib/audit";
-import type { TenantKind } from "@/lib/types";
 
-// Self-serve tenant signup (T3). Provisions a new workspace and its first
-// owner, then signs them in. Identity is global: if the email already exists,
-// we link the new membership to the existing person rather than duplicating.
+// Self-serve client signup. Provisions a temporary HOLDING tenant so the
+// onboarding wizard (owner-gated) can run; payment attaches a company under
+// the platform agency and converts the user to a portal member.
 export async function signUpAction(_prev: unknown, formData: FormData) {
   const orgName = String(formData.get("orgName") || "").trim();
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim();
-  const kind = (String(formData.get("kind") || "business_group") as TenantKind);
   if (!orgName || !name || !email) {
     return { error: "Workspace name, your name and email are all required." };
   }
@@ -44,25 +42,29 @@ export async function signUpAction(_prev: unknown, formData: FormData) {
 
   const tenant = await createTenant({
     name: orgName,
-    kind: kind === "agency" ? "agency" : "business_group",
+    // Holding seat for the client wizard only — payment migrates the company
+    // onto the platform agency and suspends this row. Never create agency SaaS.
+    kind: "business_group",
     plan: "starter",
     status: "active",
   });
 
-  // Link or create the identity, then make them the workspace OWNER.
+  // Link or create the identity, then make them OWNER of the holding seat
+  // (wizard requires requireTenantOwnerRaw). Completion converts them to a
+  // portal member on the platform agency.
   const existing = await getUserByEmail(email);
   const user = existing ?? (await createUser({ email, name, role: "user" }));
   await addMembership({ tenantId: tenant.id, userId: user.id, role: "owner" });
 
   await logAction({ id: user.id, email: user.email, tenantId: tenant.id }, "tenant.created", {
     tenantId: tenant.id,
-    detail: `${orgName} (${kind})`,
+    detail: `${orgName} (client-holding → platform agency on payment)`,
   });
 
   await startSession(user.id);
-  // Land them in the workspace they just created (they may belong to others).
+  // Land them in the holding seat they just created (they may belong to others).
   await setActiveTenant(user.id, tenant.id);
-  // New tenant → client onboarding (details → marketing package → T&C).
+  // Client onboarding (details → marketing package → T&C → payment).
   // Agency SaaS / white-label signup is parked — we are the agency; signup = client.
   redirect("/onboarding");
 }

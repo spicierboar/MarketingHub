@@ -54,7 +54,13 @@ export async function portalCompanyId(user: ActingUser): Promise<string | null> 
 export async function postLoginRedirectPath(user: ActingUser): Promise<string> {
   if (await isPortalUser(user)) return "/client";
   const tenant = await getTenant(user.tenantId);
-  if (tenant && !tenant.onboardingCompletedAt && isTenantOwner(user)) {
+  // Agency seats are ops workspaces — client wizard must not trap agency owners.
+  if (
+    tenant &&
+    !tenant.onboardingCompletedAt &&
+    tenant.kind !== "agency" &&
+    isTenantOwner(user)
+  ) {
     return "/onboarding";
   }
   return "/dashboard";
@@ -124,9 +130,14 @@ export async function requireUserRaw(): Promise<ActingUser> {
 // closes that hole. The two gate routes use requireUserRaw to avoid a loop.
 async function enforceOnboardingAndTerms(user: ActingUser): Promise<void> {
   const tenant = await getTenant(user.tenantId);
-  // A not-yet-onboarded tenant's OWNER must finish onboarding (details → plan →
-  // card → T&C) before doing anything.
-  if (tenant && !tenant.onboardingCompletedAt && isTenantOwner(user)) {
+  // A not-yet-onboarded HOLDING tenant's OWNER must finish client onboarding.
+  // Platform agency seats (kind=agency) are ops — never trap them in the client wizard.
+  if (
+    tenant &&
+    !tenant.onboardingCompletedAt &&
+    tenant.kind !== "agency" &&
+    isTenantOwner(user)
+  ) {
     redirect("/onboarding");
   }
   // Everyone must have accepted the CURRENT terms version.

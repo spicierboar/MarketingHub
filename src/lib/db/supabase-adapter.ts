@@ -276,6 +276,22 @@ export const supabaseRepo = {
     if (error) throw new Error("addMembership: " + error.message);
     return toDomain<TenantMember>(data);
   },
+  async updateMembership(
+    tenantId: string,
+    userId: string,
+    patch: Partial<Pick<TenantMember, "role" | "portalOnly" | "roleTitle" | "capabilities">>,
+  ): Promise<TenantMember | undefined> {
+    const sb = svc(); if (!sb) return undefined;
+    const { data, error } = await sb
+      .from("tenant_members")
+      .update(toRow(patch))
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error("updateMembership: " + error.message);
+    return data ? toDomain<TenantMember>(data) : undefined;
+  },
   async listMembers(tenantId: string): Promise<TenantMember[]> {
     const sb = svc(); if (!sb) return [];
     const { data } = await sb.from("tenant_members").select("*").eq("tenant_id", tenantId);

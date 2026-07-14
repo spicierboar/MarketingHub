@@ -3,17 +3,23 @@
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import {
+  addMembership,
   createCompany,
   currentTerms,
   getCompany,
+  getMembership,
   getTenant,
+  grantAccess,
   hasAcceptedTerms,
   listCompanies,
+  listTenants,
   recordTermsAcceptance,
   updateCompany,
+  updateMembership,
   updateTenant,
 } from "@/lib/db";
 import { requireTenantOwnerRaw } from "@/lib/auth/rbac";
+import { setActiveTenant } from "@/lib/auth/session";
 import { clientIp } from "@/lib/ratelimit";
 import { logAction } from "@/lib/audit";
 import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
@@ -46,12 +52,19 @@ import {
 } from "@/lib/auto-onboarding";
 import { lookupAbn } from "@/lib/abn-lookup";
 import { matchPlace, placeMatchToExtractedHints } from "@/lib/places-enrichment";
+import {
+  platformAgencyCanonicalName,
+  resolvePlatformAgencyTenant,
+} from "@/lib/platform-agency";
+import { assertCompanyQuota } from "@/lib/billing";
+import { appEnv } from "@/lib/env";
 import type {
+  ActingUser,
   Company,
-  CompanyProfile,
   ManagedServiceLevel,
   MarketingPackageCustomModules,
   MarketingPackageId,
+  Tenant,
   TenantOnboarding,
 } from "@/lib/types";
 
@@ -101,6 +114,163 @@ function detailsErrorRedirect(message: string): never {
 
 function paymentErrorRedirect(message: string): never {
   redirect(`/onboarding?step=payment&payError=${encodeURIComponent(message)}`);
+}
+
+/**
+ * Persist wizard draft on the user's current tenant without turning the
+ * platform agency into a client workspace (no kind flip / rename).
+ */
+async function saveOnboardingDraft(
+  tenant: Tenant,
+  onboarding: TenantOnboarding,
+): Promise<void> {
+  // Agency seat (or the sole staging active tenant, which is that seat even if
+  // a prior bug renamed it) — store draft only; never flip kind / rename here.
+  if (tenant.kind === "agency") {
+    await updateTenant(tenant.id, { onboarding });
+    return;
+  }
+  if (appEnv() === "staging") {
+    const active = (await listTenants()).filter((t) => t.status === "active");
+    if (active.length === 1 && active[0]!.id === tenant.id) {
+      await updateTenant(tenant.id, { onboarding });
+      return;
+    }
+  }
+  await updateTenant(tenant.id, {
+    kind: "business_group",
+    onboarding,
+  });
+}
+
+/**
+ * Ensure signup user is a portal member of the platform agency for one company.
+ * Never demotes an existing agency owner/admin (ops seats stay ops).
+ */
+async function ensureClientPortalOnAgency(
+  agencyId: string,
+  userId: string,
+  companyId: string,
+): Promise<"portal" | "ops"> {
+  const existing = await getMembership(agencyId, userId);
+  if (existing?.role === "owner" || existing?.role === "admin") {
+    await grantAccess(userId, companyId);
+    return "ops";
+  }
+  if (existing) {
+    await updateMembership(agencyId, userId, {
+      role: "member",
+      portalOnly: true,
+    });
+  } else {
+    await addMembership({
+      tenantId: agencyId,
+      userId,
+      role: "member",
+      portalOnly: true,
+    });
+  }
+  await grantAccess(userId, companyId);
+  return "portal";
+}
+
+async function applyPrimaryCompanyProfile(args: {
+  company: Company;
+  primaryName: string;
+  draft: TenantOnboarding;
+  packageId: MarketingPackageId | undefined;
+  serviceLevel: ManagedServiceLevel;
+  customModules: MarketingPackageCustomModules | undefined;
+  actor: ActingUser;
+}): Promise<Company> {
+  const {
+    company,
+    primaryName,
+    draft,
+    packageId,
+    serviceLevel,
+    customModules,
+    actor,
+  } = args;
+  const industryId = draft.industry;
+  const industryDisplay =
+    industryLabel(industryId) ?? industryId ?? undefined;
+  const businessType = businessTypeFromOnboardingIndustry(industryId);
+  const prev = company.profile.managedService;
+
+  await updateCompany(company.id, {
+    ...(primaryName && company.name !== primaryName
+      ? { name: primaryName }
+      : {}),
+    profile: {
+      ...company.profile,
+      ...(draft.abn ? { abn: draft.abn } : {}),
+      ...(industryDisplay ? { industry: industryDisplay } : {}),
+      ...(draft.natureOfBusiness
+        ? { natureOfBusiness: draft.natureOfBusiness }
+        : {}),
+      businessType,
+      ...(draft.contactPhone && !company.profile.phone
+        ? { phone: draft.contactPhone }
+        : {}),
+      ...(draft.contactEmail && !company.profile.email
+        ? { email: draft.contactEmail }
+        : {}),
+      ...(draft.website ? { website: draft.website } : {}),
+      managedService: packageId
+        ? {
+            ...(prev ?? { serviceLevel }),
+            serviceLevel,
+            marketingPackageId: packageId,
+            customModules,
+          }
+        : prev
+          ? prev
+          : { serviceLevel },
+    },
+  });
+
+  if (draft.website && draft.scrapeConsentAt) {
+    const fresh = await getCompany(company.id);
+    if (fresh) {
+      const result = await scrapeAndApplyInitialProfile({
+        company: fresh,
+        website: draft.website,
+        actorId: actor.id,
+      });
+      await updateCompany(company.id, { profile: result.profile });
+      if (result.mode !== "failed") {
+        await logAction(actor, "auto_onboarding.scraped", {
+          targetType: "company",
+          targetId: company.id,
+          companyId: company.id,
+          detail: `mode=${result.mode} fields=${result.fieldCount} onboarding=1`,
+        });
+      }
+      if (result.fieldCount > 0) {
+        await logAction(actor, "auto_onboarding.applied", {
+          targetType: "company",
+          targetId: company.id,
+          companyId: company.id,
+          detail: `fields=${result.fieldCount} onboarding=1`,
+        });
+      }
+    }
+  }
+
+  if (packageId) {
+    await logAction(actor, "company.marketing_package_set", {
+      targetType: "company",
+      targetId: company.id,
+      companyId: company.id,
+      detail:
+        packageId === "custom"
+          ? `custom · ${serviceLevel} (onboarding)`
+          : `${packageId} · ${serviceLevel} (onboarding)`,
+    });
+  }
+
+  return (await getCompany(company.id)) ?? company;
 }
 
 export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
@@ -241,13 +411,7 @@ export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
         (noteBits.length ? noteBits.join(" · ") : undefined),
     };
 
-    await updateTenant(user.tenantId, {
-      kind: "business_group",
-      onboarding,
-      ...(onboarding.companyName && onboarding.companyName !== tenant.name
-        ? { name: onboarding.companyName }
-        : {}),
-    });
+    await saveOnboardingDraft(tenant, onboarding);
 
     const filled = [
       onboarding.abn && "ABN",
@@ -378,11 +542,9 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
       : undefined,
   };
 
-  // Force client workspace — we are the agency; signup = client.
-  await updateTenant(user.tenantId, {
-    kind: "business_group",
-    onboarding,
-  });
+  // Force client workspace draft — we are the agency; signup = client.
+  // Never rename/re-kind the platform agency seat while drafting.
+  await saveOnboardingDraft(tenant!, onboarding);
   await logAction(user, "onboarding.details_saved", {
     detail:
       abrGate.mode === "skipped"
@@ -413,10 +575,7 @@ export async function selectOnboardingPackageAction(formData: FormData) {
     marketingPackageId,
     customModules,
   };
-  await updateTenant(user.tenantId, {
-    kind: "business_group",
-    onboarding,
-  });
+  await saveOnboardingDraft(tenant, onboarding);
   await logAction(user, "onboarding.marketing_package_selected", {
     detail:
       marketingPackageId === "custom"
@@ -436,8 +595,9 @@ export async function acceptOnboardingTermsAction() {
     redirect("/onboarding?step=package");
   }
 
-  // Ensure client kind even if provisioned as agency earlier.
-  if (tenant.kind !== "business_group") {
+  // Client wizard only — do not flip the platform agency to business_group.
+  const agency = await resolvePlatformAgencyTenant();
+  if (tenant.id !== agency.id && tenant.kind !== "business_group") {
     await updateTenant(user.tenantId, { kind: "business_group" });
   }
 
@@ -495,8 +655,11 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     paymentErrorRedirect(first);
   }
 
-  // Ensure client kind even if provisioned as agency earlier.
-  if (tenant.kind !== "business_group") {
+  const agency = await resolvePlatformAgencyTenant();
+  const onAgencySeat = tenant.id === agency.id;
+
+  // Holding (signup) tenants stay business_group; never re-kind the agency seat.
+  if (!onAgencySeat && tenant.kind !== "business_group") {
     await updateTenant(user.tenantId, { kind: "business_group" });
   }
 
@@ -505,20 +668,12 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     ...(tenant.onboarding ?? {}),
     paymentMockAt,
   };
-  await updateTenant(user.tenantId, {
-    kind: "business_group",
-    onboarding,
-  });
+  await saveOnboardingDraft(tenant, onboarding);
   await logAction(user, "onboarding.package_payment_mock", {
     detail: `${tenant.onboarding.marketingPackageId}${cardName ? ` · ${cardName}` : ""} (demo — no charge; ads media extra)`,
   });
 
   const completedAt = now();
-  await updateTenant(user.tenantId, { onboardingCompletedAt: completedAt });
-  await logAction(user, "onboarding.completed", {
-    detail: tenant.onboarding.marketingPackageId ?? "done",
-  });
-
   const packageId = tenant.onboarding?.marketingPackageId;
   const draft = onboarding;
   const primaryName =
@@ -528,38 +683,12 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
       contactName: draft.contactName,
     });
 
-  let companies = (await listCompanies(user.tenantId)).filter(
-    (c) => c.status !== "archived",
-  );
-
-  if (companies.length === 0) {
-    const company = await createCompany({
-      tenantId: user.tenantId,
-      name: primaryName,
-      createdBy: user.id,
-    });
-    await logAction(user, "company.created", {
-      targetType: "company",
-      targetId: company.id,
-      companyId: company.id,
-      detail: `${company.name} (onboarding)`,
-    });
-    companies = [company];
-  }
-
-  const industryId = draft.industry;
-  const industryDisplay =
-    industryLabel(industryId) ?? industryId ?? undefined;
-  const businessType = businessTypeFromOnboardingIndustry(industryId);
-
-  let selection:
-    | ReturnType<typeof resolveSelectionForPackage>
-    | undefined;
+  let selection: ReturnType<typeof resolveSelectionForPackage> | undefined;
   let customModules: MarketingPackageCustomModules | undefined;
   let serviceLevel: ManagedServiceLevel = defaultServiceLevel();
-
   if (packageId) {
-    selection = resolveSelectionForPackage(tenant, packageId);
+    // Package catalogue lives on the agency (overrides); resolve against agency.
+    selection = resolveSelectionForPackage(agency, packageId);
     customModules =
       packageId === "custom"
         ? (draft.customModules ?? selection.customModules)
@@ -570,107 +699,86 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
         : selection.serviceLevel;
   }
 
-  for (let i = 0; i < companies.length; i++) {
-    const company = companies[i]!;
-    const isPrimary = i === 0;
-    const prev = company.profile.managedService;
-    const level = isPrimary
-      ? serviceLevel
-      : (prev?.serviceLevel ?? defaultServiceLevel());
-
-    await updateCompany(company.id, {
-      ...(isPrimary && primaryName && company.name !== primaryName
-        ? { name: primaryName }
-        : {}),
-      profile: {
-        ...company.profile,
-        ...(isPrimary
-          ? {
-              ...(draft.abn ? { abn: draft.abn } : {}),
-              ...(industryDisplay ? { industry: industryDisplay } : {}),
-              ...(draft.natureOfBusiness
-                ? { natureOfBusiness: draft.natureOfBusiness }
-                : {}),
-              businessType,
-              ...(draft.contactPhone && !company.profile.phone
-                ? { phone: draft.contactPhone }
-                : {}),
-              ...(draft.contactEmail && !company.profile.email
-                ? { email: draft.contactEmail }
-                : {}),
-              ...(draft.website ? { website: draft.website } : {}),
-            }
-          : {}),
-        managedService: isPrimary
-          ? packageId
-            ? {
-                ...(prev ?? { serviceLevel: level }),
-                serviceLevel: level,
-                marketingPackageId: packageId,
-                customModules,
-              }
-            : prev
-              ? prev
-              : { serviceLevel: level }
-          : prev
-            ? prev
-            : { serviceLevel: level },
-      },
+  // Client company always lands on the platform agency — never a parallel tenant shell.
+  await assertCompanyQuota(agency.id);
+  let company: Company | undefined;
+  const agencyCompanies = (await listCompanies(agency.id)).filter(
+    (c) => c.status !== "archived",
+  );
+  company = agencyCompanies.find(
+    (c) =>
+      c.name.trim().toLowerCase() === primaryName.trim().toLowerCase() ||
+      (draft.abn && c.profile.abn === draft.abn),
+  );
+  if (!company) {
+    company = await createCompany({
+      tenantId: agency.id,
+      name: primaryName,
+      createdBy: user.id,
     });
-
-    if (isPrimary && draft.website && draft.scrapeConsentAt) {
-      const fresh = await getCompany(company.id);
-      if (fresh) {
-        const result = await scrapeAndApplyInitialProfile({
-          company: fresh,
-          website: draft.website,
-          actorId: user.id,
-        });
-        await updateCompany(company.id, { profile: result.profile });
-        if (result.mode !== "failed") {
-          await logAction(user, "auto_onboarding.scraped", {
-            targetType: "company",
-            targetId: company.id,
-            companyId: company.id,
-            detail: `mode=${result.mode} fields=${result.fieldCount} onboarding=1`,
-          });
-        }
-        if (result.fieldCount > 0) {
-          await logAction(user, "auto_onboarding.applied", {
-            targetType: "company",
-            targetId: company.id,
-            companyId: company.id,
-            detail: `fields=${result.fieldCount} onboarding=1`,
-          });
-        }
-      }
-    }
-
-    if (isPrimary && packageId) {
-      await logAction(user, "company.marketing_package_set", {
-        targetType: "company",
-        targetId: company.id,
-        companyId: company.id,
-        detail:
-          packageId === "custom"
-            ? `custom · ${level} (onboarding)`
-            : `${packageId} · ${level} (onboarding)`,
-      });
-    }
-
-    const run = await enqueueManagedDeliveryForCompany({
-      tenantId: user.tenantId,
+    await logAction(user, "company.created", {
+      targetType: "company",
+      targetId: company.id,
       companyId: company.id,
-      onboardingCompletedAt: completedAt,
-      serviceLevel: level,
-    });
-    await logAction(user, "managed_delivery.enqueued", {
-      targetType: "managed_delivery_run",
-      targetId: run.id,
-      companyId: company.id,
-      detail: `due=${run.strategyDueAt}`,
+      detail: `${company.name} (onboarding → ${platformAgencyCanonicalName()})`,
     });
   }
 
-  redirect("/dashboard");
+  company = await applyPrimaryCompanyProfile({
+    company,
+    primaryName,
+    draft,
+    packageId,
+    serviceLevel,
+    customModules,
+    actor: user,
+  });
+
+  const run = await enqueueManagedDeliveryForCompany({
+    tenantId: agency.id,
+    companyId: company.id,
+    onboardingCompletedAt: completedAt,
+    serviceLevel,
+  });
+  await logAction(user, "managed_delivery.enqueued", {
+    targetType: "managed_delivery_run",
+    targetId: run.id,
+    companyId: company.id,
+    detail: `due=${run.strategyDueAt}`,
+  });
+
+  const seat = await ensureClientPortalOnAgency(agency.id, user.id, company.id);
+
+  if (onAgencySeat) {
+    // Ops account finished the client wizard while sitting on the agency —
+    // restore agency invariants and keep them as agency owner.
+    await updateTenant(agency.id, {
+      kind: "agency",
+      name: platformAgencyCanonicalName(),
+      onboardingCompletedAt: agency.onboardingCompletedAt ?? completedAt,
+      // Clear client draft from the agency row (explicit null → DB).
+      onboarding: null as unknown as undefined,
+    });
+    await logAction(user, "onboarding.completed", {
+      detail: `${packageId ?? "done"} · company=${company.id} on ${platformAgencyCanonicalName()} (ops seat)`,
+    });
+    redirect("/companies");
+  }
+
+  // Self-serve holding tenant: mark complete + suspend (orphan — safe to ignore/clean later).
+  await updateTenant(tenant.id, {
+    kind: "business_group",
+    onboarding,
+    onboardingCompletedAt: completedAt,
+    status: "suspended",
+  });
+  await setActiveTenant(user.id, agency.id);
+  await logAction(user, "onboarding.completed", {
+    detail: `${packageId ?? "done"} · company=${company.id} portal on ${platformAgencyCanonicalName()} (holding=${tenant.id} suspended)`,
+  });
+
+  if (seat === "portal") {
+    redirect("/client");
+  }
+  redirect("/companies");
 }

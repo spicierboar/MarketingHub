@@ -271,6 +271,22 @@ export async function addMembership(
   db().tenantMembers.push(member);
   return member;
 }
+
+/** Patch an existing membership (role / portalOnly / capabilities). */
+export async function updateMembership(
+  tenantId: string,
+  userId: string,
+  patch: Partial<Pick<TenantMember, "role" | "portalOnly" | "roleTitle" | "capabilities">>,
+): Promise<TenantMember | undefined> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.updateMembership(tenantId, userId, patch);
+  }
+  const m = await getMembership(tenantId, userId);
+  if (!m) return undefined;
+  Object.assign(m, patch);
+  return m;
+}
+
 export async function listMembers(tenantId: string): Promise<TenantMember[]> {
   if (isSupabaseConfigured()) return supabaseRepo.listMembers(tenantId);
   return db().tenantMembers.filter((m) => m.tenantId === tenantId);

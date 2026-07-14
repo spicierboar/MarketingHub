@@ -5,10 +5,9 @@ import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import {
   addMembership,
-  createTenant,
   createUser,
+  getMembership,
   getUserByEmail,
-  listTenants,
   membershipsForUser,
 } from "@/lib/db";
 import { startSession, endSession, setActiveTenant } from "@/lib/auth/session";
@@ -17,7 +16,8 @@ import { resetStore } from "@/lib/db/store";
 import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
 import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
-import type { ActingUser, Tenant, TenantMember, User } from "@/lib/types";
+import { resolvePlatformAgencyTenant } from "@/lib/platform-agency";
+import type { ActingUser, TenantMember, User } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 
 function failQuickLogin(message: string): never {
@@ -76,21 +76,9 @@ function nameFromEmail(email: string): string {
   return named || email;
 }
 
-async function resolveStagingTenant(): Promise<Tenant> {
-  const tenants = await listTenants();
-  const named = tenants.find(
-    (t) => t.name === "Staging Agency" && t.status === "active",
-  );
-  if (named) return named;
-  const active = tenants.find((t) => t.status === "active") ?? tenants[0];
-  if (active) return active;
-  // Omit timezone — DB default (0013/0035) applies; avoids fail on partial schemas.
-  return createTenant({
-    name: "Staging Agency",
-    kind: "agency",
-    plan: "agency",
-    status: "active",
-  });
+async function resolveStagingTenant() {
+  // Shared resolver also repairs a seat renamed/re-kinded by a prior client-onboarding bug.
+  return resolvePlatformAgencyTenant();
 }
 
 /**
@@ -160,9 +148,10 @@ async function ensureStagingUser(email: string): Promise<User> {
   }
   if (!user.active) throw new Error("Account deactivated.");
 
-  const memberships = await membershipsForUser(user.id);
-  if (memberships.length === 0) {
-    const tenant = await resolveStagingTenant();
+  // Always attach (or keep) membership on the platform agency seat — orphan
+  // holding tenants from prior client-signup experiments must not be the only seat.
+  const tenant = await resolveStagingTenant();
+  if (!(await getMembership(tenant.id, user.id))) {
     await addMembership({
       tenantId: tenant.id,
       userId: user.id,
@@ -204,7 +193,13 @@ export async function quickLoginAction(formData: FormData): Promise<void> {
     const memberships = [...(await membershipsForUser(user.id))].sort((a, b) =>
       a.tenantId.localeCompare(b.tenantId),
     );
-    const membership = memberships[0];
+    let membership = memberships[0];
+    // Staging ops seat: prefer platform agency over orphan holding tenants.
+    if (appEnv() === "staging" && isSupabaseConfigured()) {
+      const agency = await resolveStagingTenant();
+      membership =
+        memberships.find((m) => m.tenantId === agency.id) ?? memberships[0];
+    }
     if (!membership) {
       throw new Error(
         `No tenant membership for ${email}. Provisioning failed — check tenants / tenant_members.`,

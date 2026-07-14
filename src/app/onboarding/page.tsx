@@ -79,6 +79,9 @@ export default async function OnboardingPage({
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
   if (!tenant) redirect("/login");
+  // Agency ops seats must not enter the client wizard (even if a prior bug
+  // cleared onboardingCompletedAt). Use New Client / field sales instead.
+  if (tenant.kind === "agency") redirect("/dashboard");
   if (tenant.onboardingCompletedAt) redirect("/dashboard");
 
   const params = await searchParams;
