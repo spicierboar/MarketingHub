@@ -7,11 +7,28 @@
 // but nothing is sent. The force-re-acceptance gate (requireUser) is the actual
 // enforcement; this email is the courtesy heads-up.
 
-import { listActiveRecipients, updateTermsVersion } from "@/lib/db";
+import { getTenant, listActiveRecipients, updateTermsVersion } from "@/lib/db";
+import { isPlatformAdmin, isTenantOwner } from "@/lib/auth/rbac";
+import { isPlatformAgencyTenant } from "@/lib/platform-agency";
 import { emailConfigured, sendBulkEmail } from "@/lib/email";
 import { logAction } from "@/lib/audit";
 import { now } from "@/lib/utils";
 import type { ActingUser, LegalDocKind, TermsVersion } from "@/lib/types";
+
+/**
+ * Who may publish platform Terms / Privacy: platform admins, and owners of an
+ * agency seat (including the platform agency after kind repair on staging).
+ * Client (business_group) owners can view but not publish.
+ */
+export async function canPublishLegalDocs(user: ActingUser): Promise<boolean> {
+  if (isPlatformAdmin(user)) return true;
+  if (!isTenantOwner(user)) return false;
+  const tenant = await getTenant(user.tenantId);
+  if (tenant?.kind === "agency") return true;
+  // Staging heal: corrupted seats may briefly report business_group while
+  // still being the single platform agency row.
+  return isPlatformAgencyTenant(user.tenantId);
+}
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));

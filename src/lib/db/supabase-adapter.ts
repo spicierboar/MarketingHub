@@ -193,7 +193,16 @@ export const supabaseRepo = {
     const sb = svc(); if (!sb) return [];
     let q = sb.from("terms_versions").select("*").order("version", { ascending: false });
     if (kind) q = q.eq("kind", kind);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      const msg = error.message || "";
+      if (/kind/i.test(msg) && /does not exist|column/i.test(msg)) {
+        throw new Error(
+          "Migration 0046 (legal docs kind) is not applied. Paste supabase/migrations/_owner_paste_0046_legal_docs_kind.sql in the Supabase SQL editor, then refresh.",
+        );
+      }
+      throw new Error("listTermsVersions: " + msg);
+    }
     return many<TermsVersion>(data).map((v) => ({
       ...v,
       kind: v.kind === "privacy" ? "privacy" : "terms",

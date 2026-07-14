@@ -4,6 +4,7 @@ import {
   isTenantOwner,
   isPlatformAdmin,
 } from "@/lib/auth/rbac";
+import { canPublishLegalDocs } from "@/lib/terms";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -28,6 +29,8 @@ type HubLink = {
   icon: LucideIcon;
   ownerOnly?: boolean;
   platformAdminOnly?: boolean;
+  /** Platform Terms/Privacy publishers only (agency owner / platform admin). */
+  legalPublisherOnly?: boolean;
 };
 
 type HubSection = {
@@ -86,7 +89,7 @@ const SECTIONS: HubSection[] = [
         label: "Terms & Privacy Policy",
         description: "Publish versioned T&Cs and Privacy Policy; notify clients.",
         icon: FileText,
-        ownerOnly: true,
+        legalPublisherOnly: true,
       },
       {
         href: "/audit",
@@ -137,12 +140,15 @@ export default async function SettingsHubPage() {
   const user = await requireAdmin();
   const owner = isTenantOwner(user);
   const platform = isPlatformAdmin(user);
+  const legalPublisher = await canPublishLegalDocs(user);
 
   const sections = SECTIONS.map((section) => ({
     ...section,
     links: section.links.filter(
       (link) =>
-        (!link.ownerOnly || owner) && (!link.platformAdminOnly || platform),
+        (!link.ownerOnly || owner) &&
+        (!link.platformAdminOnly || platform) &&
+        (!link.legalPublisherOnly || legalPublisher),
     ),
   })).filter((section) => section.links.length > 0);
 

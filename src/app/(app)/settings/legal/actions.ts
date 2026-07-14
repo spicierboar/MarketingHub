@@ -5,19 +5,18 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   currentLegalDoc,
-  getTenant,
   publishTermsVersion,
 } from "@/lib/db";
-import {
-  isPlatformAdmin,
-  isTenantOwner,
-  requireUser,
-} from "@/lib/auth/rbac";
+import { requireUser } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { assertAiBudget } from "@/lib/ai/budget";
 import { formatLegalDocBody } from "@/lib/ai/legal-format";
 import { recordAiUsage } from "@/lib/ai/metering";
-import { broadcastLegalDocUpdate, legalDocLabel } from "@/lib/terms";
+import {
+  broadcastLegalDocUpdate,
+  canPublishLegalDocs,
+  legalDocLabel,
+} from "@/lib/terms";
 import { resolveOrigin } from "@/lib/origin";
 import { assertAiRateLimit } from "@/lib/ratelimit";
 import type { LegalDocKind } from "@/lib/types";
@@ -30,13 +29,10 @@ function parseKind(raw: string): LegalDocKind {
   return raw === "privacy" ? "privacy" : "terms";
 }
 
-/** Agency owners (and platform admins) may publish platform legal docs. */
+/** Agency / platform-agency owners (and platform admins) may publish. */
 async function requireLegalPublisher() {
   const user = await requireUser();
-  if (isPlatformAdmin(user)) return user;
-  if (!isTenantOwner(user)) redirect("/settings");
-  const tenant = await getTenant(user.tenantId);
-  if (!tenant || tenant.kind !== "agency") redirect("/settings");
+  if (!(await canPublishLegalDocs(user))) redirect("/settings/legal");
   return user;
 }
 

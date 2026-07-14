@@ -1,12 +1,8 @@
 import Link from "next/link";
-import {
-  isPlatformAdmin,
-  isTenantOwner,
-  requireAdmin,
-} from "@/lib/auth/rbac";
+import { isTenantOwner, requireAdmin } from "@/lib/auth/rbac";
 import { getTenant, listTermsVersions } from "@/lib/db";
 import { emailConfigured } from "@/lib/email";
-import { legalDocLabel } from "@/lib/terms";
+import { canPublishLegalDocs, legalDocLabel } from "@/lib/terms";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +16,55 @@ import {
 } from "./actions";
 import { LegalBodyEditor } from "./legal-body-editor";
 
+function PublishForm({
+  kind,
+  label,
+  defaultTitle,
+}: {
+  kind: LegalDocKind;
+  label: string;
+  defaultTitle: string;
+}) {
+  return (
+    <form action={publishLegalDocAction} className="space-y-3">
+      <input type="hidden" name="kind" value={kind} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Title" htmlFor={`${kind}-title`} hint="Shown on the re-acceptance screen">
+          <Input
+            id={`${kind}-title`}
+            name="title"
+            required
+            defaultValue={defaultTitle}
+            placeholder={defaultTitle}
+          />
+        </Field>
+        <Field label="Effective date" htmlFor={`${kind}-eff`} hint="When the new version takes effect">
+          <Input id={`${kind}-eff`} name="effectiveDate" type="date" required />
+        </Field>
+      </div>
+      <Field
+        label="What changed (summary)"
+        htmlFor={`${kind}-sum`}
+        hint="Shown to users on re-acceptance + used in the update email."
+      >
+        <Input
+          id={`${kind}-sum`}
+          name="summary"
+          placeholder={
+            kind === "privacy"
+              ? "e.g. Clarified retention and marketing consent."
+              : "e.g. Updated billing + data-processing terms."
+          }
+        />
+      </Field>
+      <LegalBodyEditor kind={kind} label={label} />
+      <Button type="submit" size="sm">
+        Publish new version
+      </Button>
+    </form>
+  );
+}
+
 function LegalDocPanel({
   kind,
   versions,
@@ -32,6 +77,7 @@ function LegalDocPanel({
   const label = legalDocLabel(kind);
   const current = versions.find((v) => v.active);
   const defaultTitle = kind === "privacy" ? "Privacy Policy" : "Terms of Service";
+  const nothingPublished = versions.length === 0;
 
   return (
     <Card>
@@ -42,12 +88,12 @@ function LegalDocPanel({
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
           Publishing a new version forces every user to re-accept before they can keep using the
-          app, and emails all active clients that the document changed.
+          app. Active clients also get an update email when email delivery is configured.
           {!emailConfigured() && (
-            <span className="text-amber-600">
+            <span className="text-muted-foreground">
               {" "}
-              (Email isn&apos;t configured — RESEND_API_KEY unset — so notices are recorded but not
-              sent.)
+              Email delivery is optional — without RESEND_API_KEY, publish still works; notices are
+              recorded but not emailed.
             </span>
           )}
         </p>
@@ -83,54 +129,37 @@ function LegalDocPanel({
               </div>
             </div>
           ))}
-          {versions.length === 0 && (
+          {nothingPublished && !canPublish && (
             <p className="text-sm text-muted-foreground">No {label.toLowerCase()} published yet.</p>
           )}
         </div>
         {canPublish ? (
-          <details className="rounded-md border border-dashed border-border p-4">
-            <summary className="cursor-pointer text-sm font-medium">Publish a new version</summary>
-            <form action={publishLegalDocAction} className="mt-3 space-y-3">
-              <input type="hidden" name="kind" value={kind} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Title" htmlFor={`${kind}-title`} hint="Shown on the re-acceptance screen">
-                  <Input
-                    id={`${kind}-title`}
-                    name="title"
-                    required
-                    defaultValue={defaultTitle}
-                    placeholder={defaultTitle}
-                  />
-                </Field>
-                <Field label="Effective date" htmlFor={`${kind}-eff`} hint="When the new version takes effect">
-                  <Input id={`${kind}-eff`} name="effectiveDate" type="date" required />
-                </Field>
+          nothingPublished ? (
+            <div className="rounded-md border border-primary/30 bg-muted/30 p-4">
+              <h3 className="mb-1 text-sm font-semibold">Publish the first {label}</h3>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Paste the full document, optionally format with AI, then publish. Users will be asked
+                to accept it on next sign-in.
+              </p>
+              <PublishForm kind={kind} label={label} defaultTitle={defaultTitle} />
+            </div>
+          ) : (
+            <details className="rounded-md border border-dashed border-border p-4">
+              <summary className="cursor-pointer text-sm font-medium">Publish a new version</summary>
+              <div className="mt-3">
+                <PublishForm kind={kind} label={label} defaultTitle={defaultTitle} />
               </div>
-              <Field
-                label="What changed (summary)"
-                htmlFor={`${kind}-sum`}
-                hint="Shown to users on re-acceptance + used in the update email."
-              >
-                <Input
-                  id={`${kind}-sum`}
-                  name="summary"
-                  placeholder={
-                    kind === "privacy"
-                      ? "e.g. Clarified retention and marketing consent."
-                      : "e.g. Updated billing + data-processing terms."
-                  }
-                />
-              </Field>
-              <LegalBodyEditor kind={kind} label={label} />
-              <Button type="submit" size="sm">
-                Publish new version
-              </Button>
-            </form>
-          </details>
+            </details>
+          )
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Only the agency owner (or a platform admin) can publish new versions.
-          </p>
+          <div className="rounded-md border border-border bg-muted/40 p-4 text-sm">
+            <p className="font-medium text-foreground">You can&apos;t publish from this workspace</p>
+            <p className="mt-1 text-muted-foreground">
+              Platform legal documents are published by the <strong>agency owner</strong> (on the
+              agency seat) or a <strong>platform admin</strong>. Client workspace owners can view
+              versions but cannot publish.
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -140,14 +169,20 @@ function LegalDocPanel({
 export default async function SettingsLegalPage() {
   const user = await requireAdmin();
   const tenant = await getTenant(user.tenantId);
+  const canPublish = await canPublishLegalDocs(user);
   const owner = isTenantOwner(user);
-  const platform = isPlatformAdmin(user);
-  const canPublish = platform || (owner && tenant?.kind === "agency");
 
-  const [termsVersions, privacyVersions] = await Promise.all([
-    listTermsVersions("terms"),
-    listTermsVersions("privacy"),
-  ]);
+  let termsVersions: TermsVersion[] = [];
+  let privacyVersions: TermsVersion[] = [];
+  let schemaError: string | null = null;
+  try {
+    [termsVersions, privacyVersions] = await Promise.all([
+      listTermsVersions("terms"),
+      listTermsVersions("privacy"),
+    ]);
+  } catch (err) {
+    schemaError = err instanceof Error ? err.message : "Failed to load legal documents.";
+  }
 
   return (
     <div>
@@ -160,6 +195,30 @@ export default async function SettingsLegalPage() {
           ← Settings
         </Link>
       </div>
+      {schemaError && (
+        <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <p className="font-medium text-foreground">Database migration required</p>
+          <p className="mt-1 text-muted-foreground">{schemaError}</p>
+          {canPublish && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Editors are shown below, but publish will fail until 0046 is applied in Supabase.
+            </p>
+          )}
+        </div>
+      )}
+      {!canPublish && (
+        <div className="mx-6 mt-4 rounded-md border border-border bg-muted/40 p-4 text-sm">
+          <p className="font-medium text-foreground">Publishing is limited</p>
+          <p className="mt-1 text-muted-foreground">
+            You&apos;re signed in as{" "}
+            {owner
+              ? `owner of “${tenant?.name ?? "this workspace"}” (${tenant?.kind ?? "unknown"} seat)`
+              : "an admin (not the tenant owner)"}
+            . To publish Terms or Privacy, use the <strong>platform agency</strong> owner account or a
+            user with platform admin.
+          </p>
+        </div>
+      )}
       <div className="grid gap-6 p-6 lg:grid-cols-2">
         <LegalDocPanel kind="terms" versions={termsVersions} canPublish={canPublish} />
         <LegalDocPanel kind="privacy" versions={privacyVersions} canPublish={canPublish} />
