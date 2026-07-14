@@ -1,49 +1,51 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-14, **STAGING · LEGAL DOCS (T&C + PRIVACY) · INTERNAL PRICING IN PROGRESS · W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-14, **STAGING · LEGAL PUBLISHER RBAC BUG · 0046 PASTE? · PRICING PARKED · W6 WAITING**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` · Vercel Preview = staging · live flags **OFF**
 >
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | see `origin/staging` after legal-docs push |
+> | Git tip | **`43d2508`+** — always verify `git rev-parse --short origin/staging` |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
 > | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0045** + **paste 0046** (`legal_docs_kind`) if not yet applied |
-> | Staging login | Magic link rate-limited → use **`/dev` staging quick login** |
+> | Staging login | Magic link rate-limited → **`/dev` staging quick login** (prefer agency seat e.g. `development@tglt.com.au`) |
+> | Tenant name | **Staging Agency** (repaired; do **not** rename agency to Viya — Viya is a **client**) |
+> | Vercel Preview Protection | **OFF** (owner) so staging URL works without Vercel auth |
 > | Live / mangotickle.com.au / `*_LIVE` | **PARKED** · W6 Google still waiting |
 >
-> ### DONE this wave
-> - Agency Settings → **Terms & Privacy Policy** (`/settings/legal`): versioned publish for T&Cs + Privacy; email clients (best-effort); force re-accept at `/accept-terms`
-> - Design: **platform-global** docs with `kind` (`terms` \| `privacy`) — single agency; extends existing 0007 gate (not tenant-scoped white-label)
-> - Migration **0046_legal_docs_kind.sql** · owner paste: `supabase/migrations/_owner_paste_0046_legal_docs_kind.sql` (exclude `_owner_paste_*` from commits)
-> - Self-test: `legalDocs.independentVersionsAndGate`
+> ### DONE this wave (verify SHAs on `origin/staging`)
+> - **Client-only onboarding:** details → package → terms → payment; website-first + Prefill (`formNoValidate` fix); agency vs client tenancy — platform **agency seat**; new clients under **Staging Agency** (not rename agency → Viya)
+> - **Staging deploy recovery:** `024203e` typecheck fail → follow-up **`51db48d`** live; tenant name repaired to Staging Agency
+> - **Portal form validations** (demo payment Luhn etc.) ~`54b8768`
+> - **Legal docs:** Terms + Privacy (`kind`), Settings `/settings/legal`, Format with AI, force re-accept + email on publish, Settings hub tile + sidebar · tip through **`a8893e2`**
+> - Migration **0046** · Notepad paste: `F:\MarketingHub\command-centre\supabase\migrations\_owner_paste_0046_legal_docs_kind.sql` (exclude `_owner_paste_*` from commits)
+> - **Pricing sheet** earlier: `docs/unit-pricing-simple.xlsx` (cost-only review; margin later) — **parked** mid-owner review
 >
-> ### IN PROGRESS — owner priority
-> - **Internal unit pricing** (cost + sell) for most atomic units
-> - Wire finalized rates into Custom rate card when owner locks numbers
->
-> ### NEXT (ordered)
-> 1. Owner paste **0046** on staging Supabase if not applied
-> 2. Smoke: Settings → Legal → publish Privacy → client login gated at `/accept-terms`
-> 3. Finalize internal cost + sell rates → wire rate card
-> 4. Later: push `main` / live cutover when asked · W6 Google still waiting
+> ### IN PROGRESS / NEXT (ordered)
+> 1. **Fix legal publisher gate for agency owner** — owner reports Legal/Settings still fails while **already signed in as agency** (RBAC/UI bug). Do **not** tell them to “switch to agency”; diagnose publisher/gate/seat check
+> 2. Confirm owner pasted **0046** on staging Supabase (**blocking** for legal publish if not done)
+> 3. Smoke: `/dev` → Staging Agency header → Clients (Viya as client) → Settings → Terms & Privacy (editors + Format with AI) → publish → accept-terms gate
+> 4. Finish internal unit pricing (Excel review → finalize sell/margin later → wire rate card)
+> 5. Optional: more portal validation / `RESEND_API_KEY` for legal emails
+> 6. Later: main/live; multi-agency white-label; W6 Google waiting
 >
 > ### How to resume
-> - **Human:** staging `/dev` quick login → Settings → Terms & Privacy Policy; apply 0046 paste if needed
-> - **Agent:** `READ HANDOVER.md` · branch `staging` · never flip `*_LIVE` · never commit `_owner_paste_*`
+> - **Human:** staging `/dev` quick login → Settings → Terms & Privacy; paste 0046 if needed. If legal UI fails while on Staging Agency, it’s a **bug** — report back (don’t re-login as “agency”)
+> - **Agent:** `READ HANDOVER.md` · branch `staging` · fix legal publisher RBAC/UI first · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps
 >
 > ### Resume in a new Cursor chat
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging; Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; paste 0046 if needed; live/W6 parked.
-> IN PROGRESS: internal unit pricing; legal docs shipped (platform kind=terms|privacy).
-> NEXT: paste 0046 → smoke Settings legal + accept-terms → finalize rates → wire rate card.
+> STATE: staging @ 43d2508 (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; live/W6 parked.
+> IN PROGRESS: fix legal publisher gate (agency owner already on Staging Agency — RBAC/UI bug, not seat switch); confirm 0046 paste; unit pricing parked.
+> NEXT: fix legal Settings/publish for agency owner → 0046 if needed → smoke Clients (Viya) + accept-terms → pricing Excel → optional RESEND → later main/live + W6.
 > Login: staging /dev quick-login. No *_LIVE.
 > ```
 >
-> **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. Exclude `_owner_paste_*`, `scripts/*.snip`, integrator temps from commits.
+> **Hard locks:** No `*_LIVE`. Critique. Ads media always extra. Exclude `_owner_paste_*`, `scripts/*.snip`, integrator temps from commits. Owner applies SQL via Notepad paste only.
 >
 > **Envs:** Local / Staging / Live — **`docs/ENVIRONMENTS.md`**. Deploy: `docs/DEPLOYMENT.md`. Live cutover: `docs/OWNER-LIVE-CUTOVER.md`. Soft-block: `liveIntegrationsAllowed()` refuses cutover `*_LIVE` on staging / local demo / localhost `APP_ORIGIN`.
 >
@@ -55,9 +57,15 @@
 >
 > ---
 >
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-14, **STAGING · LEGAL DOCS · INTERNAL PRICING**) — archived
+>
+> Legal docs shipped (Settings `/settings/legal`, kind=terms|privacy, Format with AI, hub tile). Tip advanced through `a8893e2`. Superseded by full onboarding + deploy-recovery wave notes above.
+>
+> ---
+>
 > ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-13, **STAGING LIVE @ `d9a2bad` · INTERNAL PRICING IN PROGRESS · W6 WAITING**) — archived
 >
-> Staging live; UX/Custom a-la-carte; pricing wave. Superseded by legal-docs + tip advances on staging.
+> Staging live; UX/Custom a-la-carte; pricing wave. Superseded by onboarding + legal-docs + tip advances on staging.
 >
 > ---
 >
