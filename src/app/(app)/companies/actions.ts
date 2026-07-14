@@ -21,6 +21,10 @@ import {
   parseAbnInput,
 } from "@/lib/company-identity";
 import {
+  validateOptionalWebsite,
+  validateRequiredAbn,
+} from "@/lib/form-validation";
+import {
   enqueueManagedDeliveryForCompany,
   ensureManagedDeliveryBootstrap,
   ensureAndKickManagedDeliveryForCompany,
@@ -109,6 +113,9 @@ export async function createCompanyAction(
   const user = await requireAdmin();
   const name = String(formData.get("name") || "").trim();
   if (!name) return { error: "Business name is required." };
+  if (name.length < 2) return { error: "Enter a full business name." };
+  const abnErr = validateRequiredAbn(String(formData.get("abn") || ""));
+  if (abnErr) return { error: abnErr };
   const abnParsed = parseAbnInput(String(formData.get("abn") || ""));
   if (!abnParsed.ok) return { error: abnParsed.error };
   if (!abnParsed.abn) {
@@ -117,6 +124,8 @@ export async function createCompanyAction(
     };
   }
   const websiteRaw = String(formData.get("website") || "").trim();
+  const websiteErr = validateOptionalWebsite(websiteRaw);
+  if (websiteErr) return { error: websiteErr };
   const consent =
     formData.get("consent") === "on" || formData.get("consent") === "true";
   // T4: pricing is per client company — enforce the plan's company limit on

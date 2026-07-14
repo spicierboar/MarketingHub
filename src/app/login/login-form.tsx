@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { isValidEmail } from "@/lib/form-validation";
 import {
   createBrowserSupabase,
   isSupabaseConfiguredClient,
@@ -29,6 +30,10 @@ export function LoginForm() {
     const trimmed = String(email || "").trim();
     if (!trimmed) {
       setClientError("Enter your email address.");
+      return;
+    }
+    if (!isValidEmail(trimmed)) {
+      setClientError("Enter a valid email address.");
       return;
     }
 

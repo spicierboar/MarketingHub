@@ -26,6 +26,13 @@ import { now } from "@/lib/utils";
 import { parseAbnInput } from "@/lib/company-identity";
 import { verifyAbnStatusAgainstAbr } from "@/lib/abn-lookup";
 import {
+  validateDemoCardFields,
+  validateOnboardingDetailsFields,
+  validateOptionalPhone,
+  validateOptionalWebsite,
+  validateRequiredEmail,
+} from "@/lib/form-validation";
+import {
   businessTypeFromOnboardingIndustry,
   industryLabel,
   isValidOnboardingIndustry,
@@ -86,6 +93,14 @@ function prefillErrorRedirect(message: string): never {
   redirect(
     `/onboarding?step=details&prefilled=err&msg=${encodeURIComponent(message)}`,
   );
+}
+
+function detailsErrorRedirect(message: string): never {
+  redirect(`/onboarding?step=details&err=${encodeURIComponent(message)}`);
+}
+
+function paymentErrorRedirect(message: string): never {
+  redirect(`/onboarding?step=payment&payError=${encodeURIComponent(message)}`);
 }
 
 export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
@@ -273,26 +288,51 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
   const user = await requireTenantOwnerRaw();
   const tenant = await getTenant(user.tenantId);
 
+  const fieldCheck = validateOnboardingDetailsFields({
+    website: text(formData, "website"),
+    abn: text(formData, "abn"),
+    contactName: text(formData, "contactName"),
+    contactEmail: text(formData, "contactEmail"),
+    contactPhone: text(formData, "contactPhone"),
+    industry: text(formData, "industry"),
+    natureOfBusiness: text(formData, "natureOfBusiness"),
+  });
+  if (!fieldCheck.ok) {
+    const first =
+      fieldCheck.errors.abn ||
+      fieldCheck.errors.contactEmail ||
+      fieldCheck.errors.contactName ||
+      fieldCheck.errors.website ||
+      fieldCheck.errors.contactPhone ||
+      fieldCheck.errors.industry ||
+      fieldCheck.errors.natureOfBusiness ||
+      "Check the highlighted fields.";
+    detailsErrorRedirect(first);
+  }
+
   const abnParsed = parseAbnInput(text(formData, "abn"));
-  if (!abnParsed.ok) throw new Error(abnParsed.error);
-  if (!abnParsed.abn) throw new Error("ABN is required.");
+  if (!abnParsed.ok) detailsErrorRedirect(abnParsed.error);
+  if (!abnParsed.abn) detailsErrorRedirect("ABN is required.");
 
   const industry = text(formData, "industry");
   if (!isValidOnboardingIndustry(industry)) {
-    throw new Error("Choose a valid industry.");
+    detailsErrorRedirect("Choose a valid industry.");
   }
   const natureRaw = text(formData, "natureOfBusiness");
   const natureOfBusiness = resolveNatureLabel(industry, natureRaw);
-  if (!natureOfBusiness) throw new Error("Nature of business is required.");
+  if (!natureOfBusiness) detailsErrorRedirect("Nature of business is required.");
 
   const contactName = text(formData, "contactName");
   const contactEmail = text(formData, "contactEmail");
-  if (!contactName || !contactEmail) {
-    throw new Error("Contact name and contact email are required.");
+  const emailErr = validateRequiredEmail(contactEmail);
+  if (!contactName || emailErr) {
+    detailsErrorRedirect(emailErr || "Contact name and contact email are required.");
   }
+  const phoneErr = validateOptionalPhone(text(formData, "contactPhone"));
+  if (phoneErr) detailsErrorRedirect(phoneErr);
 
   const abrGate = await verifyAbnStatusAgainstAbr(abnParsed.abn);
-  if (!abrGate.ok) throw new Error(abrGate.error);
+  if (!abrGate.ok) detailsErrorRedirect(abrGate.error);
 
   const companyName = deriveCompanyName({
     abrLegalName: abrGate.mode === "live" ? abrGate.legalName : undefined,
@@ -304,15 +344,17 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
   const consent =
     formData.get("consent") === "on" || formData.get("consent") === "true";
   if (websiteRaw && !consent) {
-    throw new Error(
+    detailsErrorRedirect(
       "Confirm consent to scrape public website data, or leave the website blank.",
     );
   }
   let website: string | undefined;
   if (websiteRaw) {
+    const websiteErr = validateOptionalWebsite(websiteRaw);
+    if (websiteErr) detailsErrorRedirect(websiteErr);
     const normalised = normaliseHttpUrl(websiteRaw);
     if (!normalised) {
-      throw new Error("Enter a valid website URL (e.g. example.com).");
+      detailsErrorRedirect("Enter a valid website URL (e.g. example.com).");
     }
     website = normalised;
   }
@@ -336,7 +378,7 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
       : undefined,
   };
 
-  // Force client workspace — we are the agency; signup = our client.
+  // Force client workspace — we are the agency; signup = client.
   await updateTenant(user.tenantId, {
     kind: "business_group",
     onboarding,
@@ -433,12 +475,31 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     redirect("/onboarding?step=terms");
   }
 
+  const cardName = text(formData, "cardName");
+  const cardNumber = text(formData, "cardNumber");
+  const cardExpiry = text(formData, "cardExpiry");
+  const cardCvc = text(formData, "cardCvc");
+  const cardCheck = validateDemoCardFields({
+    cardName,
+    cardNumber,
+    cardExpiry,
+    cardCvc,
+  });
+  if (!cardCheck.ok) {
+    const first =
+      cardCheck.errors.cardName ||
+      cardCheck.errors.cardNumber ||
+      cardCheck.errors.cardExpiry ||
+      cardCheck.errors.cardCvc ||
+      "Check the card details.";
+    paymentErrorRedirect(first);
+  }
+
   // Ensure client kind even if provisioned as agency earlier.
   if (tenant.kind !== "business_group") {
     await updateTenant(user.tenantId, { kind: "business_group" });
   }
 
-  const cardName = text(formData, "cardName");
   const paymentMockAt = now();
   const onboarding: TenantOnboarding = {
     ...(tenant.onboarding ?? {}),

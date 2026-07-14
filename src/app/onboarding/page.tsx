@@ -72,6 +72,8 @@ export default async function OnboardingPage({
     checkout?: string;
     prefilled?: string;
     msg?: string;
+    err?: string;
+    payError?: string;
   }>;
 }) {
   const user = await requireTenantOwnerRaw();
@@ -201,30 +203,31 @@ export default async function OnboardingPage({
           <Stepper step={step} />
 
           {step === "details" && (
-            <form action={saveOnboardingDetailsAction} className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Start with your website (optional). Prefill pulls public pages plus
-                Google listing signals, then review ABN and contact details.
-              </p>
               <OnboardingDetailsFields
-                key={detailsFieldsKey}
-                showWebsiteScrape
-                prefillBanner={prefillBanner}
-                prefillBannerTone={prefillBannerTone}
-                defaults={{
-                  abn: tenant.onboarding?.abn,
-                  industry: tenant.onboarding?.industry,
-                  natureOfBusiness: tenant.onboarding?.natureOfBusiness,
-                  contactName: tenant.onboarding?.contactName ?? user.name,
-                  contactEmail: tenant.onboarding?.contactEmail ?? user.email,
-                  contactPhone: tenant.onboarding?.contactPhone,
-                  notes: tenant.onboarding?.notes,
-                  website: tenant.onboarding?.website,
-                  scrapeConsent: !!tenant.onboarding?.scrapeConsentAt,
-                }}
-              />
-              <Button type="submit">Continue →</Button>
-            </form>
+              key={`${detailsFieldsKey}|${params.err ?? ""}`}
+              action={saveOnboardingDetailsAction}
+              showWebsiteScrape
+              prefillBanner={prefillBanner}
+              prefillBannerTone={prefillBannerTone}
+              serverError={params.err?.trim() || null}
+              intro={
+                <p className="text-sm text-muted-foreground">
+                  Start with your website (optional). Prefill pulls public pages plus
+                  Google listing signals, then review ABN and contact details.
+                </p>
+              }
+              defaults={{
+                abn: tenant.onboarding?.abn,
+                industry: tenant.onboarding?.industry,
+                natureOfBusiness: tenant.onboarding?.natureOfBusiness,
+                contactName: tenant.onboarding?.contactName ?? user.name,
+                contactEmail: tenant.onboarding?.contactEmail ?? user.email,
+                contactPhone: tenant.onboarding?.contactPhone,
+                notes: tenant.onboarding?.notes,
+                website: tenant.onboarding?.website,
+                scrapeConsent: !!tenant.onboarding?.scrapeConsentAt,
+              }}
+            />
           )}
 
           {step === "package" && (
@@ -311,10 +314,12 @@ export default async function OnboardingPage({
                 {mockCheckout ? " (demo — no live charge)" : ""}.
               </p>
               <OnboardingPlanCheckout
+                key={params.payError ?? "payment"}
                 packageName={paymentPackageName}
                 priceAudMonthly={paymentPrice}
                 mockMode={mockCheckout}
                 cancelled={params.checkout === "cancelled"}
+                serverError={params.payError?.trim() || null}
                 action={completeOnboardingPaymentAction}
               />
               <a

@@ -1,7 +1,13 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { useMemo, useState } from "react";
+import {
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,8 +15,15 @@ import {
   naturesForIndustry,
 } from "@/lib/onboarding-industries";
 import { prefillOnboardingFromWebsiteAction } from "@/app/onboarding/actions";
+import {
+  type OnboardingDetailsFieldErrors,
+  validateOnboardingDetailsFields,
+} from "@/lib/form-validation";
+import { cn } from "@/lib/utils";
 
 type Props = {
+  /** Server action for Continue (details save). */
+  action: (formData: FormData) => void | Promise<void>;
   defaults?: {
     abn?: string;
     industry?: string;
@@ -26,6 +39,10 @@ type Props = {
   /** Shown after a successful / partial website prefill. */
   prefillBanner?: string | null;
   prefillBannerTone?: "success" | "warning";
+  /** Server-side validation banner when client checks were bypassed. */
+  serverError?: string | null;
+  /** Intro copy above the fields. */
+  intro?: ReactNode;
 };
 
 function PrefillSubmitButton({ disabled }: { disabled: boolean }) {
@@ -44,12 +61,31 @@ function PrefillSubmitButton({ disabled }: { disabled: boolean }) {
   );
 }
 
+function errClass(hasError: boolean) {
+  return hasError ? "border-red-500 focus-visible:ring-red-500" : undefined;
+}
+
+function clearField(
+  setErrors: Dispatch<SetStateAction<OnboardingDetailsFieldErrors>>,
+  key: keyof OnboardingDetailsFieldErrors,
+) {
+  setErrors((prev) => {
+    if (!prev[key]) return prev;
+    const next = { ...prev };
+    delete next[key];
+    return next;
+  });
+}
+
 /** Website-first details; optional scrape prefill via Places + AI/template enrich. */
 export function OnboardingDetailsFields({
+  action,
   defaults,
   showWebsiteScrape = false,
   prefillBanner,
   prefillBannerTone = "success",
+  serverError,
+  intro,
 }: Props) {
   const initialIndustry =
     defaults?.industry &&
@@ -62,6 +98,8 @@ export function OnboardingDetailsFields({
   const [consentChecked, setConsentChecked] = useState(
     !!defaults?.scrapeConsent,
   );
+  const [errors, setErrors] = useState<OnboardingDetailsFieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(serverError ?? null);
   const willScrape = showWebsiteScrape && website.trim().length > 0;
 
   const natures = useMemo(() => naturesForIndustry(industry), [industry]);
@@ -78,8 +116,42 @@ export function OnboardingDetailsFields({
 
   const [natureId, setNatureId] = useState(initialNatureId);
 
+  function onDetailsSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // Prefill uses formAction + formNoValidate — that submitter is not the main Continue.
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as
+      | HTMLButtonElement
+      | HTMLInputElement
+      | null;
+    if (submitter?.getAttribute?.("formAction")) return;
+
+    const fd = new FormData(e.currentTarget);
+    const result = validateOnboardingDetailsFields({
+      website: String(fd.get("website") || ""),
+      abn: String(fd.get("abn") || ""),
+      contactName: String(fd.get("contactName") || ""),
+      contactEmail: String(fd.get("contactEmail") || ""),
+      contactPhone: String(fd.get("contactPhone") || ""),
+      industry: String(fd.get("industry") || ""),
+      natureOfBusiness: String(fd.get("natureOfBusiness") || ""),
+    });
+    if (!result.ok) {
+      e.preventDefault();
+      setErrors(result.errors);
+      setFormError("Fix the highlighted fields before continuing.");
+      return;
+    }
+    setErrors({});
+    setFormError(null);
+  }
+
   return (
-    <div className="space-y-4">
+    <form
+      action={action}
+      onSubmit={onDetailsSubmit}
+      className="space-y-4"
+      noValidate
+    >
+      {intro}
       {prefillBanner ? (
         <p
           className={
@@ -92,12 +164,22 @@ export function OnboardingDetailsFields({
         </p>
       ) : null}
 
+      {formError ? (
+        <p
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+          role="alert"
+        >
+          {formError}
+        </p>
+      ) : null}
+
       {showWebsiteScrape ? (
         <div className="space-y-3 rounded-md border border-border p-4">
           <Field
             label="Website"
             htmlFor="website"
             hint="Start here — with consent we scrape public pages, then use AI/templates and Google Places / Business Profile signals to pre-fill the fields below."
+            error={errors.website}
           >
             <Input
               id="website"
@@ -105,8 +187,13 @@ export function OnboardingDetailsFields({
               type="text"
               inputMode="url"
               value={website}
-              onChange={(e) => setWebsite(e.target.value)}
+              onChange={(e) => {
+                setWebsite(e.target.value);
+                clearField(setErrors, "website");
+              }}
               placeholder="https://example.com or example.com"
+              aria-invalid={!!errors.website}
+              className={cn(errClass(!!errors.website))}
             />
           </Field>
           {willScrape ? (
@@ -145,6 +232,7 @@ export function OnboardingDetailsFields({
           label="ABN"
           htmlFor="abn"
           hint="11-digit Australian Business Number (spaces optional)"
+          error={errors.abn}
         >
           <Input
             id="abn"
@@ -154,26 +242,40 @@ export function OnboardingDetailsFields({
             inputMode="numeric"
             placeholder="e.g. 51 824 753 556"
             autoComplete="off"
+            aria-invalid={!!errors.abn}
+            className={cn(errClass(!!errors.abn))}
+            onChange={() => clearField(setErrors, "abn")}
           />
         </Field>
-        <Field label="Primary contact name" htmlFor="contactName">
+        <Field
+          label="Primary contact name"
+          htmlFor="contactName"
+          error={errors.contactName}
+        >
           <Input
             id="contactName"
             name="contactName"
             required
             defaultValue={defaults?.contactName ?? ""}
             placeholder="e.g. Sam Nguyen"
+            aria-invalid={!!errors.contactName}
+            className={cn(errClass(!!errors.contactName))}
+            onChange={() => clearField(setErrors, "contactName")}
           />
         </Field>
-        <Field label="Industry" htmlFor="industry">
+        <Field label="Industry" htmlFor="industry" error={errors.industry}>
           <Select
             id="industry"
             name="industry"
             required
             value={industry}
+            aria-invalid={!!errors.industry}
+            className={cn(errClass(!!errors.industry))}
             onChange={(e) => {
               setIndustry(e.target.value);
               setNatureId("");
+              clearField(setErrors, "industry");
+              clearField(setErrors, "natureOfBusiness");
             }}
           >
             <option value="" disabled>
@@ -190,6 +292,7 @@ export function OnboardingDetailsFields({
           label="Nature of business"
           htmlFor="natureOfBusiness"
           hint="Closest match — refine later in your business profile"
+          error={errors.natureOfBusiness}
         >
           <Select
             id="natureOfBusiness"
@@ -197,7 +300,12 @@ export function OnboardingDetailsFields({
             required
             disabled={!industry}
             value={natureId}
-            onChange={(e) => setNatureId(e.target.value)}
+            aria-invalid={!!errors.natureOfBusiness}
+            className={cn(errClass(!!errors.natureOfBusiness))}
+            onChange={(e) => {
+              setNatureId(e.target.value);
+              clearField(setErrors, "natureOfBusiness");
+            }}
           >
             <option value="" disabled>
               {industry ? "Select nature…" : "Choose industry first"}
@@ -209,7 +317,11 @@ export function OnboardingDetailsFields({
             ))}
           </Select>
         </Field>
-        <Field label="Contact email" htmlFor="contactEmail">
+        <Field
+          label="Contact email"
+          htmlFor="contactEmail"
+          error={errors.contactEmail}
+        >
           <Input
             id="contactEmail"
             name="contactEmail"
@@ -217,14 +329,24 @@ export function OnboardingDetailsFields({
             required
             defaultValue={defaults?.contactEmail ?? ""}
             placeholder="owner@harbourviewcafe.com.au"
+            aria-invalid={!!errors.contactEmail}
+            className={cn(errClass(!!errors.contactEmail))}
+            onChange={() => clearField(setErrors, "contactEmail")}
           />
         </Field>
-        <Field label="Contact phone (optional)" htmlFor="contactPhone">
+        <Field
+          label="Contact phone (optional)"
+          htmlFor="contactPhone"
+          error={errors.contactPhone}
+        >
           <Input
             id="contactPhone"
             name="contactPhone"
             defaultValue={defaults?.contactPhone ?? ""}
             placeholder="04xx xxx xxx"
+            aria-invalid={!!errors.contactPhone}
+            className={cn(errClass(!!errors.contactPhone))}
+            onChange={() => clearField(setErrors, "contactPhone")}
           />
         </Field>
       </div>
@@ -240,6 +362,7 @@ export function OnboardingDetailsFields({
           placeholder="e.g. Two locations in Bondi — want more weekday lunch trade"
         />
       </Field>
-    </div>
+      <Button type="submit">Continue →</Button>
+    </form>
   );
 }

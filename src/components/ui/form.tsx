@@ -45,12 +45,15 @@ Select.displayName = "Select";
 export function Field({
   label,
   hint,
+  error,
   htmlFor,
   children,
   className,
 }: {
   label?: string;
   hint?: string;
+  /** Inline validation message — shown instead of hint when set. */
+  error?: string | null;
   htmlFor?: string;
   children: React.ReactNode;
   className?: string;
@@ -59,7 +62,13 @@ export function Field({
     <div className={className}>
       {label && <Label htmlFor={htmlFor}>{label}</Label>}
       {children}
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      {error ? (
+        <p className="mt-1 text-xs text-red-600" role="alert">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   );
 }

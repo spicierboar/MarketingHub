@@ -20,6 +20,10 @@ import {
 import { loadPublicOrderStorefront } from "@/lib/ordering-public";
 import { canUseLiveOrderingCheckout, createOrderCheckoutSession } from "@/lib/ordering-stripe";
 import type { OrderFulfillment } from "@/lib/types";
+import {
+  validateOptionalPhone,
+  validateRequiredEmail,
+} from "@/lib/form-validation";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -44,6 +48,11 @@ export async function placeOrderAction(formData: FormData) {
   if (!customerName || !customerEmail) {
     throw new Error("Name and email are required.");
   }
+  if (customerName.length < 2) throw new Error("Enter your full name.");
+  const emailErr = validateRequiredEmail(customerEmail);
+  if (emailErr) throw new Error(emailErr);
+  const phoneErr = validateOptionalPhone(customerPhone);
+  if (phoneErr) throw new Error(phoneErr);
   if (fulfillment === "delivery" && !deliveryAddress) {
     throw new Error("Delivery address is required.");
   }

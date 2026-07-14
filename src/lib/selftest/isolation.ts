@@ -339,6 +339,7 @@ import {
   checkClientProfileLocksAbnAndLegalName,
   checkNameAbnIdentityDuplicate,
 } from "@/lib/selftest/client-profile";
+import { checkFormValidationBasics } from "@/lib/selftest/form-validation";
 import {
   checkLogRecordsDedupeKey,
   checkRetrySkipsWhenAlreadyPublished,
@@ -1274,6 +1275,9 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     );
     await expect("clientProfile.nameAbnIdentityDuplicate", () =>
       checkNameAbnIdentityDuplicate(),
+    );
+    await expect("formValidation.basics", () =>
+      Promise.resolve(checkFormValidationBasics()),
     );
 
     await expect("photoMarketplace.bookingCreatesShoot", () => checkBookingCreatesShoot());

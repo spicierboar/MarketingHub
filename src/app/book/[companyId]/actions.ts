@@ -19,6 +19,10 @@ import {
 } from "@/lib/bookings";
 import { dispatchBookingConfirmation } from "@/lib/bookings-connectors";
 import { loadPublicBookingsStorefront } from "@/lib/bookings-public";
+import {
+  validateOptionalPhone,
+  validateRequiredEmail,
+} from "@/lib/form-validation";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -46,6 +50,11 @@ export async function requestReservationAction(formData: FormData) {
   if (!guestName || !guestEmail || !date || !time) {
     throw new Error("Name, email, date, and time are required.");
   }
+  if (guestName.length < 2) throw new Error("Enter your full name.");
+  const emailErr = validateRequiredEmail(guestEmail);
+  if (emailErr) throw new Error(emailErr);
+  const phoneErr = validateOptionalPhone(guestPhone);
+  if (phoneErr) throw new Error(phoneErr);
 
   const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
   assertPartySizeAllowed(settings, partySize);
