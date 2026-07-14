@@ -4,6 +4,7 @@ import {
   isTenantOwner,
   isPlatformAdmin,
 } from "@/lib/auth/rbac";
+import { canPublishLegalDocs } from "@/lib/terms";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -135,6 +136,9 @@ const SECTIONS: HubSection[] = [
 
 export default async function SettingsHubPage() {
   const user = await requireAdmin();
+  // Side-effect: repair staging agency kind/name and promote leftover admin
+  // membership so Legal publish works when they open Terms from this hub.
+  await canPublishLegalDocs(user);
   const owner = isTenantOwner(user);
   const platform = isPlatformAdmin(user);
 

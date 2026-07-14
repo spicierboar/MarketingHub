@@ -8,13 +8,15 @@
 
 import {
   createTenant,
+  getMembership,
   getTenant,
   listTenants,
+  updateMembership,
   updateTenant,
 } from "@/lib/db";
 import { appEnv, localDemoEnabled } from "@/lib/env";
 import { now } from "@/lib/utils";
-import type { Tenant } from "@/lib/types";
+import type { ActingUser, Tenant } from "@/lib/types";
 
 /** Canonical display name for the platform agency in each env. */
 export function platformAgencyCanonicalName(): string {
@@ -109,4 +111,65 @@ export async function resolvePlatformAgencyTenant(): Promise<Tenant> {
 export async function isPlatformAgencyTenant(tenantId: string): Promise<boolean> {
   const agency = await resolvePlatformAgencyTenant();
   return agency.id === tenantId;
+}
+
+/** Ops seat names that historically meant “the agency” on staging/demo. */
+function looksLikePlatformAgencyName(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  if (!n) return false;
+  const canonical = platformAgencyCanonicalName().trim().toLowerCase();
+  if (n === canonical) return true;
+  return (
+    n === "staging agency" ||
+    n === "brightspark marketing" ||
+    n === "marketing command centre"
+  );
+}
+
+/**
+ * Repair the signed-in seat when it is the platform agency under a wrong
+ * `kind`/`name`, and (on staging) promote an existing agency membership to
+ * owner so Legal publish is not blocked by a leftover admin row.
+ *
+ * Call from Settings / Legal loads and staging quick-login — never deletes data.
+ */
+export async function ensurePlatformAgencyPublisherContext(
+  user: ActingUser,
+): Promise<{ agency: Tenant; active: Tenant | undefined }> {
+  const agency = await resolvePlatformAgencyTenant();
+
+  // Staging ops accounts often landed as admin from earlier invites; Legal
+  // publish requires owner. Promote only the platform-agency membership.
+  if (appEnv() === "staging") {
+    const m = await getMembership(agency.id, user.id);
+    if (m && m.role !== "owner") {
+      await updateMembership(agency.id, user.id, { role: "owner" });
+    }
+  }
+
+  let active = await getTenant(user.tenantId);
+  if (
+    active &&
+    active.id !== agency.id &&
+    looksLikePlatformAgencyName(active.name) &&
+    active.status === "active"
+  ) {
+    // Duplicate / env-mismatch: user is on a seat that *is* the agency by name
+    // but resolve preferred another row. Repair this seat in place so their
+    // session matches publishing rights without asking them to “switch”.
+    const repairs: Partial<Tenant> = {};
+    if (active.kind !== "agency") repairs.kind = "agency";
+    if (active.name !== platformAgencyCanonicalName()) {
+      repairs.name = platformAgencyCanonicalName();
+    }
+    if (appEnv() === "staging" && active.plan !== "agency") repairs.plan = "agency";
+    if (!active.onboardingCompletedAt) repairs.onboardingCompletedAt = now();
+    if (Object.keys(repairs).length > 0) {
+      active = (await updateTenant(active.id, repairs)) ?? active;
+    }
+  } else if (active && active.id === agency.id && active.kind !== "agency") {
+    active = agency;
+  }
+
+  return { agency, active };
 }

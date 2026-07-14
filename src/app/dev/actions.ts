@@ -9,6 +9,7 @@ import {
   getMembership,
   getUserByEmail,
   membershipsForUser,
+  updateMembership,
 } from "@/lib/db";
 import { startSession, endSession, setActiveTenant } from "@/lib/auth/session";
 import { postLoginRedirectPath } from "@/lib/auth/rbac";
@@ -150,13 +151,17 @@ async function ensureStagingUser(email: string): Promise<User> {
 
   // Always attach (or keep) membership on the platform agency seat — orphan
   // holding tenants from prior client-signup experiments must not be the only seat.
+  // Promote leftover admin rows to owner so Legal publish is not blocked.
   const tenant = await resolveStagingTenant();
-  if (!(await getMembership(tenant.id, user.id))) {
+  const existing = await getMembership(tenant.id, user.id);
+  if (!existing) {
     await addMembership({
       tenantId: tenant.id,
       userId: user.id,
       role: "owner",
     });
+  } else if (existing.role !== "owner") {
+    await updateMembership(tenant.id, user.id, { role: "owner" });
   }
   return user;
 }

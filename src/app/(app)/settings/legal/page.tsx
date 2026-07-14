@@ -168,8 +168,9 @@ function LegalDocPanel({
 
 export default async function SettingsLegalPage() {
   const user = await requireAdmin();
-  const tenant = await getTenant(user.tenantId);
+  // Heal kind/name + staging owner membership before gating the editors.
   const canPublish = await canPublishLegalDocs(user);
+  const tenant = await getTenant(user.tenantId);
   const owner = isTenantOwner(user);
 
   let termsVersions: TermsVersion[] = [];

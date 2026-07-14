@@ -7,9 +7,9 @@
 // but nothing is sent. The force-re-acceptance gate (requireUser) is the actual
 // enforcement; this email is the courtesy heads-up.
 
-import { getTenant, listActiveRecipients, updateTermsVersion } from "@/lib/db";
+import { getMembership, getTenant, listActiveRecipients, updateTermsVersion } from "@/lib/db";
 import { isPlatformAdmin, isTenantOwner } from "@/lib/auth/rbac";
-import { isPlatformAgencyTenant } from "@/lib/platform-agency";
+import { ensurePlatformAgencyPublisherContext } from "@/lib/platform-agency";
 import { emailConfigured, sendBulkEmail } from "@/lib/email";
 import { logAction } from "@/lib/audit";
 import { now } from "@/lib/utils";
@@ -19,15 +19,25 @@ import type { ActingUser, LegalDocKind, TermsVersion } from "@/lib/types";
  * Who may publish platform Terms / Privacy: platform admins, and owners of an
  * agency seat (including the platform agency after kind repair on staging).
  * Client (business_group) owners can view but not publish.
+ *
+ * Always heals the platform-agency seat first so a signed-in Staging Agency
+ * owner is not blocked by a corrupted `kind` or leftover admin membership.
  */
 export async function canPublishLegalDocs(user: ActingUser): Promise<boolean> {
   if (isPlatformAdmin(user)) return true;
+
+  const { agency, active } = await ensurePlatformAgencyPublisherContext(user);
+
+  // Prefer DB membership role after staging promote (session stamp may lag).
+  const agencyMem = await getMembership(agency.id, user.id);
+  if (agencyMem?.role === "owner") return true;
+
   if (!isTenantOwner(user)) return false;
+
+  // Any agency-kind seat owner (including after in-place name heal).
+  if (active?.kind === "agency") return true;
   const tenant = await getTenant(user.tenantId);
-  if (tenant?.kind === "agency") return true;
-  // Staging heal: corrupted seats may briefly report business_group while
-  // still being the single platform agency row.
-  return isPlatformAgencyTenant(user.tenantId);
+  return tenant?.kind === "agency";
 }
 
 function escapeHtml(s: string): string {

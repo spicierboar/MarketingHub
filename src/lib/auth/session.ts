@@ -28,6 +28,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/db/supabase";
 import { appEnv } from "@/lib/env";
+import { resolvePlatformAgencyTenant } from "@/lib/platform-agency";
 import type { ActingUser, RoleTitle, TenantMember, User } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 
@@ -91,10 +92,21 @@ export async function getCurrentUser(): Promise<ActingUser | null> {
 }
 
 // Deterministic default membership for a user (stable tenant on every login).
+// Staging: prefer the platform agency seat so ops accounts never fall through
+// to an orphan holding tenant sorted first by id.
 async function defaultMembership(userId: string): Promise<TenantMember | undefined> {
   const memberships = [...(await membershipsForUser(userId))].sort((a, b) =>
     a.tenantId.localeCompare(b.tenantId),
   );
+  if (appEnv() === "staging" && memberships.length > 0) {
+    try {
+      const agency = await resolvePlatformAgencyTenant();
+      const onAgency = memberships.find((m) => m.tenantId === agency.id);
+      if (onAgency) return onAgency;
+    } catch {
+      // Fall through to sorted default if resolve fails.
+    }
+  }
   return memberships[0];
 }
 
@@ -120,16 +132,36 @@ async function getSupabaseUser(): Promise<ActingUser | null> {
   // Deterministic order so a multi-tenant user always defaults to the same
   // tenant; the active-tenant cookie (set by the tenant switcher in T3) narrows
   // to a specific membership, verified against the user's real memberships.
-  let q = sb
+  if (activeTenant) {
+    const { data: memberships } = await sb
+      .from("tenant_members")
+      .select("*")
+      .eq("user_id", authUser.id)
+      .eq("tenant_id", activeTenant)
+      .limit(1);
+    const m = memberships?.[0];
+    if (m) {
+      return stampSupabaseUser(data, m);
+    }
+  }
+
+  // Cookie missing / stale: prefer platform agency on staging, else first id.
+  const preferred = await defaultMembership(authUser.id);
+  if (!preferred) return null;
+  const { data: row } = await sb
     .from("tenant_members")
     .select("*")
     .eq("user_id", authUser.id)
-    .order("tenant_id", { ascending: true });
-  if (activeTenant) q = q.eq("tenant_id", activeTenant);
-  const { data: memberships } = await q.limit(1);
-  const m = memberships?.[0];
-  if (!m) return null;
+    .eq("tenant_id", preferred.tenantId)
+    .maybeSingle();
+  if (!row) return null;
+  return stampSupabaseUser(data, row);
+}
 
+function stampSupabaseUser(
+  data: Record<string, unknown>,
+  m: Record<string, unknown>,
+): ActingUser {
   const user: User = {
     id: data.id as string,
     email: data.email as string,
