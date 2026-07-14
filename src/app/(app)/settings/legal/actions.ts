@@ -14,8 +14,12 @@ import {
   requireUser,
 } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
+import { assertAiBudget } from "@/lib/ai/budget";
+import { formatLegalDocBody } from "@/lib/ai/legal-format";
+import { recordAiUsage } from "@/lib/ai/metering";
 import { broadcastLegalDocUpdate, legalDocLabel } from "@/lib/terms";
 import { resolveOrigin } from "@/lib/origin";
+import { assertAiRateLimit } from "@/lib/ratelimit";
 import type { LegalDocKind } from "@/lib/types";
 
 function text(fd: FormData, key: string): string {
@@ -34,6 +38,42 @@ async function requireLegalPublisher() {
   const tenant = await getTenant(user.tenantId);
   if (!tenant || tenant.kind !== "agency") redirect("/settings");
   return user;
+}
+
+/** Format pasted Terms/Privacy text for review in the editor (does not publish). */
+export async function formatLegalDocAction(
+  kind: LegalDocKind,
+  body: string,
+): Promise<{ text: string; model: string }> {
+  const user = await requireLegalPublisher();
+  const docKind: LegalDocKind = kind === "privacy" ? "privacy" : "terms";
+  // Legal pastes are often longer than AI_USER_INPUT_MAX_CHARS — only strip nulls.
+  const cleaned = body.replace(/\0/g, "").trim();
+  if (!cleaned) throw new Error("Paste some document text to format.");
+  if (cleaned.length > 80_000) {
+    throw new Error("Document is too long to format in one pass (max ~80k characters).");
+  }
+
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId);
+
+  const result = await formatLegalDocBody(docKind, cleaned);
+  await recordAiUsage({
+    tenantId: user.tenantId,
+    userId: user.id,
+    kind: "legal_format",
+    model: result.model,
+    promptSummary: `Format ${legalDocLabel(docKind)}`.slice(0, 120),
+    sourcesUsed: ["Settings · Legal paste"],
+    outputChars: result.text.length,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    contextChars: cleaned.length,
+  });
+  await logAction(user, "legal.formatted", {
+    detail: `${legalDocLabel(docKind)} · ${result.model} · ${result.text.length} chars`,
+  });
+  return { text: result.text, model: result.model };
 }
 
 export async function publishLegalDocAction(formData: FormData) {

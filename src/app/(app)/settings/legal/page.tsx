@@ -18,6 +18,7 @@ import {
   publishLegalDocAction,
   resendLegalDocNotificationAction,
 } from "./actions";
+import { LegalBodyEditor } from "./legal-body-editor";
 
 function LegalDocPanel({
   kind,
@@ -120,16 +121,7 @@ function LegalDocPanel({
                   }
                 />
               </Field>
-              <Field label={`Full ${label.toLowerCase()} text`} htmlFor={`${kind}-body`}>
-                <textarea
-                  id={`${kind}-body`}
-                  name="body"
-                  required
-                  rows={6}
-                  className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
-                  placeholder={`Paste the full ${label.toLowerCase()} text…`}
-                />
-              </Field>
+              <LegalBodyEditor kind={kind} label={label} />
               <Button type="submit" size="sm">
                 Publish new version
               </Button>

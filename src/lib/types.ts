@@ -1050,7 +1050,8 @@ export interface AiRun {
     | "ai_campaign_plan"
     | "ai_campaign_optimise"
     | "ai_campaign_decision"
-    | "onboarding_enrich";
+    | "onboarding_enrich"
+    | "legal_format";
   model: string;
   promptSummary: string;
   outputChars: number;
