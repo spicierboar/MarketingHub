@@ -7,7 +7,7 @@
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`4887a38`** (= `origin/staging`) |
+> | Git tip | **`c2ece68`** (= `origin/staging`) |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
 > | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** (`legal_docs_kind`) — owner confirmed |
 > | Staging login | Magic link rate-limited → **`/dev` staging quick login** (prefer agency seat e.g. `development@tglt.com.au`) |
@@ -38,7 +38,7 @@
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ 4887a38 (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; live/W6 parked.
+> STATE: staging @ c2ece68 (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; live/W6 parked.
 > IN PROGRESS: smoke Settings/legal publish + accept-terms; unit pricing parked.
 > NEXT: smoke /dev → Staging Agency → Clients (Viya) → Settings → Terms & Privacy publish → accept-terms → pricing Excel → optional RESEND → later main/live + W6.
 > Login: staging /dev quick-login. No *_LIVE.
