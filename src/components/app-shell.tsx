@@ -54,6 +54,7 @@ interface NavGroup {
 
 const SETTINGS_PATHS = [
   "/settings",
+  "/settings/legal",
   "/users",
   "/branding",
   "/billing",
@@ -154,6 +155,12 @@ const NAV_GROUPS: NavGroup[] = [
         icon: Settings,
         adminOnly: true,
         alsoActiveFor: SETTINGS_PATHS,
+      },
+      {
+        href: "/settings/legal",
+        label: "Terms & Privacy Policy",
+        icon: FileText,
+        adminOnly: true,
       },
     ],
   },
