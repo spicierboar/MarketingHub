@@ -1,15 +1,15 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-14, **STAGING · LEGAL PUBLISHER RBAC BUG · 0046 PASTE? · PRICING PARKED · W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-14, **STAGING · 0046 PASTED · LEGAL PUBLISHER HEALED · SMOKE LEGAL · PRICING PARKED · W6 WAITING**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` · Vercel Preview = staging · live flags **OFF**
 >
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`48b30a2`** (= `origin/staging`) |
+> | Git tip | **`4887a38`** (= `origin/staging`) |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
-> | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0045** + **paste 0046** (`legal_docs_kind`) if not yet applied |
+> | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** (`legal_docs_kind`) — owner confirmed |
 > | Staging login | Magic link rate-limited → **`/dev` staging quick login** (prefer agency seat e.g. `development@tglt.com.au`) |
 > | Tenant name | **Staging Agency** (repaired; do **not** rename agency to Viya — Viya is a **client**) |
 > | Vercel Preview Protection | **OFF** (owner) so staging URL works without Vercel auth |
@@ -20,28 +20,27 @@
 > - **Staging deploy recovery:** `024203e` typecheck fail → follow-up **`51db48d`** live; tenant name repaired to Staging Agency
 > - **Portal form validations** (demo payment Luhn etc.) ~`54b8768`
 > - **Legal docs:** Terms + Privacy (`kind`), Settings `/settings/legal`, Format with AI, force re-accept + email on publish, Settings hub tile + sidebar · tip through **`a8893e2`**
-> - Migration **0046** · Notepad paste: `F:\MarketingHub\command-centre\supabase\migrations\_owner_paste_0046_legal_docs_kind.sql` (exclude `_owner_paste_*` from commits)
+> - **Legal publisher heal:** **`4887a38`** — agency Legal publish when seat kind/membership corrupted (shipped; no longer the active bug)
+> - Migration **0046** · **PASTED** on staging (owner confirmed “I ran the sqls”) · source was `_owner_paste_0046_legal_docs_kind.sql` (exclude `_owner_paste_*` from commits)
 > - **Pricing sheet** earlier: `docs/unit-pricing-simple.xlsx` (cost-only review; margin later) — **parked** mid-owner review
 >
 > ### IN PROGRESS / NEXT (ordered)
-> 1. **Fix legal publisher gate for agency owner** — owner reports Legal/Settings still fails while **already signed in as agency** (RBAC/UI bug). Do **not** tell them to “switch to agency”; diagnose publisher/gate/seat check
-> 2. Confirm owner pasted **0046** on staging Supabase (**blocking** for legal publish if not done)
-> 3. Smoke: `/dev` → Staging Agency header → Clients (Viya as client) → Settings → Terms & Privacy (editors + Format with AI) → publish → accept-terms gate
-> 4. Finish internal unit pricing (Excel review → finalize sell/margin later → wire rate card)
-> 5. Optional: more portal validation / `RESEND_API_KEY` for legal emails
-> 6. Later: main/live; multi-agency white-label; W6 Google waiting
+> 1. **Smoke legal flow:** `/dev` → Staging Agency header → Clients (Viya as client) → Settings → Terms & Privacy (editors + Format with AI) → **publish** → **accept-terms** gate
+> 2. Finish internal unit pricing (Excel review → finalize sell/margin later → wire rate card)
+> 3. Optional: more portal validation / `RESEND_API_KEY` for legal emails
+> 4. Later: main/live; multi-agency white-label; W6 Google waiting
 >
 > ### How to resume
-> - **Human:** staging `/dev` quick login → Settings → Terms & Privacy; paste 0046 if needed. If legal UI fails while on Staging Agency, it’s a **bug** — report back (don’t re-login as “agency”)
-> - **Agent:** `READ HANDOVER.md` · branch `staging` · fix legal publisher RBAC/UI first · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps
+> - **Human:** staging `/dev` quick login → Settings → Terms & Privacy → publish → confirm accept-terms. 0046 already pasted; publisher heal already on `4887a38`
+> - **Agent:** `READ HANDOVER.md` · branch `staging` · smoke Settings/legal publish + accept-terms · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps
 >
 > ### Resume in a new Cursor chat
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ 48b30a2 (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; live/W6 parked.
-> IN PROGRESS: fix legal publisher gate (agency owner already on Staging Agency — RBAC/UI bug, not seat switch); confirm 0046 paste; unit pricing parked.
-> NEXT: fix legal Settings/publish for agency owner → 0046 if needed → smoke Clients (Viya) + accept-terms → pricing Excel → optional RESEND → later main/live + W6.
+> STATE: staging @ 4887a38 (= origin/staging); Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; live/W6 parked.
+> IN PROGRESS: smoke Settings/legal publish + accept-terms; unit pricing parked.
+> NEXT: smoke /dev → Staging Agency → Clients (Viya) → Settings → Terms & Privacy publish → accept-terms → pricing Excel → optional RESEND → later main/live + W6.
 > Login: staging /dev quick-login. No *_LIVE.
 > ```
 >
@@ -54,6 +53,12 @@
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-14, **STAGING · LEGAL PUBLISHER RBAC BUG · 0046 PASTE?**) — archived
+>
+> Publisher heal shipped @ `4887a38`; owner confirmed 0046 pasted. Superseded by smoke-legal next above.
 >
 > ---
 >
