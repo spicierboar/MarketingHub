@@ -1,50 +1,49 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-16, **STAGING · 3 WAVES ON ORIGIN · WAVE D UI DEMO NEXT · FIXTURES 6/6 · CLIENTS EMPTY · PRICING PARKED · W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-16, **STAGING · 3 WAVES ON ORIGIN · WAVE D UI BLOCKED (NO BROWSER MCP) · FIXTURES 6/6 · CLIENTS EMPTY · PRICING PARKED · W6 WAITING**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` · Vercel Preview = staging · live flags **OFF**
 >
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`3222984`** (= `origin/staging` after HANDOVER tip-SHA) · do not commit `_owner_paste_*` / pricing xlsx / logs |
+> | Git tip | **`b561d3a`** (= `origin/staging`) · do not commit `_owner_paste_*` / pricing xlsx / logs |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
 > | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** |
 > | Staging login | **`/dev`** quick login · agency seat `development@tglt.com.au` |
 > | Tenant name | **Staging Agency** (header OK) · Clients list **empty** — no Viya yet (do **not** rename agency → Viya) |
-> | Three waves on `origin/staging` | **`7a6a379`** legal archive · **`fa7a0a3`** content Create scopes · **`bacf189`** C P1 managed_exceptions auto-schedule |
-> | Wave D | Fixture proof **6/6 done** · **UI demo still in progress / next** (onboard → tick → Approvals → client Approve → scheduled/sim publish) |
-> | Legal (remote) | Smoke PASS; publish lockout FIXED @ `e9b372a`; archive landed @ `7a6a379` |
+> | Three waves on `origin/staging` | **`7a6a379`** legal archive · **`fa7a0a3`** content Create scopes · **`bacf189`** C P1 managed_exceptions auto-schedule · HANDOVER tips `3222984` / `b561d3a` |
+> | Wave D | Fixture proof **6/6 done** (local) · **UI demo BLOCKED** this session — `cursor-ide-browser` MCP not available in agent workspace; Preview **ACTIVE** @ `b561d3a`; `/dev` Quick login OK; `/terms` archive visible; full `/api/dev/self-test` **504** (gateway timeout) |
+> | Legal (remote) | Smoke PASS; publish lockout FIXED @ `e9b372a`; archive landed @ `7a6a379` — Preview shows Version archive on `/terms` |
 > | Live / mangotickle.com.au / `*_LIVE` | **PARKED** · W6 Google still waiting |
 >
 > ### DONE this wave (on `origin/staging`)
-> - **Legal version archive with dates** (`7a6a379`): Settings Legal Current/Archive; public `/terms` + `/privacy-policy` with `?v=N` dated archive · **no new migration**
+> - **Legal version archive with dates** (`7a6a379`): Settings Legal Current/Archive; public `/terms` + `/privacy-policy` with `?v=N` dated archive · **no new migration** · Preview smoke: `/terms` shows Version archive
 > - **`/content` Create scopes** (`fa7a0a3`): Client | Industry | General; not blocked with zero clients; AI → Library; industry/general → hidden agency shelf
 > - **Automation-first C P1** (`bacf189`): `managed_exceptions` unlocks `schedule_approved`; new clients default `managed_exceptions`; staff approve mirrors auto-schedule via `progressManagedSchedulesForCompany`; stale quality holds escalate after 2 days on Agency Home · **no migration** · tsc + targeted fixtures PASS
-> - **Wave D fixtures:** **6/6 done** (see `docs/AUTOMATION-FIRST-PLAN.md`)
+> - **Wave D fixtures:** **6/6 done** locally (authority default ME · schedule_approved ME · approval skips · campaign planned-ready schedule · stale quality-hold escalate)
 > - Prior: legal publish lockout fix (`e9b372a`); HANDOVER tip (`3f0ca98`); onboarding, deploy recovery, portal validations, legal docs, publisher heal `4887a38`, 0046 pasted
 > - **Pricing sheet:** `docs/unit-pricing-simple.xlsx` (cost-only) — **parked** mid-owner review
 >
 > ### IN PROGRESS / NEXT (ordered)
-> 1. **Wave D UI demo proof** — onboard → tick drafts Approvals → client Approve → scheduled/sim publish; Agency Home exceptions (see `docs/AUTOMATION-FIRST-PLAN.md`) · wait for Vercel Preview on tip if needed
-> 2. Smoke-test legal Current/Archive + `/terms` / `/privacy-policy?v=N` on staging Preview
-> 3. Smoke-test `/content` Create scopes on staging Preview
-> 4. **Create Viya as a client** under Staging Agency — keep agency name Staging Agency
-> 5. Finish internal unit pricing (Excel review → sell/margin later → wire rate card)
-> 6. Optional: `RESEND_API_KEY` for legal update emails
-> 7. Later: main/live; multi-agency white-label; W6 Google waiting
+> 1. **Wave D UI demo proof** — needs browser MCP (or human): `/dev` quick-login `development@tglt.com.au` → onboard → tick drafts Approvals → client Approve → scheduled/sim publish; Agency Home exceptions · Preview already @ `b561d3a`
+> 2. Smoke-test `/content` Create scopes on staging Preview
+> 3. **Create Viya as a client** under Staging Agency — keep agency name Staging Agency
+> 4. Finish internal unit pricing (Excel review → sell/margin later → wire rate card)
+> 5. Optional: `RESEND_API_KEY` for legal update emails
+> 6. Later: main/live; multi-agency white-label; W6 Google waiting
 >
 > ### How to resume
-> - **Human:** run or watch Wave D UI demo on staging Preview; or add Viya client under Staging Agency
-> - **Agent:** `READ HANDOVER.md` · branch `staging` · tip `3222984` · Wave D UI demo · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps / pricing xlsx unless asked
+> - **Human:** run Wave D UI demo on staging Preview (login `/dev`); or add Viya client under Staging Agency
+> - **Agent:** `READ HANDOVER.md` · branch `staging` · tip `b561d3a` · Wave D UI demo with **cursor-ide-browser** · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps / pricing xlsx unless asked
 >
 > ### Resume in a new Cursor chat
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ 3222984 (= origin/staging). Three waves landed: 7a6a379 legal archive, fa7a0a3 content Create scopes, bacf189 C P1. Wave D fixtures 6/6 done; UI demo still in progress/next. Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; Clients empty; pricing/live/W6 parked.
-> IN PROGRESS: Wave D UI demo proof (onboard → tick → Approvals → client Approve → scheduled/sim publish).
-> NEXT: legal/content smoke on Preview; Viya client; pricing Excel; optional RESEND; later main/live + W6.
+> STATE: staging @ b561d3a (= origin/staging). Three waves landed: 7a6a379 legal archive, fa7a0a3 content Create scopes, bacf189 C P1. Wave D fixtures 6/6 done; UI demo still needed (prior agent lacked cursor-ide-browser MCP). Preview ACTIVE @ b561d3a; /dev Quick login OK; /terms archive visible; self-test API 504. Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; Clients empty; pricing/live/W6 parked.
+> IN PROGRESS: Wave D UI demo proof (onboard → tick → Approvals → client Approve → scheduled/sim publish) — use browser MCP.
+> NEXT: content Create scopes smoke; Viya client; pricing Excel; optional RESEND; later main/live + W6.
 > Login: staging /dev quick-login (development@tglt.com.au). No *_LIVE. Do not commit _owner_paste_* / pricing xlsx / logs.
 > ```
 >
@@ -57,6 +56,12 @@
 > **▶ STANDING INSTRUCTION — next-session continue command:** update this block, then give Path + READ + STATE + NEXT.
 >
 > **NON-NEGOTIABLES:** Isolation rule · `appEnv()` never `NODE_ENV` · OAuth-only · never force-push main · exclude `scripts/*.snip`, `ship-*.mjs`, `_owner_paste_*`, integrator temps from commits.
+>
+> ---
+>
+> ### ▶ PREVIOUS NEXT-SESSION BLOCK (2026-07-16, **STAGING · 3 WAVES ON ORIGIN · WAVE D UI DEMO NEXT · FIXTURES 6/6**) — archived
+>
+> Tip was `3222984` / waves @ `bacf189`; Preview then ACTIVE @ `b561d3a`. UI demo blocked without browser MCP. Superseded by WAVE D UI BLOCKED block above.
 >
 > ---
 >
