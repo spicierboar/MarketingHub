@@ -47,8 +47,15 @@ import {
   applyQualityRoutingAfterDraft,
   submitHeldContentToClient,
 } from "@/lib/managed-service/quality-routing";
+import { progressManagedSchedulesForCompany } from "@/lib/managed-service/auto-progress";
 import { generateVoice, type VoiceStyle } from "@/lib/ai/voicegen";
+import { generateImage } from "@/lib/ai/imagegen";
+import { generateVideo } from "@/lib/ai/videogen";
 import { persistGeneratedAsset } from "@/lib/visuals";
+import { assertVisualsGeneration } from "@/lib/visuals-allowance";
+import { resolveContentCreateTarget } from "@/lib/content-create-scope";
+import { now } from "@/lib/utils";
+import type { DraftTone, GroundingLabel, RequestType } from "@/lib/types";
 
 // §54 — content (or its company) under an active legal hold must not be
 // overwritten. Guards every mutation path.
@@ -57,8 +64,6 @@ async function assertNotOnHold(content: { id: string; companyId: string }): Prom
     throw new Error("This content is under legal hold and cannot be modified.");
   }
 }
-import { now } from "@/lib/utils";
-import type { GroundingLabel, RequestType } from "@/lib/types";
 
 async function requestOrigin(): Promise<string> {
   const h = await headers();
@@ -355,6 +360,15 @@ export async function approveContentAction(formData: FormData) {
     companyId: content.companyId,
     detail: ROUTE_LABEL[governed.routedTo],
   });
+
+  // Managed levels: after staff approve, try critique-gated scheduleOne for
+  // assist/campaign planned dates so approved work is not left orphaned.
+  try {
+    await progressManagedSchedulesForCompany(user, content.companyId);
+  } catch {
+    /* best-effort — cron tick will retry */
+  }
+
   revalidatePath(`/content/${contentId}`);
   revalidatePath("/approvals");
 }
@@ -683,50 +697,391 @@ export async function recheckComplianceAction(formData: FormData) {
 
 const VOICE_STYLES: VoiceStyle[] = ["warm", "professional", "energetic", "calm"];
 
-/** Content hub — voiceover script draft + placeholder audio asset (no live TTS yet). */
-export async function generateAiVoiceAction(formData: FormData) {
-  const companyId = String(formData.get("companyId") || "").trim();
-  const user = await assertCompanyAccess(companyId);
-  const company = await getCompany(companyId);
-  if (!company) throw new Error("Company not found");
-  if (company.status !== "ai_ready" && company.status !== "approved") {
-    throw new Error("Company is not AI-ready. Complete onboarding first.");
-  }
+function textFd(fd: FormData, key: string): string {
+  return String(fd.get(key) || "").trim();
+}
+
+async function resolveHubTarget(formData: FormData) {
+  const user = await requireUser();
+  const target = await resolveContentCreateTarget(formData, user, {
+    assertCompanyAccess,
+    getCompany,
+  });
+  // Re-assert access on the resolved company (client or shelf).
+  await assertCompanyAccess(target.company.id);
+  return { user, target };
+}
+
+/**
+ * /content Create — AI copy (any type). Lands in Library as ai_draft.
+ * Supports client · industry · general (industry/general need zero clients).
+ */
+export async function hubGenerateContentAction(formData: FormData) {
+  const { user, target } = await resolveHubTarget(formData);
+  const { company, generationCompany, scopeTag, displayLabel } = target;
   await assertAiBudget(user.tenantId);
   await assertAiRateLimit(user.tenantId);
 
-  const script = String(formData.get("script") || "").trim();
-  if (!script) throw new Error("A voiceover script is required");
-  const topic = String(formData.get("topic") || "").trim() || undefined;
-  const rawStyle = String(formData.get("voiceStyle") || "warm").trim();
-  const voiceStyle = (VOICE_STYLES.includes(rawStyle as VoiceStyle)
-    ? rawStyle
-    : "warm") as VoiceStyle;
+  const contentType = (textFd(formData, "contentType") || "social_post") as RequestType;
+  const topic = textFd(formData, "topic");
+  const objective = textFd(formData, "objective");
+  if (!topic || !objective) throw new Error("Topic and objective are required");
+  const channel = textFd(formData, "channel") || undefined;
+  const tone = (textFd(formData, "tone") || "brand_default") as DraftTone;
 
-  const result = await generateVoice({ company, script, voiceStyle, topic });
+  const draft = await draftContent({
+    company: generationCompany,
+    requestType: contentType,
+    topic,
+    objective,
+    platform: channel,
+    tone,
+  });
+  const compliance = await checkCompliance(draft.body, generationCompany);
+  const claimAudit = await auditClaims(draft.body, generationCompany);
+  const groundingLabel: GroundingLabel = claimAudit.some((c) => c.status === "unsupported")
+    ? "requires_evidence"
+    : draft.sourceRefs.length > 0
+      ? "grounded"
+      : "suggested_by_ai";
+  const routedTo = routeContent({ type: contentType, compliance, claimAudit });
 
-  const compliance = await checkCompliance(result.scriptBody, company);
-  const claimAudit = await auditClaims(result.scriptBody, company);
+  const sourcesUsed = [
+    ...draft.sources,
+    scopeTag,
+    `Content hub: AI Content · ${displayLabel}`,
+  ];
+  const aiRun = await recordAiUsage({
+    tenantId: user.tenantId,
+    companyId: company.id,
+    userId: user.id,
+    kind: "content_draft",
+    model: draft.model,
+    promptSummary: `${topic} [${displayLabel}]`.slice(0, 120),
+    outputChars: draft.body.length,
+    sourcesUsed,
+    contextChars: draft.body.length + objective.length,
+  });
+
+  const content = await createContent({
+    companyId: company.id,
+    requestId: null,
+    type: contentType,
+    title: draft.title,
+    body: draft.body,
+    status: "ai_draft",
+    createdById: user.id,
+    compliance,
+    claimAudit,
+    routedTo,
+    groundingLabel,
+    sourceRefs: draft.sourceRefs,
+    brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
+    aiModel: draft.model,
+    aiPrompt: `${objective} — ${topic}`,
+    sourcesUsed,
+    aiRunId: aiRun.id,
+    estCostUsd: aiRun.estCostUsd,
+  });
+
+  await logAction(user, "content.ai_drafted", {
+    targetType: "content",
+    targetId: content.id,
+    companyId: company.id,
+    detail: `Hub · ${contentType} · ${displayLabel} · risk ${compliance.riskLevel}`,
+  });
+
+  revalidatePath("/content");
+  redirect(`/content/${content.id}`);
+}
+
+/**
+ * /content Create — AI image → DAM asset + Library content row.
+ */
+export async function hubGenerateImageAction(formData: FormData) {
+  const { user, target } = await resolveHubTarget(formData);
+  const { company, generationCompany, scopeTag, displayLabel } = target;
+  const tenant = await getTenant(user.tenantId);
+  await assertVisualsGeneration(company, "image", 1, tenant);
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId);
+
+  const topic = textFd(formData, "topic");
+  const objective = textFd(formData, "objective");
+  if (!topic || !objective) throw new Error("Topic and prompt are required");
+  const channel = textFd(formData, "channel") || undefined;
+  const format = textFd(formData, "format") as "square" | "vertical" | "landscape" | "";
+
+  const result = await generateImage({
+    company: generationCompany,
+    topic,
+    objective,
+    channel,
+    format: format || "square",
+  });
+
+  const body = [
+    `AI image for ${displayLabel}.`,
+    "",
+    `Topic: ${topic}`,
+    `Brief: ${objective}`,
+    channel ? `Channel: ${channel}` : null,
+    "",
+    result.description,
+    "",
+    "Creative asset is attached — review the image in Creative Assets, then approve this Library item when ready.",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  const compliance = await checkCompliance(body, generationCompany);
+  const claimAudit = await auditClaims(body, generationCompany);
+  const routedTo = routeContent({
+    type: "creative_request",
+    compliance,
+    claimAudit,
+  });
+  const sourcesUsed = [
+    scopeTag,
+    "Brand Brain: company profile",
+    "Content hub: AI Image Gen",
+  ];
+
+  const aiRun = await recordAiUsage({
+    tenantId: user.tenantId,
+    companyId: company.id,
+    userId: user.id,
+    kind: "image_gen",
+    model: result.model,
+    promptSummary: result.prompt.slice(0, 120),
+    outputChars: result.bytes.length,
+    sourcesUsed,
+    contextChars: result.prompt.length,
+  });
+
+  const content = await createContent({
+    companyId: company.id,
+    requestId: null,
+    type: "creative_request",
+    title: result.name,
+    body,
+    status: "ai_draft",
+    createdById: user.id,
+    compliance,
+    claimAudit,
+    routedTo,
+    groundingLabel: "suggested_by_ai",
+    brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
+    aiModel: result.model,
+    aiPrompt: result.prompt,
+    sourcesUsed,
+    aiRunId: aiRun.id,
+    estCostUsd: aiRun.estCostUsd,
+  });
+
+  const asset = await persistGeneratedAsset({
+    tenantId: user.tenantId,
+    companyId: company.id,
+    userId: user.id,
+    name: result.name,
+    description: result.description,
+    assetType: "image",
+    mimeType: result.mimeType,
+    bytes: result.bytes,
+    channels: channel ? [channel] : [],
+    targetContentId: content.id,
+    aiModel: result.model,
+    aiPrompt: result.prompt,
+    aiRunId: aiRun.id,
+    estCostUsd: aiRun.estCostUsd,
+    sourcesUsed,
+  });
+  await updateContent(content.id, { assetIds: [asset.id] });
+
+  await logAction(user, "visuals.image_generated", {
+    targetType: "content",
+    targetId: content.id,
+    companyId: company.id,
+    detail: `${topic} · asset ${asset.id} · ${displayLabel}`,
+  });
+
+  revalidatePath("/content");
+  revalidatePath("/assets");
+  redirect(`/content/${content.id}`);
+}
+
+/**
+ * /content Create — AI video or Reels → DAM + Library.
+ * Pass kind=reel for vertical Reels/Shorts labelling.
+ */
+export async function hubGenerateVideoAction(formData: FormData) {
+  const { user, target } = await resolveHubTarget(formData);
+  const { company, generationCompany, scopeTag, displayLabel } = target;
+  const tenant = await getTenant(user.tenantId);
+  await assertVisualsGeneration(company, "video", 1, tenant);
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId, 2);
+
+  const isReel = textFd(formData, "kind") === "reel";
+  const topic = textFd(formData, "topic");
+  const script = textFd(formData, "script");
+  if (!topic || !script) throw new Error("Topic and script are required");
+  const channel =
+    textFd(formData, "channel") ||
+    (isReel ? "instagram" : undefined);
+
+  const result = await generateVideo({
+    company: generationCompany,
+    topic,
+    script,
+    channel,
+  });
+
+  const kindLabel = isReel ? "AI Reel" : "AI Video";
+  const body = [
+    `${kindLabel} for ${displayLabel}.`,
+    "",
+    `Topic: ${topic}`,
+    channel ? `Channel: ${channel}` : null,
+    "",
+    "Script:",
+    script,
+    "",
+    result.description,
+    "",
+    "Video asset is attached — review then approve this Library item when ready.",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  const compliance = await checkCompliance(body, generationCompany);
+  const claimAudit = await auditClaims(body, generationCompany);
   const routedTo = routeContent({
     type: "video_script",
     compliance,
     claimAudit,
   });
+  const sourcesUsed = [
+    scopeTag,
+    "Brand Brain: company profile",
+    `Content hub: ${kindLabel}`,
+    ...(isReel ? ["format:reel"] : []),
+  ];
 
   const aiRun = await recordAiUsage({
     tenantId: user.tenantId,
-    companyId,
+    companyId: company.id,
+    userId: user.id,
+    kind: "video_gen",
+    model: result.model,
+    promptSummary: result.prompt.slice(0, 120),
+    outputChars: result.bytes.length,
+    sourcesUsed,
+    contextChars: result.prompt.length,
+  });
+
+  const content = await createContent({
+    companyId: company.id,
+    requestId: null,
+    type: "video_script",
+    title: isReel
+      ? `AI Reel — ${topic}`.slice(0, 120)
+      : result.name,
+    body,
+    status: "ai_draft",
+    createdById: user.id,
+    compliance,
+    claimAudit,
+    routedTo,
+    groundingLabel: "suggested_by_ai",
+    brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
+    aiModel: result.model,
+    aiPrompt: result.prompt,
+    sourcesUsed,
+    aiRunId: aiRun.id,
+    estCostUsd: aiRun.estCostUsd,
+  });
+
+  const asset = await persistGeneratedAsset({
+    tenantId: user.tenantId,
+    companyId: company.id,
+    userId: user.id,
+    name: isReel ? `AI Reel — ${topic}`.slice(0, 120) : result.name,
+    description: result.description,
+    assetType: "video",
+    mimeType: result.mimeType,
+    bytes: result.bytes,
+    channels: channel ? [channel] : [],
+    targetContentId: content.id,
+    aiModel: result.model,
+    aiPrompt: result.prompt,
+    aiRunId: aiRun.id,
+    estCostUsd: aiRun.estCostUsd,
+    sourcesUsed,
+  });
+  await updateContent(content.id, { assetIds: [asset.id] });
+
+  await logAction(user, "visuals.video_generated", {
+    targetType: "content",
+    targetId: content.id,
+    companyId: company.id,
+    detail: `${kindLabel} · ${topic} · asset ${asset.id} · ${displayLabel}`,
+  });
+
+  revalidatePath("/content");
+  revalidatePath("/assets");
+  redirect(`/content/${content.id}`);
+}
+
+/** Content hub — voiceover script draft + placeholder audio → Library. */
+export async function generateAiVoiceAction(formData: FormData) {
+  const { user, target } = await resolveHubTarget(formData);
+  const { company, generationCompany, scopeTag, displayLabel } = target;
+  await assertAiBudget(user.tenantId);
+  await assertAiRateLimit(user.tenantId);
+
+  const script = textFd(formData, "script");
+  if (!script) throw new Error("A voiceover script is required");
+  const topic = textFd(formData, "topic") || undefined;
+  const rawStyle = textFd(formData, "voiceStyle") || "warm";
+  const voiceStyle = (VOICE_STYLES.includes(rawStyle as VoiceStyle)
+    ? rawStyle
+    : "warm") as VoiceStyle;
+
+  const result = await generateVoice({
+    company: generationCompany,
+    script,
+    voiceStyle,
+    topic,
+  });
+
+  const compliance = await checkCompliance(result.scriptBody, generationCompany);
+  const claimAudit = await auditClaims(result.scriptBody, generationCompany);
+  const routedTo = routeContent({
+    type: "video_script",
+    compliance,
+    claimAudit,
+  });
+  const sourcesUsed = [
+    scopeTag,
+    "Brand Brain: company profile",
+    "Content hub: AI Voice Gen",
+  ];
+
+  const aiRun = await recordAiUsage({
+    tenantId: user.tenantId,
+    companyId: company.id,
     userId: user.id,
     kind: "voice_gen",
     model: result.model,
     promptSummary: result.prompt.slice(0, 120),
     outputChars: result.scriptBody.length + result.bytes.length,
-    sourcesUsed: ["Brand Brain: company profile"],
+    sourcesUsed,
     contextChars: result.prompt.length + script.length,
   });
 
   const content = await createContent({
-    companyId,
+    companyId: company.id,
     requestId: null,
     type: "video_script",
     title: result.name,
@@ -740,14 +1095,14 @@ export async function generateAiVoiceAction(formData: FormData) {
     brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
     aiModel: result.model,
     aiPrompt: result.prompt,
-    sourcesUsed: ["Brand Brain: company profile", "Content hub: AI Voice Gen"],
+    sourcesUsed,
     aiRunId: aiRun.id,
     estCostUsd: aiRun.estCostUsd,
   });
 
   const asset = await persistGeneratedAsset({
     tenantId: user.tenantId,
-    companyId,
+    companyId: company.id,
     userId: user.id,
     name: `${result.name} (audio)`,
     description: result.description,
@@ -760,7 +1115,7 @@ export async function generateAiVoiceAction(formData: FormData) {
     aiPrompt: result.prompt,
     aiRunId: aiRun.id,
     estCostUsd: aiRun.estCostUsd,
-    sourcesUsed: ["Content hub: AI Voice Gen"],
+    sourcesUsed,
   });
 
   await updateContent(content.id, {
@@ -770,9 +1125,11 @@ export async function generateAiVoiceAction(formData: FormData) {
   await logAction(user, "content.voice_drafted", {
     targetType: "content",
     targetId: content.id,
-    companyId,
-    detail: `${voiceStyle} · asset ${asset.id} · placeholder audio`,
+    companyId: company.id,
+    detail: `${voiceStyle} · asset ${asset.id} · ${displayLabel}`,
   });
 
+  revalidatePath("/content");
+  revalidatePath("/assets");
   redirect(`/content/${content.id}`);
 }

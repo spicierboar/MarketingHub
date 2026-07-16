@@ -5,6 +5,7 @@ import {
   listIntegrations,
   usersForCompany,
 } from "@/lib/db";
+import { clientCompaniesOnly } from "@/lib/content-create-scope";
 import { onboardingScore } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { AddClientModalTrigger } from "@/components/add-client-modal";
@@ -15,11 +16,12 @@ import {
 
 export default async function CompaniesPage() {
   const user = await requireAdmin();
-  const [companies, allContent, allIntegrations] = await Promise.all([
+  const [companiesRaw, allContent, allIntegrations] = await Promise.all([
     listCompanies(user.tenantId),
     listContent(user.tenantId),
     listIntegrations(user.tenantId),
   ]);
+  const companies = clientCompaniesOnly(companiesRaw);
   const userCounts = new Map(
     await Promise.all(
       companies.map(

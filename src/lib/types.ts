@@ -343,6 +343,11 @@ export interface RestaurantProfileFields {
 }
 
 export interface CompanyProfile {
+  /**
+   * Internal tenant shelf for agency-wide / industry / general Create on
+   * `/content` — not a real client. Hidden from Clients list + billing count.
+   */
+  contentLibraryShelf?: boolean;
   legalName?: string;
   tradingNames?: string;
   industry?: string;

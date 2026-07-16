@@ -25,6 +25,7 @@ import {
 } from "@/lib/db";
 import { localDemoEnabled } from "@/lib/env";
 import { planFor, type PlanDef } from "@/lib/plans";
+import { clientCompaniesOnly } from "@/lib/content-create-scope";
 import type { AddonId, MarketingPackageId, PlanId, Tenant } from "@/lib/types";
 
 export function stripeConfigured(): boolean {
@@ -65,13 +66,15 @@ export interface TenantUsage {
 }
 
 export async function tenantUsage(tenantId: string): Promise<TenantUsage> {
-  const [tenant, companies, aiSpendUsd, aiCapUsd, settings] = await Promise.all([
+  const [tenant, companiesRaw, aiSpendUsd, aiCapUsd, settings] = await Promise.all([
     getTenant(tenantId),
     listCompanies(tenantId),
     aiSpendThisMonth(tenantId),
     effectiveAiCapUsd(tenantId),
     getSecuritySettings(tenantId),
   ]);
+  // Internal /content library shelf is not a billable client seat.
+  const companies = clientCompaniesOnly(companiesRaw);
   const plan = planFor(tenant?.plan);
   return {
     plan,

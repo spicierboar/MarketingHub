@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Clapperboard,
   FileText,
   ImageIcon,
   Mic,
@@ -12,12 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { FormModal } from "@/components/form-modal";
 import { LockedCompanyField } from "@/components/locked-company-field";
-import { generateStudioDraftAction } from "@/app/(app)/studio/actions";
 import {
-  generateAiImageAction,
-  generateAiVideoAction,
-} from "@/app/(app)/visuals/actions";
-import { generateAiVoiceAction } from "@/app/(app)/content/actions";
+  generateAiVoiceAction,
+  hubGenerateContentAction,
+  hubGenerateImageAction,
+  hubGenerateVideoAction,
+} from "@/app/(app)/content/actions";
 import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import { cn } from "@/lib/utils";
 
@@ -55,31 +56,11 @@ const VOICE_STYLES: [string, string][] = [
   ["calm", "Calm"],
 ];
 
-type HubModal = "content" | "image" | "video" | "voice" | null;
+type HubModal = "content" | "image" | "video" | "reel" | "voice" | null;
+type CreateScope = "client" | "industry" | "general";
 
 type CompanyOpt = { id: string; name: string };
-
-function CompanyField({
-  companies,
-  defaultCompanyId,
-  id,
-  locked,
-}: {
-  companies: CompanyOpt[];
-  defaultCompanyId?: string;
-  id: string;
-  locked?: boolean;
-}) {
-  return (
-    <LockedCompanyField
-      id={id}
-      companies={companies}
-      companyId={defaultCompanyId}
-      locked={locked}
-      hint="Required — drafts stay company-scoped."
-    />
-  );
-}
+type IndustryOpt = { id: string; label: string };
 
 function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLabel: string }) {
   return (
@@ -92,22 +73,131 @@ function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLab
   );
 }
 
+function CreateScopeFields({
+  scope,
+  onScopeChange,
+  companies,
+  industries,
+  defaultCompanyId,
+  lockCompany,
+  fieldId,
+}: {
+  scope: CreateScope;
+  onScopeChange: (s: CreateScope) => void;
+  companies: CompanyOpt[];
+  industries: IndustryOpt[];
+  defaultCompanyId?: string;
+  lockCompany?: boolean;
+  fieldId: string;
+}) {
+  const lockedToClient = Boolean(lockCompany && defaultCompanyId);
+
+  return (
+    <div className="space-y-3">
+      {!lockedToClient && (
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium">Create for</legend>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {(
+              [
+                ["client", "Client"],
+                ["industry", "Industry"],
+                ["general", "General"],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={value} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="createScope"
+                  value={value}
+                  checked={scope === value}
+                  onChange={() => onScopeChange(value)}
+                  className="h-4 w-4"
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Client uses Brand Brain. Industry and General go into the shared Library
+            (no client required).
+          </p>
+        </fieldset>
+      )}
+      {lockedToClient && <input type="hidden" name="createScope" value="client" />}
+
+      {scope === "client" && (
+        <LockedCompanyField
+          id={fieldId}
+          companies={companies}
+          companyId={defaultCompanyId}
+          locked={lockCompany}
+          hint={
+            companies.length === 0
+              ? "No AI-ready clients — switch to Industry or General."
+              : "Draft stays client-scoped."
+          }
+        />
+      )}
+      {scope === "industry" && (
+        <Field label="Industry" htmlFor={`${fieldId}-industry`}>
+          <Select id={`${fieldId}-industry`} name="industryId" required defaultValue="">
+            <option value="" disabled>
+              Select industry…
+            </option>
+            {industries.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+      {scope === "general" && (
+        <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          Tenant-wide general content — not tied to a client or industry vertical.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function ContentHubActions({
   companies,
+  industries,
   defaultCompanyId,
   lockCompany = false,
+  isAdmin = false,
 }: {
   companies: CompanyOpt[];
+  industries: IndustryOpt[];
   defaultCompanyId?: string;
   /** When true (client workspace), hide the company switcher. */
   lockCompany?: boolean;
+  /** Industry / general require agency admin. */
+  isAdmin?: boolean;
 }) {
   const [open, setOpen] = useState<HubModal>(null);
+  const [scope, setScope] = useState<CreateScope>(
+    lockCompany && defaultCompanyId ? "client" : companies.length > 0 ? "client" : "general",
+  );
   const close = () => setOpen(null);
   const usable =
     lockCompany && defaultCompanyId
       ? companies.filter((c) => c.id === defaultCompanyId)
       : companies.filter(Boolean);
+
+  const canIndustryOrGeneral = isAdmin && !lockCompany;
+  const effectiveScope: CreateScope =
+    lockCompany && defaultCompanyId
+      ? "client"
+      : scope === "client" && usable.length === 0
+        ? canIndustryOrGeneral
+          ? "general"
+          : "client"
+        : !canIndustryOrGeneral
+          ? "client"
+          : scope;
 
   const tiles: {
     id: Exclude<HubModal, null>;
@@ -118,47 +208,64 @@ export function ContentHubActions({
     {
       id: "content",
       label: "AI Content",
-      hint: "Governed draft → review → approve",
+      hint: "Copy draft → Library",
       icon: FileText,
     },
     {
       id: "image",
       label: "AI Image Gen",
-      hint: "DAM asset (video add-on)",
+      hint: "Image → Library + assets",
       icon: ImageIcon,
     },
     {
       id: "video",
       label: "AI Video Gen",
-      hint: "Short-form (video add-on)",
+      hint: "Short video → Library",
       icon: Video,
+    },
+    {
+      id: "reel",
+      label: "AI Reels",
+      hint: "Vertical reel → Library",
+      icon: Clapperboard,
     },
     {
       id: "voice",
       label: "AI Voice Gen",
-      hint: "Script + placeholder audio",
+      hint: "VO + audio → Library",
       icon: Mic,
     },
   ];
 
-  if (usable.length === 0) {
+  const clientBlocked =
+    effectiveScope === "client" && usable.length === 0 && !canIndustryOrGeneral;
+
+  if (clientBlocked) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-        No AI-ready clients yet. Finish onboarding a client before generating content.
+        No AI-ready clients yet. Ask an agency admin to create Industry or General
+        content, or finish onboarding a client.
       </div>
     );
   }
 
+  function openModal(id: Exclude<HubModal, null>) {
+    if (usable.length === 0 && canIndustryOrGeneral && scope === "client") {
+      setScope("general");
+    }
+    setOpen(id);
+  }
+
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {tiles.map((t) => {
           const Icon = t.icon;
           return (
             <button
               key={t.id}
               type="button"
-              onClick={() => setOpen(t.id)}
+              onClick={() => openModal(t.id)}
               className={cn(
                 "flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left transition-colors",
                 "hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -177,33 +284,34 @@ export function ContentHubActions({
       {open === "content" && (
         <FormModal
           title="AI Content"
-          description="Creates an ai_draft through the Studio pipeline — compliance-checked, never auto-published."
+          description="Creates an ai_draft in Library — compliance-checked, never auto-published."
           onClose={close}
           wide
         >
-          <form action={generateStudioDraftAction} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <CompanyField
-                companies={usable}
-                defaultCompanyId={defaultCompanyId}
-                locked={lockCompany}
-                id="hub-content-company"
-              />
-              <Field label="Content type" htmlFor="hub-content-type">
-                <Select
-                  id="hub-content-type"
-                  name="contentType"
-                  required
-                  defaultValue="social_post"
-                >
-                  {CONTENT_TYPES.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+          <form action={hubGenerateContentAction} className="space-y-4">
+            <CreateScopeFields
+              scope={effectiveScope}
+              onScopeChange={setScope}
+              companies={usable}
+              industries={industries}
+              defaultCompanyId={defaultCompanyId}
+              lockCompany={lockCompany}
+              fieldId="hub-content-company"
+            />
+            <Field label="Content type" htmlFor="hub-content-type">
+              <Select
+                id="hub-content-type"
+                name="contentType"
+                required
+                defaultValue="social_post"
+              >
+                {CONTENT_TYPES.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field label="Topic / brief" htmlFor="hub-content-topic">
               <Input
                 id="hub-content-topic"
@@ -257,16 +365,19 @@ export function ContentHubActions({
       {open === "image" && (
         <FormModal
           title="AI Image Gen"
-          description="Creates a pending DAM image asset. Requires the video add-on. Simulated when VISUALS_LIVE is off."
+          description="Creates a Library item plus a pending DAM image. Simulated when VISUALS_LIVE is off."
           onClose={close}
           wide
         >
-          <form action={generateAiImageAction} className="space-y-4">
-            <CompanyField
+          <form action={hubGenerateImageAction} className="space-y-4">
+            <CreateScopeFields
+              scope={effectiveScope}
+              onScopeChange={setScope}
               companies={usable}
+              industries={industries}
               defaultCompanyId={defaultCompanyId}
-                locked={lockCompany}
-              id="hub-image-company"
+              lockCompany={lockCompany}
+              fieldId="hub-image-company"
             />
             <Field label="Topic / title" htmlFor="hub-image-topic">
               <Input id="hub-image-topic" name="topic" required placeholder="Hero — winter special" />
@@ -300,13 +411,6 @@ export function ContentHubActions({
                 </Select>
               </Field>
             </div>
-            <Field
-              label="Attach to content ID (optional)"
-              htmlFor="hub-image-content"
-              hint="After creative approval, the asset can auto-attach to this content."
-            >
-              <Input id="hub-image-content" name="contentId" placeholder="cnt_…" />
-            </Field>
             <ModalActions onClose={close} submitLabel="Generate image" />
           </form>
         </FormModal>
@@ -315,19 +419,23 @@ export function ContentHubActions({
       {open === "video" && (
         <FormModal
           title="AI Video Gen"
-          description="Creates a pending DAM video asset. Requires the video add-on. Placeholder MP4 when live render is off."
+          description="Creates a Library item plus a pending DAM video. Placeholder MP4 when live render is off."
           onClose={close}
           wide
         >
-          <form action={generateAiVideoAction} className="space-y-4">
-            <CompanyField
+          <form action={hubGenerateVideoAction} className="space-y-4">
+            <input type="hidden" name="kind" value="video" />
+            <CreateScopeFields
+              scope={effectiveScope}
+              onScopeChange={setScope}
               companies={usable}
+              industries={industries}
               defaultCompanyId={defaultCompanyId}
-                locked={lockCompany}
-              id="hub-video-company"
+              lockCompany={lockCompany}
+              fieldId="hub-video-company"
             />
             <Field label="Topic / title" htmlFor="hub-video-topic">
-              <Input id="hub-video-topic" name="topic" required placeholder="15s Reels — winter special" />
+              <Input id="hub-video-topic" name="topic" required placeholder="15s — winter special" />
             </Field>
             <Field label="Script / prompt" htmlFor="hub-video-script">
               <Textarea
@@ -337,36 +445,64 @@ export function ContentHubActions({
                 placeholder="Hook → body → CTA. Include on-screen text if needed."
               />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Channel (optional)" htmlFor="hub-video-channel">
-                <Select id="hub-video-channel" name="channel" defaultValue="">
-                  <option value="">Not specified</option>
-                  {CONTENT_PLATFORM_OPTIONS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field
-                label="Target duration (optional)"
-                htmlFor="hub-video-duration"
-                hint="Hint only — length is derived from script until live render."
-              >
-                <Input
-                  id="hub-video-duration"
-                  name="durationSec"
-                  type="number"
-                  min={5}
-                  max={60}
-                  placeholder="15"
-                />
-              </Field>
-            </div>
-            <Field label="Attach to content ID (optional)" htmlFor="hub-video-content">
-              <Input id="hub-video-content" name="contentId" placeholder="cnt_…" />
+            <Field label="Channel (optional)" htmlFor="hub-video-channel">
+              <Select id="hub-video-channel" name="channel" defaultValue="">
+                <option value="">Not specified</option>
+                {CONTENT_PLATFORM_OPTIONS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <ModalActions onClose={close} submitLabel="Generate video" />
+          </form>
+        </FormModal>
+      )}
+
+      {open === "reel" && (
+        <FormModal
+          title="AI Reels"
+          description="Vertical short-form video as a Library item plus DAM asset. Defaults toward Instagram Reels."
+          onClose={close}
+          wide
+        >
+          <form action={hubGenerateVideoAction} className="space-y-4">
+            <input type="hidden" name="kind" value="reel" />
+            <CreateScopeFields
+              scope={effectiveScope}
+              onScopeChange={setScope}
+              companies={usable}
+              industries={industries}
+              defaultCompanyId={defaultCompanyId}
+              lockCompany={lockCompany}
+              fieldId="hub-reel-company"
+            />
+            <Field label="Topic / title" htmlFor="hub-reel-topic">
+              <Input
+                id="hub-reel-topic"
+                name="topic"
+                required
+                placeholder="15s Reel — winter special"
+              />
+            </Field>
+            <Field label="Script / prompt" htmlFor="hub-reel-script">
+              <Textarea
+                id="hub-reel-script"
+                name="script"
+                required
+                placeholder="Hook (0–3s) → body → CTA. Keep vertical 9:16."
+              />
+            </Field>
+            <Field label="Channel (optional)" htmlFor="hub-reel-channel">
+              <Select id="hub-reel-channel" name="channel" defaultValue="instagram">
+                <option value="instagram">Instagram</option>
+                <option value="tiktok">TikTok</option>
+                <option value="facebook">Facebook</option>
+                <option value="">Not specified</option>
+              </Select>
+            </Field>
+            <ModalActions onClose={close} submitLabel="Generate reel" />
           </form>
         </FormModal>
       )}
@@ -374,17 +510,20 @@ export function ContentHubActions({
       {open === "voice" && (
         <FormModal
           title="AI Voice Gen"
-          description="Polishes a voiceover script as an ai_draft and attaches a placeholder audio asset. Live TTS lands when a provider is configured — nothing is published automatically."
+          description="Polishes a voiceover as an ai_draft in Library and attaches placeholder audio. Nothing publishes automatically."
           onClose={close}
           wide
         >
           <form action={generateAiVoiceAction} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <CompanyField
+              <CreateScopeFields
+                scope={effectiveScope}
+                onScopeChange={setScope}
                 companies={usable}
+                industries={industries}
                 defaultCompanyId={defaultCompanyId}
-                locked={lockCompany}
-                id="hub-voice-company"
+                lockCompany={lockCompany}
+                fieldId="hub-voice-company"
               />
               <Field label="Voice style" htmlFor="hub-voice-style">
                 <Select id="hub-voice-style" name="voiceStyle" defaultValue="warm">
@@ -399,7 +538,7 @@ export function ContentHubActions({
             <Field
               label="Topic (optional)"
               htmlFor="hub-voice-topic"
-              hint="Short label for the draft in the content list"
+              hint="Short label for the draft in Library"
             >
               <Input id="hub-voice-topic" name="topic" placeholder="e.g. Winter lunch VO" />
             </Field>

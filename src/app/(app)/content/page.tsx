@@ -1,11 +1,16 @@
 import Link from "next/link";
-import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
+import { requireUser, accessibleCompanyIds, isAdmin } from "@/lib/auth/rbac";
 import { visibleContent, visibleCompanies } from "@/lib/scope";
-import { getCompany } from "@/lib/db";
+import { getCompany, getTenant } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge, RiskBadge } from "@/components/status-badge";
 import { buttonClasses } from "@/components/ui/button";
 import { ContentHubActions } from "@/components/content-hub-actions";
+import {
+  clientCompaniesOnly,
+  libraryScopeLabel,
+} from "@/lib/content-create-scope";
+import { promoIndustryOptions } from "@/lib/promo-catalog";
 import { formatDate, titleCase } from "@/lib/utils";
 
 export default async function ContentPage({
@@ -14,6 +19,7 @@ export default async function ContentPage({
   searchParams: Promise<{ company?: string }>;
 }) {
   const user = await requireUser();
+  const tenant = await getTenant(user.tenantId);
   const allowed = new Set(await accessibleCompanyIds(user));
   const { company: companyParam } = await searchParams;
   const companyId =
@@ -31,10 +37,14 @@ export default async function ContentPage({
       (co, i) => [companyIds[i], co] as const,
     ),
   );
-  const aiCompanies = (await visibleCompanies(user))
+  const companyNameById = new Map(
+    [...companiesById.entries()].map(([id, co]) => [id, co?.name] as const),
+  );
+  const aiCompanies = clientCompaniesOnly(await visibleCompanies(user))
     .filter((c) => c.status === "ai_ready" || c.status === "approved")
     .filter((c) => !companyId || c.id === companyId)
     .map((c) => ({ id: c.id, name: c.name }));
+  const industries = promoIndustryOptions(tenant?.promoIndustries);
   const exportHref = companyId
     ? `/api/export/content.csv?company=${companyId}`
     : "/api/export/content.csv";
@@ -62,13 +72,16 @@ export default async function ContentPage({
           <div>
             <h2 className="text-sm font-semibold">Create</h2>
             <p className="text-xs text-muted-foreground">
-              Open a form to draft copy, image, video, or voiceover — company-scoped and governed.
+              Draft copy, images, video, reels, or voice for a client, an industry
+              template, or general — all land in Library for review.
             </p>
           </div>
           <ContentHubActions
             companies={aiCompanies}
+            industries={industries}
             defaultCompanyId={companyId}
             lockCompany={Boolean(companyId)}
+            isAdmin={isAdmin(user)}
           />
         </section>
 
@@ -76,7 +89,7 @@ export default async function ContentPage({
           <div>
             <h2 className="text-sm font-semibold">Library</h2>
             <p className="text-xs text-muted-foreground">
-              All drafted marketing content and approval status
+              Drafted copy and AI media with approval status
               {companyId ? " for this client" : ""}.
             </p>
           </div>
@@ -84,8 +97,11 @@ export default async function ContentPage({
           {content.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center">
               <p className="text-sm text-muted-foreground">
-                No content yet. Use{" "}
-                <span className="font-medium text-foreground">AI Content</span> above, or open a{" "}
+                Nothing in Library yet. Use Create above
+                {isAdmin(user) && !companyId
+                  ? " (Client, Industry, or General)"
+                  : ""}
+                , or open a{" "}
                 <Link
                   href={companyId ? `/requests?company=${companyId}` : "/requests"}
                   className="text-primary hover:underline"
@@ -101,7 +117,7 @@ export default async function ContentPage({
                 <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium">Title</th>
-                    <th className="px-4 py-3 font-medium">Client</th>
+                    <th className="px-4 py-3 font-medium">Scope</th>
                     <th className="px-4 py-3 font-medium">Type</th>
                     <th className="px-4 py-3 font-medium">Risk</th>
                     <th className="px-4 py-3 font-medium">Status</th>
@@ -118,9 +134,19 @@ export default async function ContentPage({
                         >
                           {c.title}
                         </Link>
+                        {(c.assetIds?.length ?? 0) > 0 && (
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {c.assetIds!.length} attached asset
+                            {c.assetIds!.length === 1 ? "" : "s"}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {companiesById.get(c.companyId)?.name}
+                        {libraryScopeLabel(
+                          c,
+                          companyNameById,
+                          tenant?.promoIndustries,
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {titleCase(c.type)}
