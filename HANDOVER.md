@@ -1,19 +1,19 @@
 # Marketing Command Centre — Handover
 
-> ## ▶ NEXT SESSION — START HERE (2026-07-16, **STAGING · 3 WAVES ON ORIGIN · WAVE D UI BLOCKED (NO BROWSER MCP) · FIXTURES 6/6 · CLIENTS EMPTY · PRICING PARKED · W6 WAITING**)
+> ## ▶ NEXT SESSION — START HERE (2026-07-16, **STAGING · 3 WAVES ON ORIGIN · WAVE D UI BLOCKED (RE-ROOT FOR BROWSER MCP) · FIXTURES 6/6 · CLIENTS EMPTY · PRICING PARKED · W6 WAITING**)
 >
 > **Path:** `F:/MarketingHub/command-centre` · **Branch:** `staging` · Vercel Preview = staging · live flags **OFF**
 >
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`161e119`** (= `origin/staging`) · do not commit `_owner_paste_*` / pricing xlsx / logs |
+> | Git tip | **`6ff63e3`** (= `origin/staging`) · do not commit `_owner_paste_*` / pricing xlsx / logs |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
 > | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** |
 > | Staging login | **`/dev`** quick login · agency seat `development@tglt.com.au` |
 > | Tenant name | **Staging Agency** (header OK) · Clients list **empty** — no Viya yet (do **not** rename agency → Viya) |
-> | Three waves on `origin/staging` | **`7a6a379`** legal archive · **`fa7a0a3`** content Create scopes · **`bacf189`** C P1 · HANDOVER through `161e119` |
-> | Wave D | Fixture proof **6/6 done** (local) · **UI demo BLOCKED** this session — `cursor-ide-browser` MCP not available in agent workspace; Preview was **ACTIVE** @ `b561d3a` (redeploy for `e1609db` HANDOVER-only); `/dev` Quick login OK; `/terms` archive visible; full `/api/dev/self-test` **504** (gateway timeout) |
+> | Three waves on `origin/staging` | **`7a6a379`** legal archive · **`fa7a0a3`** content Create scopes · **`bacf189`** C P1 · HANDOVER through `6ff63e3` |
+> | Wave D | Fixture proof **6/6 done** (local) · **UI demo still BLOCKED** — `cursor-ide-browser` MCP loads only when workspace root is `F:/MarketingHub/command-centre` (subagents cannot re-root); Preview **ACTIVE** (HTTP `/`→`/login`, `/terms` 200 + Version archive); self-test still 504/timeout; no `*_LIVE` touched |
 > | Legal (remote) | Smoke PASS; publish lockout FIXED @ `e9b372a`; archive landed @ `7a6a379` — Preview shows Version archive on `/terms` |
 > | Live / mangotickle.com.au / `*_LIVE` | **PARKED** · W6 Google still waiting |
 >
@@ -26,7 +26,7 @@
 > - **Pricing sheet:** `docs/unit-pricing-simple.xlsx` (cost-only) — **parked** mid-owner review
 >
 > ### IN PROGRESS / NEXT (ordered)
-> 1. **Wave D UI demo proof** — needs browser MCP (or human): `/dev` quick-login `development@tglt.com.au` → onboard → tick drafts Approvals → client Approve → scheduled/sim publish; Agency Home exceptions · Preview already @ `b561d3a`
+> 1. **Wave D UI demo proof** — **parent must open/re-root chat at `F:/MarketingHub/command-centre`** so `cursor-ide-browser` loads · then `/dev` quick-login → onboard/client → tick → Approvals → client Approve → scheduled/sim publish
 > 2. Smoke-test `/content` Create scopes on staging Preview
 > 3. **Create Viya as a client** under Staging Agency — keep agency name Staging Agency
 > 4. Finish internal unit pricing (Excel review → sell/margin later → wire rate card)
@@ -35,14 +35,14 @@
 >
 > ### How to resume
 > - **Human:** run Wave D UI demo on staging Preview (login `/dev`); or add Viya client under Staging Agency
-> - **Agent:** `READ HANDOVER.md` · branch `staging` · tip `161e119` · Wave D UI demo with **cursor-ide-browser** · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps / pricing xlsx unless asked
+> - **Agent:** Open workspace at `F:/MarketingHub/command-centre` (required for browser MCP) · `READ HANDOVER.md` · branch `staging` · tip `6ff63e3` · Wave D UI demo · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps / pricing xlsx unless asked
 >
 > ### Resume in a new Cursor chat
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ 161e119 (= origin/staging). Three waves landed: 7a6a379 legal archive, fa7a0a3 content Create scopes, bacf189 C P1. Wave D fixtures 6/6 done; UI demo still needed (prior agent lacked cursor-ide-browser MCP). Preview had ACTIVE deploy @ b561d3a; /dev Quick login OK; /terms archive visible; self-test API 504. Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; Clients empty; pricing/live/W6 parked.
-> IN PROGRESS: Wave D UI demo proof (onboard → tick → Approvals → client Approve → scheduled/sim publish) — use browser MCP.
+> STATE: staging @ 6ff63e3 (= origin/staging). Three waves landed: 7a6a379 legal archive, fa7a0a3 content Create scopes, bacf189 C P1. Wave D fixtures 6/6 done; UI demo BLOCKED until chat rooted at F:/MarketingHub/command-centre (cursor-ide-browser). Preview ACTIVE; /terms Version archive HTTP-verified; self-test API 504/timeout. Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; Clients empty; pricing/live/W6 parked.
+> IN PROGRESS: Wave D UI demo proof (onboard → tick → Approvals → client Approve → scheduled/sim publish) — re-root then use browser MCP.
 > NEXT: content Create scopes smoke; Viya client; pricing Excel; optional RESEND; later main/live + W6.
 > Login: staging /dev quick-login (development@tglt.com.au). No *_LIVE. Do not commit _owner_paste_* / pricing xlsx / logs.
 > ```
