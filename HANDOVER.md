@@ -7,7 +7,7 @@
 > ### STATE
 > | Item | Status |
 > |------|--------|
-> | Git tip | **`bacf189`** (= `origin/staging` after push) · HANDOVER tip-SHA commit may sit on top · do not commit `_owner_paste_*` / pricing xlsx / logs |
+> | Git tip | **`3222984`** (= `origin/staging` after HANDOVER tip-SHA) · do not commit `_owner_paste_*` / pricing xlsx / logs |
 > | Staging URL | `https://marketing-hub-git-staging-nickmadahar-7174s-projects.vercel.app` |
 > | Staging Supabase | **`ccgkbyboobctqjhjiejt`** (NOT live) · migrations **0001–0046** · **0046 PASTED** |
 > | Staging login | **`/dev`** quick login · agency seat `development@tglt.com.au` |
@@ -36,13 +36,13 @@
 >
 > ### How to resume
 > - **Human:** run or watch Wave D UI demo on staging Preview; or add Viya client under Staging Agency
-> - **Agent:** `READ HANDOVER.md` · branch `staging` · tip `bacf189` (+ HANDOVER tip commit if present) · Wave D UI demo · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps / pricing xlsx unless asked
+> - **Agent:** `READ HANDOVER.md` · branch `staging` · tip `3222984` · Wave D UI demo · never flip `*_LIVE` · never commit `_owner_paste_*` / integrator temps / pricing xlsx unless asked
 >
 > ### Resume in a new Cursor chat
 > Paste:
 > ```
 > Path: F:/MarketingHub/command-centre — READ HANDOVER.md NEXT SESSION.
-> STATE: staging @ bacf189 (= origin/staging tip of C P1; HANDOVER tip-SHA may sit on top). Three waves landed: 7a6a379 legal archive, fa7a0a3 content Create scopes, bacf189 C P1. Wave D fixtures 6/6 done; UI demo still in progress/next. Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; Clients empty; pricing/live/W6 parked.
+> STATE: staging @ 3222984 (= origin/staging). Three waves landed: 7a6a379 legal archive, fa7a0a3 content Create scopes, bacf189 C P1. Wave D fixtures 6/6 done; UI demo still in progress/next. Preview URL in HANDOVER; Supabase ccgkbyboobctqjhjiejt; 0046 PASTED; Clients empty; pricing/live/W6 parked.
 > IN PROGRESS: Wave D UI demo proof (onboard → tick → Approvals → client Approve → scheduled/sim publish).
 > NEXT: legal/content smoke on Preview; Viya client; pricing Excel; optional RESEND; later main/live + W6.
 > Login: staging /dev quick-login (development@tglt.com.au). No *_LIVE. Do not commit _owner_paste_* / pricing xlsx / logs.
