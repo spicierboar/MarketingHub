@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { requireUserRaw } from "@/lib/auth/rbac";
 import { pendingLegalDocs } from "@/lib/db";
 import { legalDocLabel } from "@/lib/terms";
+import { formatLegalDate, publicLegalHref } from "@/lib/legal-display";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatDate } from "@/lib/utils";
 import { acceptTermsAction } from "./actions";
 
 // Force-re-acceptance gate. The (app) layout redirects here whenever the signed-
@@ -30,14 +30,21 @@ export default async function AcceptTermsPage() {
           <div className="mb-4 space-y-4">
             {pending.map((doc) => (
               <div key={doc.id} className="rounded-md border border-border">
-                <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-3 py-2">
                   <h2 className="text-sm font-semibold">{doc.title || legalDocLabel(doc.kind)}</h2>
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                     {legalDocLabel(doc.kind)} v{doc.version}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    effective {formatDate(doc.effectiveDate)}
+                    effective {formatLegalDate(doc.effectiveDate)}
                   </span>
+                  <Link
+                    href={publicLegalHref(doc.kind, doc.version)}
+                    className="text-xs text-primary hover:underline"
+                    target="_blank"
+                  >
+                    Full page →
+                  </Link>
                 </div>
                 {doc.summary && (
                   <div className="border-b border-border px-3 py-2 text-sm">
@@ -51,10 +58,7 @@ export default async function AcceptTermsPage() {
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/terms" className="text-xs text-primary hover:underline" target="_blank">
-              Open public terms page →
-            </Link>
+          <div className="flex items-center justify-end gap-3">
             <form action={acceptTermsAction}>
               <Button type="submit">I have read and accept</Button>
             </form>

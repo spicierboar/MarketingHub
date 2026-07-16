@@ -301,6 +301,7 @@ import {
 } from "@/lib/selftest/publishing-connectors";
 import { checkOptedOutContactBlocked } from "@/lib/selftest/privacy-dsr";
 import { checkLegalDocsIndependentVersions } from "@/lib/selftest/legal-docs";
+import { checkLegalVersionArchiveSplit } from "@/lib/selftest/legal-archive";
 import {
   checkManagedDeliveryEnqueueDueWithin24h,
   checkManagedDeliveryNeverAutoPublish,
@@ -1214,6 +1215,7 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("legalDocs.independentVersionsAndGate", () =>
       checkLegalDocsIndependentVersions(),
     );
+    await expect("legalDocs.versionArchiveSplit", () => checkLegalVersionArchiveSplit());
 
     await expect("managedDelivery.enqueueDueWithin24h", () =>
       checkManagedDeliveryEnqueueDueWithin24h(),

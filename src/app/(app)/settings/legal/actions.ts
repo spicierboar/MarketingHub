@@ -99,6 +99,8 @@ export async function publishLegalDocAction(formData: FormData) {
   revalidatePath("/settings/legal");
   revalidatePath("/platform-admin");
   revalidatePath("/accept-terms");
+  revalidatePath("/terms");
+  revalidatePath("/privacy-policy");
 }
 
 export async function resendLegalDocNotificationAction(formData: FormData) {

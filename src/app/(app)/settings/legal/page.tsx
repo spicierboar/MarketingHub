@@ -2,13 +2,18 @@ import Link from "next/link";
 import { isTenantOwner, requireAdmin } from "@/lib/auth/rbac";
 import { getTenant, listTermsVersions } from "@/lib/db";
 import { emailConfigured } from "@/lib/email";
+import {
+  formatLegalDate,
+  publicLegalHref,
+  publicLegalPath,
+  splitCurrentAndArchive,
+} from "@/lib/legal-display";
 import { canPublishLegalDocs, legalDocLabel } from "@/lib/terms";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
-import { formatDate } from "@/lib/utils";
 import type { LegalDocKind, TermsVersion } from "@/lib/types";
 import {
   publishLegalDocAction,
@@ -65,6 +70,69 @@ function PublishForm({
   );
 }
 
+function VersionRow({
+  kind,
+  version,
+  canPublish,
+  tone,
+}: {
+  kind: LegalDocKind;
+  version: TermsVersion;
+  canPublish: boolean;
+  tone: "current" | "archive";
+}) {
+  const label = legalDocLabel(kind);
+  return (
+    <details className="rounded-md border border-border open:bg-muted/20">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-2.5 text-sm [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <span className="font-medium">
+            v{version.version} — {version.title || label}
+          </span>
+          <p className="text-xs text-muted-foreground">
+            effective {formatLegalDate(version.effectiveDate)} · published{" "}
+            {formatLegalDate(version.publishedAt)}
+            {version.notifiedAt
+              ? ` · emailed ${version.notifiedCount ?? 0} client(s)`
+              : " · not yet emailed"}
+          </p>
+        </div>
+        <Badge tone={tone === "current" ? "success" : "neutral"}>
+          {tone === "current" ? "current" : "archived"}
+        </Badge>
+      </summary>
+      <div className="space-y-2 border-t border-border px-2.5 py-3">
+        {version.summary && (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">What changed: </span>
+            {version.summary}
+          </p>
+        )}
+        <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+          {version.body}
+        </pre>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href={publicLegalHref(kind, tone === "archive" ? version.version : undefined)}
+            className="text-xs text-primary hover:underline"
+            target="_blank"
+          >
+            Open public page →
+          </Link>
+          {tone === "current" && canPublish && (
+            <form action={resendLegalDocNotificationAction}>
+              <input type="hidden" name="kind" value={kind} />
+              <button type="submit" className="text-xs text-primary hover:underline">
+                {version.notifiedAt ? "Resend email" : "Send email"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function LegalDocPanel({
   kind,
   versions,
@@ -75,20 +143,27 @@ function LegalDocPanel({
   canPublish: boolean;
 }) {
   const label = legalDocLabel(kind);
-  const current = versions.find((v) => v.active);
+  const { current, archive } = splitCurrentAndArchive(versions);
   const defaultTitle = kind === "privacy" ? "Privacy Policy" : "Terms of Service";
   const nothingPublished = versions.length === 0;
 
   return (
     <Card>
       <CardContent className="p-6">
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
           <h2 className="font-semibold">{label}</h2>
           {current && <Badge tone="success">current: v{current.version}</Badge>}
+          <Link
+            href={publicLegalPath(kind)}
+            className="text-xs text-primary hover:underline"
+            target="_blank"
+          >
+            Public page →
+          </Link>
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
-          Publishing a new version forces every user to re-accept before they can keep using the
-          app. Active clients also get an update email when email delivery is configured.
+          Publishing a new version archives the previous one (with its effective and published
+          dates), emails clients when configured, and requires re-acceptance at next login.
           {!emailConfigured() && (
             <span className="text-muted-foreground">
               {" "}
@@ -97,42 +172,52 @@ function LegalDocPanel({
             </span>
           )}
         </p>
-        <div className="mb-5 space-y-2">
-          {versions.map((v) => (
-            <div
-              key={v.id}
-              className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm"
-            >
+
+        {!nothingPublished && (
+          <div className="mb-5 space-y-4">
+            {current && (
               <div>
-                <span className="font-medium">
-                  v{v.version} — {v.title}
-                </span>
-                <p className="text-xs text-muted-foreground">
-                  effective {formatDate(v.effectiveDate)} · published {formatDate(v.publishedAt)}
-                  {v.notifiedAt
-                    ? ` · emailed ${v.notifiedCount ?? 0} client(s)`
-                    : " · not yet emailed"}
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Current
+                </h3>
+                <VersionRow
+                  kind={kind}
+                  version={current}
+                  canPublish={canPublish}
+                  tone="current"
+                />
+              </div>
+            )}
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Archive
+              </h3>
+              {archive.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No archived versions yet. Publishing again will move the current version here
+                  with its dates.
                 </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge tone={v.active ? "success" : "neutral"}>
-                  {v.active ? "active" : "superseded"}
-                </Badge>
-                {v.active && canPublish && (
-                  <form action={resendLegalDocNotificationAction}>
-                    <input type="hidden" name="kind" value={kind} />
-                    <button type="submit" className="text-xs text-primary hover:underline">
-                      {v.notifiedAt ? "Resend email" : "Send email"}
-                    </button>
-                  </form>
-                )}
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  {archive.map((v) => (
+                    <VersionRow
+                      key={v.id}
+                      kind={kind}
+                      version={v}
+                      canPublish={canPublish}
+                      tone="archive"
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
-          {nothingPublished && !canPublish && (
-            <p className="text-sm text-muted-foreground">No {label.toLowerCase()} published yet.</p>
-          )}
-        </div>
+          </div>
+        )}
+
+        {nothingPublished && !canPublish && (
+          <p className="mb-5 text-sm text-muted-foreground">No {label.toLowerCase()} published yet.</p>
+        )}
+
         {canPublish ? (
           nothingPublished ? (
             <div className="rounded-md border border-primary/30 bg-muted/30 p-4">
@@ -191,7 +276,7 @@ export default async function SettingsLegalPage() {
     <div>
       <PageHeader
         title="Legal documents"
-        description="Versioned Terms & Conditions and Privacy Policy. Publishing a new version emails clients and requires acceptance at next login."
+        description="Versioned Terms & Conditions and Privacy Policy. Publishing archives the prior version with its dates, emails clients, and requires acceptance at next login."
       />
       <div className="space-y-2 px-6 pt-2 text-sm text-muted-foreground">
         <Link href="/settings" className="text-primary hover:underline">

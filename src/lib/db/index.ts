@@ -198,6 +198,15 @@ export async function currentLegalDoc(kind: LegalDocKind): Promise<TermsVersion 
     .filter((v) => v.active && v.kind === kind)
     .sort((a, b) => b.version - a.version)[0];
 }
+/** Lookup a specific version (current or archived) by kind + version number. */
+export async function getLegalDocVersion(
+  kind: LegalDocKind,
+  version: number,
+): Promise<TermsVersion | undefined> {
+  if (!Number.isFinite(version) || version < 1) return undefined;
+  const all = await listTermsVersions(kind);
+  return all.find((v) => v.version === version);
+}
 /** @deprecated Prefer currentLegalDoc("terms") — kept for call-site compatibility. */
 export async function currentTerms(): Promise<TermsVersion | undefined> {
   return currentLegalDoc("terms");

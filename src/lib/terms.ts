@@ -13,6 +13,7 @@ import { ensurePlatformAgencyPublisherContext } from "@/lib/platform-agency";
 import { emailConfigured, sendBulkEmail } from "@/lib/email";
 import { logAction } from "@/lib/audit";
 import { now } from "@/lib/utils";
+import { publicLegalPath } from "@/lib/legal-display";
 import type { ActingUser, LegalDocKind, TermsVersion } from "@/lib/types";
 
 /** Agency ops roles that may publish platform legal docs (DB membership, not session stamp). */
@@ -70,10 +71,9 @@ export function legalDocLabel(kind: LegalDocKind): string {
 function legalDocEmailHtml(version: TermsVersion, name: string, origin: string): string {
   const label = legalDocLabel(version.kind);
   const summary = version.summary ? `<p><strong>What changed:</strong> ${escapeHtml(version.summary)}</p>` : "";
-  const link =
-    version.kind === "privacy"
-      ? `<p><a href="${origin}/accept-terms">Review and accept →</a></p>`
-      : `<p><a href="${origin}/terms">Read the full terms →</a></p>`;
+  const publicPath = publicLegalPath(version.kind);
+  const link = `<p><a href="${origin}${publicPath}">Read the full ${escapeHtml(label)} →</a></p>
+<p><a href="${origin}/accept-terms">Review and accept →</a></p>`;
   return `<p>Hi ${escapeHtml(name || "there")},</p>
 <p>We've updated our ${escapeHtml(label)} (version ${version.version}, effective ${escapeHtml(version.effectiveDate)}).</p>
 ${summary}
