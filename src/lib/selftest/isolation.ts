@@ -221,6 +221,7 @@ import {
 } from "@/lib/selftest/health-scores";
 import {
   checkOverdueApprovalDetected,
+  checkStaleQualityHoldEscalates,
   checkTemplateApplyPrefill,
   checkWorkloadSummaryTotals,
 } from "@/lib/selftest/agency-ops";
@@ -1056,6 +1057,10 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("healthScores.agencyNeedsAttentionSort", () => checkAgencyNeedsAttentionSort());
 
     await expect("agencyOps.overdueApprovalDetected", () => checkOverdueApprovalDetected());
+
+    await expect("agencyOps.staleQualityHoldEscalates", () =>
+      checkStaleQualityHoldEscalates(),
+    );
 
     await expect("agencyOps.workloadSummaryTotals", () => checkWorkloadSummaryTotals());
 

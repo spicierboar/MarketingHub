@@ -13,7 +13,6 @@ Showstoppers and deferred product work that are **out of scope for the current m
 - Upcoming payments engine with webhook-synced confirmed vs estimated forecasts
 - Support escalation taxonomy (legal/payment dispute/security) beyond marketing requests
 - 1000-client live load proof on real platforms
-- `managed_exceptions` auto-schedule (only `fully_managed` gets `schedule_approved` in wave 3)
 - Photo marketplace webhook settlement gap (if still open)
 - Full client self-serve signup funnel (payment/plan in 90s) — **pre-fill wave shipped** (scrape deepen + templates + ABN/Places + Looks-correct); see `docs/SIGNUP-PREFILL-WAVE.md`
 
@@ -27,6 +26,7 @@ Showstoppers and deferred product work that are **out of scope for the current m
 - **Platform improvements wave:** nested company-form fix · send campaign pack to client Approvals · exception deep-links (credit / reconnect) · letterhead helper · off-session auto top-up + saved PM (migration **0041**) · client Stripe portal · closed-loop Results snapshot · guided checklist (service level + first campaign) · vertical playbook default channels · chunked `.in(company_id)` lists
 - **AI discovery / GEO** on Local SEO — readiness checklist, prompt pack, mention scorecard (odds, not guarantees)
 - **Quality routing** — PASS/WARN/FAIL/ESCALATE → auto client review vs agency hold by service level (never auto-publishes)
+- **C P1** — `managed_exceptions` + `fully_managed` get `schedule_approved`; new clients default `managed_exceptions`; staff approve mirrors auto-schedule; stale quality holds escalate on Agency Home
 - Fixtures **291+** (+ platform improvement checks)
 
 ## Owner env (optional, production polish)

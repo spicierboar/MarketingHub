@@ -30,20 +30,21 @@ const MATERIAL: ReadonlySet<ManagedAuthorityKind> = new Set([
   "promotion_activate",
 ]);
 
+/** New clients default to managed_exceptions — client still Approves; system drafts/schedules. */
 export function defaultServiceLevel(): ManagedServiceLevel {
-  return "approval";
+  return "managed_exceptions";
 }
 
 /**
  * Whether the delivery runner may auto-create low-risk drafts/suggestions, or
- * (fully_managed only) call scheduleOne on already-approved content.
+ * call scheduleOne on already-approved content (managed levels).
  *
  * Always false for publish | spend | promotion_activate — those still need
  * scheduleOne critique + existing approval / spend policies.
  *
- * schedule_approved: true ONLY at fully_managed. Means call scheduleOne on
- * pre-approved content under pre-granted authority; critique still runs inside
- * scheduleOne — never bypassed.
+ * schedule_approved: true at fully_managed | managed_exceptions. Means call
+ * scheduleOne on pre-approved content under pre-granted authority; critique
+ * still runs inside scheduleOne — never bypassed.
  */
 export function canAutoExecuteLowRisk(
   level: ManagedServiceLevel,
@@ -53,7 +54,7 @@ export function canAutoExecuteLowRisk(
     return false;
   }
   if (kind === "schedule_approved") {
-    return level === "fully_managed";
+    return level === "fully_managed" || level === "managed_exceptions";
   }
   if (!LOW_RISK.has(kind)) return false;
   return level === "fully_managed" || level === "managed_exceptions";
@@ -70,8 +71,8 @@ export function requiresClientApproval(
 ): boolean {
   if (MATERIAL.has(kind)) return true;
   if (kind === "schedule_approved" || LOW_RISK.has(kind)) {
-    // approval level: everything needs a human; managed levels may draft without
-    // a click; schedule_approved only at fully_managed.
+    // approval level: everything needs a human; managed levels may draft and
+    // schedule already-approved content without an extra click.
     return !canAutoExecuteLowRisk(level, kind);
   }
   return true;

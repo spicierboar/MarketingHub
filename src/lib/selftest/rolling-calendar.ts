@@ -12,7 +12,6 @@ import {
   purgeTenant,
   updateCompany,
 } from "@/lib/db";
-import { defaultServiceLevel } from "@/lib/managed-service/authority";
 import {
   companyNeedsCalendarTopUp,
   maintainRollingCalendarForCompany,
@@ -60,7 +59,7 @@ export async function checkRollingCalendarNeedsTopUpWhenEmpty(): Promise<{
     profile: {
       ...company.profile,
       industry: "cafe",
-      managedService: { serviceLevel: defaultServiceLevel() },
+      managedService: { serviceLevel: "approval" },
     },
   });
 
@@ -104,7 +103,7 @@ export async function checkRollingCalendarMaintainAddsSuggestionsOnly(): Promise
       natureOfBusiness: "Local cafe",
       services: ["Coffee"],
       serviceAreas: ["Town"],
-      managedService: { serviceLevel: defaultServiceLevel() },
+      managedService: { serviceLevel: "approval" },
     },
   });
 

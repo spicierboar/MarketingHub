@@ -12,8 +12,8 @@ Product decisions for Marketing Command Centre as an **outsourced managed market
 
 | Level | Meaning |
 |-------|---------|
-| `approval` | Default. Every material action waits for client (or admin) approval. |
-| `managed_exceptions` | Low-risk operational drafts/suggestions may proceed within policy; material publish/spend still gated. |
+| `approval` | Every material action waits for client (or admin) approval. |
+| `managed_exceptions` | **Default for new clients.** Low-risk drafts/suggestions + critique-gated `scheduleOne` on already-approved content may proceed; material publish/spend still gated. |
 | `fully_managed` | Pre-authorised **low-risk** work within limits + critique + audit. **Not** unsupervised AI publish. May call `scheduleOne` on **already-approved** content under pre-granted authority (`schedule_approved`) — critique still runs inside `scheduleOne`. |
 
 ### Quality routing after AI draft
@@ -44,7 +44,7 @@ Allowed without a separate client click (subject to service level + authority he
 - Create **draft** campaigns and **ai_draft** content
 - Create calendar **suggestions** (assist rows / planned dates)
 - Advance managed delivery phases and status copy
-- At `fully_managed` only: call `scheduleOne` on assist-ready **approved** content (`schedule_approved`) — critique gate inside `scheduleOne` is never bypassed
+- At `fully_managed` | `managed_exceptions`: call `scheduleOne` on assist-ready **approved** content (`schedule_approved`) — critique gate inside `scheduleOne` is never bypassed
 
 Never without the human path:
 
@@ -64,7 +64,7 @@ Parked showstoppers and deferred product work: [`MANAGED-SERVICE-PENDING.md`](./
 
 - After onboarding completes: **24h strategy + calendar** SLA (`strategyDueAt` = onboarding + 24h)
 - Rolling **30-day** calendar maintained via background jobs (`processDueManagedDeliveries` on the scheduler tick)
-- Managed auto-progress (`progressManagedSchedulesForTenant`) schedules assist-ready approved content for `fully_managed` companies after the rolling calendar top-up
+- Managed auto-progress (`progressManagedSchedulesForTenant`) schedules assist-ready approved content for `fully_managed` | `managed_exceptions` companies after the rolling calendar top-up (and after staff approve when planned dates exist)
 
 ## Agency vs client surfaces (automation-first)
 

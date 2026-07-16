@@ -31,6 +31,9 @@ export const DEFAULT_OVERDUE_APPROVAL_DAYS = 3;
 /** Days awaiting client sign-off before surfacing an overdue alert. */
 export const DEFAULT_OVERDUE_CLIENT_REVIEW_DAYS = 5;
 
+/** Days on agency quality hold before escalating severity / SLA ping. */
+export const DEFAULT_STALE_QUALITY_HOLD_DAYS = 2;
+
 // ---- types -------------------------------------------------------------------
 
 export type AgencyAlertKind =
@@ -170,8 +173,15 @@ export function detectOverdueApprovalAlerts(args: {
 export function detectQualityHoldAlerts(args: {
   content: ContentItem[];
   companiesById: Map<string, { id: string; name: string }>;
+  todayIso?: string;
+  staleThresholdDays?: number;
 }): AgencyAlert[] {
-  const { content, companiesById } = args;
+  const {
+    content,
+    companiesById,
+    todayIso = new Date().toISOString().slice(0, 10),
+    staleThresholdDays = DEFAULT_STALE_QUALITY_HOLD_DAYS,
+  } = args;
   const alerts: AgencyAlert[] = [];
 
   for (const item of content) {
@@ -183,23 +193,30 @@ export function detectQualityHoldAlerts(args: {
     const company = companiesById.get(item.companyId);
     if (!company) continue;
     const gate = item.qualityRouting.gate.toUpperCase();
+    const heldSince = item.qualityRouting.decidedAt || item.updatedAt;
+    const waitingDays = daysBetween(heldSince, todayIso);
+    const daysOverdue = Math.max(0, waitingDays - staleThresholdDays + 1);
+    const stale = waitingDays >= staleThresholdDays;
+    const failGate =
+      item.qualityRouting.gate === "fail" || item.qualityRouting.gate === "escalate";
     alerts.push({
       id: `quality-hold:${item.id}`,
       kind: "quality_hold",
-      severity:
-        item.qualityRouting.gate === "fail" || item.qualityRouting.gate === "escalate"
-          ? "danger"
-          : "warning",
+      severity: failGate || stale ? "danger" : "warning",
       companyId: company.id,
       companyName: company.name,
       title: item.title,
-      detail: `Needs attention — quality ${gate}. ${item.qualityRouting.reason}`,
+      detail: stale
+        ? `Needs attention — quality ${gate} held ${waitingDays} day(s). ${item.qualityRouting.reason}`
+        : `Needs attention — quality ${gate}. ${item.qualityRouting.reason}`,
       href: `/content/${item.id}`,
-      daysOverdue: 0,
+      daysOverdue: stale ? daysOverdue : 0,
     });
   }
 
-  return alerts.sort((a, b) => a.companyName.localeCompare(b.companyName));
+  return alerts.sort(
+    (a, b) => b.daysOverdue - a.daysOverdue || a.companyName.localeCompare(b.companyName),
+  );
 }
 
 export function buildWorkloadSummary(args: {

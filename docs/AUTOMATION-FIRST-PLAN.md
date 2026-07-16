@@ -96,10 +96,10 @@ Without this, UX cuts still feel empty. **Extend existing runners — no second 
 
 | Gap | Fix |
 |-----|-----|
-| `managed_exceptions` cannot auto-schedule | Unlock low-risk `schedule_approved` (parked in PENDING) |
-| Staff approve orphans content | Mirror auto-schedule under `fully_managed` after staff approve (still via `scheduleOne`) |
-| Quality holds have weak SLA | Agency-ops ping for stale `quality_hold` / client review |
-| Default level = `approval` | New clients default **`managed_exceptions`** (product decision) — client still Approves; system does the rest |
+| `managed_exceptions` cannot auto-schedule | **DONE** — Unlock low-risk `schedule_approved` for managed_exceptions |
+| Staff approve orphans content | **DONE** — Mirror auto-schedule after staff approve (still via `scheduleOne`) |
+| Quality holds have weak SLA | **DONE** — Agency-ops escalates stale `quality_hold` after 2 days |
+| Default level = `approval` | **DONE** — New clients default **`managed_exceptions`** |
 
 ### P2
 
@@ -125,10 +125,10 @@ Observable with `CC_LOCAL_DEMO` + simulated connectors:
 
 | Order | Wave | Outcome | Status |
 |------:|------|---------|--------|
-| 1 | **C P0** | Machine actually drafts/schedules — product stops lying | **DONE (uncommitted)** |
-| 2 | **A** | Client portal stops teaching DIY | **DONE (uncommitted)** |
-| 3 | **B** | Agency stops looking like a module zoo | **DONE (uncommitted)** |
-| 4 | **C P1** + default service level | Managed levels feel complete | pending |
+| 1 | **C P0** | Machine actually drafts/schedules — product stops lying | **DONE** |
+| 2 | **A** | Client portal stops teaching DIY | **DONE** |
+| 3 | **B** | Agency stops looking like a module zoo | **DONE** |
+| 4 | **C P1** + default service level | Managed levels feel complete | **DONE** |
 | 5 | **D** verify in demo | Proof before any `*_LIVE` | **NEXT** |
 | 6 | W6 Google GO | Real outbound — only after A–D hold | waiting |
 

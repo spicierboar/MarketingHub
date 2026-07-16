@@ -4,7 +4,9 @@ import {
   agencyTemplateInput,
   buildWorkloadSummary,
   DEFAULT_OVERDUE_APPROVAL_DAYS,
+  DEFAULT_STALE_QUALITY_HOLD_DAYS,
   detectOverdueApprovalAlerts,
+  detectQualityHoldAlerts,
   isApprovalOverdue,
   templateToRequestParams,
 } from "@/lib/agency-ops";
@@ -165,5 +167,65 @@ export async function checkTemplateApplyPrefill(): Promise<{ ok: boolean; detail
   return {
     ok: !!ok,
     detail: params.toString(),
+  };
+}
+
+/** Stale agency quality holds escalate severity after DEFAULT_STALE_QUALITY_HOLD_DAYS. */
+export async function checkStaleQualityHoldEscalates(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const today = todayIso();
+  const staleDecided = addDays(today, -(DEFAULT_STALE_QUALITY_HOLD_DAYS + 1));
+  const freshDecided = today;
+  const stale = stubContent({
+    id: "cnt_qh_stale",
+    companyId: "co_qh",
+    title: "Held fail",
+    status: "pending_approval",
+    updatedAt: staleDecided,
+    qualityRouting: {
+      gate: "warn",
+      decision: "hold_agency",
+      serviceLevel: "managed_exceptions",
+      decidedAt: staleDecided + "T12:00:00.000Z",
+      decidedById: "u_stub",
+      reason: "Soft claims need staff eyes",
+      queue: "in_agency_review",
+    },
+  });
+  const fresh = stubContent({
+    id: "cnt_qh_fresh",
+    companyId: "co_qh",
+    title: "Held fresh",
+    status: "pending_approval",
+    updatedAt: freshDecided,
+    qualityRouting: {
+      gate: "warn",
+      decision: "hold_agency",
+      serviceLevel: "managed_exceptions",
+      decidedAt: freshDecided + "T12:00:00.000Z",
+      decidedById: "u_stub",
+      reason: "Just held",
+      queue: "in_agency_review",
+    },
+  });
+
+  const alerts = detectQualityHoldAlerts({
+    content: [stale, fresh],
+    companiesById: new Map([["co_qh", { id: "co_qh", name: "QH Co" }]]),
+    todayIso: today,
+  });
+  const staleAlert = alerts.find((a) => a.id === "quality-hold:cnt_qh_stale");
+  const freshAlert = alerts.find((a) => a.id === "quality-hold:cnt_qh_fresh");
+  const ok =
+    alerts.length === 2 &&
+    staleAlert?.severity === "danger" &&
+    (staleAlert?.daysOverdue ?? 0) >= 1 &&
+    freshAlert?.severity === "warning" &&
+    freshAlert?.daysOverdue === 0;
+  return {
+    ok,
+    detail: `alerts=${alerts.length} staleSev=${staleAlert?.severity} staleDays=${staleAlert?.daysOverdue} freshSev=${freshAlert?.severity}`,
   };
 }

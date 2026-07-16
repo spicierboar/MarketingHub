@@ -3,7 +3,8 @@
 // HARD RULES:
 //   • ALWAYS goes through scheduleOne (critiqueForPublish inside) — never bypass
 //   • NEVER auto-spend or activate promotions
-//   • Only when canAutoExecuteLowRisk(level, "schedule_approved") — fully_managed
+//   • Only when canAutoExecuteLowRisk(level, "schedule_approved") —
+//     fully_managed | managed_exceptions
 //   • Live publish flags stay OFF; demo still creates scheduled_post rows
 //   • Sources: assist-ready accepted drafts AND approved campaign-builder
 //     planned-date / draft-schedule rows
@@ -27,7 +28,7 @@ import { notifyClientException } from "@/lib/managed-service/exception-notify";
 import { scheduleOne } from "@/lib/scheduling";
 import type { ActingUser, ManagedServiceLevel } from "@/lib/types";
 
-/** Cap how many fully_managed companies we progress per tenant tick. */
+/** Cap how many managed companies we progress per tenant tick. */
 const MAX_COMPANIES_PER_TICK = 10;
 
 /** Cap schedule attempts per company per call (assist + campaign planned). */
@@ -37,6 +38,10 @@ function serviceLevelOf(company: {
   profile: { managedService?: { serviceLevel?: ManagedServiceLevel } };
 }): ManagedServiceLevel | null {
   return company.profile.managedService?.serviceLevel ?? null;
+}
+
+function canAutoScheduleLevel(level: ManagedServiceLevel | null): boolean {
+  return level != null && canAutoExecuteLowRisk(level, "schedule_approved");
 }
 
 export type ManagedScheduleCandidate = {
@@ -123,8 +128,9 @@ async function collectReadyToSchedule(
 }
 
 /**
- * For one fully_managed company: schedule assist-ready + approved campaign
- * planned-date content via scheduleOne (critique gate).
+ * For one managed company (fully_managed | managed_exceptions): schedule
+ * assist-ready + approved campaign planned-date content via scheduleOne
+ * (critique gate).
  */
 export async function progressManagedSchedulesForCompany(
   actor: ActingUser,
@@ -136,8 +142,7 @@ export async function progressManagedSchedulesForCompany(
   if (!company?.profile.managedService) return zeros;
 
   const level = serviceLevelOf(company);
-  if (level !== "fully_managed") return zeros;
-  if (!canAutoExecuteLowRisk(level, "schedule_approved")) return zeros;
+  if (!canAutoScheduleLevel(level)) return zeros;
 
   const ready = await collectReadyToSchedule(
     company.tenantId,
@@ -195,24 +200,24 @@ export async function progressManagedSchedulesForCompany(
 }
 
 /**
- * Progress ready schedules for up to MAX_COMPANIES_PER_TICK fully_managed
- * companies in the tenant. Returns total scheduled count.
+ * Progress ready schedules for up to MAX_COMPANIES_PER_TICK managed companies
+ * (fully_managed | managed_exceptions) in the tenant. Returns total scheduled.
  */
 export async function progressManagedSchedulesForTenant(
   actor: ActingUser,
   tenantId: string,
 ): Promise<number> {
   const companies = await listCompanies(tenantId);
-  const fullyManaged = companies.filter(
+  const managed = companies.filter(
     (c) =>
       c.status !== "archived" &&
-      c.profile.managedService?.serviceLevel === "fully_managed",
+      canAutoScheduleLevel(c.profile.managedService?.serviceLevel ?? null),
   );
 
   let totalScheduled = 0;
   let processed = 0;
 
-  for (const company of fullyManaged) {
+  for (const company of managed) {
     if (processed >= MAX_COMPANIES_PER_TICK) break;
     const result = await progressManagedSchedulesForCompany(actor, company.id);
     totalScheduled += result.scheduled;

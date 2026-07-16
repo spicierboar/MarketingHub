@@ -15,7 +15,6 @@ import {
 } from "@/lib/db";
 import {
   canAutoExecuteLowRisk,
-  defaultServiceLevel,
 } from "@/lib/managed-service/authority";
 import {
   listApprovedCampaignPlannedReadyToSchedule,
@@ -33,14 +32,14 @@ function acting(user: User, tenantId: string): ActingUser {
   };
 }
 
-/** schedule_approved is true only at fully_managed; material kinds stay blocked. */
+/** schedule_approved at managed levels; material kinds stay blocked. */
 export async function checkScheduleApprovedAuthorityOnlyFullyManaged(): Promise<{
   ok: boolean;
   detail: string;
 }> {
   const scheduleOk =
     canAutoExecuteLowRisk("fully_managed", "schedule_approved") &&
-    !canAutoExecuteLowRisk("managed_exceptions", "schedule_approved") &&
+    canAutoExecuteLowRisk("managed_exceptions", "schedule_approved") &&
     !canAutoExecuteLowRisk("approval", "schedule_approved");
   const materialBlocked =
     !canAutoExecuteLowRisk("fully_managed", "publish") &&
@@ -82,7 +81,7 @@ export async function checkAutoProgressSkipsApprovalLevel(): Promise<{
     profile: {
       ...company.profile,
       industry: "cafe",
-      managedService: { serviceLevel: defaultServiceLevel() },
+      managedService: { serviceLevel: "approval" },
     },
   });
 
@@ -190,7 +189,7 @@ export async function checkAutoProgressListsCampaignPlannedReady(): Promise<{
       ready[0]!.source === "campaign_planned" &&
       ready[0]!.date === tomorrow;
 
-    // managed_exceptions must still schedule 0 even with ready rows (P0 lock)
+    // managed_exceptions may also schedule when ready rows exist (C P1)
     const refreshed = await getCompany(company.id);
     await updateCompany(company.id, {
       profile: {
@@ -199,12 +198,12 @@ export async function checkAutoProgressListsCampaignPlannedReady(): Promise<{
       },
     });
     const user = acting(userRow, t.id);
-    const skippedLevel = await progressManagedSchedulesForCompany(user, company.id);
-    const levelOk = skippedLevel.scheduled === 0;
+    const meResult = await progressManagedSchedulesForCompany(user, company.id);
+    const levelOk = meResult.scheduled >= 1 || meResult.blocked >= 1;
 
     return {
       ok: listOk && levelOk,
-      detail: `ready=${ready.length} date=${ready[0]?.date ?? "none"} meScheduled=${skippedLevel.scheduled}`,
+      detail: `ready=${ready.length} date=${ready[0]?.date ?? "none"} meScheduled=${meResult.scheduled} meBlocked=${meResult.blocked}`,
     };
   } finally {
     await purgeTenant(t.id);
