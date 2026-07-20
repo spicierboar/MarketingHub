@@ -56,15 +56,22 @@ export default async function ContentPage({
           scopedCompany ? `Content · ${scopedCompany.name}` : "Content"
         }
         explainerId="content-library"
-        explainer="Create with AI at the top, then manage the library below. Drafts always need review and approval — nothing publishes automatically."
+        explainer="Create with AI at the top, then manage drafts below. Drafts need review before schedule or publish — managed clients may get auto-routed to client sign-off first."
       >
-        <a
-          href={exportHref}
-          className={buttonClasses("outline")}
-          aria-disabled={approvedCount === 0}
-        >
-          Export approved (CSV)
-        </a>
+        {approvedCount === 0 ? (
+          <button
+            type="button"
+            disabled
+            className={buttonClasses("outline")}
+            aria-disabled="true"
+          >
+            Export approved (CSV)
+          </button>
+        ) : (
+          <a href={exportHref} className={buttonClasses("outline")}>
+            Export approved (CSV)
+          </a>
+        )}
       </PageHeader>
 
       <div className="space-y-8 p-6">

@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireUser, isAdmin, isSalesRep, accessibleCompanyIds } from "@/lib/auth/rbac";
+import {
+  requireUser,
+  isAdmin,
+  isSalesRep,
+  accessibleCompanyIds,
+  userHasPermission,
+} from "@/lib/auth/rbac";
 import { visibleCompanies, visibleContent, visibleRequests } from "@/lib/scope";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
@@ -15,17 +21,13 @@ import type { Company } from "@/lib/types";
 function nextSpielStep(company: Company | undefined): {
   title: string;
   detail: string;
-  href: string;
-  cta: string;
 } | null {
   if (!company) return null;
   const { score, missing } = onboardingScore(company);
   if (score >= 100) return null;
   return {
     title: `Setup incomplete — ${company.name}`,
-    detail: `Missing: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}. Delivery quality improves once this is filled.`,
-    href: `/companies/${company.id}`,
-    cta: "Complete setup",
+    detail: `Missing: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}. Ask an admin to finish client setup — delivery quality improves once this is filled.`,
   };
 }
 
@@ -48,6 +50,7 @@ export default async function DashboardPage() {
   const companyById = new Map(companies.map((company) => [company.id, company]));
   const scope = await accessibleCompanyIds(user);
   const local = await buildLocalDashboard(user.tenantId, scope);
+  const canApprove = userHasPermission(user, "approve_content");
 
   const firstCompany = companies[0];
   const nextUp = nextSpielStep(firstCompany);
@@ -62,15 +65,23 @@ export default async function DashboardPage() {
         explainerId="dashboard"
         explainer="Exceptions and status for your assigned clients — clear blockers, then delivery continues."
       >
-        <Link href="/approvals" className={buttonClasses("default", "sm")}>
-          Approvals
-        </Link>
-        <Link
-          href="/companies"
-          className="text-xs text-muted-foreground hover:text-foreground hover:underline sm:text-sm"
-        >
-          Clients
-        </Link>
+        {canApprove ? (
+          <Link href="/approvals" className={buttonClasses("default", "sm")}>
+            Approvals
+          </Link>
+        ) : (
+          <Link href="/content" className={buttonClasses("default", "sm")}>
+            Content
+          </Link>
+        )}
+        {firstCompany ? (
+          <Link
+            href={`/content?company=${firstCompany.id}`}
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline sm:text-sm"
+          >
+            {firstCompany.name}
+          </Link>
+        ) : null}
       </PageHeader>
 
       <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-5">
@@ -91,18 +102,15 @@ export default async function DashboardPage() {
             <ul className="space-y-1.5">
               {local.missingOnboarding.slice(0, 6).map((m) => (
                 <li key={`onboard-${m.company}`}>
-                  <Link
-                    href="/dashboard"
-                    className="flex items-start justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-muted"
-                  >
+                  <div className="flex items-start justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm">
                     <div className="min-w-0">
-                      <p className="font-medium">Complete onboarding — {m.company}</p>
+                      <p className="font-medium">Onboarding incomplete — {m.company}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        Missing {m.missing.length} item(s): {m.missing.slice(0, 3).join(", ")}
+                        Missing {m.missing.length} item(s): {m.missing.slice(0, 3).join(", ")}. An
+                        admin needs to finish setup.
                       </p>
                     </div>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">open →</span>
-                  </Link>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -110,17 +118,12 @@ export default async function DashboardPage() {
         </section>
 
         {nextUp && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2.5">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Setup
-              </p>
-              <p className="text-sm font-medium">{nextUp.title}</p>
-              <p className="text-xs text-muted-foreground">{nextUp.detail}</p>
-            </div>
-            <Link href={nextUp.href} className={buttonClasses("subtle", "sm")}>
-              {nextUp.cta}
-            </Link>
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Setup
+            </p>
+            <p className="text-sm font-medium">{nextUp.title}</p>
+            <p className="text-xs text-muted-foreground">{nextUp.detail}</p>
           </div>
         )}
 

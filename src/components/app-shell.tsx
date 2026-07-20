@@ -37,6 +37,8 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
+  /** Visible when the user can approve content (admins always can). */
+  approveAccess?: boolean;
   ownerOnly?: boolean;
   platformAdminOnly?: boolean;
   salesAccess?: boolean;
@@ -94,7 +96,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Queues",
     pinned: true,
     items: [
-      { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
+      { href: "/approvals", label: "Approvals", icon: CheckSquare, approveAccess: true },
     ],
   },
   {
@@ -232,6 +234,7 @@ function itemVisible(
     isAdmin: boolean;
     isOwner: boolean;
     isPlatformAdmin: boolean;
+    canApprove: boolean;
     canFieldSales: boolean;
     /** Non-admin sales_rep — show only salesHome items. */
     isSalesRepFocused: boolean;
@@ -245,6 +248,7 @@ function itemVisible(
   if (n.memberOnly && opts.isAdmin) return false;
   return (
     (!n.adminOnly || opts.isAdmin) &&
+    (!n.approveAccess || opts.canApprove) &&
     (!n.ownerOnly || opts.isOwner) &&
     (!n.platformAdminOnly || opts.isPlatformAdmin) &&
     (!n.salesAccess || opts.canFieldSales)
@@ -356,6 +360,8 @@ export function AppShell({
   isAdmin,
   isOwner = false,
   isPlatformAdmin = false,
+  canApprove = false,
+  canViewAudit = false,
   canFieldSales = false,
   isSalesRepFocused = false,
   branding = null,
@@ -371,6 +377,8 @@ export function AppShell({
   isAdmin: boolean;
   isOwner?: boolean;
   isPlatformAdmin?: boolean;
+  canApprove?: boolean;
+  canViewAudit?: boolean;
   canFieldSales?: boolean;
   isSalesRepFocused?: boolean;
   branding?: { accentColor?: string; logoUrl?: string } | null;
@@ -384,9 +392,11 @@ export function AppShell({
     isAdmin,
     isOwner,
     isPlatformAdmin,
+    canApprove,
     canFieldSales,
     isSalesRepFocused,
   };
+  const toolsAccess = { isAdmin, canApprove, canViewAudit };
 
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
@@ -532,7 +542,7 @@ export function AppShell({
         )}
         {companies.length > 0 && (
           <Suspense fallback={null}>
-            <CompanyContextBar companies={companies} />
+            <CompanyContextBar companies={companies} access={toolsAccess} />
           </Suspense>
         )}
         <main className="flex-1 overflow-x-hidden">{children}</main>

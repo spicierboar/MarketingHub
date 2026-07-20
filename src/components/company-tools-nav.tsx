@@ -65,31 +65,49 @@ function verticalTools(
   return items;
 }
 
+export type CompanyToolsAccess = {
+  isAdmin: boolean;
+  canApprove: boolean;
+  canViewAudit: boolean;
+};
+
 function buildTools(
   companyId: string,
   businessType: BusinessType,
   activeAddons: AddonId[],
+  access: CompanyToolsAccess,
 ): { primary: ToolLink[]; groups: ToolGroup[]; vertical: ToolLink[] } {
   const q = `company=${companyId}`;
   const base = `/companies/${companyId}`;
 
-  // Daily agency loop — keep this strip short.
-  const primary: ToolLink[] = [
-    { href: base, label: "Overview", match: "exact" },
-    { href: `${base}/strategy`, label: "Strategy", match: "prefix" },
+  // Daily loop — members only see routes they can actually open.
+  const primary: ToolLink[] = [];
+  if (access.isAdmin) {
+    primary.push(
+      { href: base, label: "Overview", match: "exact" },
+      { href: `${base}/strategy`, label: "Strategy", match: "prefix" },
+    );
+  }
+  primary.push(
     { href: `/calendar?${q}`, label: "Calendar" },
     { href: `/content?${q}`, label: "Content" },
     { href: `/campaigns?${q}`, label: "Campaigns" },
-    { href: `/approvals?${q}`, label: "Approvals" },
-    { href: `/publishing?${q}`, label: "Publishing" },
-    { href: `/requests?${q}`, label: "Asks" },
-  ];
+  );
+  if (access.canApprove) {
+    primary.push({ href: `/approvals?${q}`, label: "Approvals" });
+  }
+  if (access.isAdmin) {
+    primary.push({ href: `/publishing?${q}`, label: "Publishing" });
+  }
+  primary.push({ href: `/requests?${q}`, label: "Asks" });
 
-  const vertical = verticalTools(companyId, businessType, activeAddons);
+  const vertical = access.isAdmin
+    ? verticalTools(companyId, businessType, activeAddons)
+    : [];
 
-  // Second-row chips (max 4) — expand inline, not a hub page.
-  const groups: ToolGroup[] = [
-    {
+  const groups: ToolGroup[] = [];
+  if (access.isAdmin) {
+    groups.push({
       id: "brand",
       label: "Brand",
       items: [
@@ -99,33 +117,36 @@ function buildTools(
         { href: `${base}/governance`, label: "Governance", match: "prefix" },
         { href: `${base}/local-seo`, label: "Local SEO & AI", match: "prefix" },
       ],
-    },
-    {
-      id: "produce",
-      label: "Produce",
-      items: [
-        { href: `/studio?${q}`, label: "Studio" },
-        { href: `/assets?${q}`, label: "Assets" },
-        { href: `/library?${q}`, label: "Reuse library" },
-      ],
-    },
-    {
-      id: "channels",
-      label: "Channels",
-      items: [
-        { href: `/inbox?${q}`, label: "Social inbox" },
-        { href: `/social?${q}`, label: "Social" },
-        { href: `/reviews?${q}`, label: "Reviews" },
-        { href: `/analytics?${q}`, label: "Analytics" },
-        { href: `/audit?${q}`, label: "Audit trail" },
-      ],
-    },
-    {
+    });
+  }
+  groups.push({
+    id: "produce",
+    label: "Produce",
+    items: [
+      { href: `/studio?${q}`, label: "Studio" },
+      { href: `/assets?${q}`, label: "Assets" },
+      { href: `/library?${q}`, label: "Reuse library" },
+    ],
+  });
+  const channelItems: ToolLink[] = [
+    { href: `/inbox?${q}`, label: "Social inbox" },
+    { href: `/social?${q}`, label: "Social" },
+    { href: `/reviews?${q}`, label: "Reviews" },
+  ];
+  if (access.isAdmin) {
+    channelItems.push({ href: `/analytics?${q}`, label: "Analytics" });
+  }
+  if (access.canViewAudit) {
+    channelItems.push({ href: `/audit?${q}`, label: "Audit trail" });
+  }
+  groups.push({ id: "channels", label: "Channels", items: channelItems });
+  if (access.isAdmin) {
+    groups.push({
       id: "ads",
       label: "Ads",
       items: [{ href: `/ads?${q}`, label: "Paid ads" }],
-    },
-  ];
+    });
+  }
 
   return { primary, groups, vertical };
 }
@@ -189,6 +210,7 @@ export function CompanyToolsNav({
   businessType,
   activeAddons = [],
   serviceLevel,
+  access = { isAdmin: true, canApprove: true, canViewAudit: true },
 }: {
   companyId: string;
   companyName: string;
@@ -196,12 +218,15 @@ export function CompanyToolsNav({
   businessType: BusinessType;
   activeAddons?: AddonId[];
   serviceLevel?: ManagedServiceLevel;
+  /** Defaults to full admin strip (company workspace layout is admin-only). */
+  access?: CompanyToolsAccess;
 }) {
   const pathname = usePathname();
   const { primary, groups, vertical } = buildTools(
     companyId,
     businessType,
     activeAddons,
+    access,
   );
 
   const panelId = useId();
@@ -235,11 +260,11 @@ export function CompanyToolsNav({
     <div className="border-b border-border bg-card">
       <div className="flex flex-wrap items-center gap-3 px-6 py-3">
         <Link
-          href="/companies"
+          href={access.isAdmin ? "/companies" : "/dashboard"}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Clients
+          {access.isAdmin ? "Clients" : "Home"}
         </Link>
         <div className="h-4 w-px bg-border" />
         <div className="min-w-0 flex-1">

@@ -52,11 +52,24 @@ export default async function ClientApprovalsPage() {
         ) : (
           pending.map((c) => (
             <Card key={c.id}>
-              <CardContent className="p-6">
-                <Link href={`/client/approvals/${c.id}`} className="font-semibold hover:text-primary">
-                  {c.title}
+              <CardContent className="flex flex-col gap-3 p-6 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <Link
+                    href={`/client/approvals/${c.id}`}
+                    className="font-semibold hover:text-primary"
+                  >
+                    {c.title}
+                  </Link>
+                  <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+                    {c.body}
+                  </p>
+                </div>
+                <Link
+                  href={`/client/approvals/${c.id}`}
+                  className="shrink-0 text-sm font-medium text-primary hover:underline"
+                >
+                  Review →
                 </Link>
-                <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{c.body}</p>
               </CardContent>
             </Card>
           ))

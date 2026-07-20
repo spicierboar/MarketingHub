@@ -1,7 +1,10 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { CompanyToolsNav } from "@/components/company-tools-nav";
+import {
+  CompanyToolsNav,
+  type CompanyToolsAccess,
+} from "@/components/company-tools-nav";
 import type { AddonId, BusinessType, ManagedServiceLevel } from "@/lib/types";
 
 export type CompanyWorkspaceNavData = {
@@ -20,8 +23,10 @@ export type CompanyWorkspaceNavData = {
  */
 export function CompanyContextBar({
   companies,
+  access,
 }: {
   companies: CompanyWorkspaceNavData[];
+  access: CompanyToolsAccess;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -39,6 +44,7 @@ export function CompanyContextBar({
       businessType={company.businessType}
       activeAddons={company.activeAddons}
       serviceLevel={company.serviceLevel}
+      access={access}
     />
   );
 }

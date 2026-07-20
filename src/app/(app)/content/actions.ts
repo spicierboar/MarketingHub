@@ -319,6 +319,16 @@ export async function approveContentAction(formData: FormData) {
     status: "approved",
     approvedById: user.id,
     approvedAt: now(),
+    // Staff override supersedes any open client-review share.
+    ...(content.clientReview?.status === "pending"
+      ? {
+          clientReview: {
+            ...content.clientReview,
+            status: "approved" as const,
+            respondedAt: now(),
+          },
+        }
+      : {}),
   });
   if (content.requestId) await advanceRequest(content.requestId, "approved", user.id);
   // Campaign items track their content's approval individually (Phase 4);
@@ -430,6 +440,10 @@ export async function saveReuseAction(formData: FormData) {
   // Tenant pin: an admin may only set reuse policy for content in their tenant.
   if (!(await canAccessCompany(user, content.companyId))) {
     throw new Error("Forbidden: no access to this company");
+  }
+  await assertNotOnHold(content);
+  if (!["approved", "published"].includes(content.status)) {
+    throw new Error("Reuse policy can only be set on approved or published content.");
   }
 
   await updateContent(contentId, {
@@ -648,14 +662,57 @@ export async function attachAssetAction(formData: FormData) {
   }
   const assetIds = content.assetIds ?? [];
   if (assetIds.includes(assetId)) return; // idempotent
-  await updateContent(contentId, { assetIds: [...assetIds, assetId] });
+
+  // Creative change on approved/scheduled content must re-enter approval —
+  // the prior approver never saw this package.
+  const wasApproved =
+    content.status === "approved" || content.status === "scheduled";
+  if (content.status === "scheduled") {
+    for (const s of await cancellableSchedulesForContent(content.id)) {
+      await transitionScheduledPost(user.tenantId, s.id, {
+        from: ["scheduled", "failed", "dead"],
+        to: "cancelled",
+      });
+    }
+    await logAction(user, "content.schedule_cancelled", {
+      targetType: "content",
+      targetId: contentId,
+      companyId: content.companyId,
+      detail: "Asset attached — schedules cancelled pending re-approval",
+    });
+  }
+
+  await updateContent(contentId, {
+    assetIds: [...assetIds, assetId],
+    ...(wasApproved
+      ? {
+          status: "pending_approval" as const,
+          approvedById: null,
+          approvedAt: null,
+          ...(content.clientReview ? { clientReview: undefined } : {}),
+        }
+      : {}),
+  });
+  if (wasApproved && content.campaignItemId) {
+    if (await revertCampaignItemAfterDemotion(content.campaignItemId)) {
+      await logAction(user, "campaign.item_reverted", {
+        targetType: "campaign_item",
+        targetId: content.campaignItemId,
+        companyId: content.companyId,
+        detail: "Approved content asset changed — back to review",
+      });
+    }
+  }
   await logAction(user, "content.asset_attached", {
     targetType: "content",
     targetId: contentId,
     companyId: content.companyId,
-    detail: asset.name,
+    detail: wasApproved
+      ? `${asset.name} (demoted for re-approval)`
+      : asset.name,
   });
   revalidatePath(`/content/${contentId}`);
+  if (wasApproved) revalidatePath("/approvals");
 }
 
 export async function detachAssetAction(formData: FormData) {
@@ -668,16 +725,53 @@ export async function detachAssetAction(formData: FormData) {
   if (["archived", "rejected", "published"].includes(content.status)) {
     throw new Error("Assets cannot be changed on terminal content.");
   }
+
+  const wasApproved =
+    content.status === "approved" || content.status === "scheduled";
+  if (content.status === "scheduled") {
+    for (const s of await cancellableSchedulesForContent(content.id)) {
+      await transitionScheduledPost(user.tenantId, s.id, {
+        from: ["scheduled", "failed", "dead"],
+        to: "cancelled",
+      });
+    }
+    await logAction(user, "content.schedule_cancelled", {
+      targetType: "content",
+      targetId: contentId,
+      companyId: content.companyId,
+      detail: "Asset detached — schedules cancelled pending re-approval",
+    });
+  }
+
   await updateContent(contentId, {
     assetIds: (content.assetIds ?? []).filter((a) => a !== assetId),
+    ...(wasApproved
+      ? {
+          status: "pending_approval" as const,
+          approvedById: null,
+          approvedAt: null,
+          ...(content.clientReview ? { clientReview: undefined } : {}),
+        }
+      : {}),
   });
+  if (wasApproved && content.campaignItemId) {
+    if (await revertCampaignItemAfterDemotion(content.campaignItemId)) {
+      await logAction(user, "campaign.item_reverted", {
+        targetType: "campaign_item",
+        targetId: content.campaignItemId,
+        companyId: content.companyId,
+        detail: "Approved content asset changed — back to review",
+      });
+    }
+  }
   await logAction(user, "content.asset_detached", {
     targetType: "content",
     targetId: contentId,
     companyId: content.companyId,
-    detail: assetId,
+    detail: wasApproved ? `${assetId} (demoted for re-approval)` : assetId,
   });
   revalidatePath(`/content/${contentId}`);
+  if (wasApproved) revalidatePath("/approvals");
 }
 
 export async function recheckComplianceAction(formData: FormData) {

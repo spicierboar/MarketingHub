@@ -209,17 +209,8 @@ export async function completeClientApproval(args: {
     throw new Error("This item has open compliance issues and cannot be approved yet.");
   }
 
-  await updateContent(content.id, {
-    ...governed,
-    status: "approved",
-    approvedById: logActor.id,
-    approvedAt: now(),
-    clientReview: {
-      ...content.clientReview!,
-      status: "approved",
-      respondedAt: now(),
-    },
-  });
+  // Durable ACK first — never mark content approved if the managed request
+  // is already gone (avoids approved content with a failed client response).
   if (durableRequest) {
     if (args.actor.kind === "portal") {
       if (
@@ -241,6 +232,18 @@ export async function completeClientApproval(args: {
       throw new Error("This approval link is invalid, expired or superseded.");
     }
   }
+
+  await updateContent(content.id, {
+    ...governed,
+    status: "approved",
+    approvedById: logActor.id,
+    approvedAt: now(),
+    clientReview: {
+      ...content.clientReview!,
+      status: "approved",
+      respondedAt: now(),
+    },
+  });
 
   if (content.requestId) {
     await advanceRequest(content.requestId, "approved", logActor.id);
