@@ -21,6 +21,8 @@ import {
   MessageSquare,
   Settings,
   Tag,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
@@ -126,12 +128,12 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "ai-ops",
-    label: "AI Ops",
+    id: "service-quality",
+    label: "Service quality",
     pinned: true,
     adminOnly: true,
     items: [
-      { href: "/recommendations", label: "Recommendations", icon: Lightbulb },
+      { href: "/recommendations", label: "Opportunities", icon: Lightbulb },
     ],
   },
   {
@@ -237,6 +239,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors",
         active
@@ -357,6 +360,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const visibility = { isAdmin, isOwner, isPlatformAdmin, canFieldSales };
 
   const groups = NAV_GROUPS.map((g) => ({
@@ -439,6 +443,9 @@ export function AppShell({
           <div className="mb-1 px-2">
             <p className="truncate text-xs font-medium">{user.name}</p>
             <p className="truncate text-[10px] text-muted-foreground">{user.email}</p>
+            <p className="text-[10px] font-medium text-primary">
+              {isAdmin ? "Admin" : "Staff"}
+            </p>
           </div>
           <form action={signOut}>
             <button
@@ -458,14 +465,33 @@ export function AppShell({
             {envLabel} — test, not live
           </div>
         )}
-        <header className="flex h-12 items-center justify-between border-b border-border bg-card px-3 md:hidden">
-          <span className="text-sm font-semibold">Command Centre</span>
+        <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-card px-3 md:hidden">
+          <button
+            type="button"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((open) => !open)}
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">Command Centre</span>
+          <span className="text-[10px] font-medium text-primary">
+            {isAdmin ? "Admin" : "Staff"}
+          </span>
           <form action={signOut}>
             <button type="submit" className="text-xs text-muted-foreground">
               Sign out
             </button>
           </form>
         </header>
+        {mobileOpen && (
+          <nav className="max-h-[70vh] overflow-y-auto border-b border-border bg-card p-2 md:hidden">
+            <Suspense fallback={null}>
+              <SidebarNav groups={groups} pathname={pathname} />
+            </Suspense>
+          </nav>
+        )}
         {banner && (
           <div
             className={cn(

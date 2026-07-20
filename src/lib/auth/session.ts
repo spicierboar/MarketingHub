@@ -185,7 +185,7 @@ function stampSupabaseUser(
   });
 }
 
-// Demo / staging quick-login: start a session without sending email.
+// Strict localhost local-demo quick-login: start a seeded-user session.
 //   • Local demo: cookie-backed passwordless session.
 //   • Staging (Supabase): admin generateLink + verifyOtp — no email sent, so
 //     magic-link rate limits cannot block /dev quick login. Never in production.

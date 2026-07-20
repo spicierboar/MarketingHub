@@ -23,18 +23,38 @@ import {
   getTenant,
   listCompanies,
 } from "@/lib/db";
-import { localDemoEnabled } from "@/lib/env";
+import {
+  appEnv,
+  liveIntegrationsAllowed,
+  localDemoEnabled,
+  providerLiveFlagEnabled,
+} from "@/lib/env";
 import { planFor, type PlanDef } from "@/lib/plans";
 import { clientCompaniesOnly } from "@/lib/content-create-scope";
-import type { AddonId, MarketingPackageId, PlanId, Tenant } from "@/lib/types";
+import type {
+  AddonId,
+  CompanyServiceBillingState,
+  CompanyServiceOptions,
+  MarketingPackageId,
+  PlanId,
+  Tenant,
+} from "@/lib/types";
+import {
+  currentPackageId,
+  normaliseCompanyServiceOptions,
+} from "@/lib/managed-service-billing";
 
 export function stripeConfigured(): boolean {
-  return !!process.env.STRIPE_SECRET_KEY;
+  return (
+    providerLiveFlagEnabled(process.env.STRIPE_BILLING_LIVE) &&
+    liveIntegrationsAllowed() &&
+    Boolean(process.env.STRIPE_SECRET_KEY?.trim())
+  );
 }
 
-/** Prefer mock package checkout in local demo even when Stripe keys exist. */
-export function useMockPackageCheckout(): boolean {
-  return localDemoEnabled() || !stripeConfigured();
+/** Mock settlement is opt-in and is never available in production. */
+export function mockPackageCheckoutEnabled(): boolean {
+  return appEnv() === "development" && localDemoEnabled();
 }
 
 // The Stripe Price for each plan (created in the owner's Stripe dashboard).
@@ -66,13 +86,14 @@ export interface TenantUsage {
 }
 
 export async function tenantUsage(tenantId: string): Promise<TenantUsage> {
-  const [tenant, companiesRaw, aiSpendUsd, aiCapUsd, settings] = await Promise.all([
-    getTenant(tenantId),
-    listCompanies(tenantId),
-    aiSpendThisMonth(tenantId),
-    effectiveAiCapUsd(tenantId),
-    getSecuritySettings(tenantId),
-  ]);
+  const [tenant, companiesRaw, aiSpendUsd, aiCapUsd, settings] =
+    await Promise.all([
+      getTenant(tenantId),
+      listCompanies(tenantId),
+      aiSpendThisMonth(tenantId),
+      effectiveAiCapUsd(tenantId),
+      getSecuritySettings(tenantId),
+    ]);
   // Internal /content library shelf is not a billable client seat.
   const companies = clientCompaniesOnly(companiesRaw);
   const plan = planFor(tenant?.plan);
@@ -103,15 +124,21 @@ export async function assertCompanyQuota(tenantId: string): Promise<void> {
   }
 }
 
-export async function planIncludesAutomations(tenantId: string): Promise<boolean> {
+export async function planIncludesAutomations(
+  tenantId: string,
+): Promise<boolean> {
   return planFor((await getTenant(tenantId))?.plan).automations;
 }
 
-export async function planIncludesWhiteLabel(tenantId: string): Promise<boolean> {
+export async function planIncludesWhiteLabel(
+  tenantId: string,
+): Promise<boolean> {
   return planFor((await getTenant(tenantId))?.plan).whiteLabel;
 }
 
-export async function assertPlanIncludesAutomations(tenantId: string): Promise<void> {
+export async function assertPlanIncludesAutomations(
+  tenantId: string,
+): Promise<void> {
   if (!(await planIncludesAutomations(tenantId))) {
     throw new Error(
       "Enterprise Automation is not included in your plan. Upgrade on the Billing page to enable it.",
@@ -127,8 +154,9 @@ async function stripePost(
   path: string,
   params: Record<string, string>,
 ): Promise<Record<string, unknown> | null> {
+  if (!stripeConfigured()) return null;
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return null;
+  if (!key?.trim()) return null;
   try {
     const res = await fetch(`https://api.stripe.com/v1/${path}`, {
       method: "POST",
@@ -153,8 +181,9 @@ async function stripePost(
 async function stripeGet(
   path: string,
 ): Promise<Record<string, unknown> | null> {
+  if (!stripeConfigured()) return null;
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return null;
+  if (!key?.trim()) return null;
   try {
     const res = await fetch(`https://api.stripe.com/v1/${path}`, {
       method: "GET",
@@ -162,7 +191,10 @@ async function stripeGet(
     });
     const body = (await res.json()) as Record<string, unknown>;
     if (!res.ok) {
-      console.error(`[billing] Stripe GET ${path} failed (${res.status}):`, body);
+      console.error(
+        `[billing] Stripe GET ${path} failed (${res.status}):`,
+        body,
+      );
       return null;
     }
     return body;
@@ -285,8 +317,12 @@ export async function createAddonCheckoutSession(
 ): Promise<string | null> {
   const price = stripeAddonPriceId(addonId);
   if (!stripeConfigured() || !price) return null;
-  const successUrl = returnPaths?.successPath ? `${origin}${returnPaths.successPath}` : `${origin}/billing?addon=success`;
-  const cancelUrl = returnPaths?.cancelPath ? `${origin}${returnPaths.cancelPath}` : `${origin}/billing?addon=cancelled`;
+  const successUrl = returnPaths?.successPath
+    ? `${origin}${returnPaths.successPath}`
+    : `${origin}/billing?addon=success`;
+  const cancelUrl = returnPaths?.cancelPath
+    ? `${origin}${returnPaths.cancelPath}`
+    : `${origin}/billing?addon=cancelled`;
   const params: Record<string, string> = {
     mode: "subscription",
     "line_items[0][price]": price,
@@ -323,11 +359,64 @@ export function stripeMarketingPackagePriceId(
   }
   return (
     {
+      starter:
+        process.env.STRIPE_PRICE_PACKAGE_STARTER ??
+        process.env.STRIPE_PRICE_PACKAGE_BASIC,
+      growth:
+        process.env.STRIPE_PRICE_PACKAGE_GROWTH ??
+        process.env.STRIPE_PRICE_PACKAGE_PRO,
+      managed:
+        process.env.STRIPE_PRICE_PACKAGE_MANAGED ??
+        process.env.STRIPE_PRICE_PACKAGE_BLAST,
       basic: process.env.STRIPE_PRICE_PACKAGE_BASIC,
       pro: process.env.STRIPE_PRICE_PACKAGE_PRO,
       blast: process.env.STRIPE_PRICE_PACKAGE_BLAST,
     }[packageId]?.trim() || undefined
   );
+}
+
+export function marketingPackageCheckoutConfigurationError(
+  packageId: MarketingPackageId,
+  serviceOptions?: Partial<CompanyServiceOptions>,
+): string | null {
+  if (!stripeConfigured()) return "STRIPE_SECRET_KEY is not configured";
+  if (!stripeMarketingPackagePriceId(packageId)) {
+    return `Stripe price is not configured for package ${packageId}`;
+  }
+  const options = normaliseCompanyServiceOptions(packageId, serviceOptions);
+  const required: Array<[boolean, string, string | undefined]> = [
+    [
+      true,
+      "website connection setup",
+      process.env.STRIPE_PRICE_WEBSITE_CONNECTION_SETUP,
+    ],
+    [
+      options.searchVisibility && packageId === "growth",
+      "search visibility",
+      process.env.STRIPE_PRICE_SEARCH_VISIBILITY,
+    ],
+    [
+      options.websitePublishing,
+      "website publishing",
+      process.env.STRIPE_PRICE_WEBSITE_PUBLISHING,
+    ],
+    [
+      options.hostedLandingPage,
+      "hosted landing page",
+      process.env.STRIPE_PRICE_HOSTED_LANDING_PAGE,
+    ],
+    [
+      options.hostedLandingPage,
+      "hosted landing page setup",
+      process.env.STRIPE_PRICE_HOSTED_LANDING_PAGE_SETUP,
+    ],
+  ];
+  const missing = required
+    .filter(([selected, , price]) => selected && !price?.trim())
+    .map(([, label]) => label);
+  return missing.length
+    ? `Stripe price is not configured for ${missing.join(", ")}`
+    : null;
 }
 
 /** True when Checkout metadata identifies a company marketing-package SKU. */
@@ -348,8 +437,108 @@ export async function retrieveCheckoutSession(
   return stripeGet(`checkout/sessions/${encodeURIComponent(sessionId.trim())}`);
 }
 
+export function uniqueSubscriptionItemForPrice(
+  subscription: Record<string, unknown> | null | undefined,
+  expectedPriceId: string,
+): { subscriptionItemId: string; priceId: string } | null {
+  const items = ((subscription?.items as Record<string, unknown> | undefined)
+    ?.data ?? []) as Array<Record<string, unknown>>;
+  const matches = items.filter(
+    (item) =>
+      typeof item.id === "string" &&
+      item.id.length > 0 &&
+      (item.price as Record<string, unknown> | undefined)?.id ===
+        expectedPriceId,
+  );
+  return matches.length === 1
+    ? {
+        subscriptionItemId: matches[0]!.id as string,
+        priceId: expectedPriceId,
+      }
+    : null;
+}
+
+export async function retrieveMarketingPackageSubscriptionState(
+  subscriptionId: string,
+  expect: { tenantId: string; companyId: string },
+): Promise<{
+  subscriptionItemId: string;
+  priceId: string;
+  packageId: MarketingPackageId;
+  currentPeriodEnd?: number;
+  cancelAtPeriodEnd: boolean;
+} | null> {
+  if (!subscriptionId) return null;
+  const subscription = await stripeGet(
+    `subscriptions/${encodeURIComponent(subscriptionId)}?expand[]=items.data.price`,
+  );
+  const metadata = subscription?.metadata as
+    | Record<string, unknown>
+    | undefined;
+  const packageId = metadata?.packageId;
+  if (
+    subscription?.id !== subscriptionId ||
+    metadata?.kind !== "marketing_package" ||
+    metadata?.tenantId !== expect.tenantId ||
+    metadata?.companyId !== expect.companyId ||
+    typeof packageId !== "string" ||
+    ![
+      "starter",
+      "growth",
+      "managed",
+      "basic",
+      "pro",
+      "blast",
+      "custom",
+    ].includes(packageId)
+  ) {
+    return null;
+  }
+  const typedPackageId = packageId as MarketingPackageId;
+  const expectedPriceId = stripeMarketingPackagePriceId(typedPackageId);
+  const correlation = expectedPriceId
+    ? uniqueSubscriptionItemForPrice(subscription, expectedPriceId)
+    : null;
+  if (!correlation) return null;
+  const periodEnd = Number(subscription.current_period_end);
+  return {
+    ...correlation,
+    packageId: typedPackageId,
+    ...(Number.isFinite(periodEnd) ? { currentPeriodEnd: periodEnd } : {}),
+    cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+  };
+}
+
+export async function retrieveMarketingPackageSubscriptionCorrelation(
+  subscriptionId: string,
+  expect: {
+    tenantId: string;
+    companyId: string;
+    packageId: MarketingPackageId;
+  },
+): Promise<{ subscriptionItemId: string; priceId: string } | null> {
+  const state = await retrieveMarketingPackageSubscriptionState(
+    subscriptionId,
+    expect,
+  );
+  const expectedPriceId = stripeMarketingPackagePriceId(expect.packageId);
+  if (!state || !expectedPriceId || state.priceId !== expectedPriceId) {
+    return null;
+  }
+  return {
+    subscriptionItemId: state.subscriptionItemId,
+    priceId: state.priceId,
+  };
+}
+
 export type MarketingPackageCheckoutVerify =
-  | { ok: true; sessionId: string; companyId: string; tenantId: string; packageId?: string }
+  | {
+      ok: true;
+      sessionId: string;
+      companyId: string;
+      tenantId: string;
+      packageId?: string;
+    }
   | { ok: false; reason: string };
 
 /**
@@ -372,7 +561,8 @@ export function verifyMarketingPackageCheckoutSession(
     (typeof session.client_reference_id === "string"
       ? session.client_reference_id
       : undefined);
-  const companyId = typeof meta?.companyId === "string" ? meta.companyId : undefined;
+  const companyId =
+    typeof meta?.companyId === "string" ? meta.companyId : undefined;
   if (!tenantId || tenantId !== expect.tenantId) {
     return { ok: false, reason: "tenant_mismatch" };
   }
@@ -382,14 +572,14 @@ export function verifyMarketingPackageCheckoutSession(
   const paymentStatus =
     typeof session.payment_status === "string" ? session.payment_status : "";
   const status = typeof session.status === "string" ? session.status : "";
-  // Subscription Checkout may report payment_status=paid or unpaid+complete
-  // (trial / delayed invoice). Accept complete + paid/no_payment_required.
+  // Never infer payment from session completion alone.
   const paidOk =
-    paymentStatus === "paid" ||
-    paymentStatus === "no_payment_required" ||
-    (status === "complete" && paymentStatus !== "unpaid");
-  if (!paidOk && status !== "complete") {
-    return { ok: false, reason: `not_complete:${status || "?"}:${paymentStatus || "?"}` };
+    paymentStatus === "paid" || paymentStatus === "no_payment_required";
+  if (status !== "complete" || !paidOk) {
+    return {
+      ok: false,
+      reason: `not_complete:${status || "?"}:${paymentStatus || "?"}`,
+    };
   }
   const packageId =
     typeof meta?.packageId === "string" ? meta.packageId : undefined;
@@ -412,10 +602,22 @@ export async function createMarketingPackageCheckoutSession(
   packageId: MarketingPackageId,
   origin: string,
   returnPaths?: { successPath?: string; cancelPath?: string },
+  serviceOptions?: Partial<CompanyServiceOptions>,
+  pendingTransition?: Pick<
+    CompanyServiceBillingState,
+    "pendingTransitionId" | "pendingChangeKind" | "pendingEffectiveAt"
+  >,
 ): Promise<string | null> {
-  if (useMockPackageCheckout()) return null;
+  if (mockPackageCheckoutEnabled()) return null;
+  if (marketingPackageCheckoutConfigurationError(packageId, serviceOptions)) {
+    return null;
+  }
   const price = stripeMarketingPackagePriceId(packageId);
   if (!price) return null;
+  const connectionSetupPrice =
+    process.env.STRIPE_PRICE_WEBSITE_CONNECTION_SETUP?.trim();
+  if (!connectionSetupPrice) return null;
+  const options = normaliseCompanyServiceOptions(packageId, serviceOptions);
   const successPath = returnPaths?.successPath
     ? returnPaths.successPath
     : `/sales/new-client?step=checkout&companyId=${encodeURIComponent(companyId)}&checkout=success`;
@@ -438,16 +640,253 @@ export async function createMarketingPackageCheckoutSession(
     success_url: withCheckoutSessionId(`${origin}${successPath}`),
     cancel_url: `${origin}${cancelPath}`,
   };
+  const extraPrices = [
+    connectionSetupPrice,
+    options.searchVisibility && packageId === "growth"
+      ? process.env.STRIPE_PRICE_SEARCH_VISIBILITY?.trim()
+      : undefined,
+    options.websitePublishing
+      ? process.env.STRIPE_PRICE_WEBSITE_PUBLISHING?.trim()
+      : undefined,
+    options.hostedLandingPage
+      ? process.env.STRIPE_PRICE_HOSTED_LANDING_PAGE?.trim()
+      : undefined,
+    options.hostedLandingPage
+      ? process.env.STRIPE_PRICE_HOSTED_LANDING_PAGE_SETUP?.trim()
+      : undefined,
+  ].filter((id): id is string => Boolean(id));
+  const expectedExtraCount =
+    1 +
+    (options.searchVisibility && packageId === "growth" ? 1 : 0) +
+    (options.websitePublishing ? 1 : 0) +
+    (options.hostedLandingPage ? 2 : 0);
+  if (extraPrices.length !== expectedExtraCount) return null;
+  extraPrices.forEach((extraPrice, offset) => {
+    const index = offset + 1;
+    params[`line_items[${index}][price]`] = extraPrice;
+    params[`line_items[${index}][quantity]`] = "1";
+  });
+  for (const prefix of ["metadata", "subscription_data[metadata]"]) {
+    params[`${prefix}[searchVisibility]`] = String(options.searchVisibility);
+    params[`${prefix}[websitePublishing]`] = String(options.websitePublishing);
+    params[`${prefix}[hostedLandingPage]`] = String(options.hostedLandingPage);
+    params[`${prefix}[monthlyAdCapAud]`] = String(options.monthlyAdCapAud);
+    if (pendingTransition?.pendingChangeKind) {
+      params[`${prefix}[pendingChangeKind]`] =
+        pendingTransition.pendingChangeKind;
+    }
+    if (pendingTransition?.pendingTransitionId) {
+      params[`${prefix}[pendingTransitionId]`] =
+        pendingTransition.pendingTransitionId;
+    }
+    if (pendingTransition?.pendingEffectiveAt) {
+      params[`${prefix}[pendingEffectiveAt]`] =
+        pendingTransition.pendingEffectiveAt;
+    }
+  }
   if (tenant.stripeCustomerId) params.customer = tenant.stripeCustomerId;
   const session = await stripePost("checkout/sessions", params);
   return typeof session?.url === "string" ? session.url : null;
 }
 
+export type MarketingPackageSubscriptionChange =
+  | {
+      ok: true;
+      mode:
+        "upgrade_invoiced" | "downgrade_pending_renewal" | "downgrade_applied";
+      subscriptionId: string;
+      subscriptionItemId: string;
+      priceId: string;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * Change the one existing company subscription. Upgrades are invoiced
+ * immediately; downgrades remain durable locally and are applied by the renewal
+ * webhook. Correlation mismatches fail closed and never create a second sub.
+ */
+export async function changeMarketingPackageSubscription(input: {
+  tenantId: string;
+  companyId: string;
+  packageId: MarketingPackageId;
+  changeKind: NonNullable<CompanyServiceBillingState["pendingChangeKind"]>;
+  billing: CompanyServiceBillingState;
+  serviceOptions?: CompanyServiceOptions;
+  applyDowngradeAtRenewal?: boolean;
+}): Promise<MarketingPackageSubscriptionChange> {
+  const subscriptionId = input.billing.stripeSubscriptionId;
+  const expectedItemId = input.billing.stripeSubscriptionItemId;
+  const expectedPriceId = input.billing.stripePriceId;
+  const nextPriceId = stripeMarketingPackagePriceId(input.packageId);
+  if (
+    !stripeConfigured() ||
+    !subscriptionId ||
+    !expectedItemId ||
+    !expectedPriceId ||
+    !nextPriceId
+  ) {
+    return { ok: false, reason: "missing_subscription_correlation" };
+  }
+  const subscription = await stripeGet(
+    `subscriptions/${encodeURIComponent(subscriptionId)}?expand[]=items.data.price`,
+  );
+  if (!subscription || subscription.id !== subscriptionId) {
+    return { ok: false, reason: "subscription_not_found" };
+  }
+  const metadata = subscription.metadata as Record<string, unknown> | undefined;
+  if (
+    metadata?.kind !== "marketing_package" ||
+    metadata?.tenantId !== input.tenantId ||
+    metadata?.companyId !== input.companyId
+  ) {
+    return { ok: false, reason: "subscription_scope_mismatch" };
+  }
+  const items = ((subscription.items as Record<string, unknown> | undefined)
+    ?.data ?? []) as Array<Record<string, unknown>>;
+  const matching = items.filter((item) => {
+    const price = item.price as Record<string, unknown> | undefined;
+    return item.id === expectedItemId && price?.id === expectedPriceId;
+  });
+  if (matching.length !== 1) {
+    return { ok: false, reason: "subscription_item_mismatch" };
+  }
+  const deferred = ["downgrade", "options_downgrade", "mixed"].includes(
+    input.changeKind,
+  );
+  if (deferred && !input.applyDowngradeAtRenewal) {
+    return {
+      ok: true,
+      mode: "downgrade_pending_renewal",
+      subscriptionId,
+      subscriptionItemId: expectedItemId,
+      priceId: nextPriceId,
+    };
+  }
+  const options = normaliseCompanyServiceOptions(
+    input.packageId,
+    input.serviceOptions ??
+      input.billing.pendingServiceOptions ??
+      input.billing.serviceOptions,
+  );
+  const recurringOptionPrices = [
+    [
+      options.searchVisibility &&
+        currentPackageId(input.packageId) === "growth",
+      process.env.STRIPE_PRICE_SEARCH_VISIBILITY?.trim(),
+    ],
+    [
+      options.websitePublishing,
+      process.env.STRIPE_PRICE_WEBSITE_PUBLISHING?.trim(),
+    ],
+    [
+      options.hostedLandingPage,
+      process.env.STRIPE_PRICE_HOSTED_LANDING_PAGE?.trim(),
+    ],
+  ] as const;
+  if (recurringOptionPrices.some(([selected, price]) => selected && !price)) {
+    return { ok: false, reason: "missing_recurring_price_configuration" };
+  }
+  const desiredRecurring = [
+    nextPriceId,
+    ...recurringOptionPrices
+      .filter(([selected]) => selected)
+      .map(([, price]) => price),
+  ].filter((value): value is string => Boolean(value));
+  const itemByPrice = new Map(
+    items.map((item) => [
+      (item.price as Record<string, unknown> | undefined)?.id,
+      item.id,
+    ]),
+  );
+  const updateParams: Record<string, string> = {
+    proration_behavior: deferred ? "none" : "always_invoice",
+    payment_behavior: deferred ? "allow_incomplete" : "pending_if_incomplete",
+    "metadata[kind]": "marketing_package",
+    "metadata[tenantId]": input.tenantId,
+    "metadata[companyId]": input.companyId,
+    "metadata[packageId]": input.packageId,
+    "metadata[pendingTransitionId]": input.billing.pendingTransitionId ?? "",
+    "metadata[pendingChangeKind]": input.changeKind,
+    "metadata[pendingEffectiveAt]": input.billing.pendingEffectiveAt ?? "",
+    "metadata[searchVisibility]": String(options.searchVisibility),
+    "metadata[websitePublishing]": String(options.websitePublishing),
+    "metadata[hostedLandingPage]": String(options.hostedLandingPage),
+    "metadata[monthlyAdCapAud]": String(options.monthlyAdCapAud),
+  };
+  let itemIndex = 0;
+  for (const priceId of desiredRecurring) {
+    const existingId = itemByPrice.get(priceId);
+    if (existingId)
+      updateParams[`items[${itemIndex}][id]`] = String(existingId);
+    updateParams[`items[${itemIndex}][price]`] = priceId;
+    itemIndex += 1;
+  }
+  for (const item of items) {
+    const priceId = (item.price as Record<string, unknown> | undefined)?.id;
+    if (
+      typeof item.id === "string" &&
+      typeof priceId === "string" &&
+      !desiredRecurring.includes(priceId)
+    ) {
+      updateParams[`items[${itemIndex}][id]`] = item.id;
+      updateParams[`items[${itemIndex}][deleted]`] = "true";
+      itemIndex += 1;
+    }
+  }
+  if (
+    !deferred &&
+    options.hostedLandingPage &&
+    !input.billing.serviceOptions.hostedLandingPage
+  ) {
+    const setupPrice =
+      process.env.STRIPE_PRICE_HOSTED_LANDING_PAGE_SETUP?.trim();
+    const customerId =
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : (subscription.customer as Record<string, unknown> | undefined)?.id;
+    if (!setupPrice || typeof customerId !== "string") {
+      return { ok: false, reason: "hosted_setup_correlation_missing" };
+    }
+    const invoiceItem = await stripePost("invoiceitems", {
+      customer: customerId,
+      subscription: subscriptionId,
+      price: setupPrice,
+      "metadata[pendingTransitionId]": input.billing.pendingTransitionId ?? "",
+    });
+    if (!invoiceItem?.id)
+      return { ok: false, reason: "hosted_setup_invoice_failed" };
+  }
+  const updated = await stripePost(
+    `subscriptions/${encodeURIComponent(subscriptionId)}`,
+    updateParams,
+  );
+  if (!updated || updated.id !== subscriptionId) {
+    return { ok: false, reason: "stripe_subscription_update_failed" };
+  }
+  const updatedCorrelation = uniqueSubscriptionItemForPrice(
+    updated,
+    nextPriceId,
+  );
+  if (!updatedCorrelation) {
+    return { ok: false, reason: "stripe_update_correlation_failed" };
+  }
+  return {
+    ok: true,
+    mode: deferred ? "downgrade_applied" : "upgrade_invoiced",
+    subscriptionId,
+    subscriptionItemId: updatedCorrelation.subscriptionItemId,
+    priceId: updatedCorrelation.priceId,
+  };
+}
+
 // Minimal DELETE call (subscription cancellation). Like stripePost, never
 // surfaces Stripe's raw error text; logs server-side and returns null on failure.
-async function stripeDelete(path: string): Promise<Record<string, unknown> | null> {
+async function stripeDelete(
+  path: string,
+): Promise<Record<string, unknown> | null> {
+  if (!stripeConfigured()) return null;
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return null;
+  if (!key?.trim()) return null;
   try {
     const res = await fetch(`https://api.stripe.com/v1/${path}`, {
       method: "DELETE",
@@ -455,7 +894,10 @@ async function stripeDelete(path: string): Promise<Record<string, unknown> | nul
     });
     const body = (await res.json()) as Record<string, unknown>;
     if (!res.ok) {
-      console.error(`[billing] Stripe DELETE ${path} failed (${res.status}):`, body);
+      console.error(
+        `[billing] Stripe DELETE ${path} failed (${res.status}):`,
+        body,
+      );
       return null;
     }
     return body;
@@ -469,9 +911,13 @@ async function stripeDelete(path: string): Promise<Record<string, unknown> | nul
 // success. The webhook (subscription.deleted, kind=addon) is the backstop that
 // also flips the entitlement, but the action flips it locally too so the UI is
 // correct without waiting for the webhook.
-export async function cancelStripeSubscription(subscriptionId: string): Promise<boolean> {
+export async function cancelStripeSubscription(
+  subscriptionId: string,
+): Promise<boolean> {
   if (!stripeConfigured() || !subscriptionId) return false;
-  return !!(await stripeDelete(`subscriptions/${encodeURIComponent(subscriptionId)}`));
+  return !!(await stripeDelete(
+    `subscriptions/${encodeURIComponent(subscriptionId)}`,
+  ));
 }
 
 // ---- Prepaid credit top-up (mode=payment) ------------------------------------
@@ -485,23 +931,24 @@ export async function createCreditTopUpCheckoutSession(
   companyId: string,
   amountUsd: number,
   origin: string,
-  opts?: { successPath?: string; cancelPath?: string; stripeCustomerId?: string },
+  opts?: {
+    successPath?: string;
+    cancelPath?: string;
+    stripeCustomerId?: string;
+  },
 ): Promise<string | null> {
   if (!stripeConfigured()) return null;
   const cents = Math.round(amountUsd * 100);
   if (!(cents > 0)) return null;
-  const successPath =
-    opts?.successPath ?? `/client/payments?topup=success`;
-  const cancelPath =
-    opts?.cancelPath ?? `/client/payments?topup=cancelled`;
+  const successPath = opts?.successPath ?? `/client/payments?topup=success`;
+  const cancelPath = opts?.cancelPath ?? `/client/payments?topup=cancelled`;
   const amountStr = String(amountUsd);
   const params: Record<string, string> = {
     mode: "payment",
     client_reference_id: tenant.id,
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(cents),
-    "line_items[0][price_data][product_data][name]":
-      `Account credit top-up ($${amountUsd.toFixed(2)})`,
+    "line_items[0][price_data][product_data][name]": `Account credit top-up ($${amountUsd.toFixed(2)})`,
     "line_items[0][quantity]": "1",
     "metadata[kind]": "credit_top_up",
     "metadata[tenantId]": tenant.id,
@@ -607,22 +1054,35 @@ export function verifyStripeSignature(
   toleranceSeconds = 300,
 ): boolean {
   if (!signatureHeader) return false;
-  const parts = new Map(
-    signatureHeader.split(",").map((p) => {
-      const i = p.indexOf("=");
-      return [p.slice(0, i).trim(), p.slice(i + 1)] as const;
-    }),
-  );
-  const t = parts.get("t");
-  const v1 = parts.get("v1");
-  if (!t || !v1) return false;
+  const timestamps: string[] = [];
+  const signatures: string[] = [];
+  for (const part of signatureHeader.split(",")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0 || separator === part.length - 1) return false;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (!key || !value) return false;
+    if (key === "t") timestamps.push(value);
+    if (key === "v1") signatures.push(value);
+  }
+  if (timestamps.length !== 1 || signatures.length === 0) return false;
+  const t = timestamps[0]!;
   const timestamp = Number(t);
-  if (!Number.isFinite(timestamp)) return false;
+  if (!Number.isInteger(timestamp) || timestamp < 0) return false;
   if (Math.abs(Date.now() / 1000 - timestamp) > toleranceSeconds) return false;
   const expected = createHmac("sha256", secret)
     .update(`${t}.${rawBody}`, "utf8")
     .digest("hex");
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(v1, "utf8");
-  return a.length === b.length && timingSafeEqual(a, b);
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  let matched = false;
+  for (const signature of signatures) {
+    const candidate = Buffer.from(signature, "utf8");
+    if (
+      candidate.length === expectedBuffer.length &&
+      timingSafeEqual(expectedBuffer, candidate)
+    ) {
+      matched = true;
+    }
+  }
+  return matched;
 }

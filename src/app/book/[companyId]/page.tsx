@@ -1,6 +1,8 @@
 import { getConfirmedReservation } from "./actions";
+import { connection } from "next/server";
 import { loadPublicBookingsStorefront } from "@/lib/bookings-public";
 import { bookingStatusLabel } from "@/lib/bookings";
+import { serverRenderTimestamp } from "@/lib/server-time";
 import { requestReservationAction } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
@@ -59,7 +61,9 @@ export default async function PublicBookPage({
     }
   }
 
-  const defaultDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  await connection();
+  const renderedAt = serverRenderTimestamp();
+  const defaultDate = new Date(renderedAt + 86400000).toISOString().slice(0, 10);
 
   return (
     <Shell title={company.name}>

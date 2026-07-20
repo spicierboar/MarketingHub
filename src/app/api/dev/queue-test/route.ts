@@ -9,39 +9,37 @@
 // Access gating is identical to /api/dev/self-test (CC_SELFTEST_SECRET).
 
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { runQueueSelfTest } from "@/lib/selftest/queue";
-import { devToolsOpen } from "@/lib/env";
+import { diagnosticAccessAllowed } from "@/lib/dev-access";
+import { getCurrentUser } from "@/lib/auth/session";
 
-function constantTimeEquals(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
-}
-
-function authorize(req: NextRequest): { ok: true } | { ok: false; status: number; error: string } {
-  const secret = process.env.CC_SELFTEST_SECRET?.trim();
-  if (secret) {
-    const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    const key = new URL(req.url).searchParams.get("key");
-    const provided = bearer || key || "";
-    return constantTimeEquals(provided, secret)
-      ? { ok: true }
-      : { ok: false, status: 401, error: "unauthorized" };
-  }
-  // OPEN on development + staging; LOCKED in production (gate on appEnv(), since
-  // a Vercel staging build has NODE_ENV=production).
-  if (!devToolsOpen()) {
-    return { ok: false, status: 403, error: "queue-test disabled in production (set CC_SELFTEST_SECRET to enable)" };
-  }
-  return { ok: true };
+async function authorize(req: NextRequest): Promise<
+  { ok: true } | { ok: false; status: number; error: string }
+> {
+  const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const key = new URL(req.url).searchParams.get("key");
+  const user = await getCurrentUser();
+  return diagnosticAccessAllowed({
+    headers: req.headers,
+    requestUrl: req.url,
+    providedSecret: bearer || key,
+    user,
+  })
+    ? { ok: true }
+    : {
+        ok: false,
+        status: process.env.CC_SELFTEST_SECRET?.trim() ? 401 : 403,
+        error: process.env.CC_SELFTEST_SECRET?.trim()
+          ? "unauthorized"
+          : "queue-test disabled in production (set CC_SELFTEST_SECRET to enable)",
+      };
 }
 
 /** Queue fixture hits real Supabase on staging — allow up to 60s on Vercel. */
 export const maxDuration = 60;
 
 async function handle(req: NextRequest) {
-  const auth = authorize(req);
+  const auth = await authorize(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {
     const report = await runQueueSelfTest();

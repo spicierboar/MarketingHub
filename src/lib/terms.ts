@@ -3,8 +3,8 @@
 // When a new Terms or Privacy version is published, email every active client
 // that the document changed and that they'll be asked to re-accept on next
 // sign-in. Fires best-effort on publish and is re-sendable from Settings /
-// Platform Admin. Env-gated: with no RESEND_API_KEY the recipients are counted
-// but nothing is sent. The force-re-acceptance gate (requireUser) is the actual
+// Platform Admin. Env-gated: without EMAIL_SEND_LIVE=true plus RESEND_API_KEY,
+// recipients are counted but nothing is sent. The force-re-acceptance gate is the actual
 // enforcement; this email is the courtesy heads-up.
 
 import { getMembership, getTenant, listActiveRecipients, updateTermsVersion } from "@/lib/db";
@@ -115,9 +115,9 @@ export async function broadcastLegalDocUpdate(
     await updateTermsVersion(version.id, { notifiedAt: now(), notifiedCount: result.sent });
     const auditAction = version.kind === "privacy" ? "privacy.notified" : "terms.notified";
     await logAction(actor, auditAction, {
-      detail: emailConfigured()
-        ? `${label} v${version.version}: emailed ${result.sent}/${recipients.length} client(s)${result.failed ? `, ${result.failed} failed` : ""}`
-        : `${label} v${version.version}: ${recipients.length} recipient(s) — email NOT sent (RESEND_API_KEY not configured)`,
+      detail: result.detail
+        ? `${label} v${version.version}: ${recipients.length} recipient(s) · ${result.detail}`
+        : `${label} v${version.version}: emailed ${result.sent}/${recipients.length} client(s)${result.failed ? `, ${result.failed} failed` : ""}`,
     });
     return { recipients: recipients.length, sent: result.sent, failed: result.failed, emailConfigured: emailConfigured() };
   } catch (err) {

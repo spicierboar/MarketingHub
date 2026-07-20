@@ -1,10 +1,16 @@
 // Auto-onboarding (V1 module 13) — with explicit consent, scrape client website
 // + public social URLs to pre-fill Brand Brain / company profile fields.
-// Live HTTP fetch is on by default in development/staging; production opts in via
-// AUTO_ONBOARDING_LIVE=true. AUTO_ONBOARDING_FETCH_KEY is an optional proxy auth
-// header only — it does not gate whether public HTML is fetched.
+// Live HTTP fetch is allowed in local development and explicitly in production.
+// Staging is always deterministic/simulated under the central environment policy.
 
-import { appEnv } from "@/lib/env";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+import {
+  appEnv,
+  liveIntegrationsAllowed,
+  providerLiveFlagEnabled,
+  type AppEnv,
+} from "@/lib/env";
 import { enrichExtractedWithBusinessType } from "@/lib/signup-prefill-templates";
 import type { Company, CompanyProfile, SocialLink } from "@/lib/types";
 import tls from "node:tls";
@@ -131,28 +137,98 @@ export interface AutoOnboardingScrapeInput {
 // ---- live gate ---------------------------------------------------------------
 
 /** True when outbound HTTP fetches for onboarding scrape are permitted. */
+export function autoOnboardingLiveFor(env: AppEnv, configuredFlag?: string): boolean {
+  return env === "production" && providerLiveFlagEnabled(configuredFlag);
+}
+
 export function autoOnboardingLive(): boolean {
-  const flag = (process.env.AUTO_ONBOARDING_LIVE || "").trim().toLowerCase();
-  if (flag === "false" || flag === "0" || flag === "off") return false;
-  const env = appEnv();
-  // Non-prod: fetch public HTML by default so New Client scrape works in demos.
-  if (env === "development" || env === "staging") return true;
-  // Production: explicit opt-in only.
-  return flag === "true" || flag === "1" || flag === "on";
+  return (
+    liveIntegrationsAllowed() &&
+    autoOnboardingLiveFor(appEnv(), process.env.AUTO_ONBOARDING_LIVE)
+  );
 }
 
 // ---- URL helpers -------------------------------------------------------------
 
 const HTTP_URL_RE = /^https?:\/\//i;
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
+function isUnsafeIpAddress(address: string): boolean {
+  const value = address.toLowerCase().replace(/^\[|\]$/g, "");
+  if (isIP(value) === 4) {
+    const [a, b] = value.split(".").map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+  if (isIP(value) === 6) {
+    if (value === "::" || value === "::1") return true;
+    if (value.startsWith("::ffff:")) return true;
+    return /^(?:fc|fd|fe[89ab]|ff)/i.test(value);
+  }
+  return false;
+}
+
+/** Parse and reject URL forms that can target internal services. */
+export function assertSafeEnrichmentUrl(raw: string): URL {
+  const url = new URL(raw);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Website enrichment only supports http(s) URLs.");
+  }
+  if (url.username || url.password) {
+    throw new Error("Website enrichment URLs cannot contain credentials.");
+  }
+  if (url.port) {
+    throw new Error("Website enrichment only supports standard http(s) ports.");
+  }
+  const host = url.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  if (
+    !host ||
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    isUnsafeIpAddress(host)
+  ) {
+    throw new Error("Website enrichment URL targets a non-public host.");
+  }
+  return url;
+}
+
+async function assertPublicEnrichmentDestination(url: URL): Promise<void> {
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (isIP(host)) {
+    if (isUnsafeIpAddress(host)) {
+      throw new Error("Website enrichment URL targets a non-public address.");
+    }
+    return;
+  }
+  const addresses = await lookup(host, { all: true, verbatim: true });
+  if (
+    addresses.length === 0 ||
+    addresses.some((entry) => isUnsafeIpAddress(entry.address))
+  ) {
+    throw new Error("Website enrichment hostname resolves to a non-public address.");
+  }
+}
 
 export function normaliseHttpUrl(raw: string | undefined): string | undefined {
   const trimmed = (raw ?? "").trim();
   if (!trimmed) return undefined;
+  if (URL_SCHEME_RE.test(trimmed) && !HTTP_URL_RE.test(trimmed)) return undefined;
   const withProto = HTTP_URL_RE.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
-    const u = new URL(withProto);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return undefined;
-    return u.toString();
+    return assertSafeEnrichmentUrl(withProto).toString();
   } catch {
     return undefined;
   }
@@ -985,24 +1061,34 @@ function pageContentFromHtml(url: string, html: string): PageContent {
 }
 
 async function fetchLivePageContent(url: string): Promise<PageContent> {
-  const key = process.env.AUTO_ONBOARDING_FETCH_KEY?.trim();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12_000);
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; MarketingCommandCentre/1.0; +https://github.com/marketing-command-centre)",
-        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-AU,en;q=0.9",
-        ...(key ? { Authorization: `Bearer ${key}` } : {}),
-      },
-      redirect: "follow",
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const html = await res.text();
-    return pageContentFromHtml(url, html);
+    let current = assertSafeEnrichmentUrl(url);
+    for (let redirects = 0; redirects <= 5; redirects++) {
+      await assertPublicEnrichmentDestination(current);
+      const res = await fetch(current, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; MarketingCommandCentre/1.0; +https://github.com/marketing-command-centre)",
+          Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-AU,en;q=0.9",
+        },
+        redirect: "manual",
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get("location");
+        if (!location) throw new Error(`HTTP ${res.status} redirect missing location`);
+        await res.body?.cancel();
+        current = assertSafeEnrichmentUrl(new URL(location, current).toString());
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      return pageContentFromHtml(current.toString(), html);
+    }
+    throw new Error("Website enrichment exceeded the redirect limit.");
   } finally {
     clearTimeout(timer);
   }
@@ -1780,7 +1866,7 @@ export async function scrapeForOnboardingPreview(
   const urlsToFetch = [
     ...(input.urls.website ? [input.urls.website] : []),
     ...input.urls.socialLinks.map((l) => l.url),
-  ];
+  ].map((url) => assertSafeEnrichmentUrl(url).toString());
 
   const loaded = await Promise.all(urlsToFetch.map((u) => loadPageContent(u)));
   const pages = loaded.map((l) => l.content);

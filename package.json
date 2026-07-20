@@ -8,7 +8,20 @@
     "build": "next build",
     "start": "next start",
     "start:supabase": "node --use-system-ca ./node_modules/next/dist/bin/next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:local-demo-seed": "node --experimental-transform-types --experimental-loader ./scripts/local-ts-loader.mjs scripts/local-demo-seed.selftest.ts",
+    "test:managed-content": "npx --yes tsx scripts/managed-content-jobs.selftest.ts",
+    "test:managed-content-status": "npx --yes tsx scripts/managed-content-status.selftest.ts",
+    "test:scheduler": "npx --yes tsx scripts/scheduler-saturation.selftest.ts",
+    "test:managed-service-ux": "npx --yes tsx scripts/managed-service-ux.selftest.ts",
+    "test:content-desk": "npx --yes tsx scripts/content-desk-operator.selftest.ts",
+    "test:agency-control-plane": "npx --yes tsx scripts/agency-control-plane.selftest.ts",
+    "test:provider-activation": "npx --yes tsx scripts/provider-activation.selftest.ts",
+    "test:database-security": "npx --yes tsx scripts/database-security.selftest.ts",
+    "test:rls-initplans": "tsx scripts/rls-initplan-remediation.selftest.ts",
+    "test:rls-initplans:advisors": "tsx scripts/rls-initplan-advisor-delta.ts",
+    "test:database-security:concurrency": "npx --yes tsx scripts/database-security-concurrency.integration.ts",
+    "test:scheduler:concurrency": "npx --yes tsx scripts/scheduler-cursor-concurrency.integration.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
@@ -28,11 +41,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "pg": "^8.22.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

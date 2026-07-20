@@ -205,24 +205,27 @@ export function CompanyToolsNav({
   );
 
   const panelId = useId();
-  const [openGroupId, setOpenGroupId] = useState<ToolGroup["id"] | null>(() =>
-    groupIdForPath(pathname, groups, vertical),
-  );
-
-  // Sync open chip to the route on navigation only (manual collapse stays until next nav).
-  useEffect(() => {
-    const built = buildTools(companyId, businessType, activeAddons);
-    setOpenGroupId(groupIdForPath(pathname, built.groups, built.vertical));
-  }, [pathname, companyId, businessType, activeAddons]);
+  const routeKey = `${pathname}\0${companyId}\0${businessType}\0${activeAddons.join(",")}`;
+  const routeGroupId = groupIdForPath(pathname, groups, vertical);
+  const [groupSelection, setGroupSelection] = useState<{
+    routeKey: string;
+    groupId: ToolGroup["id"] | null;
+  }>(() => ({ routeKey, groupId: routeGroupId }));
+  // A manual collapse belongs to the current route. A new route derives its
+  // active group immediately without an extra effect/render cycle.
+  const openGroupId =
+    groupSelection.routeKey === routeKey ? groupSelection.groupId : routeGroupId;
 
   useEffect(() => {
     if (!openGroupId) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpenGroupId(null);
+      if (e.key === "Escape") {
+        setGroupSelection({ routeKey, groupId: null });
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [openGroupId]);
+  }, [openGroupId, routeKey]);
 
   const openGroup = groups.find((g) => g.id === openGroupId) ?? null;
   const levelLabel = serviceLevelLabel(serviceLevel);
@@ -287,7 +290,10 @@ export function CompanyToolsNav({
                 aria-expanded={open}
                 aria-controls={open ? panelId : undefined}
                 onClick={() =>
-                  setOpenGroupId((cur) => (cur === group.id ? null : group.id))
+                  setGroupSelection({
+                    routeKey,
+                    groupId: openGroupId === group.id ? null : group.id,
+                  })
                 }
                 className={cn(
                   "rounded-md border px-2.5 py-0.5 text-xs font-medium transition-colors",

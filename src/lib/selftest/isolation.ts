@@ -160,7 +160,7 @@ import {
 } from "@/lib/selftest/promo-catalog";
 import {
   checkPromoAllowanceBillingClass,
-  checkPromoIncludedStillAvailable,
+  checkManagedPromoRemainsExtra,
   checkPromoPeriodKeyQuarterly,
 } from "@/lib/selftest/promo-allowance";
 import {
@@ -271,6 +271,11 @@ import {
   checkPlaceSimulatedWhenUnconfigured,
 } from "@/lib/selftest/abn-places";
 import {
+  checkPublishingTokenKeyPolicy,
+  checkStagingEnrichmentPolicy,
+  checkWebsiteEnrichmentRejectsSsrfUrls,
+} from "@/lib/selftest/security-invariants";
+import {
   checkInferBusinessTypeFromIndustry,
   checkSignupDefaultsCoverage,
   checkSignupPrefillFromExtract,
@@ -297,6 +302,7 @@ import {
 import {
   checkConnectorCapabilityRegistry,
   checkPublishingHealthInBundle,
+  checkPublishingLiveMisconfigurationFailsClosed,
   checkPublishingPlatformHealthRows,
   checkPublishingSimWhenLiveOff,
 } from "@/lib/selftest/publishing-connectors";
@@ -305,6 +311,7 @@ import { checkLegalDocsIndependentVersions } from "@/lib/selftest/legal-docs";
 import { checkLegalVersionArchiveSplit } from "@/lib/selftest/legal-archive";
 import {
   checkManagedDeliveryEnqueueDueWithin24h,
+  checkManagedDeliveryBillingBlocks,
   checkManagedDeliveryNeverAutoPublish,
   checkManagedDeliveryPlanEmailIdempotent,
   checkManagedDeliveryProcessNoSchedule,
@@ -874,8 +881,8 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("promoAllowance.billingClassExtra", () =>
       checkPromoAllowanceBillingClass(),
     );
-    await expect("promoAllowance.billingClassIncluded", () =>
-      checkPromoIncludedStillAvailable(),
+    await expect("promoAllowance.managedPromoExtra", () =>
+      checkManagedPromoRemainsExtra(),
     );
     await expect("promoAllowance.customQuarterlyLimit", () =>
       checkCustomQuarterlyPromoLimit(),
@@ -1191,6 +1198,16 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
       checkPlaceMatchToExtractedHints(),
     );
 
+    await expect("securityInvariants.publishingTokenKeyPolicy", () =>
+      Promise.resolve(checkPublishingTokenKeyPolicy()),
+    );
+    await expect("securityInvariants.websiteSsrfUrlsRejected", () =>
+      Promise.resolve(checkWebsiteEnrichmentRejectsSsrfUrls()),
+    );
+    await expect("securityInvariants.stagingEnrichmentPolicy", () =>
+      Promise.resolve(checkStagingEnrichmentPolicy()),
+    );
+
     await expect("securitySlice.injectionPatternsStripped", () => checkInjectionPatternsStripped());
 
     await expect("securitySlice.tenantContextFence", () => checkTenantContextFence());
@@ -1204,6 +1221,10 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
     await expect("securitySlice.integrationHealthAlerts", () => checkIntegrationHealthAlertsThreshold());
 
     await expect("publishingConnectors.simWhenLiveOff", () => checkPublishingSimWhenLiveOff());
+
+    await expect("publishingConnectors.liveMisconfigurationFailsClosed", () =>
+      checkPublishingLiveMisconfigurationFailsClosed(),
+    );
 
     await expect("publishingConnectors.platformHealthRows", () =>
       checkPublishingPlatformHealthRows(),
@@ -1224,6 +1245,9 @@ export async function runIsolationSelfTest(): Promise<IsoReport> {
 
     await expect("managedDelivery.enqueueDueWithin24h", () =>
       checkManagedDeliveryEnqueueDueWithin24h(),
+    );
+    await expect("managedDelivery.billingBlocksPendingAndPaused", () =>
+      checkManagedDeliveryBillingBlocks(),
     );
     await expect("managedDelivery.respects6hFloor", () =>
       checkManagedDeliveryRespects6hFloor(),

@@ -1,15 +1,22 @@
 import { notFound } from "next/navigation";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getAsset, getContent } from "@/lib/db";
+import {
+  getAsset,
+  getContent,
+  listManagedApprovalRequests,
+  listScheduledPosts,
+} from "@/lib/db";
 import { canClientApproveRoute } from "@/lib/routing";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ActionSubmitButton } from "@/components/action-submit-button";
 import { Field, Textarea } from "@/components/ui/form";
 import { titleCase } from "@/lib/utils";
 import { ShieldCheck } from "lucide-react";
 import { portalApproveContentAction, portalRequestChangesAction } from "../../../actions";
+import { ClientApprovalSummaryPanel } from "@/components/client-approval-summary";
+import { clientApprovalSummary } from "@/lib/managed-service/client-ux";
 
 export default async function ClientApprovalDetailPage({ params }: { params: Promise<{ contentId: string }> }) {
   const { contentId } = await params;
@@ -21,9 +28,22 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
   const pending = content.status === "pending_approval" && review?.status === "pending";
   const routedTo = content.routedTo ?? "admin";
   const canApprove = canClientApproveRoute(routedTo) && (content.compliance?.canProceed ?? true);
-  const mediaAssets = (await Promise.all((content.assetIds ?? []).map((id) => getAsset(id)))).filter(
-    (a): a is NonNullable<typeof a> => !!a && a.status === "approved" && !!a.storedFile && a.storedFile.mimeType.startsWith("image/"),
+  const [assets, posts, approvalRequests] = await Promise.all([
+    Promise.all((content.assetIds ?? []).map((id) => getAsset(id))),
+    listScheduledPosts(user.tenantId),
+    listManagedApprovalRequests(user.tenantId, companyId),
+  ]);
+  const mediaAssets = assets.filter(
+    (a): a is NonNullable<typeof a> =>
+      !!a &&
+      a.status === "approved" &&
+      !!a.storedFile &&
+      a.storedFile.mimeType.startsWith("image/"),
   );
+  const managedRequest = approvalRequests
+    .filter((request) => request.contentId === content.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const summary = clientApprovalSummary({ content, posts, request: managedRequest });
 
   return (
     <div>
@@ -32,15 +52,19 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
         description="Does this look right? Approve and we’ll schedule it after our usual checks — it won’t go live without them."
         hideExplainer
       />
-      <div className="mx-auto max-w-3xl p-6">
+      <div className="mx-auto max-w-3xl p-4 sm:p-6">
         <Card>
-          <CardContent className="p-6">
-            <div className="mb-4 flex items-center justify-between">
+          <CardContent className="space-y-4 p-4 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Badge tone="neutral">{titleCase(content.type)}</Badge>
               <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-primary">
                 <ShieldCheck className="h-3.5 w-3.5" /> We&apos;ve checked this against your guidelines
               </span>
             </div>
+            <ClientApprovalSummaryPanel
+              summary={summary}
+              hasVisual={mediaAssets.length > 0}
+            />
             <article className="whitespace-pre-wrap rounded-md border border-border bg-background p-4 text-sm">{content.body}</article>
             {mediaAssets.length > 0 && (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -64,10 +88,16 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
               </div>
             )}
             {pending && canApprove && (
-              <div className="mt-6 space-y-4">
+              <div className="space-y-4" aria-label="Approval actions">
                 <form action={portalApproveContentAction}>
                   <input type="hidden" name="contentId" value={content.id} />
-                  <Button type="submit" className="w-full">Looks good — approve</Button>
+                  <ActionSubmitButton
+                    type="submit"
+                    className="h-12 w-full text-base"
+                    pendingLabel="Approving…"
+                  >
+                    Approve
+                  </ActionSubmitButton>
                 </form>
                 <form action={portalRequestChangesAction} className="space-y-2">
                   <input type="hidden" name="contentId" value={content.id} />
@@ -84,7 +114,14 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
                       required
                     />
                   </Field>
-                  <Button type="submit" variant="outline" className="w-full">Ask for changes</Button>
+                  <ActionSubmitButton
+                    type="submit"
+                    variant="outline"
+                    className="h-12 w-full text-base"
+                    pendingLabel="Sending request…"
+                  >
+                    Request changes
+                  </ActionSubmitButton>
                 </form>
               </div>
             )}

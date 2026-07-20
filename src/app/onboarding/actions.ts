@@ -2,17 +2,17 @@
 
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { headers } from "next/headers";
 import {
   addMembership,
   createCompany,
-  currentTerms,
   getCompany,
   getMembership,
   getTenant,
   grantAccess,
-  hasAcceptedTerms,
   listCompanies,
   listTenants,
+  pendingLegalDocs,
   recordTermsAcceptance,
   updateCompany,
   updateMembership,
@@ -57,7 +57,18 @@ import {
   resolvePlatformAgencyTenant,
 } from "@/lib/platform-agency";
 import { assertCompanyQuota } from "@/lib/billing";
+import {
+  createMarketingPackageCheckoutSession,
+  marketingPackageCheckoutConfigurationError,
+  mockPackageCheckoutEnabled,
+} from "@/lib/billing";
+import { resolveOrigin } from "@/lib/origin";
 import { appEnv } from "@/lib/env";
+import {
+  applyInvoicePaymentSucceeded,
+  initialCompanyServiceBilling,
+  parseCompanyServiceOptionsFromFormData,
+} from "@/lib/managed-service-billing";
 import type {
   ActingUser,
   Company,
@@ -182,6 +193,8 @@ async function applyPrimaryCompanyProfile(args: {
   packageId: MarketingPackageId | undefined;
   serviceLevel: ManagedServiceLevel;
   customModules: MarketingPackageCustomModules | undefined;
+  serviceOptions: import("@/lib/types").CompanyServiceOptions | undefined;
+  paymentSettled: boolean;
   actor: ActingUser;
 }): Promise<Company> {
   const {
@@ -191,6 +204,7 @@ async function applyPrimaryCompanyProfile(args: {
     packageId,
     serviceLevel,
     customModules,
+    serviceOptions,
     actor,
   } = args;
   const industryId = draft.industry;
@@ -224,6 +238,14 @@ async function applyPrimaryCompanyProfile(args: {
             serviceLevel,
             marketingPackageId: packageId,
             customModules,
+            serviceOptions,
+            serviceBilling: args.paymentSettled
+              ? applyInvoicePaymentSucceeded(
+                  initialCompanyServiceBilling(packageId, serviceOptions),
+                  now(),
+                )
+              : initialCompanyServiceBilling(packageId, serviceOptions),
+            packageChangePendingBilling: !args.paymentSettled,
           }
         : prev
           ? prev
@@ -499,11 +521,17 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
   const abrGate = await verifyAbnStatusAgainstAbr(abnParsed.abn);
   if (!abrGate.ok) detailsErrorRedirect(abrGate.error);
 
-  const companyName = deriveCompanyName({
-    abrLegalName: abrGate.mode === "live" ? abrGate.legalName : undefined,
-    tenantName: tenant?.name,
-    contactName,
-  });
+  const requestedBusinessName = text(formData, "businessName");
+  if (!requestedBusinessName || requestedBusinessName.length > 120) {
+    detailsErrorRedirect("Enter a business name under 120 characters.");
+  }
+  const companyName =
+    requestedBusinessName ||
+    deriveCompanyName({
+      abrLegalName: abrGate.mode === "live" ? abrGate.legalName : undefined,
+      tenantName: tenant?.name,
+      contactName,
+    });
 
   const websiteRaw = text(formData, "website");
   const consent =
@@ -563,10 +591,19 @@ export async function selectOnboardingPackageAction(formData: FormData) {
 
   const idRaw = text(formData, "marketingPackageId");
   if (!isMarketingPackageId(idRaw)) throw new Error("Unknown marketing package.");
+  if (formData.get("directPlatformChargeAccepted") !== "on") {
+    throw new Error(
+      "Accept the direct advertising-platform charge disclosure before continuing.",
+    );
+  }
   const marketingPackageId = idRaw as MarketingPackageId;
 
   const { serviceLevel, customModules } = resolveSelectionForPackage(
     tenant,
+    marketingPackageId,
+    formData,
+  );
+  const serviceOptions = parseCompanyServiceOptionsFromFormData(
     marketingPackageId,
     formData,
   );
@@ -575,13 +612,14 @@ export async function selectOnboardingPackageAction(formData: FormData) {
     ...(tenant.onboarding ?? {}),
     marketingPackageId,
     customModules,
+    serviceOptions,
   };
   await saveOnboardingDraft(tenant, onboarding);
   await logAction(user, "onboarding.marketing_package_selected", {
     detail:
       marketingPackageId === "custom"
-        ? `custom · ${serviceLevel}`
-        : `${marketingPackageId} · ${serviceLevel}`,
+        ? `custom · ${serviceLevel} · direct platform charges disclosed`
+        : `${marketingPackageId} · ${serviceLevel} · direct platform charges disclosed`,
   });
   redirect("/onboarding?step=terms");
 }
@@ -602,17 +640,18 @@ export async function acceptOnboardingTermsAction() {
     await updateTenant(user.tenantId, { kind: "business_group" });
   }
 
-  const terms = await currentTerms();
-  if (terms && !(await hasAcceptedTerms(user.id, terms.version, "terms"))) {
+  const pendingDocs = await pendingLegalDocs(user.id);
+  const ip = await clientIp();
+  for (const doc of pendingDocs) {
     await recordTermsAcceptance({
       userId: user.id,
       tenantId: user.tenantId,
-      kind: "terms",
-      version: terms.version,
-      ip: await clientIp(),
+      kind: doc.kind,
+      version: doc.version,
+      ip,
     });
-    await logAction(user, "terms.accepted", {
-      detail: `Accepted Terms v${terms.version} (onboarding)`,
+    await logAction(user, `${doc.kind}.accepted`, {
+      detail: `Accepted ${doc.kind === "privacy" ? "Privacy Policy" : "Terms"} v${doc.version} (onboarding)`,
     });
   }
 
@@ -632,29 +671,28 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     redirect("/onboarding?step=package");
   }
 
-  const terms = await currentTerms();
-  if (terms && !(await hasAcceptedTerms(user.id, terms.version, "terms"))) {
+  if ((await pendingLegalDocs(user.id)).length > 0) {
     redirect("/onboarding?step=terms");
   }
 
-  const cardName = text(formData, "cardName");
-  const cardNumber = text(formData, "cardNumber");
-  const cardExpiry = text(formData, "cardExpiry");
-  const cardCvc = text(formData, "cardCvc");
-  const cardCheck = validateDemoCardFields({
-    cardName,
-    cardNumber,
-    cardExpiry,
-    cardCvc,
-  });
-  if (!cardCheck.ok) {
-    const first =
-      cardCheck.errors.cardName ||
-      cardCheck.errors.cardNumber ||
-      cardCheck.errors.cardExpiry ||
-      cardCheck.errors.cardCvc ||
-      "Check the card details.";
-    paymentErrorRedirect(first);
+  const mockCheckout = mockPackageCheckoutEnabled();
+  if (mockCheckout) {
+    const cardCheck = validateDemoCardFields({
+      cardName: text(formData, "cardName"),
+      cardNumber: text(formData, "cardNumber"),
+      cardExpiry: text(formData, "cardExpiry"),
+      cardCvc: text(formData, "cardCvc"),
+    });
+    if (!cardCheck.ok) {
+      const first = Object.values(cardCheck.errors)[0] || "Check the card details.";
+      paymentErrorRedirect(first);
+    }
+  } else if (
+    ["cardName", "cardNumber", "cardExpiry", "cardCvc"].some(
+      (field) => text(formData, field).length > 0,
+    )
+  ) {
+    throw new Error("Card data must only be entered in Stripe Checkout.");
   }
 
   const agency = await resolvePlatformAgencyTenant();
@@ -665,15 +703,16 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     await updateTenant(user.tenantId, { kind: "business_group" });
   }
 
-  const paymentMockAt = now();
   const onboarding: TenantOnboarding = {
     ...(tenant.onboarding ?? {}),
-    paymentMockAt,
+    ...(mockCheckout ? { paymentMockAt: now() } : {}),
   };
   await saveOnboardingDraft(tenant, onboarding);
-  await logAction(user, "onboarding.package_payment_mock", {
-    detail: `${tenant.onboarding.marketingPackageId}${cardName ? ` · ${cardName}` : ""} (demo — no charge; ads media extra)`,
-  });
+  if (mockCheckout) {
+    await logAction(user, "onboarding.package_payment_mock", {
+      detail: `${tenant.onboarding.marketingPackageId} (local demo — no charge; ads media extra)`,
+    });
+  }
 
   const completedAt = now();
   const packageId = tenant.onboarding?.marketingPackageId;
@@ -733,8 +772,45 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     packageId,
     serviceLevel,
     customModules,
+    serviceOptions: draft.serviceOptions,
+    paymentSettled: mockCheckout,
     actor: user,
   });
+
+  const seat = await ensureClientPortalOnAgency(agency.id, user.id, company.id);
+
+  if (!mockCheckout) {
+    const configurationError = marketingPackageCheckoutConfigurationError(
+      packageId!,
+      draft.serviceOptions,
+    );
+    if (configurationError) {
+      throw new Error(`Could not start Stripe Checkout: ${configurationError}.`);
+    }
+    const h = await headers();
+    const checkoutUrl = await createMarketingPackageCheckoutSession(
+      agency,
+      company.id,
+      packageId!,
+      resolveOrigin((key) => h.get(key)),
+      {
+        successPath: "/client?checkout=success",
+        cancelPath: "/onboarding?step=payment&checkout=cancelled",
+      },
+      draft.serviceOptions,
+      company.profile.managedService?.serviceBilling,
+    );
+    if (!checkoutUrl) throw new Error("Could not start verified Stripe Checkout.");
+    if (!onAgencySeat) {
+      await updateTenant(tenant.id, {
+        kind: "business_group",
+        onboarding,
+        status: "suspended",
+      });
+      await setActiveTenant(user.id, agency.id);
+    }
+    redirect(checkoutUrl);
+  }
 
   const run = await enqueueManagedDeliveryForCompany({
     tenantId: agency.id,
@@ -748,8 +824,6 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     companyId: company.id,
     detail: `due=${run.strategyDueAt}`,
   });
-
-  const seat = await ensureClientPortalOnAgency(agency.id, user.id, company.id);
 
   if (onAgencySeat) {
     // Ops account finished the client wizard while sitting on the agency —

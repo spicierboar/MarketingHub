@@ -1,8 +1,10 @@
+import { connection } from "next/server";
 import { loadPublicConnectInvite } from "@/lib/connect-public";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { formatDate } from "@/lib/utils";
+import { serverRenderTimestamp } from "@/lib/server-time";
 import { connectInviteManualAction, startInviteOAuthAction } from "./actions";
 
 export const metadata = { title: "Connect your account" };
@@ -66,7 +68,9 @@ export default async function PublicConnectPage({
     );
   }
 
-  if (invite.status === "expired" || Date.parse(invite.expiresAt) <= Date.now()) {
+  await connection();
+  const renderedAt = serverRenderTimestamp();
+  if (invite.status === "expired" || Date.parse(invite.expiresAt) <= renderedAt) {
     return (
       <Shell>
         <Card>

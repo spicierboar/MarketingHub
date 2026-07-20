@@ -2,9 +2,8 @@
 //
 // The cron drop-in. `runAutomations` spawns draft campaigns, monthly content
 // drafts, analytics summaries and content alerts (recommendations), and can
-// auto-APPROVE low-risk social replies — but it NEVER publishes anything and
-// never bypasses a human-approval gate. Every artifact it creates is a draft /
-// pending review / recommendation that a person still signs off.
+// auto-publish only explicitly enabled, low-risk engagement replies. Negative,
+// sensitive and uncertain cases remain in the staff queue.
 //
 // Everything is admin-gated and OFF by default (AutomationSettings.enabled).
 // Runs are capped (maxCampaignsPerRun / maxDraftsPerCompany) and respect the
@@ -38,6 +37,8 @@ import { auditClaims, checkCompliance } from "@/lib/ai/compliance";
 import { buildReport } from "@/lib/analytics";
 import { summariseReport } from "@/lib/ai/summary";
 import { now } from "@/lib/utils";
+import { publishSocialReply } from "@/lib/publishing";
+import { recordManagedEngagementRisk } from "@/lib/managed-service/workflow-service";
 import type {
   ActingUser,
   AutomationOutcome,
@@ -65,8 +66,11 @@ function estCost(model: string, chars: number): number {
 // The cron drop-in. Admin-triggered ("manual") or scheduled ("cron").
 export async function runAutomations(
   actor: ActingUser,
-  opts: { trigger: "manual" | "cron" },
+  opts: { trigger: "manual" | "cron"; signal?: AbortSignal; deadlineMs?: number },
 ): Promise<AutomationRun> {
+  const deadlineReached = () =>
+    opts.signal?.aborted ||
+    (opts.deadlineMs !== undefined && Date.now() >= opts.deadlineMs);
   // T4: Enterprise Automation is a paid-tier feature — gate at the engine
   // entry so both the manual button AND a future cron respect the plan.
   await assertPlanIncludesAutomations(actor.tenantId);
@@ -87,6 +91,7 @@ export async function runAutomations(
   if (settings.draftCampaignSuggestions && !(await overBudget())) {
     let made = 0;
     for (const company of companies) {
+      if (deadlineReached()) break;
       if (made >= settings.maxCampaignsPerRun) break;
       if (await overBudget()) break;
       // Don't pile up: skip a company that already has an unapproved draft
@@ -110,6 +115,7 @@ export async function runAutomations(
   // ---- Job B: monthly content generation (capped per company) ----------------
   if (settings.monthlyContentGeneration && !(await overBudget())) {
     for (const company of companies) {
+      if (deadlineReached()) break;
       if (await overBudget()) break;
       try {
         const made = await autoDraftContent(
@@ -125,7 +131,11 @@ export async function runAutomations(
   }
 
   // ---- Job C: analytics summary (tenant-wide, once per run) ------------------
-  if (settings.analyticsSummaries && !(await overBudget())) {
+  if (
+    !deadlineReached() &&
+    settings.analyticsSummaries &&
+    !(await overBudget())
+  ) {
     try {
       const tenant = await getTenant(actor.tenantId);
       const report = await buildReport(actor.tenantId);
@@ -156,6 +166,7 @@ export async function runAutomations(
   // offer refresh, etc.). Each becomes a governed suggestion, not an action.
   if (settings.contentAlerts) {
     for (const company of companies) {
+      if (deadlineReached()) break;
       try {
         const made = await autoContentAlerts(company, actor);
         outcomes.push(...made);
@@ -165,8 +176,8 @@ export async function runAutomations(
     }
   }
 
-  // ---- Job E: low-risk auto-responses (auto-approve only, never publish) -----
-  if (settings.lowRiskAutoResponses) {
+  // ---- Job E: risk-routed low-risk auto-responses ----------------------------
+  if (!deadlineReached() && settings.lowRiskAutoResponses) {
     const s = await getSecuritySettings(actor.tenantId);
     const controls = await getPublishingControls(actor.tenantId);
     const blocked = s.crisisMode || s.sandboxMode || controls.socialRepliesDisabled;
@@ -415,27 +426,55 @@ async function autoContentAlerts(company: Company, actor: ActingUser): Promise<A
   return outcomes;
 }
 
-// Auto-approve (never publish) pending low-risk replies. This is the admin's
-// pre-authorised approval for the §40 whitelist — publishing still runs through
-// the gated engine, so "nothing publishes without approval" holds.
+// The admin setting is the pre-authorisation for the low-risk whitelist.
+// Publishing still runs the complete connector/control eligibility chain.
 async function autoApproveLowRiskReplies(actor: ActingUser): Promise<AutomationOutcome[]> {
   const outcomes: AutomationOutcome[] = [];
   for (const draft of await listSocial(actor.tenantId)) {
     if (draft.status !== "pending_approval") continue;
-    if (draft.escalationRequired) continue;
-    if (draft.riskLevel !== "low") continue;
-    if (!LOW_RISK_INTENTS.has(draft.intent)) continue;
+    const eligible =
+      !draft.escalationRequired &&
+      draft.riskLevel === "low" &&
+      draft.sentiment !== "negative" &&
+      LOW_RISK_INTENTS.has(draft.intent);
+    await recordManagedEngagementRisk({
+      tenantId: actor.tenantId,
+      companyId: draft.companyId,
+      sourceKind: "comment",
+      sourceId: draft.id,
+      riskLevel:
+        draft.riskLevel === "critical" || draft.riskLevel === "high"
+          ? "high"
+          : draft.riskLevel === "medium"
+            ? "medium"
+            : "low",
+      sentiment:
+        draft.sentiment === "positive" ||
+        draft.sentiment === "neutral" ||
+        draft.sentiment === "negative"
+          ? draft.sentiment
+          : "uncertain",
+      confidence: eligible ? 0.9 : 0.5,
+    });
+    if (!eligible) continue;
     await updateSocial(draft.id, { status: "approved", approvedById: actor.id });
+    const result = await publishSocialReply(
+      { ...draft, status: "approved", approvedById: actor.id },
+      actor,
+    );
+    if (result.status === "published") {
+      await updateSocial(draft.id, { status: "published" });
+    }
     await logAction(actor, "automation.reply_auto_approved", {
       targetType: "social",
       targetId: draft.id,
       companyId: draft.companyId,
-      detail: `${draft.intent} · ${draft.riskLevel} risk (auto-approved, not published)`,
+      detail: `${draft.intent} · ${draft.riskLevel} risk · ${result.status}`,
     });
     outcomes.push({
       kind: "auto_response",
       companyId: draft.companyId,
-      detail: `Auto-approved low-risk ${draft.intent.replace(/_/g, " ")} reply — still requires publishing`,
+      detail: `Low-risk ${draft.intent.replace(/_/g, " ")} reply: ${result.status}`,
       resultType: "social",
       resultId: draft.id,
     });

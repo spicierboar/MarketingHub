@@ -25,14 +25,29 @@ import {
   isUnderLegalHold,
   listPublishLogs,
   transitionScheduledPost,
+  updateCompany,
   updateCampaignItem,
   updateContent,
+  updateScheduledPost,
 } from "@/lib/db";
 import { logAction } from "@/lib/audit";
 import { assetsBlockingChannel } from "@/lib/assets";
-import { dispatchPublish } from "@/lib/publishing-connectors";
+import {
+  dispatchPublish,
+  resolvePublishingMode,
+  type ConnectorResult,
+  type PublishingMode,
+} from "@/lib/publishing-connectors";
 import { recordProviderFailure } from "@/lib/security-slice";
 import { now } from "@/lib/utils";
+import {
+  isScheduledDeadlineError,
+  throwIfScheduledAborted,
+} from "@/lib/scheduled-execution";
+import {
+  refreshFailedPaymentPause,
+  serviceOperationsAllowed,
+} from "@/lib/managed-service-billing";
 import type {
   ActingUser,
   PublishingIntegration,
@@ -53,13 +68,37 @@ export async function controlsBlockReason(args: {
   // Per-tenant panels (T1): derive the tenant from the company being published.
   const company = await getCompany(args.companyId);
   if (!company) return "Unknown company";
+  const serviceBilling = company.profile.managedService?.serviceBilling;
+  const checkedAt = now();
+  if (
+    serviceBilling &&
+    !serviceOperationsAllowed(serviceBilling, checkedAt)
+  ) {
+    const managedService = company.profile.managedService;
+    if (managedService && serviceBilling.status === "past_due_grace") {
+      await updateCompany(company.id, {
+        profile: {
+          ...company.profile,
+          managedService: {
+            ...managedService,
+            serviceBilling: refreshFailedPaymentPause(serviceBilling, checkedAt),
+          },
+        },
+      });
+    }
+    return "Managed service is paused after the failed-payment grace period";
+  }
   // Phase 10 security modes override everything (§33 crisis, §56 sandbox).
   const s = await getSecuritySettings(company.tenantId);
   if (s.crisisMode) return "Crisis Communications Mode is active — publishing is frozen";
   if (s.sandboxMode) return "Sandbox/training mode is active — publishing is disabled";
   const c = await getPublishingControls(company.tenantId);
   if (c.freezeAll) return "Publishing freeze is active (all posts paused)";
-  if (args.kind === "post" && c.automatedPublishingDisabled) {
+  if (
+    args.kind === "post" &&
+    c.automatedPublishingDisabled &&
+    resolvePublishingMode().kind !== "simulate"
+  ) {
     return "Automated publishing is disabled";
   }
   if (args.kind === "reply" && c.socialRepliesDisabled) {
@@ -90,30 +129,39 @@ async function sendToPlatform(
   integration: PublishingIntegration,
   body: string,
   sim?: {
+    mode?: PublishingMode;
+    signal?: AbortSignal;
+    dispatch?: typeof dispatchPublish;
     idempotencyKey?: string;
     lookup?: () => string | undefined;
     onPublish?: (detail: string) => void;
     tenantId?: string;
   },
-): Promise<{ ok: boolean; detail: string }> {
-  const cached = sim?.lookup?.();
-  if (cached) {
-    return {
-      ok: true,
-      detail: `Already published (simulated idempotent): ${cached}`,
-    };
-  }
-  const live = await dispatchPublish(integration, body);
-  if (live) {
-    if (!live.ok && sim?.tenantId) {
-      recordProviderFailure("publishing", live.detail, sim.tenantId);
+): Promise<ConnectorResult> {
+  const mode = sim?.mode ?? resolvePublishingMode();
+  if (mode.kind === "simulate") {
+    const cached = sim?.lookup?.();
+    if (cached) {
+      return {
+        ok: true,
+        detail: `Already published (simulated idempotent): ${cached}`,
+      };
     }
-    if (live.ok && sim?.onPublish) sim.onPublish(live.detail);
-    return live;
+    const result = simulateConnector(integration, body, sim?.idempotencyKey);
+    if (result.ok && sim?.onPublish) sim.onPublish(result.detail);
+    return result;
   }
-  const result = simulateConnector(integration, body, sim?.idempotencyKey);
-  if (result.ok && sim?.onPublish) sim.onPublish(result.detail);
-  return result;
+  if (mode.kind === "blocked") {
+    return { ok: false, blocked: true, detail: mode.detail };
+  }
+  const live = await (sim?.dispatch ?? dispatchPublish)(integration, body, {
+    signal: sim?.signal,
+    idempotencyKey: sim?.idempotencyKey,
+  });
+  if (!live.ok && !live.blocked && sim?.tenantId) {
+    recordProviderFailure("publishing", live.detail, sim.tenantId);
+  }
+  return live;
 }
 
 function hashToBase36(input: string): string {
@@ -145,6 +193,68 @@ function simulateConnector(
   };
 }
 
+export async function finalizeSuccessfulDelivery(args: {
+  post: ScheduledPost;
+  actor: ActingUser;
+  attempt: number;
+  detail: string;
+  integrationId?: string;
+  idempotencyKey?: string;
+  from: ScheduledPostStatus[];
+}): Promise<PublishLog> {
+  const advanced = await transitionScheduledPost(
+    args.actor.tenantId,
+    args.post.id,
+    {
+      from: args.from,
+      to: "published",
+    },
+  );
+  const content = await getContent(args.post.contentId);
+  const demoted =
+    !content || !["scheduled", "published"].includes(content.status);
+  const note = !advanced
+    ? " (the post changed state before finalization; provider delivery still stands)"
+    : demoted
+      ? " (content was demoted before finalization; app workflow records left untouched)"
+      : "";
+  if (advanced && !demoted && content) {
+    await updateContent(content.id, { status: "published" });
+    if (content.campaignItemId) {
+      await updateCampaignItem(content.campaignItemId, {
+        status: "published",
+      });
+    }
+    if (content.requestId) {
+      await advanceRequest(
+        content.requestId,
+        "published",
+        args.actor.id,
+        `Published to ${args.post.platform}`,
+      );
+    }
+  }
+  await logAction(args.actor, "content.published", {
+    targetType: "scheduled_post",
+    targetId: args.post.id,
+    companyId: args.post.companyId,
+    detail: `${content?.title ?? args.post.contentId} → ${args.detail}${note}`,
+  });
+  return appendPublishLog({
+    companyId: args.post.companyId,
+    platform: args.post.platform,
+    integrationId: args.integrationId,
+    scheduledPostId: args.post.id,
+    contentId: args.post.contentId,
+    status: "published",
+    attempt: args.attempt,
+    detail: args.idempotencyKey
+      ? `[idem:${args.idempotencyKey}] ${args.detail}${note}`
+      : args.detail + note,
+    actorId: args.actor.id,
+  });
+}
+
 // One publish ATTEMPT of a post the queue has already CLAIMED (status
 // "publishing"). This function owns the eligibility chain, the platform send
 // and honest logging; it does NOT claim, count attempts or dead-letter — those
@@ -160,6 +270,8 @@ function simulateConnector(
 //     demotion the moment it sees it (otherwise an edited body's stale
 //     schedule would survive and double-publish after re-approval).
 //   • failure → "failed" (the queue settles dead-letter).
+//   • live response lost after dispatch starts → "delivery_unknown"; an
+//     operator must reconcile provider evidence before any retry.
 //   • success → "published"; everything AFTER a successful platform send is
 //     bookkeeping and must NEVER surface as a retryable failure — a retry
 //     would post the same content to the platform twice.
@@ -169,6 +281,9 @@ export async function attemptScheduledPost(
   actor: ActingUser,
   attempt: number,
   opts?: {
+    publishMode?: PublishingMode;
+    signal?: AbortSignal;
+    dispatchPublishOverride?: typeof dispatchPublish;
     idempotencyKey?: string;
     lookupSimulatedDetail?: () => string | undefined;
     onSimulatedPublish?: (detail: string) => void;
@@ -217,6 +332,29 @@ export async function attemptScheduledPost(
     return await appendLog(status, released ? detail : detail + CANCELLED_MID_FLIGHT);
   };
 
+  const markDeliveryUnknown = async (detail: string): Promise<PublishLog> => {
+    const changed = await transitionScheduledPost(actor.tenantId, postId, {
+      from: ["publishing"],
+      to: "delivery_unknown",
+    });
+    if (changed) {
+      await updateScheduledPost(postId, {
+        deliveryIdempotencyKey: opts?.idempotencyKey ?? null,
+        deliveryUnknownAt: now(),
+        deliveryUnknownReason: detail,
+      });
+    }
+    return appendLog(
+      "skipped",
+      `${detail}. Delivery outcome is unknown; reconciliation is required before retry.`,
+      integration?.id,
+    );
+  };
+
+  if (opts?.signal?.aborted) {
+    return settle("skipped", "Scheduled publishing deadline reached before send");
+  }
+
   // Content must still be approved-and-scheduled (or published for an extra
   // platform) — a demoted or rejected item can never slip out, and its
   // schedule must not survive the demotion either (see release semantics).
@@ -259,12 +397,43 @@ export async function attemptScheduledPost(
     );
   }
 
-  const result = await sendToPlatform(integration, content.body, {
-    idempotencyKey: opts?.idempotencyKey,
-    lookup: opts?.lookupSimulatedDetail,
-    onPublish: opts?.onSimulatedPublish,
-    tenantId: actor.tenantId,
-  });
+  let result: Awaited<ReturnType<typeof sendToPlatform>>;
+  try {
+    throwIfScheduledAborted(
+      opts?.signal
+        ? { signal: opts.signal }
+        : undefined,
+    );
+    result = await sendToPlatform(integration, content.body, {
+      mode: opts?.publishMode,
+      signal: opts?.signal,
+      dispatch: opts?.dispatchPublishOverride,
+      idempotencyKey: opts?.idempotencyKey,
+      lookup: opts?.lookupSimulatedDetail,
+      onPublish: opts?.onSimulatedPublish,
+      tenantId: actor.tenantId,
+    });
+  } catch (error) {
+    if (opts?.signal?.aborted || isScheduledDeadlineError(error)) {
+      const mode = opts?.publishMode ?? resolvePublishingMode();
+      if (mode.kind === "live") {
+        return markDeliveryUnknown(
+          "Live dispatch began but its response was lost at the scheduler deadline",
+        );
+      }
+      return settle(
+        "skipped",
+        "Scheduled publishing deadline reached before completion",
+      );
+    }
+    throw error;
+  }
+  if (result.blocked) {
+    return settle("skipped", result.detail);
+  }
+  if (result.deliveryUnknown) {
+    return markDeliveryUnknown(result.detail);
+  }
   if (!result.ok) {
     const log = await settle("failed", result.detail);
     await logAction(actor, "publishing.failed", {
@@ -280,36 +449,15 @@ export async function attemptScheduledPost(
   // this function: publishPostNow's catch would record a failed attempt and
   // the queue would eventually POST THE SAME CONTENT AGAIN.
   try {
-    const advanced = await transitionScheduledPost(actor.tenantId, postId, {
+    return await finalizeSuccessfulDelivery({
+      post: claimed,
+      actor,
+      attempt,
+      detail: result.detail,
+      integrationId: integration.id,
+      idempotencyKey: opts?.idempotencyKey,
       from: ["publishing"],
-      to: "published",
     });
-    // Only advance the APP records if the content wasn't demoted while the
-    // send was in flight (an editor pulling approval mid-send must not have
-    // their demotion silently overwritten).
-    const fresh = await getContent(claimed.contentId);
-    const demotedMidFlight = !fresh || !["scheduled", "published"].includes(fresh.status);
-    const note = !advanced
-      ? " (the post was cancelled mid-flight but the platform HAS the post — verify and remove it on the platform if unwanted)"
-      : demotedMidFlight
-        ? " (content was demoted mid-send; app records left untouched)"
-        : "";
-    if (advanced && !demotedMidFlight) {
-      await updateContent(content.id, { status: "published" });
-      if (content.campaignItemId) {
-        await updateCampaignItem(content.campaignItemId, { status: "published" });
-      }
-      if (content.requestId) {
-        await advanceRequest(content.requestId, "published", actor.id, `Published to ${claimed.platform}`);
-      }
-    }
-    await logAction(actor, "content.published", {
-      targetType: "scheduled_post",
-      targetId: postId,
-      companyId: claimed.companyId,
-      detail: `${content.title} → ${result.detail}${note}`,
-    });
-    return await appendLog("published", result.detail + note, integration.id);
   } catch (err) {
     // Bookkeeping failed AFTER a successful send. Pin the row as published
     // (best effort) and record what we can — never let this look retryable.

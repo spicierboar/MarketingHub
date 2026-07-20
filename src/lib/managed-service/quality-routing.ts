@@ -14,12 +14,18 @@ import {
   getCompany,
   getContent,
   getTenant,
+  createManagedApprovalRequest,
+  listManagedApprovalRequests,
+  listManagedChannelAdaptations,
+  listManagedPlannedSlots,
+  updateManagedApprovalRequest,
   updateContent,
 } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { defaultServiceLevel } from "@/lib/managed-service/authority";
 import { canClientApproveRoute, routeContent } from "@/lib/routing";
 import { signPayload } from "@/lib/token";
+import { hashApprovalToken } from "@/lib/managed-service/workflow";
 import type {
   ActingUser,
   AiCritique,
@@ -127,6 +133,57 @@ async function stampClientReview(input: {
   );
   const link = `${input.origin.replace(/\/+$/, "")}/approve/${token}`;
   const tenant = await getTenant(input.company.tenantId);
+  const priorRequests = (await listManagedApprovalRequests(
+    input.company.tenantId,
+    input.company.id,
+  ))
+    .filter((request) => request.contentId === input.content.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const pending = priorRequests.filter((request) => request.status === "pending");
+  let plannedSlotId: string | null = null;
+  if (input.content.managedConceptId) {
+    const adaptations = await listManagedChannelAdaptations(
+      input.company.tenantId,
+      input.content.managedConceptId,
+    );
+    const adaptation = adaptations.find(
+      (item) => item.channelKey === input.content.managedChannelKey,
+    );
+    if (adaptation) {
+      plannedSlotId =
+        (await listManagedPlannedSlots(input.company.tenantId, input.company.id))
+          .find((slot) => slot.adaptationId === adaptation.id)?.id ?? null;
+    }
+  }
+  const durable = await createManagedApprovalRequest({
+    tenantId: input.company.tenantId,
+    companyId: input.company.id,
+    contentId: input.content.id,
+    conceptId: input.content.managedConceptId ?? null,
+    plannedSlotId,
+    adCampaignId: null,
+    scope: "standard_content",
+    recipientEmail: contact,
+    tokenHash: hashApprovalToken(token),
+    status: "pending",
+    dueAt: new Date(issuedAt + ttlMs).toISOString(),
+    revisionRound: priorRequests[0]?.revisionRound ?? 0,
+    supersededById: null,
+    reminder7dAt: null,
+    reminder3dAt: null,
+    staffEscalationAt: null,
+    reminder7dKey: null,
+    reminder3dKey: null,
+    staffEscalationKey: null,
+    respondedAt: null,
+    directChargeDisclosureAcceptedAt: null,
+  });
+  for (const request of pending) {
+    await updateManagedApprovalRequest(request.id, {
+      status: "superseded",
+      supersededById: durable.id,
+    });
+  }
 
   await updateContent(input.content.id, {
     status: "pending_approval",

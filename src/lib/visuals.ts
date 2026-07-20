@@ -45,7 +45,7 @@ export interface PersistGeneratedAssetInput {
 export async function persistGeneratedAsset(
   input: PersistGeneratedAssetInput,
 ): Promise<Asset> {
-  const tags = ["ai-visuals"];
+  const tags = ["generated-visual"];
   if (input.targetContentId) tags.push(attachTagForContent(input.targetContentId));
 
   const asset = await createAsset({
@@ -64,12 +64,12 @@ export async function persistGeneratedAsset(
     sizeBytes: input.bytes.length,
     tags,
     usageRights: {
-      owner: "AI-generated (platform)",
+      owner: "Platform-created visual",
       licenceType: "owned",
       consentObtained: true,
       allowedChannels: input.channels.length ? input.channels : [],
       restrictions:
-        "AI-generated asset — route through creative approval before publishing.",
+        "Route through creative approval before publishing.",
     },
     status: "pending_approval",
     createdById: input.userId,
@@ -78,6 +78,12 @@ export async function persistGeneratedAsset(
     aiRunId: input.aiRunId,
     estCostUsd: input.estCostUsd,
     sourcesUsed: input.sourcesUsed ?? ["Brand Brain: company profile"],
+    privateProvenance: {
+      model: input.aiModel,
+      prompt: input.aiPrompt,
+      runId: input.aiRunId,
+      sources: input.sourcesUsed ?? ["company_profile"],
+    },
   });
 
   if (storageConfigured()) {

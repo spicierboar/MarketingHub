@@ -6,6 +6,118 @@ import {
 } from "@/lib/billing";
 import { initialDetailedStrategyStatus } from "@/lib/managed-service/detailed-strategy";
 import { includedPromoLimitForPeriod } from "@/lib/promo-allowance";
+import { packageFor } from "@/lib/marketing-packages";
+import {
+  applyInvoicePaymentFailed,
+  applyInvoicePaymentSucceeded,
+  applyServiceOptionsEdit,
+  initialCompanyServiceBilling,
+  refreshFailedPaymentPause,
+  requestPackageChange,
+} from "@/lib/managed-service-billing";
+
+export async function checkManagedPackageEntitlements(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const starter = packageFor("starter");
+  const growth = packageFor("growth");
+  const managed = packageFor("managed");
+  const ok =
+    starter.priceAudMonthly === 299 &&
+    starter.campaignConceptsPerMonth === 4 &&
+    !starter.searchVisibilityIncluded &&
+    growth.priceAudMonthly === 699 &&
+    growth.campaignConceptsPerMonth === 12 &&
+    !growth.searchVisibilityIncluded &&
+    managed.priceAudMonthly === 1499 &&
+    managed.campaignConceptsPerMonth === 24 &&
+    managed.searchVisibilityIncluded &&
+    packageFor("basic").id === "starter" &&
+    packageFor("pro").id === "growth" &&
+    packageFor("blast").id === "managed";
+  return {
+    ok,
+    detail: ok ? "Starter/Growth/Managed entitlements and legacy aliases" : "catalog mismatch",
+  };
+}
+
+export async function checkManagedBillingTransitions(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const initial = applyInvoicePaymentSucceeded(
+    initialCompanyServiceBilling("starter"),
+    "2026-07-01T00:00:00.000Z",
+    "2026-08-01T00:00:00.000Z",
+  );
+  const upgradePending = requestPackageChange(
+    initial,
+    "growth",
+    "2026-07-15T00:00:00.000Z",
+  );
+  const upgraded = applyInvoicePaymentSucceeded(
+    upgradePending,
+    "2026-07-15T00:01:00.000Z",
+  );
+  const optionsPending = applyServiceOptionsEdit(
+    upgraded,
+    "growth",
+    { ...upgraded.serviceOptions, websitePublishing: true },
+    "2026-07-16T00:00:00.000Z",
+  );
+  const optionsSettled = applyInvoicePaymentSucceeded(
+    optionsPending,
+    "2026-07-16T00:01:00.000Z",
+  );
+  const downgradePending = requestPackageChange(
+    upgraded,
+    "starter",
+    "2026-07-20T00:00:00.000Z",
+  );
+  const beforeRenewal = applyInvoicePaymentSucceeded(
+    downgradePending,
+    "2026-07-25T00:00:00.000Z",
+  );
+  const atRenewal = applyInvoicePaymentSucceeded(
+    beforeRenewal,
+    "2026-08-01T00:00:01.000Z",
+  );
+  const failed = applyInvoicePaymentFailed(
+    atRenewal,
+    "2026-08-02T00:00:00.000Z",
+  );
+  const stillGrace = refreshFailedPaymentPause(
+    failed,
+    "2026-08-08T23:59:59.000Z",
+  );
+  const paused = refreshFailedPaymentPause(
+    failed,
+    "2026-08-09T00:00:00.000Z",
+  );
+  const recovered = applyInvoicePaymentSucceeded(
+    paused,
+    "2026-08-09T01:00:00.000Z",
+  );
+  const ok =
+    upgradePending.activePackageId === "starter" &&
+    upgraded.activePackageId === "growth" &&
+    !upgraded.serviceOptions.websitePublishing &&
+    optionsPending.pendingServiceOptions?.websitePublishing === true &&
+    !optionsPending.serviceOptions.websitePublishing &&
+    optionsSettled.serviceOptions.websitePublishing &&
+    beforeRenewal.activePackageId === "growth" &&
+    atRenewal.activePackageId === "starter" &&
+    stillGrace.status === "past_due_grace" &&
+    paused.status === "paused" &&
+    recovered.status === "active";
+  return {
+    ok,
+    detail: ok
+      ? "paid upgrade, renewal downgrade, seven-day grace, pause and recovery"
+      : JSON.stringify({ upgradePending, upgraded, beforeRenewal, atRenewal, stillGrace, paused, recovered }),
+  };
+}
 
 export async function checkMarketingPackageCheckoutKind(): Promise<{
   ok: boolean;

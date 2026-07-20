@@ -2,10 +2,10 @@
 // photographer profiles + packages, book a shoot (creates PhotoShoot lifecycle),
 // collect payment with marketplace fee, hold photographer payout until the shoot
 // completes (DAM upload → approve path). Stripe Connect when live; simulated
-// when PHOTO_MARKETPLACE_LIVE / Stripe keys are off.
+// unless PHOTO_MARKETPLACE_LIVE=true, Stripe is configured, and the runtime
+// permits live integrations.
 
-import { appEnv } from "@/lib/env";
-import { stripeConfigured } from "@/lib/billing";
+import { photoMarketplaceActivation } from "@/lib/env";
 import {
   createPhotoMarketplaceBooking,
   createPhotoShoot,
@@ -31,10 +31,7 @@ import { createMarketplaceCheckoutSession } from "@/lib/photo-marketplace-stripe
 export const MARKETPLACE_FEE_BPS = 1500;
 
 export function photoMarketplaceLive(): boolean {
-  if (!stripeConfigured()) return false;
-  const env = appEnv();
-  if (env === "development" || env === "staging") return true;
-  return process.env.PHOTO_MARKETPLACE_LIVE === "true";
+  return photoMarketplaceActivation().mode === "live";
 }
 
 export function photoMarketplaceStripeReady(): boolean {

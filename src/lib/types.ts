@@ -73,6 +73,8 @@ export interface TenantOnboarding {
   scrapeConsentAt?: string;
   /** Client marketing package (company delivery SKU) — persisted until a company exists. */
   marketingPackageId?: MarketingPackageId;
+  /** Managed-service options selected alongside the base package. */
+  serviceOptions?: CompanyServiceOptions;
   /** Module picks when marketingPackageId is `"custom"`. */
   customModules?: MarketingPackageCustomModules;
   /**
@@ -622,6 +624,9 @@ export interface ClaimAuditEntry {
 export interface ContentItem {
   id: string;
   companyId: string;
+  /** Durable package-unit identity shared by every channel adaptation. */
+  managedConceptId?: string | null;
+  managedChannelKey?: ManagedChannelKey | null;
   requestId?: string | null;
   type: RequestType;
   title: string;
@@ -1220,12 +1225,15 @@ export interface CampaignItem {
 // ---- Phase 6: Social Calendar & Scheduling ---------------------------------------
 
 // "publishing" = claimed by a queue worker, in-flight to the platform (scale
-// pass: the atomic claim that stops two workers double-posting). "dead" =
+// pass: the atomic claim that stops two workers double-posting).
+// "delivery_unknown" means dispatch began but the response was lost; it cannot
+// retry until an operator/provider reconciliation establishes the outcome. "dead" =
 // failed MAX_PUBLISH_ATTEMPTS times — parked in the dead-letter queue for a
 // human to requeue or cancel; the scheduler never retries it again.
 export type ScheduledPostStatus =
   | "scheduled"
   | "publishing"
+  | "delivery_unknown"
   | "published"
   | "failed"
   | "dead"
@@ -1241,6 +1249,9 @@ export interface ScheduledPost {
   scheduledDate: string; // ISO date
   scheduledTime?: string; // HH:mm
   status: ScheduledPostStatus;
+  deliveryIdempotencyKey?: string | null;
+  deliveryUnknownAt?: string | null;
+  deliveryUnknownReason?: string | null;
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -2151,6 +2162,11 @@ export interface Asset {
   aiRunId?: string | null;
   estCostUsd?: number;
   sourcesUsed?: string[];
+  /** Required for client-supplied assets before managed scheduling. */
+  rightsConfirmedAt?: string | null;
+  rightsConfirmationEmail?: string | null;
+  /** Private service provenance; never render in client-visible language. */
+  privateProvenance?: Record<string, unknown> | null;
 }
 
 // Brand template (§46) — a reusable creative layout/spec. Tenant-wide when
@@ -3444,12 +3460,69 @@ export interface ManagedServiceSettings {
   promoMarkupPercent?: number;
   /** Company marketing package SKU (separate from tenant SaaS plan). */
   marketingPackageId?: MarketingPackageId;
+  /** Commercial service options and Stripe lifecycle state. */
+  serviceOptions?: CompanyServiceOptions;
+  serviceBilling?: CompanyServiceBillingState;
   /** Module picks when marketingPackageId is `"custom"`. */
   customModules?: MarketingPackageCustomModules;
 }
 
-/** Company-level marketing delivery SKU (not tenant SaaS plan). */
-export type MarketingPackageId = "basic" | "pro" | "blast" | "custom";
+/** Current company-level managed-service packages. Legacy ids remain readable. */
+export type CurrentMarketingPackageId = "starter" | "growth" | "managed";
+export type LegacyMarketingPackageId = "basic" | "pro" | "blast" | "custom";
+export type MarketingPackageId =
+  | CurrentMarketingPackageId
+  | LegacyMarketingPackageId;
+
+export interface CompanyServiceOptions {
+  /** One substantial article or landing-page update each month. */
+  searchVisibility: boolean;
+  /** Mandatory one-off connection setup (A$299). */
+  websiteConnectionSetup: boolean;
+  /** Website publishing service (A$99/month). */
+  websitePublishing: boolean;
+  /** Hosted landing page (A$79/month plus A$299 setup). */
+  hostedLandingPage: boolean;
+  /** Client-authorised ad-platform spend cap; media is charged to client card. */
+  monthlyAdCapAud: number;
+}
+
+export type CompanyServiceBillingStatus =
+  | "pending_payment"
+  | "active"
+  | "past_due_grace"
+  | "paused"
+  | "cancel_at_period_end";
+
+/** Durable company billing state stored in managedService JSON. */
+export interface CompanyServiceBillingState {
+  status: CompanyServiceBillingStatus;
+  activePackageId: CurrentMarketingPackageId;
+  pendingPackageId?: CurrentMarketingPackageId;
+  /** Immutable correlation nonce copied into Stripe metadata for this transition. */
+  pendingTransitionId?: string;
+  pendingServiceOptions?: CompanyServiceOptions;
+  pendingChangeKind?:
+    | "upgrade"
+    | "downgrade"
+    | "options_upgrade"
+    | "options_downgrade"
+    | "mixed";
+  pendingEffectiveAt?: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  /** The single recurring base-package item on stripeSubscriptionId. */
+  stripeSubscriptionItemId?: string;
+  /** Price currently attached to stripeSubscriptionItemId. */
+  stripePriceId?: string;
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd?: boolean;
+  failedPaymentAt?: string;
+  graceEndsAt?: string;
+  pausedAt?: string;
+  lastPaidAt?: string;
+  serviceOptions: CompanyServiceOptions;
+}
 
 /**
  * Build-your-own modules when a company is on the Custom package.
@@ -3484,6 +3557,8 @@ export interface AgencyMarketingPackageOverride {
   channels?: string[];
   postsPerMonth?: number;
   campaignsPerMonth?: number;
+  campaignConceptsPerMonth?: number;
+  searchVisibilityIncluded?: boolean;
   promosIncludedPerMonth?: number;
   adsManagementIncluded?: boolean;
   includedAddonIds?: AddonId[];
@@ -3632,6 +3707,171 @@ export interface ManagedDeliveryRun {
   statusMessageKey: string; // maps to client status copy
   createdAt: string;
   updatedAt: string;
+}
+
+export const MANAGED_CHANNELS = [
+  "facebook",
+  "instagram",
+  "tiktok",
+  "youtube_shorts",
+  "linkedin",
+  "threads",
+  "x",
+  "pinterest",
+  "google_business_profile",
+  "website_blog_cms",
+  "email",
+  "sms",
+  "whatsapp_rcs",
+  "reviews_engagement",
+  "local_technical_seo",
+  "aeo_geo",
+  "analytics",
+  "paid_media",
+] as const;
+
+export type ManagedChannelKey = (typeof MANAGED_CHANNELS)[number];
+export type ManagedConceptStatus =
+  | "planned"
+  | "drafting"
+  | "approval"
+  | "approved"
+  | "scheduled"
+  | "completed"
+  | "cancelled";
+
+export interface ManagedStrategyCycle {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  quarterStart: string;
+  status: "draft" | "client_review" | "approved" | "superseded";
+  confirmedInputs: {
+    profileConfirmedAt: string;
+    goals: string[];
+    packageId: CurrentMarketingPackageId;
+    locations: string[];
+    seasonalInputs: string[];
+  };
+  guardrails: {
+    channels: ManagedChannelKey[];
+    themes: string[];
+    publishWindows: string[];
+  };
+  approvedAt?: string | null;
+  supersededAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManagedContentConcept {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  strategyCycleId?: string | null;
+  campaignId?: string | null;
+  packagePeriod: string;
+  unitKey: string;
+  title: string;
+  theme: string;
+  status: ManagedConceptStatus;
+  reusableAssetId?: string | null;
+  quotaConsumedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManagedChannelAdaptation {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  conceptId: string;
+  channelKey: ManagedChannelKey;
+  copy: string;
+  status: "draft" | "ready" | "approved" | "superseded";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManagedPlannedSlot {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  conceptId: string;
+  adaptationId: string;
+  plannedPublishAt: string;
+  finalContentDueAt: string;
+  status: "planned" | "awaiting_approval" | "approved" | "scheduled" | "cancelled";
+  scheduledPostId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ManagedApprovalScope =
+  | "standard_content"
+  | "paid_creative"
+  | "paid_budget_targeting";
+export interface ManagedApprovalRequest {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  contentId?: string | null;
+  conceptId?: string | null;
+  plannedSlotId?: string | null;
+  adCampaignId?: string | null;
+  scope: ManagedApprovalScope;
+  recipientEmail: string;
+  tokenHash: string;
+  status: "pending" | "approved" | "changes_requested" | "superseded" | "expired";
+  dueAt: string;
+  revisionRound: 0 | 1 | 2;
+  supersededById?: string | null;
+  reminder7dAt?: string | null;
+  reminder3dAt?: string | null;
+  staffEscalationAt?: string | null;
+  reminder7dKey?: string | null;
+  reminder3dKey?: string | null;
+  staffEscalationKey?: string | null;
+  reminderClaimKind?: "client_7d" | "client_3d" | "staff_1d" | null;
+  reminderClaimOwner?: string | null;
+  reminderClaimedAt?: string | null;
+  reminderClaimExpiresAt?: string | null;
+  respondedAt?: string | null;
+  responsePayload?: Record<string, unknown> | null;
+  directChargeDisclosureAcceptedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManagedPaidAuthorization {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  adCampaignId: string;
+  monthKey: string;
+  requestedBudgetAud: number;
+  clientMonthlyCapAud: number;
+  creativeApprovalId?: string | null;
+  budgetTargetingApprovalId?: string | null;
+  disclosureAcceptedAt?: string | null;
+  status: "pending" | "approved" | "blocked";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManagedEngagementRoute {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  sourceKind: "review" | "comment" | "message";
+  sourceId: string;
+  riskLevel: "low" | "medium" | "high";
+  confidence: number;
+  sentiment: "positive" | "neutral" | "negative" | "uncertain";
+  decision: "auto_publish" | "staff_review";
+  reason: string;
+  publishedAt?: string | null;
+  createdAt: string;
 }
 
 // ---- Prepaid company credit wallet (C2) --------------------------------------

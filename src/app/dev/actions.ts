@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import {
   addMembership,
@@ -14,6 +15,7 @@ import {
 import { startSession, endSession, setActiveTenant } from "@/lib/auth/session";
 import { postLoginRedirectPath } from "@/lib/auth/rbac";
 import { resetStore } from "@/lib/db/store";
+import { localDemoMutationAllowed } from "@/lib/dev-access";
 import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
 import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
@@ -25,15 +27,19 @@ function failQuickLogin(message: string): never {
   redirect(`/dev?error=${encodeURIComponent(message.slice(0, 300))}`);
 }
 
-function assertDevTools() {
-  if (!devToolsOpen()) {
-    throw new Error("Dev tools are locked in production.");
+async function assertLocalDemoMutationAllowed(): Promise<void> {
+  if (!localDemoMutationAllowed(await headers())) {
+    throw new Error(
+      "Local-demo mutations require CC_LOCAL_DEMO on a non-deployed localhost development server.",
+    );
   }
 }
 
-/** Quick login is for local demo OR staging (never production — gated by assertDevTools). */
+/** Quick login is for local demo OR staging (never production). */
 function assertQuickLoginAllowed() {
-  assertDevTools();
+  if (!devToolsOpen()) {
+    throw new Error("Dev tools are locked in production.");
+  }
   if (!localDemoEnabled() && appEnv() !== "staging") {
     throw new Error(
       "Quick login needs local demo (CC_LOCAL_DEMO) or a staging deployment.",
@@ -41,14 +47,9 @@ function assertQuickLoginAllowed() {
   }
 }
 
-/** Re-seed in-memory demo data (Wattle + BrightSpark). */
+/** Re-seed the complete in-memory local-demo fixture. */
 export async function seedDemoDataAction(_formData?: FormData): Promise<void> {
-  assertDevTools();
-  if (!localDemoEnabled()) {
-    throw new Error(
-      "Enable CC_LOCAL_DEMO=true and NEXT_PUBLIC_CC_LOCAL_DEMO=true, then restart npm run dev.",
-    );
-  }
+  await assertLocalDemoMutationAllowed();
   resetStore();
   revalidatePath("/", "layout");
   redirect("/dev?seeded=1");
@@ -56,12 +57,7 @@ export async function seedDemoDataAction(_formData?: FormData): Promise<void> {
 
 /** Clear session + re-seed (fresh demo). */
 export async function clearAndReseedAction(_formData?: FormData): Promise<void> {
-  assertDevTools();
-  if (!localDemoEnabled()) {
-    throw new Error(
-      "Enable CC_LOCAL_DEMO=true and NEXT_PUBLIC_CC_LOCAL_DEMO=true, then restart npm run dev.",
-    );
-  }
+  await assertLocalDemoMutationAllowed();
   await endSession();
   resetStore();
   revalidatePath("/", "layout");
@@ -78,7 +74,6 @@ function nameFromEmail(email: string): string {
 }
 
 async function resolveStagingTenant() {
-  // Shared resolver also repairs a seat renamed/re-kinded by a prior client-onboarding bug.
   return resolvePlatformAgencyTenant();
 }
 
@@ -149,9 +144,6 @@ async function ensureStagingUser(email: string): Promise<User> {
   }
   if (!user.active) throw new Error("Account deactivated.");
 
-  // Always attach (or keep) membership on the platform agency seat — orphan
-  // holding tenants from prior client-signup experiments must not be the only seat.
-  // Promote leftover admin rows to owner so Legal publish is not blocked.
   const tenant = await resolveStagingTenant();
   const existing = await getMembership(tenant.id, user.id);
   if (!existing) {
@@ -191,7 +183,6 @@ export async function quickLoginAction(formData: FormData): Promise<void> {
       if (!found.active) throw new Error("Account deactivated.");
       user = found;
     } else {
-      // Staging + Supabase: look up or provision a minimal agency owner.
       user = await ensureStagingUser(email);
     }
 
@@ -199,7 +190,6 @@ export async function quickLoginAction(formData: FormData): Promise<void> {
       a.tenantId.localeCompare(b.tenantId),
     );
     let membership = memberships[0];
-    // Staging ops seat: prefer platform agency over orphan holding tenants.
     if (appEnv() === "staging" && isSupabaseConfigured()) {
       const agency = await resolveStagingTenant();
       membership =
@@ -212,7 +202,6 @@ export async function quickLoginAction(formData: FormData): Promise<void> {
     }
 
     await startSession(user.id);
-    // Set active tenant after auth cookies so a single response carries both.
     await setActiveTenant(user.id, membership.tenantId);
 
     await logAction(user, "user.login", {
@@ -223,8 +212,6 @@ export async function quickLoginAction(formData: FormData): Promise<void> {
           : "Dev tools quick-login",
     });
 
-    // Do not call getCurrentUser() here — verifyOtp cookies may not be readable
-    // until the next request. Redirect from DB membership instead.
     redirect(await postLoginRedirectPath(actingFromMembership(user, membership)));
   } catch (e) {
     if (isRedirectError(e)) throw e;

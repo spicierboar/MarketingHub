@@ -27,6 +27,7 @@ import {
   listScheduledPosts,
   createManagedDeliveryRun,
   updateCompany,
+  updateContent,
   updateManagedDeliveryRun,
 } from "@/lib/db";
 import { surfaceCalendarAssistSuggestions } from "@/lib/ai/calendar-assist";
@@ -46,6 +47,15 @@ import {
   resolveCompanyPackage,
   resolveSelectionForPackage,
 } from "@/lib/marketing-packages";
+import {
+  initialCompanyServiceBilling,
+  refreshFailedPaymentPause,
+  serviceOperationsAllowed,
+} from "@/lib/managed-service-billing";
+import {
+  createManagedConceptBundle,
+  ensureQuarterlyStrategyCycle,
+} from "@/lib/managed-service/workflow-service";
 import { now } from "@/lib/utils";
 import type {
   ActingUser,
@@ -53,6 +63,7 @@ import type {
   ManagedDeliveryEnqueueReason,
   ManagedDeliveryPhase,
   ManagedDeliveryRun,
+  ManagedChannelKey,
   ManagedServiceLevel,
   ManagedServiceSettings,
   MarketingPackageId,
@@ -89,7 +100,41 @@ const PACKAGE_CHANNEL_TO_BUILDER: Record<string, string> = {
   facebook: "Facebook",
   gbp: "Google Business Profile",
   email: "Email",
-  // tiktok not in builder supported set — omitted intentionally
+  tiktok: "TikTok",
+  youtube: "YouTube / Shorts",
+  youtube_shorts: "YouTube / Shorts",
+  linkedin: "LinkedIn",
+  threads: "Threads",
+  x: "X",
+  pinterest: "Pinterest",
+  website: "Website / blog / CMS",
+  cms: "Website / blog / CMS",
+  sms: "SMS",
+  whatsapp: "WhatsApp / RCS",
+  seo: "Local and technical SEO",
+  aeo: "AEO / GEO",
+  analytics: "Analytics",
+  paid_media: "Paid media",
+};
+
+const BUILDER_TO_MANAGED_CHANNEL: Record<string, ManagedChannelKey> = {
+  Facebook: "facebook",
+  Instagram: "instagram",
+  TikTok: "tiktok",
+  "YouTube / Shorts": "youtube_shorts",
+  LinkedIn: "linkedin",
+  Threads: "threads",
+  X: "x",
+  Pinterest: "pinterest",
+  "Google Business Profile": "google_business_profile",
+  "Website / blog / CMS": "website_blog_cms",
+  Email: "email",
+  SMS: "sms",
+  "WhatsApp / RCS": "whatsapp_rcs",
+  "Local and technical SEO": "local_technical_seo",
+  "AEO / GEO": "aeo_geo",
+  Analytics: "analytics",
+  "Paid media": "paid_media",
 };
 
 /**
@@ -336,7 +381,7 @@ export async function ensureManagedDeliveryBootstrap(args: {
   let marketingPackageId = prev?.marketingPackageId;
 
   if (!marketingPackageId) {
-    const packageId = args.defaultPackageId ?? "basic";
+    const packageId = args.defaultPackageId ?? "starter";
     const selection = resolveSelectionForPackage(tenant, packageId);
     serviceLevel = selection.serviceLevel;
     marketingPackageId = packageId;
@@ -349,6 +394,7 @@ export async function ensureManagedDeliveryBootstrap(args: {
           ...(prev ?? { serviceLevel }),
           serviceLevel,
           marketingPackageId,
+          serviceBilling: initialCompanyServiceBilling(packageId),
           ...(packageId === "custom" && selection.customModules
             ? { customModules: selection.customModules }
             : {}),
@@ -378,6 +424,9 @@ export async function ensureManagedDeliveryBootstrap(args: {
   if (settled) return settled;
 
   const stamped = await getCompany(args.companyId);
+  if (!serviceOperationsAllowed(stamped?.profile.managedService?.serviceBilling)) {
+    return null;
+  }
   if (
     stamped?.profile.managedService?.strategySummary ||
     stamped?.profile.managedService?.strategyCompletedAt
@@ -389,7 +438,7 @@ export async function ensureManagedDeliveryBootstrap(args: {
   // stamp that would leave strategy idle after Overview shows Assigned.
   const catalogLevel = resolveSelectionForPackage(
     tenant,
-    (marketingPackageId ?? args.defaultPackageId ?? "basic") as MarketingPackageId,
+    (marketingPackageId ?? args.defaultPackageId ?? "starter") as MarketingPackageId,
   ).serviceLevel;
   const level =
     serviceLevel && serviceLevel !== "approval" ? serviceLevel : catalogLevel;
@@ -487,6 +536,13 @@ export async function enqueueManagedDeliveryForCompany(args: {
   reason?: ManagedDeliveryEnqueueReason;
 }): Promise<ManagedDeliveryRun> {
   const company = await getCompany(args.companyId);
+  if (
+    !company ||
+    company.tenantId !== args.tenantId ||
+    !serviceOperationsAllowed(company.profile.managedService?.serviceBilling)
+  ) {
+    throw new Error("Managed delivery requires active billing or a valid payment grace period.");
+  }
   const level =
     args.serviceLevel ??
     company?.profile.managedService?.serviceLevel ??
@@ -616,6 +672,13 @@ export async function maybePromoteManagedDeliveryToActive(
 ): Promise<ManagedDeliveryRun | undefined> {
   const run = await getManagedDeliveryRun(runId);
   if (!run || run.phase !== "awaiting_approval") return run;
+  const billedCompany = await getCompany(run.companyId);
+  if (
+    !billedCompany ||
+    !serviceOperationsAllowed(billedCompany.profile.managedService?.serviceBilling)
+  ) {
+    return run;
+  }
 
   const companyId = run.companyId;
   const campaignId = run.campaignId;
@@ -637,6 +700,7 @@ export async function maybePromoteManagedDeliveryToActive(
       pipelineIds.has(p.contentId) &&
       (p.status === "scheduled" ||
         p.status === "publishing" ||
+        p.status === "delivery_unknown" ||
         p.status === "published"),
   );
 
@@ -674,6 +738,18 @@ export async function processManagedDeliveryRun(
   }
   if (run.phase === "active") return run;
   if (run.phase === "failed" || run.phase === "blocked") return run;
+  const billedCompany = await getCompany(run.companyId);
+  if (
+    !billedCompany ||
+    billedCompany.tenantId !== run.tenantId ||
+    !serviceOperationsAllowed(billedCompany.profile.managedService?.serviceBilling)
+  ) {
+    return advancePhase(run, {
+      phase: "blocked",
+      missingInfo: ["service_billing_inactive"],
+      statusMessageKey: "delivery_blocked",
+    });
+  }
 
   try {
     // ---- validating --------------------------------------------------------
@@ -694,6 +770,30 @@ export async function processManagedDeliveryRun(
         return advancePhase(run, {
           phase: "blocked",
           missingInfo: ["company_archived"],
+          statusMessageKey: "delivery_blocked",
+        });
+      }
+      if (
+        !serviceOperationsAllowed(company.profile.managedService?.serviceBilling)
+      ) {
+        const managedService = company.profile.managedService;
+        if (managedService?.serviceBilling?.status === "past_due_grace") {
+          await updateCompany(company.id, {
+            profile: {
+              ...company.profile,
+              managedService: {
+                ...managedService,
+                serviceBilling: refreshFailedPaymentPause(
+                  managedService.serviceBilling,
+                  now(),
+                ),
+              },
+            },
+          });
+        }
+        return advancePhase(run, {
+          phase: "blocked",
+          missingInfo: ["service_billing_paused"],
           statusMessageKey: "delivery_blocked",
         });
       }
@@ -748,6 +848,30 @@ export async function processManagedDeliveryRun(
 
       const startDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
       const profileGoal = goalFromProfile(company);
+      const currentPackageId =
+        company.profile.managedService?.serviceBilling?.activePackageId ??
+        pkg.id;
+      const seasonalInputs = [
+        company.profile.localMarketNotes,
+        company.profile.currentOffers,
+        company.profile.tradingHours,
+      ].filter((value): value is string => Boolean(value?.trim()));
+      const strategyCycle = await ensureQuarterlyStrategyCycle({
+        company,
+        packageId: currentPackageId,
+        goals: [profileGoal],
+        seasonalInputs: seasonalInputs.length
+          ? seasonalInputs
+          : ["No seasonal constraints confirmed for this quarter"],
+        profileConfirmedAt: company.updatedAt,
+        channels: channels
+          .map((channel) => BUILDER_TO_MANAGED_CHANNEL[channel])
+          .filter((channel): channel is ManagedChannelKey => Boolean(channel)),
+        themes: (company.profile.services.length
+          ? company.profile.services
+          : [company.profile.industry ?? "business priorities"]),
+        publishWindows: ["weekday_morning", "weekday_afternoon", "weekday_evening"],
+      });
       const goal = [
         profileGoal,
         `Marketing package: ${pkg.name} (A$${pkg.priceAudMonthly}/mo).`,
@@ -773,6 +897,50 @@ export async function processManagedDeliveryRun(
         channels,
         offer: null,
       });
+      const scheduleItems = await listCampaignDraftScheduleItems(exec.campaign.id);
+      const campaignContent = (await listContent(run.tenantId)).filter(
+        (item) =>
+          item.companyId === company.id &&
+          item.campaignId === exec.campaign.id &&
+          exec.spawnedContentIds.includes(item.id),
+      );
+      for (const [index, contentItem] of campaignContent.entries()) {
+        const schedule = scheduleItems.find(
+          (item) =>
+            item.contentId === contentItem.id ||
+            item.campaignItemId === contentItem.campaignItemId,
+        );
+        if (!schedule) continue;
+        const channelKey =
+          BUILDER_TO_MANAGED_CHANNEL[schedule.platform] ?? "facebook";
+        const plannedPublishAt = new Date(
+          `${schedule.scheduledDate}T${schedule.scheduledTime ?? "11:00"}:00.000Z`,
+        ).toISOString();
+        const concept = await createManagedConceptBundle({
+          tenantId: run.tenantId,
+          companyId: company.id,
+          strategyCycleId: strategyCycle.id,
+          campaignId: exec.campaign.id,
+          packagePeriod: schedule.scheduledDate.slice(0, 7),
+          unitKey:
+            schedule.campaignItemId ??
+            contentItem.campaignItemId ??
+            `campaign-${exec.campaign.id}-${index + 1}`,
+          title: contentItem.title,
+          theme: contentItem.title,
+          adaptations: [
+            {
+              channelKey,
+              copy: contentItem.body,
+              plannedPublishAt,
+            },
+          ],
+        });
+        await updateContent(contentItem.id, {
+          managedConceptId: concept.id,
+          managedChannelKey: channelKey,
+        });
+      }
 
       const nextVersion = run.strategyVersion + 1;
       const strategyStatus = initialDetailedStrategyStatus(
@@ -957,11 +1125,7 @@ export async function processManagedDeliveryRun(
       }
 
       const statusMessageKey =
-        routedClient > 0
-          ? "content_ready"
-          : drafts.length > 0
-            ? "approval_required"
-            : "approval_required";
+        routedClient > 0 ? "content_ready" : "approval_required";
 
       run = await advancePhase(run, {
         phase: "awaiting_approval",
@@ -1004,6 +1168,7 @@ export async function processManagedDeliveryRun(
 export async function processDueManagedDeliveries(
   actor: ActingUser,
   tenantId: string,
+  options: { signal?: AbortSignal; deadlineMs?: number } = {},
 ): Promise<number> {
   const at = now();
   const open = await listOpenManagedDeliveryRuns(tenantId);
@@ -1015,6 +1180,10 @@ export async function processDueManagedDeliveries(
 
   let processed = 0;
   for (const run of due) {
+    if (
+      options.signal?.aborted ||
+      (options.deadlineMs && Date.now() >= options.deadlineMs)
+    ) break;
     await processManagedDeliveryRun(run.id, actor);
     processed += 1;
   }
@@ -1025,6 +1194,10 @@ export async function processDueManagedDeliveries(
     .sort((a, b) => a.strategyDueAt.localeCompare(b.strategyDueAt))
     .slice(0, MAX_PROMOTIONS_PER_TICK);
   for (const run of awaiting) {
+    if (
+      options.signal?.aborted ||
+      (options.deadlineMs && Date.now() >= options.deadlineMs)
+    ) break;
     const before = run.phase;
     const after = await maybePromoteManagedDeliveryToActive(run.id, actor);
     if (after && after.phase !== before) processed += 1;

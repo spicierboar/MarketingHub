@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { isAdmin, requireUser } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
 import { liveOffers, getCompany } from "@/lib/db";
@@ -14,6 +15,7 @@ import { CampaignObjectiveHints } from "../campaign-objective-hints";
 import { CampaignBuilderPanel } from "@/components/campaign-builder-panel";
 import { MARKETING_FIELD_HELP } from "@/lib/profile-suggestions";
 import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
+import { serverRenderTimestamp } from "@/lib/server-time";
 
 export default async function NewCampaignPage({
   searchParams,
@@ -47,7 +49,9 @@ export default async function NewCampaignPage({
       ),
     )
   ).flat();
-  const defaultStart = new Date(Date.now() + 7 * 86_400_000)
+  await connection();
+  const renderedAt = serverRenderTimestamp();
+  const defaultStart = new Date(renderedAt + 7 * 86_400_000)
     .toISOString()
     .slice(0, 10);
 

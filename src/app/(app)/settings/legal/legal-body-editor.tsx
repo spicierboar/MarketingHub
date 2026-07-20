@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/form";
 import type { LegalDocKind } from "@/lib/types";
@@ -17,8 +17,8 @@ export function LegalBodyEditor({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [offerFormat, setOfferFormat] = useState(false);
+  const [lastFormatted, setLastFormatted] = useState("");
   const [pending, startTransition] = useTransition();
-  const lastFormatted = useRef("");
 
   function runFormat() {
     const current = body.trim();
@@ -33,7 +33,7 @@ export function LegalBodyEditor({
       try {
         const result = await formatLegalDocAction(kind, current);
         setBody(result.text);
-        lastFormatted.current = result.text;
+        setLastFormatted(result.text);
         setOfferFormat(false);
         setStatus(
           result.model.startsWith("claude")
@@ -82,7 +82,7 @@ export function LegalBodyEditor({
         >
           {pending ? "Formatting…" : "Format with AI"}
         </Button>
-        {offerFormat && !pending && body.trim() !== lastFormatted.current && (
+        {offerFormat && !pending && body.trim() !== lastFormatted && (
           <button
             type="button"
             className="text-xs text-primary hover:underline"

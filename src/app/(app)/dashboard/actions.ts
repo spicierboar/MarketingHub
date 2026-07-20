@@ -5,8 +5,20 @@ import { revalidatePath } from "next/cache";
 import { createPromptTemplate, getPromptTemplate } from "@/lib/db";
 import { assertCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
+import { processManagedApprovalReminders } from "@/lib/managed-service/workflow-service";
 import { agencyTemplateInput, templateToRequestParams } from "@/lib/agency-ops";
 import type { RequestType } from "@/lib/types";
+
+export async function sendDueApprovalRemindersAction(): Promise<void> {
+  const actor = await requireAdmin();
+  const sent = await processManagedApprovalReminders(actor);
+  await logAction(actor, "agency_control_plane.reminders_run", {
+    targetType: "managed_approval_queue",
+    detail: `${sent} due reminder(s) sent through the governed approval workflow`,
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/approvals");
+}
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();

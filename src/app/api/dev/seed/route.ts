@@ -2,33 +2,26 @@
 //   POST /api/dev/seed   → reset in-memory store to demo seed
 //   POST /api/dev/clear  → end is N/A over HTTP; resets store (same as seed)
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { resetStore } from "@/lib/db/store";
-import { localDemoEnabled, devToolsOpen } from "@/lib/env";
+import { localDemoPostAllowed } from "@/lib/dev-access";
 
-function gate() {
-  if (!devToolsOpen()) {
-    return NextResponse.json({ error: "dev tools locked in production" }, { status: 403 });
-  }
-  if (!localDemoEnabled()) {
+function gate(req: NextRequest) {
+  if (!localDemoPostAllowed(req.headers, req.url, req.method)) {
     return NextResponse.json(
       {
-        error: "CC_LOCAL_DEMO not enabled",
-        hint: "Set CC_LOCAL_DEMO=true and NEXT_PUBLIC_CC_LOCAL_DEMO=true, restart npm run dev",
+        error: "local-demo seed disabled",
+        hint: "Use a same-origin POST with CC_LOCAL_DEMO on a non-deployed localhost development server.",
       },
-      { status: 400 },
+      { status: 403 },
     );
   }
   return null;
 }
 
-export async function POST() {
-  const blocked = gate();
+export async function POST(req: NextRequest) {
+  const blocked = gate(req);
   if (blocked) return blocked;
   resetStore();
   return NextResponse.json({ ok: true, action: "seed", message: "Demo data re-seeded" });
-}
-
-export async function GET() {
-  return POST();
 }

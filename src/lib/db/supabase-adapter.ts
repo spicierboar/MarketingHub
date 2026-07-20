@@ -34,6 +34,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { now } from "@/lib/utils";
 import { randomUUID } from "node:crypto";
 import { chunkIds, COMPANY_ID_IN_CHUNK } from "@/lib/db/chunk-ids";
+import {
+  collectAllChunkPages,
+  collectAllPages,
+  dedupeById,
+} from "@/lib/db/pagination";
 import type {
   AdAccount, AdBudget, AdCampaign, AdPlatform, AddonId, AudienceSegment,
   AiRun, AiMosOpportunity, AiMosSignalRun, CalendarAssistSuggestion, ApprovedClaim, ApprovedResponse, Asset, AuditLog, AutomationRun,
@@ -41,6 +46,13 @@ import type {
   ApprovalPolicy, AiCampaignRecommendation, AiOrchestrationRun, AiPromptVersion, CampaignPerformanceSnapshot,
   PrivacyRequest,
   ManagedDeliveryRun,
+  ManagedApprovalRequest,
+  ManagedChannelAdaptation,
+  ManagedContentConcept,
+  ManagedEngagementRoute,
+  ManagedPaidAuthorization,
+  ManagedPlannedSlot,
+  ManagedStrategyCycle,
   CompanyCreditWallet,
   CompanyCreditLedgerEntry,
   CreditLedgerKind,
@@ -74,6 +86,8 @@ async function usr(): Promise<ReturnType<typeof getServiceSupabase>> {
   return getServerSupabase();
 }
 const svc = getServiceSupabase; // service role (sync)
+const MANAGED_APPROVAL_PUBLIC_COLUMNS =
+  "id,tenant_id,company_id,content_id,concept_id,planned_slot_id,ad_campaign_id,scope,recipient_email,status,due_at,revision_round,superseded_by_id,reminder_7d_at,reminder_3d_at,staff_escalation_at,reminder_7d_key,reminder_3d_key,staff_escalation_key,responded_at,direct_charge_disclosure_accepted_at,created_at,updated_at";
 
 // companies alone map created_by -> createdBy (everyone else -> createdById).
 const COMPANY_ALIAS = { created_by: "createdBy" } as const;
@@ -131,8 +145,17 @@ const many = <T>(rows: Row[] | null, ov?: Record<string, string>): T[] =>
 
 // tenant → its company ids (rows carry company_id; companies carry tenant_id).
 async function companyIds(sb: SupabaseClient, tenantId: string): Promise<string[]> {
-  const { data } = await sb.from("companies").select("id").eq("tenant_id", tenantId);
-  return (data ?? []).map((r) => (r as Row).id as string);
+  const data = await collectAllPages<Row>(
+    (from, to) =>
+      sb
+        .from("companies")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .order("id")
+        .range(from, to),
+    "companyIds",
+  );
+  return data.map((r) => r.id as string);
 }
 
 /** PostgREST URL length guard — fan out `.in()` across id chunks. */
@@ -147,10 +170,15 @@ async function selectInCompanyIdChunks(
   const chunks = chunkIds(ids, COMPANY_ID_IN_CHUNK);
   const parts = await Promise.all(
     chunks.map(async (chunk) => {
-      let q = sb.from(table).select("*").in("company_id", chunk);
-      if (orderCol) q = q.order(orderCol, { ascending });
-      const { data } = await q;
-      return (data ?? []) as Row[];
+      return collectAllPages<Row>(
+        (from, to) => {
+          let q = sb.from(table).select("*").in("company_id", chunk);
+          if (orderCol) q = q.order(orderCol, { ascending });
+          q = q.order("id", { ascending: true });
+          return q.range(from, to);
+        },
+        `select ${table}`,
+      );
     }),
   );
   return parts.flat();
@@ -183,6 +211,31 @@ export const supabaseRepo = {
     const sb = svc(); if (!sb) return undefined;
     const { data } = await sb.from("tenants").select("*").eq("stripe_customer_id", customerId).maybeSingle();
     return data ? toDomain<Tenant>(data) : undefined;
+  },
+  async hasProcessedStripeWebhookEvent(eventId: string): Promise<boolean> {
+    const sb = svc();
+    if (!sb) throw new Error("Supabase service client unavailable");
+    const { data, error } = await sb
+      .from("stripe_webhook_events")
+      .select("event_id")
+      .eq("event_id", eventId)
+      .maybeSingle();
+    if (error) throw new Error("stripe webhook event lookup: " + error.message);
+    return Boolean(data);
+  },
+  async recordProcessedStripeWebhookEvent(input: {
+    eventId: string;
+    eventType: string;
+  }): Promise<boolean> {
+    const sb = svc();
+    if (!sb) throw new Error("Supabase service client unavailable");
+    const { error } = await sb.from("stripe_webhook_events").insert({
+      event_id: input.eventId,
+      event_type: input.eventType,
+    });
+    if (!error) return true;
+    if (error.code === "23505") return false;
+    throw new Error("stripe webhook event record: " + error.message);
   },
 
   // Legal docs (terms + privacy) — platform-level (svc, like identity/audit).
@@ -443,7 +496,17 @@ export const supabaseRepo = {
   // ============================ Companies (RLS) ============================
   async listCompanies(tenantId: string): Promise<Company[]> {
     const sb = await usr(); if (!sb) return [];
-    const { data } = await sb.from("companies").select("*").eq("tenant_id", tenantId).order("name");
+    const data = await collectAllPages<Row>(
+      (from, to) =>
+        sb
+          .from("companies")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .order("name")
+          .order("id")
+          .range(from, to),
+      "listCompanies",
+    );
     return many<Company>(data, COMPANY_ALIAS).map(normaliseCompany);
   },
   async getCompany(companyId: string): Promise<Company | undefined> {
@@ -1133,7 +1196,7 @@ export const supabaseRepo = {
   },
   async activeSchedulesForContent(contentId: string): Promise<ScheduledPost[]> {
     const sb = await usr(); if (!sb) return [];
-    const { data } = await sb.from("scheduled_posts").select("*").eq("content_id", contentId).in("status", ["scheduled", "publishing"]);
+    const { data } = await sb.from("scheduled_posts").select("*").eq("content_id", contentId).in("status", ["scheduled", "publishing", "delivery_unknown"]);
     return many<ScheduledPost>(data);
   },
   async cancellableSchedulesForContent(contentId: string): Promise<ScheduledPost[]> {
@@ -1298,15 +1361,62 @@ export const supabaseRepo = {
   // next run) — a silent [] would zero the attempt count and blow ceilings.
   async listPublishLogsForPosts(tenantId: string, postIds: string[]): Promise<PublishLog[]> {
     const sb = await usr(); if (!sb || postIds.length === 0) return [];
-    const { data, error } = await sb.from("publish_logs").select("*").in("scheduled_post_id", postIds).in("company_id", await companyIds(sb, tenantId)).order("created_at", { ascending: false });
-    if (error) throw new Error("listPublishLogsForPosts: " + error.message);
-    return many<PublishLog>(data);
+    const companyChunks = chunkIds(
+      [...new Set(await companyIds(sb, tenantId))],
+      COMPANY_ID_IN_CHUNK,
+    );
+    const postChunks = chunkIds(
+      [...new Set(postIds)],
+      COMPANY_ID_IN_CHUNK,
+    );
+    if (companyChunks.length === 0) return [];
+    const queryChunks = postChunks.flatMap((posts) =>
+      companyChunks.map((companies) => ({ posts, companies })),
+    );
+    const rows = await collectAllChunkPages<
+      Row,
+      { posts: string[]; companies: string[] }
+    >(
+      queryChunks,
+      ({ posts, companies }, from, to) =>
+        sb
+          .from("publish_logs")
+          .select("*")
+          .in("scheduled_post_id", posts)
+          .in("company_id", companies)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, to),
+      "listPublishLogsForPosts",
+    );
+    const uniqueRows = dedupeById(rows);
+    return many<PublishLog>(uniqueRows).sort(
+      (a, b) =>
+        b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
+    );
   },
   async listPublishLogsSince(tenantId: string, sinceIso: string): Promise<PublishLog[]> {
     const sb = await usr(); if (!sb) return [];
-    const { data, error } = await sb.from("publish_logs").select("*").gte("created_at", sinceIso).in("company_id", await companyIds(sb, tenantId)).order("created_at", { ascending: false });
-    if (error) throw new Error("listPublishLogsSince: " + error.message);
-    return many<PublishLog>(data);
+    const ids = await companyIds(sb, tenantId);
+    const parts = await Promise.all(
+      chunkIds(ids, COMPANY_ID_IN_CHUNK).map((chunk) =>
+        collectAllPages<Row>(
+          (from, to) =>
+            sb
+              .from("publish_logs")
+              .select("*")
+              .gte("created_at", sinceIso)
+              .in("company_id", chunk)
+              .order("created_at", { ascending: false })
+              .order("id")
+              .range(from, to),
+          "listPublishLogsSince",
+        ),
+      ),
+    );
+    return many<PublishLog>(parts.flat()).sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
   },
 
   // ============================ Per-tenant singletons (svc) ================
@@ -2787,13 +2897,20 @@ export const supabaseRepo = {
     companyId?: string,
   ): Promise<ManagedDeliveryRun[]> {
     const sb = await usr(); if (!sb) return [];
-    let q = sb
-      .from("managed_delivery_runs")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .order("created_at", { ascending: false });
-    if (companyId) q = q.eq("company_id", companyId);
-    const { data } = await q;
+    const data = await collectAllPages<Row>(
+      (from, to) => {
+        let q = sb
+          .from("managed_delivery_runs")
+          .select("*")
+          .eq("tenant_id", tenantId);
+        if (companyId) q = q.eq("company_id", companyId);
+        return q
+          .order("created_at", { ascending: false })
+          .order("id")
+          .range(from, to);
+      },
+      "listManagedDeliveryRuns",
+    );
     return many<ManagedDeliveryRun>(data);
   },
   async listOpenManagedDeliveryRuns(tenantId: string): Promise<ManagedDeliveryRun[]> {
@@ -2846,6 +2963,235 @@ export const supabaseRepo = {
       .select("*")
       .maybeSingle();
     return data ? toDomain<ManagedDeliveryRun>(data) : undefined;
+  },
+
+  // ---- Durable managed-service workflow (0048) ------------------------------
+  async listManagedStrategyCycles(tenantId: string, companyId?: string): Promise<ManagedStrategyCycle[]> {
+    const sb = await usr(); if (!sb) return [];
+    const data = await collectAllPages<Row>(
+      (from, to) => {
+        let q = sb.from("managed_strategy_cycles").select("*").eq("tenant_id", tenantId);
+        if (companyId) q = q.eq("company_id", companyId);
+        return q.order("quarter_start", { ascending: false }).order("id").range(from, to);
+      },
+      "listManagedStrategyCycles",
+    );
+    return many<ManagedStrategyCycle>(data);
+  },
+  async createManagedStrategyCycle(input: Omit<ManagedStrategyCycle, "id" | "createdAt" | "updatedAt">): Promise<ManagedStrategyCycle> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("managed_strategy_cycles").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createManagedStrategyCycle: " + error.message);
+    return toDomain<ManagedStrategyCycle>(data);
+  },
+  async updateManagedStrategyCycle(id: string, patch: Partial<ManagedStrategyCycle>): Promise<ManagedStrategyCycle | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("managed_strategy_cycles").update({ ...toRow(patch), updated_at: now() }).eq("id", id).select("*").maybeSingle();
+    return data ? toDomain<ManagedStrategyCycle>(data) : undefined;
+  },
+  async listManagedContentConcepts(tenantId: string, companyId?: string): Promise<ManagedContentConcept[]> {
+    const sb = await usr(); if (!sb) return [];
+    const data = await collectAllPages<Row>(
+      (from, to) => {
+        let q = sb.from("managed_content_concepts").select("*").eq("tenant_id", tenantId);
+        if (companyId) q = q.eq("company_id", companyId);
+        return q.order("created_at").order("id").range(from, to);
+      },
+      "listManagedContentConcepts",
+    );
+    return many<ManagedContentConcept>(data);
+  },
+  async createManagedContentConcept(input: Omit<ManagedContentConcept, "id" | "createdAt" | "updatedAt">): Promise<ManagedContentConcept> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("managed_content_concepts")
+      .upsert(toRow(input), { onConflict: "company_id,package_period,unit_key" }).select("*").single();
+    if (error) throw new Error("createManagedContentConcept: " + error.message);
+    return toDomain<ManagedContentConcept>(data);
+  },
+  async updateManagedContentConcept(id: string, patch: Partial<ManagedContentConcept>): Promise<ManagedContentConcept | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("managed_content_concepts").update({ ...toRow(patch), updated_at: now() }).eq("id", id).select("*").maybeSingle();
+    return data ? toDomain<ManagedContentConcept>(data) : undefined;
+  },
+  async listManagedChannelAdaptations(tenantId: string, conceptId?: string): Promise<ManagedChannelAdaptation[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("managed_channel_adaptations").select("*").eq("tenant_id", tenantId);
+    if (conceptId) q = q.eq("concept_id", conceptId);
+    const { data } = await q.order("created_at");
+    return many<ManagedChannelAdaptation>(data);
+  },
+  async createManagedChannelAdaptation(input: Omit<ManagedChannelAdaptation, "id" | "createdAt" | "updatedAt">): Promise<ManagedChannelAdaptation> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("managed_channel_adaptations")
+      .upsert(toRow(input), { onConflict: "concept_id,channel_key" }).select("*").single();
+    if (error) throw new Error("createManagedChannelAdaptation: " + error.message);
+    return toDomain<ManagedChannelAdaptation>(data);
+  },
+  async updateManagedChannelAdaptation(id: string, patch: Partial<ManagedChannelAdaptation>): Promise<ManagedChannelAdaptation | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("managed_channel_adaptations").update({ ...toRow(patch), updated_at: now() }).eq("id", id).select("*").maybeSingle();
+    return data ? toDomain<ManagedChannelAdaptation>(data) : undefined;
+  },
+  async listManagedPlannedSlots(tenantId: string, companyId?: string): Promise<ManagedPlannedSlot[]> {
+    const sb = await usr(); if (!sb) return [];
+    const data = await collectAllPages<Row>(
+      (from, to) => {
+        let q = sb.from("managed_planned_slots").select("*").eq("tenant_id", tenantId);
+        if (companyId) q = q.eq("company_id", companyId);
+        return q.order("planned_publish_at").order("id").range(from, to);
+      },
+      "listManagedPlannedSlots",
+    );
+    return many<ManagedPlannedSlot>(data);
+  },
+  async createManagedPlannedSlot(input: Omit<ManagedPlannedSlot, "id" | "finalContentDueAt" | "createdAt" | "updatedAt">): Promise<ManagedPlannedSlot> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("managed_planned_slots").insert(toRow(input)).select("*").single();
+    if (error) throw new Error("createManagedPlannedSlot: " + error.message);
+    return toDomain<ManagedPlannedSlot>(data);
+  },
+  async updateManagedPlannedSlot(id: string, patch: Partial<ManagedPlannedSlot>): Promise<ManagedPlannedSlot | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const row = toRow(patch); delete row.final_content_due_at;
+    const { data } = await sb.from("managed_planned_slots").update({ ...row, updated_at: now() }).eq("id", id).select("*").maybeSingle();
+    return data ? toDomain<ManagedPlannedSlot>(data) : undefined;
+  },
+  async listManagedApprovalRequests(tenantId: string, companyId?: string): Promise<ManagedApprovalRequest[]> {
+    const sb = await usr(); if (!sb) return [];
+    const data = await collectAllPages<Row>(
+      (from, to) => {
+        let q = sb.from("managed_approval_requests").select(
+          MANAGED_APPROVAL_PUBLIC_COLUMNS,
+        ).eq("tenant_id", tenantId);
+        if (companyId) q = q.eq("company_id", companyId);
+        return q.order("created_at", { ascending: false }).order("id").range(from, to);
+      },
+      "listManagedApprovalRequests",
+    );
+    return many<ManagedApprovalRequest>(data);
+  },
+  async createManagedApprovalRequest(input: Omit<ManagedApprovalRequest, "id" | "createdAt" | "updatedAt">): Promise<ManagedApprovalRequest> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("managed_approval_requests")
+      .insert(toRow(input)).select(MANAGED_APPROVAL_PUBLIC_COLUMNS).single();
+    if (error) throw new Error("createManagedApprovalRequest: " + error.message);
+    return toDomain<ManagedApprovalRequest>(data);
+  },
+  async updateManagedApprovalRequest(id: string, patch: Partial<ManagedApprovalRequest>): Promise<ManagedApprovalRequest | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("managed_approval_requests")
+      .update({ ...toRow(patch), updated_at: now() }).eq("id", id)
+      .select(MANAGED_APPROVAL_PUBLIC_COLUMNS).maybeSingle();
+    return data ? toDomain<ManagedApprovalRequest>(data) : undefined;
+  },
+  async claimManagedApprovalReminder(
+    id: string,
+    kind: "client_7d" | "client_3d" | "staff_1d",
+    owner: string,
+    atIso: string,
+    leaseSeconds: number,
+  ): Promise<boolean> {
+    const sb = await usr(); if (!sb) return false;
+    const { data, error } = await sb.rpc("claim_managed_approval_reminder", {
+      p_request_id: id,
+      p_kind: kind,
+      p_owner: owner,
+      p_now: atIso,
+      p_lease_seconds: leaseSeconds,
+    });
+    if (error) throw new Error("claimManagedApprovalReminder: " + error.message);
+    return data === true;
+  },
+  async completeManagedApprovalReminderClaim(
+    id: string,
+    kind: "client_7d" | "client_3d" | "staff_1d",
+    owner: string,
+    idempotencyKey: string,
+    sentAt?: string,
+  ): Promise<boolean> {
+    const sb = await usr(); if (!sb) return false;
+    const stamp = sentAt ?? now();
+    const sentPatch =
+      kind === "client_7d"
+        ? { reminder_7d_at: stamp, reminder_7d_key: idempotencyKey }
+        : kind === "client_3d"
+          ? { reminder_3d_at: stamp, reminder_3d_key: idempotencyKey }
+          : { staff_escalation_at: stamp, staff_escalation_key: idempotencyKey };
+    const { data, error } = await sb
+      .from("managed_approval_requests")
+      .update({
+        ...(sentAt ? sentPatch : {}),
+        reminder_claim_kind: null,
+        reminder_claim_owner: null,
+        reminder_claimed_at: null,
+        reminder_claim_expires_at: null,
+        updated_at: now(),
+      })
+      .eq("id", id)
+      .eq("reminder_claim_kind", kind)
+      .eq("reminder_claim_owner", owner)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error("completeManagedApprovalReminderClaim: " + error.message);
+    return Boolean(data);
+  },
+  async respondManagedApprovalAsClient(
+    id: string,
+    decision: "approved" | "changes_requested",
+    acceptDirectChargeDisclosure: boolean,
+  ): Promise<boolean> {
+    const sb = await usr(); if (!sb) return false;
+    const { data, error } = await sb.rpc("client_respond_managed_approval", {
+      p_request_id: id,
+      p_decision: decision,
+      p_accept_direct_charge_disclosure: acceptDirectChargeDisclosure,
+    });
+    if (error) throw new Error("respondManagedApprovalAsClient: " + error.message);
+    return data === true;
+  },
+  async respondManagedApprovalWithToken(
+    tokenHash: string,
+    companyId: string,
+    decision: "approved" | "changes_requested",
+    responsePayload: Record<string, unknown>,
+    acceptDirectChargeDisclosure: boolean,
+  ): Promise<boolean> {
+    const sb = await usr(); if (!sb) return false;
+    const { data, error } = await sb.rpc("respond_managed_approval_with_token", {
+      p_token_hash: tokenHash,
+      p_company_id: companyId,
+      p_decision: decision,
+      p_response_payload: responsePayload,
+      p_accept_direct_charge_disclosure: acceptDirectChargeDisclosure,
+    });
+    if (error) throw new Error("respondManagedApprovalWithToken: " + error.message);
+    return data === true;
+  },
+  async createManagedPaidAuthorization(input: Omit<ManagedPaidAuthorization, "id" | "createdAt" | "updatedAt">): Promise<ManagedPaidAuthorization> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("managed_paid_authorizations")
+      .upsert(toRow(input), { onConflict: "ad_campaign_id,month_key" }).select("*").single();
+    if (error) throw new Error("createManagedPaidAuthorization: " + error.message);
+    return toDomain<ManagedPaidAuthorization>(data);
+  },
+  async listManagedPaidAuthorizations(tenantId: string, companyId?: string): Promise<ManagedPaidAuthorization[]> {
+    const sb = await usr(); if (!sb) return [];
+    let q = sb.from("managed_paid_authorizations").select("*").eq("tenant_id", tenantId);
+    if (companyId) q = q.eq("company_id", companyId);
+    const { data } = await q.order("created_at", { ascending: false });
+    return many<ManagedPaidAuthorization>(data);
+  },
+  async updateManagedPaidAuthorization(id: string, patch: Partial<ManagedPaidAuthorization>): Promise<ManagedPaidAuthorization | undefined> {
+    const sb = await usr(); if (!sb) return undefined;
+    const { data } = await sb.from("managed_paid_authorizations").update({ ...toRow(patch), updated_at: now() }).eq("id", id).select("*").maybeSingle();
+    return data ? toDomain<ManagedPaidAuthorization>(data) : undefined;
+  },
+  async createManagedEngagementRoute(input: Omit<ManagedEngagementRoute, "id" | "createdAt">): Promise<ManagedEngagementRoute> {
+    const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
+    const { data, error } = await sb.from("managed_engagement_routes")
+      .upsert(toRow(input), { onConflict: "company_id,source_kind,source_id" }).select("*").single();
+    if (error) throw new Error("createManagedEngagementRoute: " + error.message);
+    return toDomain<ManagedEngagementRoute>(data);
   },
 
   // ---- Prepaid company credit wallet (0039) ----------------------------------

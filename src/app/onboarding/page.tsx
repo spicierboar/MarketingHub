@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { requireTenantOwnerRaw } from "@/lib/auth/rbac";
-import { currentTerms, getTenant, hasAcceptedTerms } from "@/lib/db";
-import { useMockPackageCheckout } from "@/lib/billing";
+import {
+  currentPrivacy,
+  currentTerms,
+  getTenant,
+  hasAcceptedTerms,
+} from "@/lib/db";
+import { mockPackageCheckoutEnabled } from "@/lib/billing";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
@@ -13,6 +18,10 @@ import {
 import { OnboardingPackagePicker } from "@/components/onboarding-package-picker";
 import { OnboardingDetailsFields } from "@/components/onboarding-details-fields";
 import { OnboardingPlanCheckout } from "@/components/onboarding-plan-checkout";
+import {
+  currentPackageId,
+  monthlyServiceOptionsAud,
+} from "@/lib/managed-service-billing";
 import {
   acceptOnboardingTermsAction,
   completeOnboardingPaymentAction,
@@ -26,7 +35,7 @@ function Stepper({ step }: { step: Step }) {
   const steps: { key: Step; label: string }[] = [
     { key: "details", label: "Your details" },
     { key: "package", label: "Marketing package" },
-    { key: "terms", label: "Accept terms" },
+    { key: "terms", label: "Terms & privacy" },
     { key: "payment", label: "Payment" },
   ];
   const idx = steps.findIndex((s) => s.key === step);
@@ -85,7 +94,10 @@ export default async function OnboardingPage({
   if (tenant.onboardingCompletedAt) redirect("/dashboard");
 
   const params = await searchParams;
-  const terms = await currentTerms();
+  const [terms, privacy] = await Promise.all([currentTerms(), currentPrivacy()]);
+  const legalDocs = [terms, privacy].filter(
+    (doc): doc is NonNullable<typeof doc> => Boolean(doc),
+  );
   const detailsDone = !!(
     tenant.onboarding?.abn &&
     tenant.onboarding?.industry &&
@@ -94,9 +106,12 @@ export default async function OnboardingPage({
     tenant.onboarding?.contactEmail
   );
   const packageDone = !!tenant.onboarding?.marketingPackageId;
-  const termsDone =
-    !terms || (await hasAcceptedTerms(user.id, terms.version, "terms"));
-  const mockCheckout = useMockPackageCheckout();
+  const termsDone = (
+    await Promise.all(
+      legalDocs.map((doc) => hasAcceptedTerms(user.id, doc.version, doc.kind)),
+    )
+  ).every(Boolean);
+  const mockCheckout = mockPackageCheckoutEnabled();
 
   const requested = params.step as Step | undefined;
   let step: Step = !detailsDone
@@ -135,7 +150,7 @@ export default async function OnboardingPage({
 
   const prefillBanner =
     params.prefilled === "1"
-      ? "We pre-filled what we could from your website, public pages, and Google listing signals. Check everything below, then Continue."
+      ? "We prepared a staging preview from your website and public business listing. Check every detail before continuing."
       : params.prefilled === "partial"
         ? "Partial prefill — some public signals were thin. Review and complete any blank required fields."
         : params.prefilled === "0"
@@ -167,6 +182,8 @@ export default async function OnboardingPage({
     channels: p.channels,
     postsPerMonth: p.postsPerMonth,
     campaignsPerMonth: p.campaignsPerMonth,
+    campaignConceptsPerMonth: p.campaignConceptsPerMonth,
+    searchVisibilityIncluded: p.searchVisibilityIncluded,
     promosIncludedPerMonth: p.promosIncludedPerMonth,
     adsManagementIncluded: p.adsManagementIncluded,
     imageQuotaPerMonth: p.imageQuotaPerMonth,
@@ -191,9 +208,13 @@ export default async function OnboardingPage({
     paymentPrice = quote.priceAudMonthly;
     paymentPackageName = `${catalogPkg.name} (custom)`;
   }
+  paymentPrice += monthlyServiceOptionsAud(
+    packageId ?? "starter",
+    tenant.onboarding?.serviceOptions,
+  );
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center p-6">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center p-4 sm:p-6">
       <div className="mb-4">
         <h1 className="text-xl font-semibold">Welcome to Marketing Command Centre</h1>
         <p className="text-sm text-muted-foreground">
@@ -215,11 +236,12 @@ export default async function OnboardingPage({
               serverError={params.err?.trim() || null}
               intro={
                 <p className="text-sm text-muted-foreground">
-                  Start with your website (optional). Prefill pulls public pages plus
-                  Google listing signals, then review ABN and contact details.
+                  Start with your business name, website and contact. We’ll prepare a
+                  staging preview for you to edit before anything is activated.
                 </p>
               }
               defaults={{
+                businessName: tenant.onboarding?.companyName ?? tenant.name,
                 abn: tenant.onboarding?.abn,
                 industry: tenant.onboarding?.industry,
                 natureOfBusiness: tenant.onboarding?.natureOfBusiness,
@@ -237,7 +259,9 @@ export default async function OnboardingPage({
             <div className="space-y-4">
               <OnboardingPackagePicker
                 packages={packages}
-                initialPackageId={tenant.onboarding?.marketingPackageId}
+                initialPackageId={currentPackageId(
+                  tenant.onboarding?.marketingPackageId,
+                )}
                 initialCustomModules={tenant.onboarding?.customModules}
                 action={selectOnboardingPackageAction}
               />
@@ -268,26 +292,24 @@ export default async function OnboardingPage({
                   . Ad spend is always extra.
                 </p>
               ) : null}
-              {terms ? (
+              {legalDocs.length > 0 ? (
                 <>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{terms.title}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      v{terms.version}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      effective {formatDate(terms.effectiveDate)}
-                    </span>
-                  </div>
-                  <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                    {terms.body}
-                  </div>
-                  {(await hasAcceptedTerms(user.id, terms.version, "terms")) && (
-                    <p className="text-xs text-emerald-600">
-                      You&apos;ve already accepted this version — continue to
-                      payment below.
-                    </p>
-                  )}
+                  {legalDocs.map((doc) => (
+                    <div key={doc.id} className="rounded-md border border-border">
+                      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+                        <span className="font-medium">{doc.title}</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          v{doc.version}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          effective {formatDate(doc.effectiveDate)}
+                        </span>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto whitespace-pre-wrap bg-muted/30 p-4 text-sm text-muted-foreground">
+                        {doc.body}
+                      </div>
+                    </div>
+                  ))}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -303,7 +325,9 @@ export default async function OnboardingPage({
                 </a>
                 <form action={acceptOnboardingTermsAction}>
                   <Button type="submit">
-                    {terms ? "Accept & continue to payment →" : "Continue to payment →"}
+                    {legalDocs.length
+                      ? "Accept terms & privacy →"
+                      : "Continue to payment →"}
                   </Button>
                 </form>
               </div>
@@ -313,8 +337,9 @@ export default async function OnboardingPage({
           {step === "payment" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Enter card details to finish setup
-                {mockCheckout ? " (demo — no live charge)" : ""}.
+                {mockCheckout
+                  ? "Enter local demo card details to finish setup (no live charge)."
+                  : "Continue to Stripe Checkout to finish payment securely."}
               </p>
               <OnboardingPlanCheckout
                 key={params.payError ?? "payment"}

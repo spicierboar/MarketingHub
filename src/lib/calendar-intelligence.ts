@@ -408,7 +408,7 @@ function eventInMonth(ev: { date: string; endDate?: string }, monthKey: string):
     return ev.date.slice(0, 2) === monthKey.slice(5, 7);
   }
 
-  let start = toIsoInYear(ev.date, y);
+  const start = toIsoInYear(ev.date, y);
   if (isoInMonth(start, monthKey)) return true;
 
   if (ev.endDate) {

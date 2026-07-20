@@ -508,6 +508,16 @@ export default async function AssetDetailPage({
           <Card>
             <CardContent className="p-6">
               <h2 className="mb-3 font-semibold">Provenance</h2>
+              {admin && asset.privateProvenance && (
+                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                    Internal only · service provenance
+                  </p>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-amber-950">
+                    {JSON.stringify(asset.privateProvenance, null, 2)}
+                  </pre>
+                </div>
+              )}
               <dl className="space-y-2 text-sm">
                 {asset.aiModel && (
                   <div className="flex justify-between">

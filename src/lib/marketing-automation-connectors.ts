@@ -1,4 +1,6 @@
 // Marketing automation dispatch connectors (W4 M36).
+import { localDemoEnabled } from "@/lib/env";
+import { emailConfigured } from "@/lib/email";
 
 export interface WorkflowEmailDispatchInput {
   to: string;
@@ -23,7 +25,7 @@ export function workflowLive(): boolean {
 }
 
 export function workflowEmailConfigured(): boolean {
-  return !!process.env.RESEND_API_KEY?.trim();
+  return emailConfigured();
 }
 
 export function workflowSmsConfigured(): boolean {
@@ -54,6 +56,13 @@ function simulatedDeliver(to: string): boolean {
 export async function dispatchWorkflowEmail(
   input: WorkflowEmailDispatchInput,
 ): Promise<WorkflowDispatchResult> {
+  if (localDemoEnabled()) {
+    return {
+      ok: true,
+      mode: "simulated",
+      detail: `SIMULATED LOCAL DEMO — no email provider request was made for ${input.to}`,
+    };
+  }
   if (workflowLive() && workflowEmailConfigured()) {
     return { ok: true, mode: "live", detail: `live email queued to ${input.to}` };
   }

@@ -4,6 +4,7 @@ import {
   buildPublishingPlatformHealth,
   dispatchPublish,
   publishingLive,
+  resolvePublishingMode,
 } from "@/lib/publishing-connectors";
 import {
   assertConnectorAction,
@@ -30,9 +31,61 @@ function stubIntegration(platform: string): PublishingIntegration {
 
 export async function checkPublishingSimWhenLiveOff(): Promise<{ ok: boolean; detail: string }> {
   const live = publishingLive();
-  const result = await dispatchPublish(stubIntegration("Facebook"), "hello");
-  const ok = !live && result === null;
-  return { ok, detail: `live=${live} dispatch=${result === null ? "null" : "handled"}` };
+  const mode = resolvePublishingMode();
+  let fetchCalls = 0;
+  const result = await dispatchPublish(stubIntegration("Facebook"), "hello", {
+    fetcher: async () => {
+      fetchCalls += 1;
+      return Response.json({});
+    },
+  });
+  const ok =
+    !live &&
+    mode.kind === "simulate" &&
+    result.blocked === true &&
+    fetchCalls === 0;
+  return {
+    ok,
+    detail: `live=${live} mode=${mode.kind} blocked=${result.blocked === true} fetchCalls=${fetchCalls}`,
+  };
+}
+
+export async function checkPublishingLiveMisconfigurationFailsClosed(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const names = [
+    "CC_ENV",
+    "PUBLISHING_LIVE",
+    "PUBLISHING_TOKEN_KEY",
+    "META_APP_ID",
+    "META_APP_SECRET",
+  ] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  let fetchCalls = 0;
+  try {
+    process.env.CC_ENV = "development";
+    process.env.PUBLISHING_LIVE = "true";
+    process.env.PUBLISHING_TOKEN_KEY = "self-test-key";
+    delete process.env.META_APP_ID;
+    delete process.env.META_APP_SECRET;
+    const result = await dispatchPublish(stubIntegration("Facebook"), "hello", {
+      fetcher: async () => {
+        fetchCalls += 1;
+        return Response.json({});
+      },
+    });
+    return {
+      ok: !result.ok && result.blocked === true && fetchCalls === 0,
+      detail: `ok=${result.ok} blocked=${result.blocked === true} fetchCalls=${fetchCalls}`,
+    };
+  } finally {
+    for (const name of names) {
+      const value = previous[name];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 }
 
 export async function checkPublishingPlatformHealthRows(): Promise<{ ok: boolean; detail: string }> {

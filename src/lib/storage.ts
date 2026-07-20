@@ -14,11 +14,17 @@
 
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { basename, join, dirname } from "node:path";
 import { getServiceSupabase } from "@/lib/db/supabase";
 import type { StoredFileRef } from "@/lib/types";
 
-const MEDIA_DIR = process.env.CC_MEDIA_DIR?.trim() || undefined;
+const configuredMediaDirectory = process.env.CC_MEDIA_DIR?.trim();
+// Keep the disk backend inside its dedicated dev root. Besides preventing an
+// env typo from escaping the project, the static prefix lets NFT trace only
+// media files instead of treating the whole repository as a possible target.
+const MEDIA_DIR = configuredMediaDirectory
+  ? join(process.cwd(), ".dev-media", basename(configuredMediaDirectory))
+  : undefined;
 const BUCKET = process.env.SUPABASE_MEDIA_BUCKET?.trim() || undefined;
 
 export const MAX_MEDIA_BYTES =

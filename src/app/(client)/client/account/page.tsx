@@ -101,8 +101,8 @@ export default async function ClientAccountPage() {
                 <div>
                   <p className="text-sm font-medium">{marketingPkg.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    A${marketingPkg.priceAudMonthly}/mo · {marketingPkg.imageQuotaPerMonth}{" "}
-                    AI images + {marketingPkg.videoQuotaPerMonth} short videos / mo included ·
+                    A${marketingPkg.priceAudMonthly}/mo excl GST · {marketingPkg.imageQuotaPerMonth}{" "}
+                    campaign images + {marketingPkg.videoQuotaPerMonth} short videos / mo included ·
                     package changes are agency-managed
                   </p>
                 </div>
@@ -294,7 +294,8 @@ export default async function ClientAccountPage() {
                 appears under Approvals.
               </p>
               <p>
-                Nothing goes live without the usual checks. AI never publishes or spends on its own.
+                Nothing goes live without the usual checks. The automated content service never
+                publishes or spends on its own.
               </p>
               <Link href="/client/help" className="inline-block text-xs text-primary hover:underline">
                 More help →

@@ -3,9 +3,8 @@ import { redirect } from "next/navigation";
 import { requireSalesRepOrAdmin } from "@/lib/auth/rbac";
 import { getCompany, getTenant } from "@/lib/db";
 import {
+  mockPackageCheckoutEnabled,
   stripeConfigured,
-  stripeMarketingPackagePriceId,
-  useMockPackageCheckout,
 } from "@/lib/billing";
 import {
   listActivePackagesForSignup,
@@ -134,6 +133,8 @@ export default async function NewClientPage({
     channels: p.channels,
     postsPerMonth: p.postsPerMonth,
     campaignsPerMonth: p.campaignsPerMonth,
+    campaignConceptsPerMonth: p.campaignConceptsPerMonth,
+    searchVisibilityIncluded: p.searchVisibilityIncluded,
     promosIncludedPerMonth: p.promosIncludedPerMonth,
     adsManagementIncluded: p.adsManagementIncluded,
     imageQuotaPerMonth: p.imageQuotaPerMonth,
@@ -143,10 +144,9 @@ export default async function NewClientPage({
   }));
 
   const packageId = (company?.profile.managedService?.marketingPackageId ??
-    "pro") as MarketingPackageId;
+    "growth") as MarketingPackageId;
   const selectedPkg = resolvePackageById(tenant, packageId);
-  const mockCheckout =
-    useMockPackageCheckout() || !stripeMarketingPackagePriceId(packageId);
+  const mockCheckout = mockPackageCheckoutEnabled();
 
   return (
     <div>
@@ -232,7 +232,7 @@ export default async function NewClientPage({
                   </p>
                   <p>
                     Next step collects package payment
-                    {stripeConfigured() && !useMockPackageCheckout()
+                    {stripeConfigured() && !mockPackageCheckoutEnabled()
                       ? " via Stripe Checkout when package prices are configured"
                       : " with a full demo checkout experience"}
                     . Extra video/photo capacity is managed later under{" "}

@@ -60,7 +60,8 @@ export default async function ClientHelpPage() {
                 you&apos;re happy; we handle the rest within the limits you and your agency agreed.
               </p>
               <p>
-                Nothing goes live without the usual checks. AI never publishes or spends on its own.
+                Nothing goes live without the usual checks. The automated content service never
+                publishes or spends on its own.
               </p>
             </CardContent>
           </Card>

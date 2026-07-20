@@ -88,7 +88,7 @@ export async function buildCompanyStrategyView(
 
   let strategySummary = ms?.strategySummary?.trim() || null;
   let strategyChannelPlan = ms?.strategyChannelPlan?.trim() || null;
-  let campaignId = run?.campaignId ?? null;
+  const campaignId = run?.campaignId ?? null;
 
   if ((!strategySummary || !strategyChannelPlan) && campaignId) {
     const campaign = await getCampaign(campaignId);

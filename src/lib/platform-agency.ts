@@ -174,7 +174,7 @@ async function promoteAgencyOpsIfNeeded(
  * `kind`/`name`, and (outside production) promote leftover admin membership
  * so Legal publish is not blocked by session/admin lag or duplicate agency rows.
  *
- * Call from Settings / Legal loads and staging quick-login — never deletes data.
+ * Call from Settings / Legal loads — never deletes data.
  */
 export async function ensurePlatformAgencyPublisherContext(
   user: ActingUser,

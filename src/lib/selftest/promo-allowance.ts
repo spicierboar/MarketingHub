@@ -86,7 +86,7 @@ export async function checkPromoAllowanceBillingClass(): Promise<{
   };
 }
 
-export async function checkPromoIncludedStillAvailable(): Promise<{
+export async function checkManagedPromoRemainsExtra(): Promise<{
   ok: boolean;
   detail: string;
 }> {
@@ -95,15 +95,15 @@ export async function checkPromoIncludedStillAvailable(): Promise<{
       ...stubGbpCompany().profile,
       managedService: {
         serviceLevel: "fully_managed",
-        marketingPackageId: "blast",
+        marketingPackageId: "managed",
       },
       promoSelections: [
         stubSelection({ id: "p1", billingClass: "included", periodKey: "2026-07" }),
       ],
     },
   });
-  // Blast = 2/mo; 1 used → still included
+  // The current Managed catalog has no included ready-made promos.
   const next = resolvePromoBillingClass(company, null, "2026-07-15T00:00:00.000Z");
-  const ok = next === "included";
-  return { ok, detail: ok ? `next=${next}` : `expected included got ${next}` };
+  const ok = next === "extra";
+  return { ok, detail: ok ? `next=${next}` : `expected extra got ${next}` };
 }

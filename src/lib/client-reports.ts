@@ -242,9 +242,9 @@ export async function sendClientReportEmail(args: {
     await logAction(actor, "client_report.sent", {
       targetType: "company",
       targetId: companyId,
-      detail: emailConfigured()
-        ? `ROI report: emailed ${result.sent}/${recipients.length} for ${company.name}`
-        : `ROI report: ${recipients.length} recipient(s) — email NOT sent (no RESEND_API_KEY)`,
+      detail: result.detail
+        ? `ROI report: ${recipients.length} recipient(s) · ${result.detail}`
+        : `ROI report: emailed ${result.sent}/${recipients.length} for ${company.name}`,
     });
   }
   return {
@@ -261,52 +261,43 @@ export async function runScheduledClientReportsForTenant(
   options: { deadlineMs?: number; signal?: AbortSignal } = {},
 ) {
   return runInServiceContext(tenantId, async () => {
-    let companiesChecked = 0;
-    let reportsSent = 0;
-    let recipients = 0;
-    const actor: ActingUser = {
-      id: "system:cron",
-      email: "cron@marketing-command-centre.system",
-      name: "Scheduler",
-      role: "super_admin",
-      active: true,
-      tenantId,
-      tenantRole: "owner",
-      createdAt: "1970-01-01T00:00:00.000Z",
-    };
-    for (const company of (await listCompanies(tenantId)).filter(
-      (c) => c.status !== "archived",
-    )) {
-      if (
-        options.signal?.aborted ||
-        (options.deadlineMs && Date.now() >= options.deadlineMs)
-      ) {
-        break;
-      }
-      companiesChecked += 1;
-      if (!isScheduledReportDue(company)) continue;
-      if (
-        (await listPortalRecipientsForCompany(tenantId, company.id)).length ===
-        0
-      ) {
-        continue;
-      }
-      try {
-        const outcome = await sendClientReportEmail({
-          tenantId,
-          companyId: company.id,
-          origin,
-          actor,
-        });
-        if (outcome.recipients > 0) {
-          reportsSent += 1;
-          recipients += outcome.recipients;
+      let companiesChecked = 0;
+      let reportsSent = 0;
+      let recipients = 0;
+      const actor: ActingUser = {
+        id: "system:cron",
+        email: "cron@marketing-command-centre.system",
+        name: "Scheduler",
+        role: "super_admin",
+        active: true,
+        tenantId,
+        tenantRole: "owner",
+        createdAt: "1970-01-01T00:00:00.000Z",
+      };
+      for (const company of (await listCompanies(tenantId)).filter((c) => c.status !== "archived")) {
+        if (
+          options.signal?.aborted ||
+          (options.deadlineMs && Date.now() >= options.deadlineMs)
+        ) break;
+        companiesChecked += 1;
+        if (!isScheduledReportDue(company)) continue;
+        if ((await listPortalRecipientsForCompany(tenantId, company.id)).length === 0) continue;
+        try {
+          const outcome = await sendClientReportEmail({
+            tenantId,
+            companyId: company.id,
+            origin,
+            actor,
+          });
+          if (outcome.recipients > 0) {
+            reportsSent += 1;
+            recipients += outcome.recipients;
+          }
+        } catch (err) {
+          console.error(`[client-reports] send failed for ${company.id}:`, err);
         }
-      } catch (err) {
-        console.error(`[client-reports] send failed for ${company.id}:`, err);
       }
-    }
-    return { companiesChecked, reportsSent, recipients };
+      return { companiesChecked, reportsSent, recipients };
   });
 }
 
@@ -314,19 +305,12 @@ export async function runScheduledClientReports(
   origin: string,
   options: { deadlineMs?: number; signal?: AbortSignal } = {},
 ) {
-  const results: {
-    tenantId: string;
-    companiesChecked: number;
-    reportsSent: number;
-    recipients: number;
-  }[] = [];
+  const results: { tenantId: string; companiesChecked: number; reportsSent: number; recipients: number }[] = [];
   for (const tenant of await listTenants()) {
     if (
       options.signal?.aborted ||
       (options.deadlineMs && Date.now() >= options.deadlineMs)
-    ) {
-      break;
-    }
+    ) break;
     if (tenant.status !== "active") continue;
     const tick = await runScheduledClientReportsForTenant(
       tenant.id,

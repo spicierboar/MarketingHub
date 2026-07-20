@@ -9,6 +9,22 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { localDemoEnabled } from "@/lib/env";
+import { currentScheduledExecution } from "@/lib/scheduled-execution";
+
+export function scheduledSupabaseFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const scheduledSignal = currentScheduledExecution()?.signal;
+  if (!scheduledSignal) return globalThis.fetch(input, init);
+  const requestSignal = input instanceof Request ? input.signal : undefined;
+  const signals = [scheduledSignal, init?.signal, requestSignal].filter(
+    (signal): signal is AbortSignal => Boolean(signal),
+  );
+  const signal =
+    signals.length === 1 ? signals[0] : AbortSignal.any(signals);
+  return globalThis.fetch(input, { ...init, signal });
+}
 
 export function isSupabaseConfigured(): boolean {
   // Local demo bypass: force in-memory store + cookie auth despite Supabase env.
@@ -68,6 +84,7 @@ export function getServiceSupabase(): SupabaseClient | null {
     url && key
       ? createClient(url, key, {
           auth: { persistSession: false, autoRefreshToken: false },
+          global: { fetch: scheduledSupabaseFetch },
         })
       : null;
   return serviceClient;

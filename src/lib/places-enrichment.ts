@@ -1,8 +1,14 @@
 // Google Places read-only enrichment for onboarding pre-fill.
 // Find Place / Text Search + Details — NO GBP OAuth, NO publish, no *_LIVE
-// flips for ads or publishing. Deterministic simulation when API key unset.
+// flips for ads or publishing. Deterministic simulation on staging or when the
+// API key is unset.
 
-import { appEnv } from "@/lib/env";
+import {
+  appEnv,
+  liveIntegrationsAllowed,
+  providerLiveFlagEnabled,
+  type AppEnv,
+} from "@/lib/env";
 import type { AutoOnboardingExtractedFields } from "@/lib/auto-onboarding";
 import type { CompanyProfile } from "@/lib/types";
 
@@ -41,16 +47,29 @@ function placesApiKey(): string | undefined {
   );
 }
 
-/** True when a Google Places API key is configured. */
+/** True only when Google Places is effectively activated for outbound calls. */
 export function placesEnrichmentConfigured(): boolean {
-  return !!placesApiKey();
+  return (
+    providerLiveFlagEnabled(process.env.PLACES_ENRICHMENT_LIVE) &&
+    liveIntegrationsAllowed() &&
+    Boolean(placesApiKey())
+  );
+}
+
+export function placesEnrichmentLiveFor(
+  env: AppEnv,
+  configured: boolean,
+  liveFlag = false,
+): boolean {
+  return configured && env === "production" && liveFlag;
 }
 
 function placesEnrichmentLive(): boolean {
-  if (!placesEnrichmentConfigured()) return false;
-  const env = appEnv();
-  if (env === "development" || env === "staging") return true;
-  return process.env.PLACES_ENRICHMENT_LIVE === "true";
+  return placesEnrichmentLiveFor(
+    appEnv(),
+    placesEnrichmentConfigured(),
+    providerLiveFlagEnabled(process.env.PLACES_ENRICHMENT_LIVE),
+  );
 }
 
 // ---- helpers -----------------------------------------------------------------
@@ -149,6 +168,7 @@ interface PlacesDetailsResponse {
 }
 
 async function googlePlacesFetch<T>(path: string, params: Record<string, string>): Promise<T | null> {
+  if (!placesEnrichmentConfigured()) return null;
   const key = placesApiKey();
   if (!key) return null;
 

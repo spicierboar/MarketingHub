@@ -13,6 +13,7 @@ import {
   listCompanies,
   listScheduledPosts,
   updateCalendarAssistSuggestion,
+  updateContent,
 } from "@/lib/db";
 import { logAction } from "@/lib/audit";
 import {
@@ -483,6 +484,13 @@ export async function autoDraftOpenCalendarAssistSuggestions(
   const { applyQualityRoutingAfterDraft } = await import(
     "@/lib/managed-service/quality-routing"
   );
+  const {
+    createManagedConceptBundle,
+    ensureQuarterlyStrategyCycle,
+  } = await import("@/lib/managed-service/workflow-service");
+  const { managedChannelKeyFromLabel } = await import(
+    "@/lib/managed-service/workflow"
+  );
 
   let accepted = 0;
   let routed = 0;
@@ -493,6 +501,57 @@ export async function autoDraftOpenCalendarAssistSuggestions(
       const contentId = await acceptCalendarAssistSuggestion(suggestion, actor);
       accepted += 1;
       try {
+        const content = await getContent(contentId);
+        if (content) {
+          const rawPackage =
+            company.profile.managedService?.serviceBilling?.activePackageId ??
+            company.profile.managedService?.marketingPackageId ??
+            "starter";
+          const packageId =
+            rawPackage === "managed" || rawPackage === "blast"
+              ? "managed"
+              : rawPackage === "growth" ||
+                  rawPackage === "pro" ||
+                  rawPackage === "custom"
+                ? "growth"
+                : "starter";
+          const channelKey = managedChannelKeyFromLabel(suggestion.platform);
+          const cycle = await ensureQuarterlyStrategyCycle({
+            company,
+            packageId,
+            goals: [suggestion.brief || suggestion.title],
+            seasonalInputs: [
+              company.profile.localMarketNotes ||
+                "No seasonal constraints confirmed for this quarter",
+            ],
+            profileConfirmedAt: company.updatedAt,
+            channels: [channelKey],
+            themes: [suggestion.title],
+            publishWindows: [suggestion.proposedTime || "11:00"],
+          });
+          const concept = await createManagedConceptBundle({
+            tenantId: company.tenantId,
+            companyId: company.id,
+            strategyCycleId: cycle.id,
+            packagePeriod: suggestion.proposedDate.slice(0, 7),
+            unitKey: `calendar-assist-${suggestion.id}`,
+            title: content.title,
+            theme: suggestion.title,
+            adaptations: [
+              {
+                channelKey,
+                copy: content.body,
+                plannedPublishAt: new Date(
+                  `${suggestion.proposedDate}T${suggestion.proposedTime || "11:00"}:00.000Z`,
+                ).toISOString(),
+              },
+            ],
+          });
+          await updateContent(content.id, {
+            managedConceptId: concept.id,
+            managedChannelKey: channelKey,
+          });
+        }
         await applyQualityRoutingAfterDraft({
           contentId,
           actor,

@@ -2,7 +2,6 @@
 // Mirrors ordering-stripe.ts — destination charge to photographer Connect account
 // with application_fee_amount for the platform marketplace fee.
 
-import { stripeConfigured } from "@/lib/billing";
 import { photoMarketplaceStripeReady } from "@/lib/photo-marketplace";
 import type { PhotoMarketplaceBooking, PhotographerProfile } from "@/lib/types";
 
@@ -10,8 +9,9 @@ async function stripePost(
   path: string,
   params: Record<string, string>,
 ): Promise<Record<string, unknown> | null> {
+  if (!photoMarketplaceStripeReady()) return null;
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return null;
+  if (!key?.trim()) return null;
   try {
     const res = await fetch(`https://api.stripe.com/v1/${path}`, {
       method: "POST",
@@ -34,7 +34,7 @@ async function stripePost(
 }
 
 export function stripePhotoMarketplaceConfigured(): boolean {
-  return stripeConfigured();
+  return photoMarketplaceStripeReady();
 }
 
 export async function createMarketplaceCheckoutSession(
