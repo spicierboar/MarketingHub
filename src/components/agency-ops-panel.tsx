@@ -137,6 +137,9 @@ export function AgencyAlertsList({
               <p className="text-[11px] text-muted-foreground">
                 {alert.companyName} · {alert.detail}
               </p>
+              <p className="mt-1 text-[11px] font-medium text-foreground">
+                Owner: Staff · Next: {ALERT_LABEL[alert.kind]}
+              </p>
             </div>
             <span className="shrink-0 text-[11px] text-muted-foreground">open →</span>
           </Link>
@@ -150,11 +153,14 @@ export function AgencyAlertsList({
           >
             <div className="min-w-0">
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <Badge tone="info">AI-MOS</Badge>
+                <Badge tone="info">Opportunity</Badge>
                 <span className="font-medium">{item.title}</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 {item.companyName} · {item.detail}
+              </p>
+              <p className="mt-1 text-[11px] font-medium text-foreground">
+                Owner: Staff · Next: Review
               </p>
             </div>
             <span className="shrink-0 text-xs text-muted-foreground">open →</span>
