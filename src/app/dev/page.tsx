@@ -5,7 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
-import { localDemoMutationAllowed } from "@/lib/dev-access";
+import {
+  localDemoMutationAllowed,
+  selfTestSecretConfigured,
+} from "@/lib/dev-access";
 import { isSupabaseConfigured } from "@/lib/db/supabase";
 import {
   clearAndReseedAction,
@@ -30,6 +33,23 @@ const DEMO_LOGINS = [
   },
 ] as const;
 
+function QuickLoginSecretFields({ required }: { required: boolean }) {
+  if (!required) return null;
+  return (
+    <label className="grid gap-1 text-sm">
+      <span className="text-muted-foreground">CC_SELFTEST_SECRET</span>
+      <input
+        type="password"
+        name="selftestSecret"
+        required
+        autoComplete="off"
+        placeholder="Required on this deployment"
+        className="h-9 min-w-[16rem] rounded-md border border-input bg-background px-3 text-sm"
+      />
+    </label>
+  );
+}
+
 export default async function DevToolsPage({
   searchParams,
 }: {
@@ -44,6 +64,7 @@ export default async function DevToolsPage({
   const staging = appEnv() === "staging";
   const quickLoginOk = demoFlag || staging;
   const supabaseActive = isSupabaseConfigured();
+  const secretRequired = selfTestSecretConfigured();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-10">
@@ -100,7 +121,11 @@ export default async function DevToolsPage({
               <dd>
                 {quickLoginOk ? (
                   <Badge tone="success">
-                    {staging && !demoFlag ? "ON — staging (no email)" : "ON"}
+                    {staging && !demoFlag
+                      ? secretRequired
+                        ? "ON — fixture emails + secret"
+                        : "ON — fixture emails only"
+                      : "ON"}
                   </Badge>
                 ) : (
                   <Badge tone="warning">OFF</Badge>
@@ -123,9 +148,12 @@ export default async function DevToolsPage({
           )}
           {staging && !demoFlag && (
             <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
-              Staging: Seed stays local-demo-only. Quick login signs you in
-              without a magic link (avoids Supabase email rate limits) and
-              provisions a staging agency owner if the email is new.
+              Staging: Seed stays local-demo-only. Quick login is limited to the
+              fixture emails below (same-origin POST
+              {secretRequired
+                ? "; CC_SELFTEST_SECRET required"
+                : ""}
+              ).
             </p>
           )}
         </CardContent>
@@ -162,11 +190,14 @@ export default async function DevToolsPage({
           <h2 className="font-semibold">Quick login (bypass magic link)</h2>
           {staging && !demoFlag && (
             <p className="text-sm text-muted-foreground">
-              Enter any email or use a Sign in button below. Missing users are
-              provisioned as agency owners on the staging tenant.
+              Use a Sign in button below. Arbitrary emails are not accepted on
+              staging.
+              {secretRequired
+                ? " Enter CC_SELFTEST_SECRET with each sign-in."
+                : ""}
             </p>
           )}
-          {(staging || demoFlag) && (
+          {demoFlag && (
             <form action={quickLoginAction} className="flex flex-wrap items-end gap-2">
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">Email</span>
@@ -178,6 +209,7 @@ export default async function DevToolsPage({
                   className="h-9 min-w-[16rem] rounded-md border border-input bg-background px-3 text-sm"
                 />
               </label>
+              <QuickLoginSecretFields required={secretRequired} />
               <Button type="submit" disabled={!quickLoginOk} size="sm">
                 Sign in with email
               </Button>
@@ -186,8 +218,12 @@ export default async function DevToolsPage({
           <ul className="space-y-2">
             {DEMO_LOGINS.map((d) => (
               <li key={d.email} className="flex flex-wrap items-center gap-2">
-                <form action={quickLoginAction}>
+                <form
+                  action={quickLoginAction}
+                  className="flex flex-wrap items-end gap-2"
+                >
                   <input type="hidden" name="email" value={d.email} />
+                  <QuickLoginSecretFields required={secretRequired} />
                   <Button type="submit" disabled={!quickLoginOk} size="sm">
                     Sign in
                   </Button>

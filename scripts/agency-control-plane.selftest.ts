@@ -14,6 +14,8 @@ import {
   diagnosticAccessAllowed,
   localDemoMutationAllowed,
   localDemoPostAllowed,
+  quickLoginRequestAllowed,
+  stagingQuickLoginEmailAllowed,
 } from "../src/lib/dev-access";
 import { sendEmail } from "../src/lib/email";
 import { dispatchWorkflowEmail } from "../src/lib/marketing-automation-connectors";
@@ -507,6 +509,44 @@ async function asyncChecks() {
       "staging stays open when CC_SELFTEST_SECRET is unset",
     );
     process.env.CC_SELFTEST_SECRET = "test-secret";
+
+    assert.equal(
+      stagingQuickLoginEmailAllowed("admin@staging-fixture.invalid"),
+      true,
+    );
+    assert.equal(stagingQuickLoginEmailAllowed("anyone@example.com"), false);
+    assert.equal(
+      quickLoginRequestAllowed({
+        headers: new Headers({
+          host: "preview.example.test",
+          origin: "https://preview.example.test",
+        }),
+        providedSecret: "test-secret",
+      }),
+      true,
+    );
+    assert.equal(
+      quickLoginRequestAllowed({
+        headers: new Headers({
+          host: "preview.example.test",
+          origin: "https://preview.example.test",
+        }),
+        providedSecret: "wrong",
+      }),
+      false,
+      "wrong secret must block staging quick-login",
+    );
+    assert.equal(
+      quickLoginRequestAllowed({
+        headers: new Headers({
+          host: "preview.example.test",
+          origin: "https://evil.example",
+        }),
+        providedSecret: "test-secret",
+      }),
+      false,
+      "cross-origin must block staging quick-login",
+    );
 
     delete process.env.VERCEL_ENV;
     const email = await sendEmail({

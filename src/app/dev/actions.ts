@@ -15,7 +15,12 @@ import {
 import { startSession, endSession, setActiveTenant } from "@/lib/auth/session";
 import { postLoginRedirectPath } from "@/lib/auth/rbac";
 import { resetStore } from "@/lib/db/store";
-import { localDemoMutationAllowed } from "@/lib/dev-access";
+import {
+  localDemoMutationAllowed,
+  quickLoginRequestAllowed,
+  selfTestSecretConfigured,
+  stagingQuickLoginEmailAllowed,
+} from "@/lib/dev-access";
 import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
 import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
@@ -36,7 +41,9 @@ async function assertLocalDemoMutationAllowed(): Promise<void> {
 }
 
 /** Quick login is for local demo OR staging (never production). */
-function assertQuickLoginAllowed() {
+async function assertQuickLoginAllowed(
+  formData: FormData,
+): Promise<void> {
   if (!devToolsOpen()) {
     throw new Error("Dev tools are locked in production.");
   }
@@ -44,6 +51,29 @@ function assertQuickLoginAllowed() {
     throw new Error(
       "Quick login needs local demo (CC_LOCAL_DEMO) or a staging deployment.",
     );
+  }
+  const hdrs = await headers();
+  const providedSecret = String(formData.get("selftestSecret") || "");
+  if (
+    !quickLoginRequestAllowed({
+      headers: hdrs,
+      providedSecret,
+    })
+  ) {
+    if (selfTestSecretConfigured()) {
+      throw new Error(
+        "Quick login requires a same-origin request and a valid CC_SELFTEST_SECRET.",
+      );
+    }
+    throw new Error("Quick login requires a same-origin browser request.");
+  }
+  if (appEnv() === "staging" && !localDemoEnabled()) {
+    const email = String(formData.get("email") || "").trim();
+    if (!stagingQuickLoginEmailAllowed(email)) {
+      throw new Error(
+        "Staging quick-login is limited to fixture emails listed on /dev.",
+      );
+    }
   }
 }
 
@@ -172,7 +202,7 @@ function actingFromMembership(user: User, m: TenantMember): ActingUser {
 /** Instant login as a seeded demo user, or provision + sign in on staging. */
 export async function quickLoginAction(formData: FormData): Promise<void> {
   try {
-    assertQuickLoginAllowed();
+    await assertQuickLoginAllowed(formData);
     const email = String(formData.get("email") || "").trim();
     if (!email) throw new Error("Email is required.");
 

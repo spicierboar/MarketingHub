@@ -81,6 +81,41 @@ export function selfTestSecretValid(
   );
 }
 
+export function selfTestSecretConfigured(): boolean {
+  return Boolean(process.env.CC_SELFTEST_SECRET?.trim());
+}
+
+/** Fixture emails allowed for staging /dev quick-login (no free-text provision). */
+export const STAGING_QUICK_LOGIN_ALLOWLIST = [
+  "admin@staging-fixture.invalid",
+  "staff-1@staging-fixture.invalid",
+  "approver-saffron-laneway@staging-fixture.invalid",
+] as const;
+
+export function stagingQuickLoginEmailAllowed(email: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  return STAGING_QUICK_LOGIN_ALLOWLIST.some((allowed) => allowed === normalized);
+}
+
+/**
+ * Quick-login POST gate: browser Origin must match the receiving Host
+ * (scheme ignored — Host has no protocol; staging is HTTPS). When
+ * CC_SELFTEST_SECRET is set the form must present a matching secret.
+ */
+export function quickLoginRequestAllowed(input: {
+  headers: Headers;
+  providedSecret?: string | null;
+}): boolean {
+  const hostUrl = parsedOrigin(input.headers.get("host") ?? "");
+  const browserOrigin = parsedOrigin(input.headers.get("origin") ?? "");
+  if (!hostUrl || !browserOrigin || !sameAuthority(hostUrl, browserOrigin)) {
+    return false;
+  }
+  const expected = process.env.CC_SELFTEST_SECRET?.trim();
+  if (expected) return selfTestSecretValid(input.providedSecret);
+  return true;
+}
+
 /**
  * Staging/dev diagnostics stay open when CC_SELFTEST_SECRET is unset
  * (docs/ENVIRONMENTS.md). When the secret is set, a matching Bearer/?key
