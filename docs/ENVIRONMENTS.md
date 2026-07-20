@@ -91,19 +91,28 @@ Do **not** point casual local coding at the live Supabase project
    project for staging only, e.g. `command-centre-staging` (region close to you,
    e.g. Sydney). Save the database password in your password manager.
 
-#### B. Create staging database schema (paste migrations)
+#### B. Create or migrate the staging database schema
 
-In Supabase → your **staging** project → **SQL Editor**:
+Use the Supabase CLI migration workflow; do not paste the archived legacy SQL
+files into the SQL Editor.
 
-1. Open each file under `F:\MarketingHub\command-centre\supabase\migrations\`
-   in filename order (`0001_…`, `0002_…`, … through `0045_…`).
-2. Paste the full contents into the SQL editor and **Run**.
-3. Skip any `_owner_paste_*.sql` helper files — those are not the numbered
-   migrations.
-4. If a later migration errors because an earlier one was skipped, go back and
-   apply the missing numbered file first.
+- `supabase/migrations/20260719044000_command_centre_staging_canonical_baseline.sql`
+  is the prepared schema-only baseline.
+- `supabase/migrations/20260719044100_content_desk_delegation_replay_ledger.sql`
+  is the next logical migration and remains unapplied until the baseline gate
+  is complete.
+- `supabase/legacy-migrations/` is immutable lineage evidence. It is not an
+  active migration source.
 
-Same order you would use for live. Staging starts empty — that is correct.
+Before establishing history on an existing project, follow
+`supabase/baseline/README.md`: replay and compare the baseline in a disposable
+local database, review the manifest, inspect current CLI `--help`, then repair
+only the reviewed baseline version. Never use an unqualified linked
+`supabase db push`.
+
+For a new empty project, apply only reviewed active timestamp migrations in
+filename order after local replay validation. Generate every future migration
+with the current Supabase CLI so each version is globally unique.
 
 #### C. Connect the GitHub repo to Vercel
 
@@ -134,12 +143,35 @@ For each variable below, set scope to **Preview** only (not Production yet):
 | `SUPABASE_SERVICE_ROLE_KEY` | Staging service_role key (**never** the live one) |
 | `APP_ORIGIN` | Prefer the **stable branch Preview URL** (contains `-git-staging-`), not a one-off `*-xxxxx.vercel.app` deployment URL. Or leave blank — auth redirects use the live request host on Preview |
 | `CRON_SECRET` | Any long random string (password manager) |
+| `PUBLISHING_TOKEN_KEY` | A staging-only random secret (32+ chars); required for approval links even while publishing integrations stay simulated |
 | `CC_TZ_OFFSET_MINUTES` | `600` (AEST) |
-| `STRIPE_SECRET_KEY` | Optional: Stripe **test** key `sk_test_…` only — or omit (mock OK) |
+| `STRIPE_SECRET_KEY` | Optional: Stripe **test** key `sk_test_…` only. Key presence never enables the photo marketplace by itself |
+| `PHOTO_MARKETPLACE_LIVE` / `STRIPE_BILLING_LIVE` / `EMAIL_SEND_LIVE` / `CC_AI_LIVE` / `PLACES_ENRICHMENT_LIVE` | **unset** or `false`; Preview and local demo remain simulated even if accidentally enabled |
+| `RESEND_API_KEY` | Optional credential only; email remains simulated unless `EMAIL_SEND_LIVE=true` in an allowed production runtime |
 | `PUBLISHING_LIVE` / `ADS_LIVE` / `ANALYTICS_LIVE` / `VISUALS_LIVE` | **unset** or `false` |
 | `CC_LOCAL_DEMO` / `NEXT_PUBLIC_CC_LOCAL_DEMO` | **unset** (staging uses real Supabase auth, not laptop demo) |
 
 Leave **Production** env vars alone until you deliberately set up live.
+
+Provider activation is fail-closed:
+
+- Photo marketplace Stripe requires `PHOTO_MARKETPLACE_LIVE=true` **and** a
+  non-empty `STRIPE_SECRET_KEY`.
+- App email requires `EMAIL_SEND_LIVE=true` **and** a non-empty
+  `RESEND_API_KEY`.
+- SaaS billing requires `STRIPE_BILLING_LIVE=true` **and** a non-empty
+  `STRIPE_SECRET_KEY`. Stripe webhook signature verification remains inbound-
+  only and does not require this outbound-call flag.
+- Claude requires `CC_AI_LIVE=true` and `ANTHROPIC_API_KEY`; Places enrichment
+  requires `PLACES_ENRICHMENT_LIVE=true` and a Places API key.
+- Provider calls additionally require an explicit production runtime:
+  `VERCEL_ENV=production`, or `CC_ENV=production` on non-Vercel hosts.
+  Non-Vercel hosts must also set a non-local `APP_ORIGIN`;
+  `NODE_ENV=production` alone never authorizes a provider request.
+- Local demo, localhost origins, and Vercel Preview always simulate these
+  providers. A key alone is inert.
+- `GET /api/status` reports `live`, `simulated`, or an inconsistent
+  live-flag-without-credential state without returning credential values.
 
 #### E. Deploy the `staging` branch
 
@@ -238,11 +270,44 @@ config — for MarketingHub, **Vercel Preview is the recommended Option A**.
 | Supabase trio | omit (demo) | **staging** project | **live** project |
 | `CRON_SECRET` | optional | set | set |
 | `CC_SELFTEST_SECRET` | omit | omit (devtools open) | set |
-| Stripe | omit → mock | **test** keys | live keys when ready |
+| Stripe | omit unless testing live Checkout | **test** keys + every selected SKU price | live keys + every selected SKU price |
 | `*_LIVE` | OFF | **OFF** | OFF until Phase 4 |
 | `CC_TZ_OFFSET_MINUTES` | optional | `600` | `600` |
 
-Templates: **`.env.example`**.
+Provider activation template:
+**`docs/provider-activation.env.example`**. It contains placeholder-only,
+safe-off values and no credentials.
+
+### Content Desk internal operator API
+
+Configure these server-only variables in the Command Centre deployment:
+
+- `CONTENT_DESK_INTERNAL_TOKEN`
+- `CONTENT_DESK_ACTOR_SIGNING_SECRET`
+
+Configure the matching server-only connection variables in Content Desk:
+
+- `COMMAND_CENTRE_INTERNAL_URL`
+- `COMMAND_CENTRE_INTERNAL_TOKEN`
+- `COMMAND_CENTRE_ACTOR_SIGNING_SECRET`
+
+Content Desk sends the service token as `Authorization: Bearer <token>` and a
+short-lived HS256 actor delegation as `X-Content-Desk-Actor`. The delegation
+contains only `iss=content-desk`, `aud=command-centre`, `sub` (the Command
+Centre user id), `tenantId`, `iat`, `exp`, and `jti`. Keep the lifetime at 60
+seconds exactly; each issuer/JTI is single-use. Never expose either secret to a
+browser.
+
+Command Centre verifies both credentials, then resolves the active user and
+tenant membership from its own database. It does not accept role, email,
+company grants, entitlement, strategy, schedule, rights, approval, publishing,
+or governance metadata from Content Desk. Tenant owners/admins and members
+whose authoritative `roleTitle` is `content_operator` may use the operator API;
+company access is checked separately for every company-scoped request.
+The guarded staging fixture stores `role` and the Command Centre selector
+`tenant_id` in Supabase `app_metadata` for Admin/Staff users. Content Desk may
+use those server-controlled values to select the delegation subject and tenant;
+authorization must never read `user_metadata`.
 
 ---
 
