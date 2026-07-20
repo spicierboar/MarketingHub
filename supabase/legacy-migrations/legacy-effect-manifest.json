@@ -1,0 +1,516 @@
+{
+  "formatVersion": 1,
+  "generatedAt": "2026-07-19T04:40:00Z",
+  "sourceProject": "command-centre-staging",
+  "sourceSchema": "public",
+  "postgresVersion": "17.6",
+  "remoteMigrationHistoryPresent": false,
+  "legacyFileCount": 49,
+  "distinctLegacyVersionCount": 38,
+  "canonicalOrderRule": "Original four-digit version ascending; filename lexical order resolves legacy collisions.",
+  "verificationMethod": "Read-only pg_catalog snapshot plus explicit data-invariant queries for migrations 0044 and 0047.",
+  "entries": [
+    {
+      "canonicalOrder": 1,
+      "originalFileName": "0001_phase1_init.sql",
+      "originalVersion": "0001",
+      "sha256": "a9b076e423ca5fd8403e82e68125be074b49bae48684e707c5eaead44f94bf6f",
+      "status": "PRESENT",
+      "checkCount": 142,
+      "presentCheckCount": 142,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 2,
+      "originalFileName": "0002_catchup_t4_t6_dam_gapclosers.sql",
+      "originalVersion": "0002",
+      "sha256": "ffa569b4d75cb90a6f83ec42106eec91e9e255353fb0730a4c2fb9d85b8be3c0",
+      "status": "PRESENT",
+      "checkCount": 12,
+      "presentCheckCount": 12,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 3,
+      "originalFileName": "0003_actor_ids_to_text.sql",
+      "originalVersion": "0003",
+      "sha256": "bf9a08dc211b434e82ade0d734d5e7fb4ec810946206ff4cbcdcee7e615d854a",
+      "status": "PRESENT",
+      "checkCount": 62,
+      "presentCheckCount": 62,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 4,
+      "originalFileName": "0004_publish_queue_indexes.sql",
+      "originalVersion": "0004",
+      "sha256": "560deec17377eae6181946a6ea66085ec14350b2044f4da5bdd3d671abd40114",
+      "status": "PRESENT",
+      "checkCount": 3,
+      "presentCheckCount": 3,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 5,
+      "originalFileName": "0005_paid_advertising.sql",
+      "originalVersion": "0005",
+      "sha256": "04d7ecdded5d356818fdaf80e06a8f63dc26ad8fb8ec33839ac2a3398fad3f90",
+      "status": "PRESENT",
+      "checkCount": 15,
+      "presentCheckCount": 15,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 6,
+      "originalFileName": "0006_ad_audience_targeting.sql",
+      "originalVersion": "0006",
+      "sha256": "9219db63eb832f1c8137ad8e17a6dd0d982dfd7ff4b38a2d9230d0bad99da5c7",
+      "status": "PRESENT",
+      "checkCount": 5,
+      "presentCheckCount": 5,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 7,
+      "originalFileName": "0007_terms_and_onboarding.sql",
+      "originalVersion": "0007",
+      "sha256": "3eef16cee9b88c3ebb8826ae77231bdee8b59f7f5afa8f66a4328016b8d19236",
+      "status": "PRESENT",
+      "checkCount": 12,
+      "presentCheckCount": 12,
+      "failedChecks": [],
+      "supersededEffects": [
+        {
+          "original": "idx_terms_versions_active",
+          "replacement": "idx_terms_versions_kind_active",
+          "migration": "0046_legal_docs_kind.sql"
+        },
+        {
+          "original": "idx_terms_acceptances_user",
+          "replacement": "idx_terms_acceptances_user_kind",
+          "migration": "0046_legal_docs_kind.sql"
+        }
+      ]
+    },
+    {
+      "canonicalOrder": 8,
+      "originalFileName": "0008_company_addons.sql",
+      "originalVersion": "0008",
+      "sha256": "b900b6ff7d6357023895a069ed7ef430b8edf9269b67ed39c51eca275c3aa4e9",
+      "status": "PRESENT",
+      "checkCount": 4,
+      "presentCheckCount": 4,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 9,
+      "originalFileName": "0009_photo_shoots.sql",
+      "originalVersion": "0009",
+      "sha256": "111647577535c5fbbd7d51e7ec0d8a4c6f4ebd96b4fff9189cc655f5c6282646",
+      "status": "PRESENT",
+      "checkCount": 4,
+      "presentCheckCount": 4,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 10,
+      "originalFileName": "0010_menu_designs.sql",
+      "originalVersion": "0010",
+      "sha256": "61964a906e3f9b7899540fb2a5a8fbb72e9421d75ae67db29898fc1dc3a9c340",
+      "status": "PRESENT",
+      "checkCount": 5,
+      "presentCheckCount": 5,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 11,
+      "originalFileName": "0011_ordering.sql",
+      "originalVersion": "0011",
+      "sha256": "4ee28a7d3d8dc8a635608b94b996883039b098c109a974bbb9c2c3e4c4ee235e",
+      "status": "PRESENT",
+      "checkCount": 12,
+      "presentCheckCount": 12,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 12,
+      "originalFileName": "0012_lead_external_id.sql",
+      "originalVersion": "0012",
+      "sha256": "348555d192e6f9dd78dc76824cf623d57cb071a44f5d23910667d49932047eaf",
+      "status": "PRESENT",
+      "checkCount": 2,
+      "presentCheckCount": 2,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 13,
+      "originalFileName": "0013_tenant_timezone.sql",
+      "originalVersion": "0013",
+      "sha256": "62a034680ec809ea2f193684363e5860e6dfe97a3dc4ae4577bd1d911efa6e54",
+      "status": "PRESENT",
+      "checkCount": 1,
+      "presentCheckCount": 1,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 14,
+      "originalFileName": "0014_connect_invites.sql",
+      "originalVersion": "0014",
+      "sha256": "cf87c28e9a96ddcf8abb8cd6a2042dfe0a432105a017292fc83a052881508fd8",
+      "status": "PRESENT",
+      "checkCount": 7,
+      "presentCheckCount": 7,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 15,
+      "originalFileName": "0015_ai_hardening.sql",
+      "originalVersion": "0015",
+      "sha256": "f9c3acdfa4e6fdfb5c81fb9b099bdbde2ab787b7faf6b6492287728199525938",
+      "status": "PRESENT",
+      "checkCount": 4,
+      "presentCheckCount": 4,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 16,
+      "originalFileName": "0027_photo_marketplace.sql",
+      "originalVersion": "0027",
+      "sha256": "0f4727c422b55e67f927393716c0030ca00f3e813b801d4c44385f7cfb5a4dda",
+      "status": "PRESENT",
+      "checkCount": 15,
+      "presentCheckCount": 15,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 17,
+      "originalFileName": "0028_portal_and_sales.sql",
+      "originalVersion": "0028",
+      "sha256": "7194d6dbe1ec3afe5011d3609814dd67fedf298c707b21b19fa31714e27e9e60",
+      "status": "PRESENT",
+      "checkCount": 1,
+      "presentCheckCount": 1,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 18,
+      "originalFileName": "0029_public_api.sql",
+      "originalVersion": "0029",
+      "sha256": "41a322fec0164d339a22498f63449e9a48b0029a3b8e93fa766e619cbb6e5b76",
+      "status": "PRESENT",
+      "checkCount": 9,
+      "presentCheckCount": 9,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 19,
+      "originalFileName": "0030_ad_campaign_external_id.sql",
+      "originalVersion": "0030",
+      "sha256": "a35b4eaf430ef4d34b55dd7723aa2330b14a5e4656dc9cd62555bd1a73bc9149",
+      "status": "PRESENT",
+      "checkCount": 2,
+      "presentCheckCount": 2,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 20,
+      "originalFileName": "0031_crm.sql",
+      "originalVersion": "0031",
+      "sha256": "f497cc43e755ee35db034a4598023e768a24544917aadfd5db0e0672ebb76598",
+      "status": "PRESENT",
+      "checkCount": 9,
+      "presentCheckCount": 9,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 21,
+      "originalFileName": "0031_email_marketing.sql",
+      "originalVersion": "0031",
+      "sha256": "8844cd2f298f0ad7350b15a45b30a867e809fee27759489ccb4eb81a21bbdee2",
+      "status": "PRESENT",
+      "checkCount": 12,
+      "presentCheckCount": 12,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 22,
+      "originalFileName": "0031_reviews.sql",
+      "originalVersion": "0031",
+      "sha256": "6e725daa694a19021d29a0e15a8091331ab2f85d352cdeb26fee53f74c80733f",
+      "status": "PRESENT",
+      "checkCount": 9,
+      "presentCheckCount": 9,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 23,
+      "originalFileName": "0031_sms_marketing.sql",
+      "originalVersion": "0031",
+      "sha256": "738dc9e0f79c984a90f17c0062f3f16b886af9471a046e3f3a094317a0ccabcd",
+      "status": "PRESENT",
+      "checkCount": 11,
+      "presentCheckCount": 11,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 24,
+      "originalFileName": "0032_cms.sql",
+      "originalVersion": "0032",
+      "sha256": "caa956d55931885c947380919aa7fd501a8e6ace1e97d057757c23d0e43372c5",
+      "status": "PRESENT",
+      "checkCount": 12,
+      "presentCheckCount": 12,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 25,
+      "originalFileName": "0032_funnel.sql",
+      "originalVersion": "0032",
+      "sha256": "4c87ad8978e31b56afd369bff2a668402310c302d125d6ea558388832dcbf6bc",
+      "status": "PRESENT",
+      "checkCount": 16,
+      "presentCheckCount": 16,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 26,
+      "originalFileName": "0032_loyalty.sql",
+      "originalVersion": "0032",
+      "sha256": "66c1d2def7207d970b9f6e299d07b7c39a9a14b42f148a76bef047b1a88306aa",
+      "status": "PRESENT",
+      "checkCount": 18,
+      "presentCheckCount": 18,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 27,
+      "originalFileName": "0032_marketing_automation.sql",
+      "originalVersion": "0032",
+      "sha256": "cef8405bdf87b378000af2cf399de5dba65ff2e7c5ba2f2923af757889fd95f2",
+      "status": "PRESENT",
+      "checkCount": 9,
+      "presentCheckCount": 9,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 28,
+      "originalFileName": "0033_ai_mos.sql",
+      "originalVersion": "0033",
+      "sha256": "c8b95f7857c5af9b97669258babda63a032eb503b33bce8cc9fa4985918b84b5",
+      "status": "PRESENT",
+      "checkCount": 10,
+      "presentCheckCount": 10,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 29,
+      "originalFileName": "0033_campaign_builder.sql",
+      "originalVersion": "0033",
+      "sha256": "2bf1ff6d8b630ef4e0b77c4ae759447fc36dff293a6a4345f1d5929b6fdf3cf1",
+      "status": "PRESENT",
+      "checkCount": 12,
+      "presentCheckCount": 12,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 30,
+      "originalFileName": "0033_rag.sql",
+      "originalVersion": "0033",
+      "sha256": "b629643c0b9fece6dce875e73ec7ff8ddd100e729abdf9798e4c61a64cacc118",
+      "status": "PRESENT",
+      "checkCount": 6,
+      "presentCheckCount": 6,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 31,
+      "originalFileName": "0033_recommendations.sql",
+      "originalVersion": "0033",
+      "sha256": "18d9fedf7f8a4db24c96d8b1a5417e09491f388bad48a1c92c298d9d885d8b7a",
+      "status": "PRESENT",
+      "checkCount": 7,
+      "presentCheckCount": 7,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 32,
+      "originalFileName": "0034_bookings.sql",
+      "originalVersion": "0034",
+      "sha256": "f043351ad4c85c89eb28736d5746e6c633fa52e2be425a4a792e5a1a0be37e08",
+      "status": "PRESENT",
+      "checkCount": 13,
+      "presentCheckCount": 13,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 33,
+      "originalFileName": "0034_learning.sql",
+      "originalVersion": "0034",
+      "sha256": "4904fba0827701369114e592744a711b0fea3b9c341022dbb8bc1d06b5ca37f6",
+      "status": "PRESENT",
+      "checkCount": 10,
+      "presentCheckCount": 10,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 34,
+      "originalFileName": "0035_ai_campaign_layer.sql",
+      "originalVersion": "0035",
+      "sha256": "8129eb13d44570e4254b448d44ae88e8c583810e940f3c2df5282a8013de1ce6",
+      "status": "PRESENT",
+      "checkCount": 24,
+      "presentCheckCount": 24,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 35,
+      "originalFileName": "0036_campaign_experiments.sql",
+      "originalVersion": "0036",
+      "sha256": "fb2afd4ab562b9e6a154d59b4330e40790a867dca38c2cc275d80707bb922c9a",
+      "status": "PRESENT",
+      "checkCount": 5,
+      "presentCheckCount": 5,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 36,
+      "originalFileName": "0036_rbac_capabilities.sql",
+      "originalVersion": "0036",
+      "sha256": "dea6a5625f3fc9b0a28095567ae310eb3d332e775ed5687a851fbd265115ec06",
+      "status": "PRESENT",
+      "checkCount": 1,
+      "presentCheckCount": 1,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 37,
+      "originalFileName": "0037_privacy_dsr.sql",
+      "originalVersion": "0037",
+      "sha256": "bae742e7af298bc5889b411fe283322adf235763ed5ae0e05bf764a9b8c099d5",
+      "status": "PRESENT",
+      "checkCount": 6,
+      "presentCheckCount": 6,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 38,
+      "originalFileName": "0038_managed_delivery.sql",
+      "originalVersion": "0038",
+      "sha256": "7b6713e6eef3bfa9d7bc1bc8c838f7730ac4dbad6259639613a96575c9d47cbb",
+      "status": "PRESENT",
+      "checkCount": 6,
+      "presentCheckCount": 6,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 39,
+      "originalFileName": "0039_prepaid_credit.sql",
+      "originalVersion": "0039",
+      "sha256": "9bd12e13a01d19f3160b9af97edc7c412a1cd0715cc51aca4b9cc03584e91d7d",
+      "status": "PRESENT",
+      "checkCount": 10,
+      "presentCheckCount": 10,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 40,
+      "originalFileName": "0040_tax_invoices.sql",
+      "originalVersion": "0040",
+      "sha256": "e76e6d45edd77cdac21d1c5bd96867ae46dd6abd4f7c221c6b8cb6771e6dbd36",
+      "status": "PRESENT",
+      "checkCount": 6,
+      "presentCheckCount": 6,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 41,
+      "originalFileName": "0041_credit_wallet_stripe_pm.sql",
+      "originalVersion": "0041",
+      "sha256": "de8863fa8d91e90fa99bd1ccfcdad8e686447e7eaac2f5188c8384699c775af8",
+      "status": "PRESENT",
+      "checkCount": 1,
+      "presentCheckCount": 1,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 42,
+      "originalFileName": "0042_tenant_promo_catalog.sql",
+      "originalVersion": "0042",
+      "sha256": "0332d20690e4376699df8f630e8c48367e40f1c84f55d18c1bf394852f51b3ed",
+      "status": "PRESENT",
+      "checkCount": 1,
+      "presentCheckCount": 1,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 43,
+      "originalFileName": "0043_marketing_packages.sql",
+      "originalVersion": "0043",
+      "sha256": "d335d6214fe28a948654a842cd5874855851dffc24e7cd86236d8fd6e735447f",
+      "status": "PRESENT",
+      "checkCount": 1,
+      "presentCheckCount": 1,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 44,
+      "originalFileName": "0044_managed_delivery_eligible.sql",
+      "originalVersion": "0044",
+      "sha256": "accba693fc402982c75c49463eb73379867e445bdcc99b4d15b281c4b41bb773",
+      "status": "PRESENT",
+      "checkCount": 4,
+      "presentCheckCount": 4,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 45,
+      "originalFileName": "0045_tenant_promo_industries.sql",
+      "originalVersion": "0045",
+      "sha256": "6b26b55598664a58dbc835894510580f0de4f221495ff919876b9efde231f5fe",
+      "status": "PRESENT",
+      "checkCount": 1,
+      "presentCheckCount": 1,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 46,
+      "originalFileName": "0046_legal_docs_kind.sql",
+      "originalVersion": "0046",
+      "sha256": "28eda0bbf698941097828b548f802000d1dab5f51b5b93e8a6c9e7ac1ca66dbf",
+      "status": "PRESENT",
+      "checkCount": 7,
+      "presentCheckCount": 7,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 47,
+      "originalFileName": "0047_managed_service_commercial_billing.sql",
+      "originalVersion": "0047",
+      "sha256": "273dff090e3d4ca335e9ddc5b4dc8e0a010028740a1427bf8c57952a02786133",
+      "status": "PRESENT",
+      "checkCount": 6,
+      "presentCheckCount": 6,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 48,
+      "originalFileName": "0048_managed_service_workflow.sql",
+      "originalVersion": "0048",
+      "sha256": "8e72d24b6f5daea7e396145ea26a6ebb2e7c49b2469c359c3e765c6ae9d9aeef",
+      "status": "PRESENT",
+      "checkCount": 78,
+      "presentCheckCount": 78,
+      "failedChecks": []
+    },
+    {
+      "canonicalOrder": 49,
+      "originalFileName": "0049_managed_content_jobs.sql",
+      "originalVersion": "0049",
+      "sha256": "08254afec7f598d4305a8b54ca906c5cf9cdcea06edc63667bc11dc39dd0fd82",
+      "status": "PRESENT",
+      "checkCount": 25,
+      "presentCheckCount": 25,
+      "failedChecks": []
+    }
+  ]
+}

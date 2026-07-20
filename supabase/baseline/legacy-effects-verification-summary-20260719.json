@@ -1,0 +1,35 @@
+{
+  "capturedAt": "2026-07-19T04:40:00Z",
+  "postgresVersion": "17.6",
+  "historyTablePresent": false,
+  "migration0047": {
+    "tablePresent": true,
+    "rlsEnabled": true,
+    "browserGrantsRevoked": true,
+    "indexPresent": true,
+    "dataInvariants": {
+      "legacyPackageRows": 0,
+      "missingBillingRows": 0
+    }
+  },
+  "migration0048": {
+    "allTablesPresent": true,
+    "allTablesRlsEnabled": true,
+    "companyTenantConstraintsPresent": true,
+    "functionAcl": {
+      "isCompanyStaff": true,
+      "clientRespond": true,
+      "tokenRespond": true,
+      "reminderClaim": true
+    }
+  },
+  "migration0049": {
+    "allTablesPresent": true,
+    "allTablesRlsEnabled": true,
+    "browserGrantsRevoked": true,
+    "indexesPresent": true,
+    "correlationConstraintsPresent": true,
+    "claimFunctionAcl": true
+  },
+  "migration0050Present": false
+}

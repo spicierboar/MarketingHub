@@ -43,6 +43,7 @@ next-env.d.ts
 # Local dev persistence snapshot (CC_STORE_FILE)
 .dev-store.json
 .dev-store.json.tmp
+.dev-data/
 
 # Local dev media store (CC_MEDIA_DIR)
 .dev-media/

@@ -1,0 +1,20 @@
+# Keep CLI uploads lean and avoid local build artifacts.
+.next
+.vercel
+node_modules
+.git
+.env
+.env.*
+!.env.example
+.dev-store.json
+.dev-store.json.tmp
+.dev-data
+.dev-media
+coverage
+out
+build
+*.tsbuildinfo
+build-out.txt
+.claude
+supabase/.temp
+supabase/.branches
