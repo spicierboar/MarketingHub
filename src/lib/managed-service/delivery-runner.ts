@@ -44,6 +44,7 @@ import { notifyClientException } from "@/lib/managed-service/exception-notify";
 import { sendImplementationPlanEmail } from "@/lib/managed-service/implementation-plan-email";
 import { applyQualityRoutingAfterDraft } from "@/lib/managed-service/quality-routing";
 import {
+  defaultPackageGuardrails,
   resolveCompanyPackage,
   resolveSelectionForPackage,
 } from "@/lib/marketing-packages";
@@ -856,6 +857,14 @@ export async function processManagedDeliveryRun(
         company.profile.currentOffers,
         company.profile.tradingHours,
       ].filter((value): value is string => Boolean(value?.trim()));
+      // Plan-seeded guardrails: package defaults first; profile services act as
+      // an early override before Desk edits the strategy cycle.
+      const packageDefaults = defaultPackageGuardrails({
+        id: pkg.id,
+        channels: pkg.channels,
+        defaultServiceLevel: pkg.serviceLevel,
+        serviceLevel: pkg.serviceLevel,
+      });
       const strategyCycle = await ensureQuarterlyStrategyCycle({
         company,
         packageId: currentPackageId,
@@ -867,10 +876,10 @@ export async function processManagedDeliveryRun(
         channels: channels
           .map((channel) => BUILDER_TO_MANAGED_CHANNEL[channel])
           .filter((channel): channel is ManagedChannelKey => Boolean(channel)),
-        themes: (company.profile.services.length
+        themes: company.profile.services.length
           ? company.profile.services
-          : [company.profile.industry ?? "business priorities"]),
-        publishWindows: ["weekday_morning", "weekday_afternoon", "weekday_evening"],
+          : packageDefaults.themes,
+        publishWindows: packageDefaults.publishWindows,
       });
       const goal = [
         profileGoal,

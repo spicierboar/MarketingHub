@@ -19,7 +19,11 @@ export type ActivityHubId =
   | "package"
   | "audit"
   | "assets"
-  | "reports";
+  | "reports"
+  | "profile"
+  | "payment_method"
+  | "invoices"
+  | "value_add";
 
 export type ActivityHub = {
   id: ActivityHubId;
@@ -115,16 +119,16 @@ export function agencyCompanyActivityHubs(companyId: string): ActivityHub[] {
 export function clientPortalActivityHubs(): ActivityHub[] {
   return [
     {
+      id: "profile",
+      label: "Profile",
+      blurb: "Business details and contacts",
+      href: "/client/profile",
+    },
+    {
       id: "strategy",
       label: "Strategy",
       blurb: "Your package-based marketing plan",
       href: "/client/strategy",
-    },
-    {
-      id: "content",
-      label: "Content status",
-      blurb: "What is in review, approved, or live",
-      href: "/client/content",
     },
     {
       id: "calendar",
@@ -133,10 +137,41 @@ export function clientPortalActivityHubs(): ActivityHub[] {
       href: "/client/calendar",
     },
     {
+      id: "content",
+      label: "Content status",
+      blurb: "What is in review, approved, or live",
+      href: "/client/content",
+    },
+    {
       id: "approvals",
       label: "Approvals",
       blurb: "Drafts waiting on your review",
       href: "/client/approvals",
+    },
+    {
+      id: "payment_method",
+      label: "Payment method",
+      // PLACEHOLDER: Stripe Customer Portal deep-link once billing portal is live.
+      blurb: "Card on file via Stripe (coming soon)",
+      href: "/client/payments#payment-method",
+    },
+    {
+      id: "invoices",
+      label: "Invoices",
+      blurb: "Tax invoices and payment history",
+      href: "/client/payments#invoices",
+    },
+    {
+      id: "package",
+      label: "Package & billing",
+      blurb: "Plan, credit, and invoices",
+      href: "/client/account",
+    },
+    {
+      id: "value_add",
+      label: "Value-add",
+      blurb: "Extra services and upgrades (coming soon)",
+      href: "/client/value-add",
     },
     {
       id: "asks",
@@ -149,12 +184,6 @@ export function clientPortalActivityHubs(): ActivityHub[] {
       label: "Extra work",
       blurb: "Promos and custom work requests",
       href: "/client/account#extra-work",
-    },
-    {
-      id: "package",
-      label: "Package & billing",
-      blurb: "Plan, credit, and invoices",
-      href: "/client/account",
     },
     {
       id: "reports",

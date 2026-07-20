@@ -253,7 +253,7 @@ export async function AgencyControlPlane({
                     <th scope="col" className="px-3 py-2 font-medium">Risk</th>
                     <th scope="col" className="px-3 py-2 font-medium">Exception</th>
                     <th scope="col" className="px-3 py-2 font-medium">Stage</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Owner</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Salesperson</th>
                     <th scope="col" className="px-3 py-2 font-medium">SLA</th>
                     <th scope="col" className="px-3 py-2 font-medium">Age</th>
                     <th scope="col" className="px-3 py-2 text-right font-medium">

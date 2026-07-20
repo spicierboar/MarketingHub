@@ -219,7 +219,7 @@ export type ActingUser = User & {
 // library; never implicitly sees tenant data).
 export type Role = "super_admin" | "admin" | "user";
 
-// Full 10-role structure (§9).
+// Granular role titles (§9) plus field-sales seat used by onboarding wizard.
 export type RoleTitle =
   | "super_admin"
   | "group_admin"
@@ -230,7 +230,8 @@ export type RoleTitle =
   | "compliance_reviewer"
   | "publisher"
   | "analyst"
-  | "viewer";
+  | "viewer"
+  | "sales_rep";
 
 // Which enforcement tier each granular title corresponds to.
 export const ROLE_TITLE_TIER: Record<RoleTitle, Role> = {
@@ -244,6 +245,7 @@ export const ROLE_TITLE_TIER: Record<RoleTitle, Role> = {
   content_operator: "user",
   analyst: "user",
   viewer: "user",
+  sales_rep: "user",
 };
 
 export interface User {
@@ -480,7 +482,14 @@ export interface Company {
   status: CompanyStatus;
   profile: CompanyProfile;
   documents: UploadedAsset[];
+  /** User id of the creator / onboarder (sales or admin). Used for salesperson display. */
   createdBy: string;
+  /**
+   * PLACEHOLDER: optional dedicated ownership field if salesperson ≠ creator.
+   * Until product confirms, agency UI derives the salesperson name from `createdBy`.
+   * TODO: nullable `soldByUserId` migration if audit/ownership must diverge from createdBy.
+   */
+  soldByUserId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -6,6 +6,7 @@ import {
   isTenantOwner,
   isPlatformAdmin,
   isPortalUser,
+  isSalesRep,
   canAccessFieldSales,
   accessibleCompanyIds,
 } from "@/lib/auth/rbac";
@@ -72,6 +73,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       isOwner={isTenantOwner(user)}
       isPlatformAdmin={isPlatformAdmin(user)}
       canFieldSales={canAccessFieldSales(user)}
+      isSalesRepFocused={isSalesRep(user) && !isAdmin(user)}
       branding={tenant?.branding ?? null}
       banner={banner}
       envLabel={envRibbonLabel()}

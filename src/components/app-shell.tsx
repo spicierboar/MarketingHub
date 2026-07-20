@@ -40,6 +40,8 @@ interface NavItem {
   ownerOnly?: boolean;
   platformAdminOnly?: boolean;
   salesAccess?: boolean;
+  /** Visible on the focused sales_rep shell (wizard + home). */
+  salesHome?: boolean;
   /** Non-admin members only — admins use the company workspace hub */
   memberOnly?: boolean;
   /** Extra path prefixes that keep this item highlighted (e.g. Settings hub children). */
@@ -83,6 +85,8 @@ const NAV_GROUPS: NavGroup[] = [
     pinned: true,
     items: [
       { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+      // Sales-focused home (hidden for admins via salesHome + isSalesRepFocused).
+      { href: "/sales", label: "Sales home", icon: LayoutDashboard, salesHome: true },
     ],
   },
   {
@@ -100,7 +104,13 @@ const NAV_GROUPS: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: "/companies", label: "Clients", icon: Building2, adminOnly: true },
-      { href: "/sales/new-client", label: "New client", icon: UserPlus, salesAccess: true },
+      {
+        href: "/sales/new-client",
+        label: "New client",
+        icon: UserPlus,
+        salesAccess: true,
+        salesHome: true,
+      },
       { href: "/requests", label: "Client asks", icon: MessageSquare },
     ],
   },
@@ -223,8 +233,15 @@ function itemVisible(
     isOwner: boolean;
     isPlatformAdmin: boolean;
     canFieldSales: boolean;
+    /** Non-admin sales_rep — show only salesHome items. */
+    isSalesRepFocused: boolean;
   },
 ) {
+  // PLACEHOLDER: confirm exact hide list with product (ops queues, catalogs, AI, etc.).
+  if (opts.isSalesRepFocused) {
+    return Boolean(n.salesHome);
+  }
+  if (n.salesHome && !opts.isSalesRepFocused) return false;
   if (n.memberOnly && opts.isAdmin) return false;
   return (
     (!n.adminOnly || opts.isAdmin) &&
@@ -340,6 +357,7 @@ export function AppShell({
   isOwner = false,
   isPlatformAdmin = false,
   canFieldSales = false,
+  isSalesRepFocused = false,
   branding = null,
   banner,
   envLabel = null,
@@ -354,6 +372,7 @@ export function AppShell({
   isOwner?: boolean;
   isPlatformAdmin?: boolean;
   canFieldSales?: boolean;
+  isSalesRepFocused?: boolean;
   branding?: { accentColor?: string; logoUrl?: string } | null;
   banner?: { tone: "danger" | "warning"; text: string } | null;
   envLabel?: string | null;
@@ -361,19 +380,26 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const visibility = { isAdmin, isOwner, isPlatformAdmin, canFieldSales };
+  const visibility = {
+    isAdmin,
+    isOwner,
+    isPlatformAdmin,
+    canFieldSales,
+    isSalesRepFocused,
+  };
 
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((n) => itemVisible(n, visibility)),
   })).filter((g) => {
     if (g.items.length === 0) return false;
+    if (isSalesRepFocused) return true;
     if (g.adminOnly) {
       return (
         isAdmin ||
         isOwner ||
         isPlatformAdmin ||
-        g.items.some((i) => i.salesAccess)
+        g.items.some((i) => i.salesAccess || i.salesHome)
       );
     }
     return true;

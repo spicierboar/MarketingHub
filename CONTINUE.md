@@ -10,6 +10,19 @@ Never expose or commit secrets, tokens, real env files, `.vercel`, logs, local
 databases, generated output, or OIDC data. The user parked the `F:\` migration;
 this `C:\` repository remains authoritative.
 
+## Backlog PR (post-split foundations)
+
+Parked Content Stack backlog stubs ship on branch
+`backlog/post-split-foundations` (base `split/10-billing-onboarding-glue`):
+plan-seeded strategy/guardrails, sales home, salesperson on agency clients,
+autopilot T−7/T−3 + publish-day auto-approve scaffolding (email gated off),
+AI brief draft stub, and client portal hub stubs.
+
+Human review / copy / secrets checklist:
+`C:\Projects\Content-Stack-PLACEHOLDERS.md`
+
+Live flags stay off. Do not apply staging migrations from this backlog branch.
+
 ## Role and current state
 
 Command Centre is the system of record and authoritative control plane for

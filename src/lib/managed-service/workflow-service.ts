@@ -29,6 +29,11 @@ import {
   issueApprovalSecret,
   hashApprovalToken,
 } from "@/lib/managed-service/workflow";
+import {
+  AUTOPILOT_EMAIL_LIVE,
+  AUTOPILOT_REMINDER_EMAIL_COPY_PLACEHOLDER,
+  maybeAutopilotAutoApproveOnPublishDay,
+} from "@/lib/managed-service/autopilot-approvals";
 import type {
   ActingUser,
   Company,
@@ -160,12 +165,30 @@ export async function processManagedApprovalReminders(
       );
       if (!claimed) continue;
       const staff = reminder.kind === "staff_1d";
+      const clientCopy =
+        reminder.kind === "client_7d" || reminder.kind === "client_3d"
+          ? AUTOPILOT_REMINDER_EMAIL_COPY_PLACEHOLDER[reminder.kind]
+          : null;
+      // Autopilot client reminder email stays off until AUTOPILOT_EMAIL_LIVE + copy review.
+      // Release the claim without stamping so reminders remain due when the flag flips on.
+      if (clientCopy && !AUTOPILOT_EMAIL_LIVE) {
+        await completeManagedApprovalReminderClaim(
+          request.id,
+          reminder.kind,
+          claimOwner,
+          reminder.idempotencyKey,
+        );
+        continue;
+      }
       const result = await sendEmail({
         to: staff ? actor.email : request.recipientEmail,
-        subject: staff ? "Approval requires staff follow-up" : "Approval reminder",
+        subject: staff
+          ? "Approval requires staff follow-up"
+          : (clientCopy?.subject ?? "Approval reminder"),
         html: staff
           ? "<p>An approval is due within one day and requires staff follow-up.</p>"
-          : "<p>Your approval is still pending. Please review it by the due date.</p>",
+          : (clientCopy?.html ??
+            "<p>Your approval is still pending. Please review it by the due date.</p>"),
         idempotencyKey: reminder.idempotencyKey,
       });
       if (!result.ok) {
@@ -193,6 +216,12 @@ export async function processManagedApprovalReminders(
       });
       sent += 1;
     }
+    // Publish-day system autopilot auto-approve (NOT staff). No-op while flag off.
+    await maybeAutopilotAutoApproveOnPublishDay({
+      tenantId: actor.tenantId,
+      request,
+      atIso,
+    });
   }
   return sent;
 }

@@ -27,6 +27,7 @@ import {
   ManagedContentContractError,
   submitManagedContentJobForStaff,
 } from "@/lib/managed-content-jobs/service";
+import { draftManagedContentBrief } from "@/lib/managed-content-jobs/brief-draft";
 import {
   consumedConceptUnits,
   strategyInputsConfirmed,
@@ -858,6 +859,21 @@ export async function regenerateClientConcept(
       ? priorAttempts.length + 1
       : Math.max(1, priorAttempts.length);
   const requestId = `${requestPrefix}${attemptNumber}`;
+  // Staff approve path: brief → submitManagedContentJobForStaff (managed-content jobs).
+  const adaptations = await listManagedChannelAdaptations(
+    actor.tenantId,
+    concept.id,
+  );
+  const conceptChannels = adaptations.map((item) => item.channelKey);
+  const briefDraft = await draftManagedContentBrief({
+    companyName: company.name,
+    theme: concept.theme,
+    channelKeys: conceptChannels,
+    conceptTitle: concept.title,
+    guardrailNotes: [
+      "Regenerate within approved theme and channel guardrails.",
+    ],
+  });
   let result: Awaited<ReturnType<typeof submitManagedContentJobForStaff>>;
   try {
     result = await submitManagedContentJobForStaff(actor, {
@@ -866,7 +882,7 @@ export async function regenerateClientConcept(
       conceptId: concept.id,
       plannedSlotId: slot.id,
       assetIds: concept.reusableAssetId ? [concept.reusableAssetId] : [],
-      brief: `Regenerate the existing concept "${concept.title}" within its approved theme and channel guardrails.`,
+      brief: briefDraft.briefText,
     });
   } catch (error) {
     if (error instanceof ManagedContentContractError) {
