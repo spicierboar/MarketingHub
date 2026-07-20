@@ -7,6 +7,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runScheduledTick } from "@/lib/scheduler";
 
+// The scheduler's own default budget is 60s. Keep the platform ceiling above
+// that for response serialization while still preventing a 300s zombie run.
+export const maxDuration = 90;
+
 function authorized(req: NextRequest, secret: string): boolean {
   // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`; also accept ?key=
   // for manual/self-hosted triggers. Constant-time compare.
@@ -26,19 +30,36 @@ async function handle(req: NextRequest) {
   if (!authorized(req, secret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const results = await runScheduledTick();
-  const totals = results.reduce(
+  const report = await runScheduledTick();
+  const totals = report.results.reduce(
     (t, r) => ({
       published: t.published + r.published,
       failed: t.failed + r.failed,
       skipped: t.skipped + r.skipped,
       deferred: t.deferred + r.deferred,
+      unknown: t.unknown + r.unknown,
       dead: t.dead + r.dead,
       automationOutcomes: t.automationOutcomes + r.automationOutcomes,
     }),
-    { published: 0, failed: 0, skipped: 0, deferred: 0, dead: 0, automationOutcomes: 0 },
+    {
+      published: 0,
+      failed: 0,
+      skipped: 0,
+      deferred: 0,
+      unknown: 0,
+      dead: 0,
+      automationOutcomes: 0,
+    },
   );
-  return NextResponse.json({ ok: true, tenants: results.length, totals });
+  return NextResponse.json({
+    ok: true,
+    tenants: report.results.length,
+    totals,
+    deadlineExceeded: report.deadlineExceeded,
+    deferred: report.deferred,
+    durationMs: report.durationMs,
+    budgetMs: report.budgetMs,
+  });
 }
 
 // Vercel Cron issues GET; POST supported for manual triggers.
