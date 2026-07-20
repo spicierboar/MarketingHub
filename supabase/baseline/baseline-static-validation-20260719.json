@@ -1,0 +1,32 @@
+{
+  "validatedAt": "2026-07-19T04:40:00Z",
+  "level": "static-catalog-reconciliation-only",
+  "checks": {
+    "tableCountMatches": true,
+    "enumCountMatches": true,
+    "constraintCountMatches": true,
+    "indexCountMatches": true,
+    "functionCountMatches": true,
+    "policyCountMatches": true,
+    "rlsCountMatches": true,
+    "tableCommentCountMatches": true,
+    "columnCommentCountMatches": true,
+    "dollarQuotesBalanced": true,
+    "replayLedgerExcluded": true,
+    "manifestHashLinked": true,
+    "replaySourceHashLinked": true,
+    "replayTablePresent": true,
+    "replayFunctionPresent": true,
+    "replayRlsEnabled": true,
+    "replayBrowserGrantsRevoked": true,
+    "replayFunctionServiceOnly": true
+  },
+  "allChecksPassed": true,
+  "limitations": [
+    "Docker Desktop is unavailable.",
+    "Native PostgreSQL pg_dump and psql are unavailable.",
+    "Baseline and replay-ledger migration were not executed against a disposable database."
+  ],
+  "baselineSha256": "f7887c0ad66c8bd83789bd7d0e8ba8f4856c3c3f3c3af29a6baa4377c41ff023",
+  "replayMigrationSha256": "1fdeaf7f865b3f6e441552572b7fc0eb1f690f8b54d2f4c3f815124104ad558e"
+}
