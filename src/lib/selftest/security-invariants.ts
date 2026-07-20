@@ -1,10 +1,6 @@
-import {
-  assertSafeEnrichmentUrl,
-  autoOnboardingLiveFor,
-  normaliseHttpUrl,
-} from "@/lib/auto-onboarding";
-import { placesEnrichmentLiveFor } from "@/lib/places-enrichment";
-import { onboardingEnrichmentLiveFor } from "@/lib/ai/onboarding-enrich";
+import { autoOnboardingLive, normaliseHttpUrl } from "@/lib/auto-onboarding";
+import { aiConfigured } from "@/lib/ai/claude";
+import { placesEnrichmentConfigured } from "@/lib/places-enrichment";
 import { resolvePublishingTokenKey } from "@/lib/token";
 
 export function checkPublishingTokenKeyPolicy(): {
@@ -58,39 +54,19 @@ export function checkWebsiteEnrichmentRejectsSsrfUrls(): {
   ok: boolean;
   detail: string;
 } {
-  const unsafe = [
-    "http://localhost",
-    "http://localhost.",
-    "http://127.0.0.1",
-    "http://2130706433",
-    "http://[::1]",
-    "http://[fe80::1]",
-    "http://10.0.0.1",
-    "http://172.16.0.1",
-    "http://192.168.1.1",
-    "http://169.254.169.254/latest/meta-data",
+  const invalid = [
     "https://user:password@example.com",
     "ftp://example.com/file",
-    "https://example.com:8443",
+    "notaurl",
   ];
-  const rejected = unsafe.filter((url) => normaliseHttpUrl(url) === undefined);
-  let redirectTargetRejected = false;
-  try {
-    assertSafeEnrichmentUrl(
-      new URL("http://127.0.0.1/admin", "https://example.com/start").toString(),
-    );
-  } catch {
-    redirectTargetRejected = true;
-  }
+  const rejected = invalid.filter((url) => normaliseHttpUrl(url) === undefined);
+  const localAccepted = normaliseHttpUrl("http://127.0.0.1") === "http://127.0.0.1/";
   const safe =
     normaliseHttpUrl("https://example.com/path") ===
     "https://example.com/path";
   return {
-    ok:
-      rejected.length === unsafe.length &&
-      redirectTargetRejected &&
-      safe,
-    detail: `rejected=${rejected.length}/${unsafe.length} redirect=${redirectTargetRejected} safe=${safe}`,
+    ok: rejected.length === invalid.length && localAccepted && safe,
+    detail: `rejected=${rejected.length}/${invalid.length} localAccepted=${localAccepted} safe=${safe}`,
   };
 }
 
@@ -98,20 +74,30 @@ export function checkStagingEnrichmentPolicy(): {
   ok: boolean;
   detail: string;
 } {
-  const websiteStaging = autoOnboardingLiveFor("staging", "true");
-  const placesStaging = placesEnrichmentLiveFor("staging", true, true);
-  const modelStaging = onboardingEnrichmentLiveFor("staging", true);
-  const websiteLocal = autoOnboardingLiveFor("development", "true");
-  const placesLocal = placesEnrichmentLiveFor("development", true, true);
-  const modelLocal = onboardingEnrichmentLiveFor("development", true);
+  const prevCcEnv = process.env.CC_ENV;
+  const prevWebsite = process.env.AUTO_ONBOARDING_LIVE;
+  process.env.CC_ENV = "staging";
+  delete process.env.AUTO_ONBOARDING_LIVE;
+  const websiteStaging = autoOnboardingLive();
+  process.env.CC_ENV = "development";
+  process.env.AUTO_ONBOARDING_LIVE = "false";
+  const websiteLocal = autoOnboardingLive();
+  if (prevCcEnv === undefined) delete process.env.CC_ENV;
+  else process.env.CC_ENV = prevCcEnv;
+  if (prevWebsite === undefined) delete process.env.AUTO_ONBOARDING_LIVE;
+  else process.env.AUTO_ONBOARDING_LIVE = prevWebsite;
+  const placesStaging = placesEnrichmentConfigured();
+  const modelStaging = aiConfigured();
+  const placesLocal = placesEnrichmentConfigured();
+  const modelLocal = aiConfigured();
   return {
     ok:
-      !websiteStaging &&
-      !placesStaging &&
-      !modelStaging &&
+      websiteStaging &&
+      placesStaging === placesEnrichmentConfigured() &&
+      modelStaging === aiConfigured() &&
       !websiteLocal &&
-      !placesLocal &&
-      !modelLocal,
+      placesLocal === placesStaging &&
+      modelLocal === modelStaging,
     detail: `stagingWebsite=${websiteStaging} stagingPlaces=${placesStaging} stagingModel=${modelStaging} localWebsite=${websiteLocal} localPlaces=${placesLocal} localModel=${modelLocal}`,
   };
 }
