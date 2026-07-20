@@ -1,23 +1,31 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany } from "@/lib/db";
+import { getCompany, getTenant } from "@/lib/db";
 import { isV1ConnectPlatform } from "@/lib/connect-invites";
-import { requestSocialConnectInvites } from "@/lib/onboarding-social-connect";
+import {
+  assertConnectPlatformsEntitled,
+  requestSocialConnectInvites,
+} from "@/lib/onboarding-social-connect";
 import type { V1ConnectPlatform } from "@/lib/types";
 
+function connectErrorRedirect(message: string): never {
+  redirect(`/client/connect?err=${encodeURIComponent(message)}`);
+}
+
 /**
- * Client self-serve: request OAuth connect invites for additional SM accounts
- * and email the one-time links (email still live-gated).
- *
- * PLACEHOLDER product rule: today any v1 platform may be requested later.
- * Confirm whether later adds must stay within the paid package channels only.
+ * Client self-serve (trigger B): request OAuth connect invites for chosen
+ * platforms. Tier must include each platform or client must upgrade first.
  */
 export async function requestClientSocialConnectAction(formData: FormData) {
   const { user, companyId } = await requirePortalUser();
-  const company = await getCompany(companyId);
-  if (!company) throw new Error("Company not found.");
+  const [company, tenant] = await Promise.all([
+    getCompany(companyId),
+    getTenant(user.tenantId),
+  ]);
+  if (!company) connectErrorRedirect("Company not found.");
 
   const platforms = formData
     .getAll("platform")
@@ -25,7 +33,15 @@ export async function requestClientSocialConnectAction(formData: FormData) {
     .filter((v): v is V1ConnectPlatform => isV1ConnectPlatform(v));
 
   if (platforms.length === 0) {
-    throw new Error("Select at least one social account to connect.");
+    connectErrorRedirect("Select at least one social account to connect.");
+  }
+
+  try {
+    assertConnectPlatformsEntitled(company, tenant, platforms);
+  } catch (error) {
+    connectErrorRedirect(
+      error instanceof Error ? error.message : "Upgrade required for that platform.",
+    );
   }
 
   const recipient =
@@ -46,4 +62,5 @@ export async function requestClientSocialConnectAction(formData: FormData) {
 
   revalidatePath("/client/connect");
   revalidatePath("/client");
+  redirect("/client/connect?sent=1");
 }

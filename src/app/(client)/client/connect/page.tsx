@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany, listIntegrations } from "@/lib/db";
+import { getCompany, getTenant, listIntegrations } from "@/lib/db";
 import {
   connectInviteUrl,
   oauthAvailableForPlatform,
 } from "@/lib/connect-invites";
 import {
+  connectPlatformsAllowedForCompany,
   listPendingSocialConnectInvites,
+  partitionConnectPlatformsByEntitlement,
   V1_CONNECT_PLATFORMS,
 } from "@/lib/onboarding-social-connect";
 import { resolveOrigin } from "@/lib/origin";
@@ -19,22 +21,23 @@ import { requestClientSocialConnectAction } from "./actions";
 
 export const metadata = { title: "Connect social accounts" };
 
-/**
- * Post-onboarding + anytime: connect package channels and request later accounts.
- * Same /connect/[token] OAuth flow as Publishing. Staff and system/AI use the
- * same invite helper; this page is the client path.
- */
 export default async function ClientConnectSocialsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ setup?: string; checkout?: string }>;
+  searchParams: Promise<{
+    setup?: string;
+    checkout?: string;
+    err?: string;
+    sent?: string;
+  }>;
 }) {
   const { user, companyId } = await requirePortalUser();
   const params = await searchParams;
   const isSetup = params.setup === "1" || params.checkout === "success";
 
-  const [company, pending, integrations] = await Promise.all([
+  const [company, tenant, pending, integrations] = await Promise.all([
     getCompany(companyId),
+    getTenant(user.tenantId),
     listPendingSocialConnectInvites(user.tenantId, companyId),
     listIntegrations(user.tenantId, companyId),
   ]);
@@ -42,9 +45,16 @@ export default async function ClientConnectSocialsPage({
   const connected = integrations.filter((i) => i.status === "connected");
   const connectedPlatforms = new Set(connected.map((i) => i.platform));
   const pendingPlatforms = new Set(pending.map((i) => i.platform));
-  const addable = V1_CONNECT_PLATFORMS.filter(
+  const notConnected = V1_CONNECT_PLATFORMS.filter(
     (p) => !connectedPlatforms.has(p) && !pendingPlatforms.has(p),
   );
+  const { entitled: entitledAddable, upgradeRequired: upgradePlatforms } =
+    company
+      ? partitionConnectPlatformsByEntitlement(company, tenant, notConnected)
+      : { entitled: [], upgradeRequired: notConnected };
+  const planPlatforms = company
+    ? connectPlatformsAllowedForCompany(company, tenant)
+    : [];
 
   const h = await headers();
   const origin = resolveOrigin((key) => h.get(key));
@@ -56,10 +66,21 @@ export default async function ClientConnectSocialsPage({
       <PageHeader
         title="Connect your social accounts"
         explainerId="client-connect-socials"
-        explainer="Authorize Facebook, Instagram, and other channels with a one-time secure link. We never ask for your password. Staff or automation can also send these links."
+        explainer="Authorize Facebook, Instagram, and other channels with a one-time secure link. We never ask for your password."
       />
 
       <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
+        {params.err ? (
+          <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {params.err}
+          </p>
+        ) : null}
+        {params.sent === "1" ? (
+          <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+            Connect link(s) sent. Check your email or use the buttons below.
+          </p>
+        ) : null}
+
         {isSetup ? (
           <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
             At signup we only asked for channels on your plan
@@ -69,8 +90,16 @@ export default async function ClientConnectSocialsPage({
                 for <span className="font-medium text-foreground">{company.name}</span>
               </>
             ) : null}
-            . Connect those below. You can add more accounts later — we&apos;ll
-            email a fresh OAuth link for each.
+            . Connect those below. Other platforms need a plan upgrade first.
+          </p>
+        ) : null}
+
+        {planPlatforms.length > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Your plan includes:{" "}
+            <span className="font-medium text-foreground">
+              {planPlatforms.join(", ")}
+            </span>
           </p>
         ) : null}
 
@@ -105,9 +134,8 @@ export default async function ClientConnectSocialsPage({
             <CardContent className="divide-y divide-border p-0">
               {pending.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-muted-foreground">
-                  No pending links. If your plan included social channels, they
-                  may already be connected — or use &quot;Add another account&quot;
-                  below.
+                  No pending links. Pick entitled platforms below or ask us to
+                  upgrade for others.
                 </p>
               ) : (
                 pending.map((invite) => {
@@ -143,24 +171,19 @@ export default async function ClientConnectSocialsPage({
           </Card>
         </section>
 
-        {addable.length > 0 ? (
-          <section aria-labelledby="add-later">
-            <h2 id="add-later" className="mb-2 text-base font-semibold">
-              Add another account later
+        {entitledAddable.length > 0 ? (
+          <section aria-labelledby="add-entitled">
+            <h2 id="add-entitled" className="mb-2 text-base font-semibold">
+              Request connect link (on your plan)
             </h2>
             <Card>
               <CardContent className="p-4">
-                <p className="mb-3 text-sm text-muted-foreground">
-                  Create an account on the platform first if you need a new Page
-                  or profile, then request a connect link here. We email the
-                  same OAuth invite staff and automation use.
-                </p>
                 <form action={requestClientSocialConnectAction} className="space-y-3">
                   <fieldset className="space-y-2">
                     <legend className="text-xs font-medium text-muted-foreground">
-                      Platforms
+                      Platforms included in your package
                     </legend>
-                    {addable.map((platform) => (
+                    {entitledAddable.map((platform) => (
                       <label
                         key={platform}
                         className="flex items-center gap-2 text-sm"
@@ -191,6 +214,33 @@ export default async function ClientConnectSocialsPage({
                     Email OAuth connect link(s)
                   </button>
                 </form>
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
+
+        {upgradePlatforms.length > 0 ? (
+          <section aria-labelledby="upgrade-required">
+            <h2 id="upgrade-required" className="mb-2 text-base font-semibold">
+              Need another platform?
+            </h2>
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <p className="text-sm text-muted-foreground">
+                  These channels are not on your current marketing package. You
+                  can add them after we upgrade your plan:
+                </p>
+                <ul className="list-inside list-disc text-sm">
+                  {upgradePlatforms.map((platform) => (
+                    <li key={platform}>{platform}</li>
+                  ))}
+                </ul>
+                <Link
+                  href="/client/requests/new"
+                  className={buttonClasses("outline", "sm")}
+                >
+                  Ask us to upgrade →
+                </Link>
               </CardContent>
             </Card>
           </section>

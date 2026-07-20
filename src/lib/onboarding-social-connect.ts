@@ -4,8 +4,10 @@
  *
  * Rules:
  * - At signup: only platforms implied by the chosen package channels.
- * - Later: staff, client, or system/AI can request more; emails use the same
- *   /connect/[token] OAuth links (email still gated by sendEmail live flags).
+ * - Later (client): may pick any v1 platform; tier must include that channel or
+ *   they must upgrade (Ask us / agency-managed package change).
+ * - Staff Publishing may still invite any platform (ops override).
+ * - System/AI uses the same tier check as the client.
  */
 
 import { logAction } from "@/lib/audit";
@@ -14,13 +16,22 @@ import {
   connectInviteUrl,
   isV1ConnectPlatform,
 } from "@/lib/connect-invites";
-import { getCompany, listConnectInvites, updateConnectInvite } from "@/lib/db";
+import {
+  findConnectedIntegration,
+  getCompany,
+  getTenant,
+  listConnectInvites,
+  updateConnectInvite,
+} from "@/lib/db";
 import { sendEmail } from "@/lib/email";
+import { resolveCompanyPackage } from "@/lib/marketing-packages";
 import { resolveOrigin } from "@/lib/origin";
 import { systemAutopilotActor } from "@/lib/managed-service/autopilot-approvals";
 import {
   V1_CONNECT_PLATFORMS,
   type ActingUser,
+  type Company,
+  type Tenant,
   type V1ConnectPlatform,
 } from "@/lib/types";
 import { headers } from "next/headers";
@@ -54,6 +65,135 @@ export function connectPlatformsFromPackageChannels(
     }
   }
   return V1_CONNECT_PLATFORMS.filter((p) => out.has(p));
+}
+
+/** Platforms the company's current marketing package entitles them to connect. */
+export function connectPlatformsAllowedForCompany(
+  company: Pick<Company, "profile">,
+  tenant: Pick<Tenant, "marketingPackageCatalog"> | null | undefined,
+): V1ConnectPlatform[] {
+  const pkg = resolveCompanyPackage(company, tenant);
+  return connectPlatformsFromPackageChannels(pkg.channels);
+}
+
+export function isConnectPlatformEntitled(
+  company: Pick<Company, "profile">,
+  tenant: Pick<Tenant, "marketingPackageCatalog"> | null | undefined,
+  platform: V1ConnectPlatform,
+): boolean {
+  return connectPlatformsAllowedForCompany(company, tenant).includes(platform);
+}
+
+export function partitionConnectPlatformsByEntitlement(
+  company: Pick<Company, "profile">,
+  tenant: Pick<Tenant, "marketingPackageCatalog"> | null | undefined,
+  platforms: V1ConnectPlatform[],
+): { entitled: V1ConnectPlatform[]; upgradeRequired: V1ConnectPlatform[] } {
+  const allowed = new Set(connectPlatformsAllowedForCompany(company, tenant));
+  const entitled: V1ConnectPlatform[] = [];
+  const upgradeRequired: V1ConnectPlatform[] = [];
+  for (const platform of platforms) {
+    if (allowed.has(platform)) entitled.push(platform);
+    else upgradeRequired.push(platform);
+  }
+  return { entitled, upgradeRequired };
+}
+
+/** Client / AI: reject platforms not on the paid package tier. */
+export function assertConnectPlatformsEntitled(
+  company: Pick<Company, "profile">,
+  tenant: Pick<Tenant, "marketingPackageCatalog"> | null | undefined,
+  platforms: V1ConnectPlatform[],
+): void {
+  const { upgradeRequired } = partitionConnectPlatformsByEntitlement(
+    company,
+    tenant,
+    platforms,
+  );
+  if (upgradeRequired.length === 0) return;
+  const names = upgradeRequired.join(", ");
+  throw new Error(
+    `${names} ${upgradeRequired.length === 1 ? "is" : "are"} not included on your current marketing package. Ask us to upgrade your plan before connecting.`,
+  );
+}
+
+/** Scheduled-post / publish-queue platform label → v1 OAuth connect platform. */
+export function v1ConnectPlatformFromPublishLabel(
+  platform: string,
+): V1ConnectPlatform | null {
+  const trimmed = platform.trim();
+  if (isV1ConnectPlatform(trimmed)) return trimmed;
+  const lower = trimmed.toLowerCase();
+  for (const candidate of V1_CONNECT_PLATFORMS) {
+    if (candidate.toLowerCase() === lower) return candidate;
+  }
+  return null;
+}
+
+export type AutoInviteForPlatformResult =
+  | { action: "none"; reason: string }
+  | { action: "invited"; platforms: V1ConnectPlatform[]; createdCount: number }
+  | { action: "upgrade_required"; platforms: V1ConnectPlatform[] };
+
+/**
+ * AI auto-invite (trigger A): schedule or publish needs a platform that is not
+ * connected. Tier-gated; skips if pending invite exists. Does not block caller.
+ */
+export async function maybeAutoInviteForScheduledPlatform(input: {
+  agencyTenantId: string;
+  companyId: string;
+  publishPlatformLabel: string;
+  recipientEmail?: string | null;
+}): Promise<AutoInviteForPlatformResult> {
+  const v1 = v1ConnectPlatformFromPublishLabel(input.publishPlatformLabel);
+  if (!v1) return { action: "none", reason: "not_v1_connect_platform" };
+
+  const company = await getCompany(input.companyId);
+  const tenant = await getTenant(input.agencyTenantId);
+  if (!company) return { action: "none", reason: "company_not_found" };
+
+  if (await findConnectedIntegration(input.companyId, v1)) {
+    return { action: "none", reason: "already_connected" };
+  }
+
+  const pending = await listPendingSocialConnectInvites(
+    input.agencyTenantId,
+    input.companyId,
+  );
+  if (pending.some((i) => i.platform === v1)) {
+    return { action: "none", reason: "pending_invite" };
+  }
+
+  if (!isConnectPlatformEntitled(company, tenant, v1)) {
+    await logAction(
+      systemAutopilotActor(input.agencyTenantId),
+      "social.connect_upgrade_required",
+      {
+        targetType: "company",
+        targetId: input.companyId,
+        companyId: input.companyId,
+        detail: `platform=${v1} trigger=scheduled_or_publish`,
+      },
+    );
+    return { action: "upgrade_required", platforms: [v1] };
+  }
+
+  const recipient =
+    input.recipientEmail?.trim() ||
+    company.profile.approvalContact?.trim() ||
+    "";
+  const result = await requestSocialConnectInvitesFromAi({
+    agencyTenantId: input.agencyTenantId,
+    companyId: input.companyId,
+    platforms: [v1],
+    recipientEmail: recipient || undefined,
+    emailInvites: Boolean(recipient.includes("@")),
+  });
+  return {
+    action: "invited",
+    platforms: [v1],
+    createdCount: result.createdCount,
+  };
 }
 
 export type RequestSocialConnectInvitesInput = {
@@ -151,7 +291,6 @@ export async function requestSocialConnectInvites(
 export async function ensureOnboardingSocialConnectInvites(input: {
   agencyTenantId: string;
   companyId: string;
-  companyName: string;
   packageChannels: string[] | undefined;
   invitedBy: ActingUser;
   recipientEmail?: string | null;
@@ -170,9 +309,7 @@ export async function ensureOnboardingSocialConnectInvites(input: {
 }
 
 /**
- * System / AI path — same invites + optional email.
- * PLACEHOLDER: call when strategy/schedule needs a channel that is not connected
- * (e.g. autopilot or staff-approved AI action). Actor is system autopilot, not staff.
+ * System / AI path — tier-gated like the client; actor is system autopilot.
  */
 export async function requestSocialConnectInvitesFromAi(input: {
   agencyTenantId: string;
@@ -181,6 +318,10 @@ export async function requestSocialConnectInvitesFromAi(input: {
   recipientEmail?: string | null;
   emailInvites?: boolean;
 }): Promise<RequestSocialConnectInvitesResult> {
+  const company = await getCompany(input.companyId);
+  const tenant = await getTenant(input.agencyTenantId);
+  if (!company) throw new Error("Company not found.");
+  assertConnectPlatformsEntitled(company, tenant, input.platforms);
   return requestSocialConnectInvites({
     agencyTenantId: input.agencyTenantId,
     companyId: input.companyId,

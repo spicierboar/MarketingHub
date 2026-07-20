@@ -31,6 +31,7 @@ import {
   updateScheduledPost,
 } from "@/lib/db";
 import { logAction } from "@/lib/audit";
+import { maybeAutoInviteForScheduledPlatform } from "@/lib/onboarding-social-connect";
 import { assetsBlockingChannel } from "@/lib/assets";
 import {
   dispatchPublish,
@@ -391,6 +392,13 @@ export async function attemptScheduledPost(
 
   const integration = await findConnectedIntegration(claimed.companyId, claimed.platform);
   if (!integration) {
+    const company = await getCompany(claimed.companyId);
+    void maybeAutoInviteForScheduledPlatform({
+      agencyTenantId: actor.tenantId,
+      companyId: claimed.companyId,
+      publishPlatformLabel: claimed.platform,
+      recipientEmail: company?.profile.approvalContact,
+    }).catch(() => {});
     return settle(
       "failed",
       `No connected ${claimed.platform} integration for this company`,
