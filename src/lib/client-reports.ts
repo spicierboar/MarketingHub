@@ -255,45 +255,84 @@ export async function sendClientReportEmail(args: {
   };
 }
 
-export async function runScheduledClientReports(origin: string) {
-  const results: { tenantId: string; companiesChecked: number; reportsSent: number; recipients: number }[] = [];
-  for (const tenant of await listTenants()) {
-    if (tenant.status !== "active") continue;
-    const tick = await runInServiceContext(tenant.id, async () => {
-      let companiesChecked = 0;
-      let reportsSent = 0;
-      let recipients = 0;
-      const actor: ActingUser = {
-        id: "system:cron",
-        email: "cron@marketing-command-centre.system",
-        name: "Scheduler",
-        role: "super_admin",
-        active: true,
-        tenantId: tenant.id,
-        tenantRole: "owner",
-        createdAt: "1970-01-01T00:00:00.000Z",
-      };
-      for (const company of (await listCompanies(tenant.id)).filter((c) => c.status !== "archived")) {
-        companiesChecked += 1;
-        if (!isScheduledReportDue(company)) continue;
-        if ((await listPortalRecipientsForCompany(tenant.id, company.id)).length === 0) continue;
-        try {
-          const outcome = await sendClientReportEmail({
-            tenantId: tenant.id,
-            companyId: company.id,
-            origin,
-            actor,
-          });
-          if (outcome.recipients > 0) {
-            reportsSent += 1;
-            recipients += outcome.recipients;
-          }
-        } catch (err) {
-          console.error(`[client-reports] send failed for ${company.id}:`, err);
-        }
+export async function runScheduledClientReportsForTenant(
+  tenantId: string,
+  origin: string,
+  options: { deadlineMs?: number; signal?: AbortSignal } = {},
+) {
+  return runInServiceContext(tenantId, async () => {
+    let companiesChecked = 0;
+    let reportsSent = 0;
+    let recipients = 0;
+    const actor: ActingUser = {
+      id: "system:cron",
+      email: "cron@marketing-command-centre.system",
+      name: "Scheduler",
+      role: "super_admin",
+      active: true,
+      tenantId,
+      tenantRole: "owner",
+      createdAt: "1970-01-01T00:00:00.000Z",
+    };
+    for (const company of (await listCompanies(tenantId)).filter(
+      (c) => c.status !== "archived",
+    )) {
+      if (
+        options.signal?.aborted ||
+        (options.deadlineMs && Date.now() >= options.deadlineMs)
+      ) {
+        break;
       }
-      return { companiesChecked, reportsSent, recipients };
-    });
+      companiesChecked += 1;
+      if (!isScheduledReportDue(company)) continue;
+      if (
+        (await listPortalRecipientsForCompany(tenantId, company.id)).length ===
+        0
+      ) {
+        continue;
+      }
+      try {
+        const outcome = await sendClientReportEmail({
+          tenantId,
+          companyId: company.id,
+          origin,
+          actor,
+        });
+        if (outcome.recipients > 0) {
+          reportsSent += 1;
+          recipients += outcome.recipients;
+        }
+      } catch (err) {
+        console.error(`[client-reports] send failed for ${company.id}:`, err);
+      }
+    }
+    return { companiesChecked, reportsSent, recipients };
+  });
+}
+
+export async function runScheduledClientReports(
+  origin: string,
+  options: { deadlineMs?: number; signal?: AbortSignal } = {},
+) {
+  const results: {
+    tenantId: string;
+    companiesChecked: number;
+    reportsSent: number;
+    recipients: number;
+  }[] = [];
+  for (const tenant of await listTenants()) {
+    if (
+      options.signal?.aborted ||
+      (options.deadlineMs && Date.now() >= options.deadlineMs)
+    ) {
+      break;
+    }
+    if (tenant.status !== "active") continue;
+    const tick = await runScheduledClientReportsForTenant(
+      tenant.id,
+      origin,
+      options,
+    );
     results.push({ tenantId: tenant.id, ...tick });
   }
   return results;
