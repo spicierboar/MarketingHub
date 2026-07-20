@@ -7,6 +7,7 @@ import {
   listManagedStrategyCycles,
   listPublishLogsSince,
   listScheduledPosts,
+  listUsers,
 } from "@/lib/db";
 import {
   listManagedJobs,
@@ -67,7 +68,8 @@ export interface ControlPlaneException {
   title: string;
   detail: string;
   href: string;
-  owner: "Unassigned";
+  /** Salesperson / onboarder display name (from company.createdBy). */
+  owner: string;
   sla: string;
   ageDays: number;
   estimatedMinutes: number;
@@ -111,6 +113,8 @@ export interface AgencyControlPlaneInput {
   scheduledPosts: ScheduledPost[];
   publishLogs: PublishLog[];
   managedJobs: ManagedContentJobRecord[];
+  /** companyId → salesperson display name */
+  salespersonByCompanyId?: Map<string, string>;
   queueToday?: string;
   queueHhmm?: string;
 }
@@ -192,8 +196,22 @@ export function latestConfirmedProfileByCompany(
 function pushException(
   rows: ControlPlaneException[],
   input: Omit<ControlPlaneException, "owner">,
+  ownerByCompanyId?: Map<string, string>,
 ): void {
-  rows.push({ ...input, owner: "Unassigned" });
+  rows.push({
+    ...input,
+    owner: ownerByCompanyId?.get(input.companyId) ?? "Unassigned",
+  });
+}
+
+/** Resolve display name for the salesperson who onboarded/owns the client. */
+export function salespersonNameForCompany(
+  company: Company,
+  namesByUserId: Map<string, string>,
+): string {
+  // PLACEHOLDER ownership: prefer soldByUserId when set; else createdBy.
+  const ownerId = company.soldByUserId?.trim() || company.createdBy;
+  return namesByUserId.get(ownerId)?.trim() || "Unassigned";
 }
 
 function buildExceptions(args: {
@@ -205,6 +223,7 @@ function buildExceptions(args: {
   runs: ManagedDeliveryRun[];
   posts: ScheduledPost[];
   jobs: ManagedContentJobRecord[];
+  salespersonByCompanyId?: Map<string, string>;
 }): ControlPlaneException[] {
   const {
     nowIso,
@@ -215,6 +234,7 @@ function buildExceptions(args: {
     runs,
     posts,
     jobs,
+    salespersonByCompanyId: owners,
   } = args;
   const today = dateOnly(nowIso);
   const horizonEnd = addDays(nowIso, 30);
@@ -251,7 +271,7 @@ function buildExceptions(args: {
         sla: "Before delivery continues",
         ageDays: ageDays(company.updatedAt, nowIso),
         estimatedMinutes: 15,
-      });
+      }, owners);
     } else if (["paused", "pending_payment", "past_due_grace"].includes(billing.status)) {
       const paused = billing.status === "paused";
       pushException(rows, {
@@ -269,7 +289,7 @@ function buildExceptions(args: {
           nowIso,
         ),
         estimatedMinutes: 20,
-      });
+      }, owners);
     }
 
     if (!isActiveClient(company)) continue;
@@ -288,7 +308,7 @@ function buildExceptions(args: {
         sla: "Before strategy runs",
         ageDays: ageDays(company.updatedAt, nowIso),
         estimatedMinutes: 25,
-      });
+      }, owners);
     }
 
     const currentStrategy = companyCycles.find(
@@ -308,7 +328,7 @@ function buildExceptions(args: {
         sla: "Within 1 business day",
         ageDays: ageDays(company.updatedAt, nowIso),
         estimatedMinutes: 30,
-      });
+      }, owners);
     }
 
     const covered = (slotsByCompany.get(company.id) ?? []).filter(
@@ -330,7 +350,7 @@ function buildExceptions(args: {
         sla: "Within 2 business days",
         ageDays: 0,
         estimatedMinutes: 20,
-      });
+      }, owners);
     }
   }
 
@@ -350,7 +370,7 @@ function buildExceptions(args: {
       sla: "Within 1 business day",
       ageDays: ageDays(request.dueAt, nowIso),
       estimatedMinutes: 10,
-    });
+    }, owners);
   }
 
   for (const run of runs) {
@@ -369,7 +389,7 @@ function buildExceptions(args: {
       sla: "Within 4 hours",
       ageDays: ageDays(run.updatedAt, nowIso),
       estimatedMinutes: 25,
-    });
+    }, owners);
   }
 
   for (const job of jobs) {
@@ -388,7 +408,7 @@ function buildExceptions(args: {
       sla: "Within 4 hours",
       ageDays: ageDays(job.updatedAt, nowIso),
       estimatedMinutes: 20,
-    });
+    }, owners);
   }
 
   for (const post of posts) {
@@ -410,7 +430,7 @@ function buildExceptions(args: {
       sla: post.status === "dead" ? "Within 4 hours" : "Next scheduled run",
       ageDays: ageDays(post.updatedAt, nowIso),
       estimatedMinutes: post.status === "dead" ? 15 : 5,
-    });
+    }, owners);
   }
 
   return rows.sort(
@@ -530,6 +550,7 @@ export function buildAgencyControlPlane(
     runs: deliveryRuns,
     posts: scheduledPosts,
     jobs: managedJobs,
+    salespersonByCompanyId: input.salespersonByCompanyId,
   });
   const exceptionCompanyIds = new Set(
     allExceptions.map((exception) => exception.companyId),
@@ -666,6 +687,7 @@ export async function loadAgencyControlPlane(
     publishLogs,
     managedJobs,
     queueClock,
+    users,
   ] = await Promise.all([
     listCompanies(tenantId),
     listManagedStrategyCycles(tenantId),
@@ -677,7 +699,16 @@ export async function loadAgencyControlPlane(
     listPublishLogsSince(tenantId, sinceIso),
     listManagedJobs(tenantId),
     queueNowPartsForTenant(tenantId),
+    listUsers(tenantId),
   ]);
+
+  const namesByUserId = new Map(users.map((user) => [user.id, user.name]));
+  const salespersonByCompanyId = new Map(
+    companies.map((company) => [
+      company.id,
+      salespersonNameForCompany(company, namesByUserId),
+    ]),
+  );
 
   return buildAgencyControlPlane({
     tenantId,
@@ -691,6 +722,7 @@ export async function loadAgencyControlPlane(
     scheduledPosts,
     publishLogs,
     managedJobs,
+    salespersonByCompanyId,
     queueToday: queueClock.today,
     queueHhmm: queueClock.hhmm,
   });

@@ -35,6 +35,7 @@ const ROLE_TITLES = [
   "publisher",
   "analyst",
   "viewer",
+  "sales_rep",
 ] as const;
 
 export default async function UsersPage() {

@@ -49,6 +49,61 @@ export interface MarketingPackageDef {
   customModuleRates?: Record<string, number>;
 }
 
+/** Desk strategy mode derived from package/service level (mirrors content-desk `modeFor`). */
+export type PackageStrategyMode = "automated" | "staff_directed";
+
+export type PackageGuardrailDefaults = {
+  channels: string[];
+  themes: string[];
+  publishWindows: string[];
+  strategyMode: PackageStrategyMode;
+};
+
+export function strategyModeForServiceLevel(
+  level: ManagedServiceLevel,
+): PackageStrategyMode {
+  return level === "approval" ? "staff_directed" : "automated";
+}
+
+/**
+ * Default operating guardrails seeded when a marketing package is chosen.
+ * Desk edits remain overrides on the strategy cycle — these are package baselines only.
+ *
+ * PLACEHOLDER: product/copy review of default themes and publishWindows per SKU.
+ */
+export function defaultPackageGuardrails(
+  pkg: Pick<MarketingPackageDef, "id" | "channels" | "defaultServiceLevel"> & {
+    serviceLevel?: ManagedServiceLevel;
+  },
+): PackageGuardrailDefaults {
+  const level = pkg.serviceLevel ?? pkg.defaultServiceLevel;
+  const packageId = String(pkg.id);
+  // PLACEHOLDER: replace with reviewed per-package theme catalogs.
+  const themesByPackage: Record<string, string[]> = {
+    starter: ["local awareness", "offers", "social proof"],
+    growth: ["local awareness", "offers", "social proof", "seasonal", "education"],
+    managed: [
+      "local awareness",
+      "offers",
+      "social proof",
+      "seasonal",
+      "education",
+      "thought leadership",
+    ],
+  };
+  return {
+    channels: [...pkg.channels],
+    themes: themesByPackage[packageId] ?? themesByPackage.starter,
+    // PLACEHOLDER: confirmed publish-window vocabulary with Desk ops.
+    publishWindows: [
+      "weekday_morning",
+      "weekday_afternoon",
+      "weekday_evening",
+    ],
+    strategyMode: strategyModeForServiceLevel(level),
+  };
+}
+
 /** Effective entitlements for a company after catalog + custom modules. */
 export interface ResolvedCompanyPackage {
   id: CurrentMarketingPackageId;

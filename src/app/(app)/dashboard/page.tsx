@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireUser, isAdmin, accessibleCompanyIds } from "@/lib/auth/rbac";
+import { redirect } from "next/navigation";
+import { requireUser, isAdmin, isSalesRep, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleCompanies, visibleContent, visibleRequests } from "@/lib/scope";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
@@ -30,6 +31,9 @@ function nextSpielStep(company: Company | undefined): {
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  if (isSalesRep(user) && !isAdmin(user)) {
+    redirect("/sales");
+  }
   if (isAdmin(user)) {
     return (
       <AgencyControlPlane

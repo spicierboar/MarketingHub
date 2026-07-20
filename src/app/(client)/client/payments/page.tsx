@@ -131,22 +131,25 @@ export default async function ClientPaymentsPage() {
                 </form>
               </div>
 
-              {liveCard && (
-                <div className="rounded-md border border-border p-4">
-                  <p className="mb-2 text-sm font-medium">Payment methods</p>
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    {wallet.stripePaymentMethodId
+              {/* PLACEHOLDER: always expose Stripe Customer Portal entry once product confirms. */}
+              <div id="payment-method" className="rounded-md border border-border p-4">
+                <p className="mb-2 text-sm font-medium">Payment methods</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  {liveCard
+                    ? wallet.stripePaymentMethodId
                       ? "A card is saved for auto top-up. Manage it in the Stripe portal."
-                      : "After your first card top-up, you can manage payment methods here."}
-                  </p>
+                      : "After your first card top-up, you can manage payment methods here."
+                    : "PLACEHOLDER — Stripe Customer Portal for card on file (gated until billing live)."}
+                </p>
+                {liveCard ? (
                   <form action={openClientBillingPortalAction}>
                     <input type="hidden" name="companyId" value={companyId} />
                     <Button type="submit" size="sm" variant="outline">
                       Open card portal
                     </Button>
                   </form>
-                </div>
-              )}
+                ) : null}
+              </div>
 
               <div className="rounded-md border border-border p-4">
                 <p className="mb-3 text-sm font-medium">Auto top-up</p>
@@ -369,7 +372,7 @@ export default async function ClientPaymentsPage() {
           </Card>
         </section>
 
-        <section className="space-y-4">
+        <section id="invoices" className="space-y-4">
           <h2 className="text-lg font-semibold">Tax invoices</h2>
           <Card>
             <CardContent className="space-y-3 p-6">

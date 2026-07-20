@@ -15,6 +15,7 @@ import {
   updateScheduledPost,
 } from "@/lib/db";
 import { assertAssetsAllowChannel } from "@/lib/assets";
+import { maybeAutoInviteForScheduledPlatform } from "@/lib/onboarding-social-connect";
 import {
   critiqueBlocksScheduling,
   critiqueForPublish,
@@ -121,6 +122,16 @@ export async function scheduleOne(args: {
   if (content.campaignItemId) {
     await updateCampaignItem(content.campaignItemId, { status: "scheduled" });
   }
+
+  void maybeAutoInviteForScheduledPlatform({
+    agencyTenantId: args.tenantId,
+    companyId: content.companyId,
+    publishPlatformLabel: args.platform || "Facebook",
+    recipientEmail: company.profile.approvalContact,
+  }).catch(() => {
+    /* non-blocking — publish path retries invite if still missing */
+  });
+
   return post;
 }
 

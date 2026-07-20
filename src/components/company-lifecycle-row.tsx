@@ -45,12 +45,15 @@ export function CompanyLifecycleRow({
   location,
   userCount,
   steps,
+  salespersonName,
 }: {
   company: Company;
   industry: string;
   location: string;
   userCount: number;
   steps: LifecycleStep[];
+  /** Display name of who onboarded/owns the client. */
+  salespersonName?: string;
 }) {
   const doneCount = steps.filter((s) => s.done).length;
   const next = steps.find((s) => !s.done);
@@ -70,6 +73,11 @@ export function CompanyLifecycleRow({
           <span className="truncate text-xs text-muted-foreground">
             {industry} · {location}
           </span>
+          {salespersonName ? (
+            <span className="truncate text-xs text-muted-foreground">
+              · Sales: {salespersonName}
+            </span>
+          ) : null}
         </div>
       </div>
 

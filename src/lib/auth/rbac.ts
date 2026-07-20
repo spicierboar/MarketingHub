@@ -49,9 +49,11 @@ export async function portalCompanyId(user: ActingUser): Promise<string | null> 
   return ids.length === 1 ? ids[0] : null;
 }
 
-// Central post-login redirect: portal → /client, incomplete owner → /onboarding, else /dashboard.
+// Central post-login redirect: portal → /client, sales → /sales, incomplete owner → /onboarding, else /dashboard.
 export async function postLoginRedirectPath(user: ActingUser): Promise<string> {
   if (await isPortalUser(user)) return "/client";
+  // Field sales get a focused home (onboarding wizard + their clients).
+  if (isSalesRep(user) && !isAdmin(user)) return "/sales";
   const tenant = await getTenant(user.tenantId);
   // Agency seats are ops workspaces — client wizard must not trap agency owners.
   if (
@@ -70,7 +72,7 @@ export function isAdmin(user: User): boolean {
 }
 
 export function isSalesRep(user: ActingUser): boolean {
-  return (user.roleTitle as string | undefined) === "sales_rep";
+  return user.roleTitle === "sales_rep";
 }
 
 export function canAccessFieldSales(user: ActingUser): boolean {

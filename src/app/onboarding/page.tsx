@@ -32,11 +32,12 @@ import {
 type Step = "details" | "package" | "terms" | "payment";
 
 function Stepper({ step }: { step: Step }) {
-  const steps: { key: Step; label: string }[] = [
+  const steps: { key: Step | "socials"; label: string }[] = [
     { key: "details", label: "Your details" },
     { key: "package", label: "Marketing package" },
     { key: "terms", label: "Terms & privacy" },
     { key: "payment", label: "Payment" },
+    { key: "socials", label: "Connect socials" },
   ];
   const idx = steps.findIndex((s) => s.key === step);
   return (
@@ -338,8 +339,8 @@ export default async function OnboardingPage({
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 {mockCheckout
-                  ? "Enter local demo card details to finish setup (no live charge)."
-                  : "Continue to Stripe Checkout to finish payment securely."}
+                  ? "Enter local demo card details to finish payment (no live charge). Next you’ll connect Facebook, Instagram, and other channels with secure one-time links — we never ask for passwords."
+                  : "Continue to Stripe Checkout to finish payment securely. After payment you’ll connect your social accounts with the same one-time OAuth links (no passwords)."}
               </p>
               <OnboardingPlanCheckout
                 key={params.payError ?? "payment"}

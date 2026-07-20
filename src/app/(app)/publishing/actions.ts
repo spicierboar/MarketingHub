@@ -36,11 +36,7 @@ import {
   retryFailedPosts,
 } from "@/lib/publish-queue";
 import { isValidIanaTimezone, SCHEDULE_TIMEZONE_OPTIONS } from "@/lib/tenant-timezone";
-import {
-  bulkCreateConnectInvites,
-  connectInviteUrl,
-} from "@/lib/connect-invites";
-import { sendEmail } from "@/lib/email";
+import { requestSocialConnectInvites } from "@/lib/onboarding-social-connect";
 import { V1_CONNECT_PLATFORMS, type V1ConnectPlatform } from "@/lib/types";
 
 function text(fd: FormData, key: string): string {
@@ -357,7 +353,7 @@ export async function saveScheduleTimezoneAction(formData: FormData) {
   revalidatePath("/publishing");
 }
 
-// Bulk one-time-connect invites — admin-only, session tenant pinned.
+// Bulk one-time-connect invites — admin-only; shared helper with client / AI.
 export async function createBulkConnectInvitesAction(formData: FormData) {
   const user = await requireAdmin();
   const companyIds = formData.getAll("companyId").map((v) => String(v).trim()).filter(Boolean);
@@ -377,35 +373,27 @@ export async function createBulkConnectInvitesAction(formData: FormData) {
     }
   }
 
-  const { created, skipped } = await bulkCreateConnectInvites({
-    tenantId: user.tenantId,
-    companyIds,
-    platforms,
-    invitedById: user.id,
-  });
-
-  const origin = await requestOrigin();
-  let emailsSent = 0;
-  if (sendEmailFlag && created.length > 0) {
-    for (const invite of created) {
-      const company = await getCompany(invite.companyId);
-      const to =
-        invite.recipientEmail?.trim() ||
-        company?.profile.approvalContact?.trim() ||
-        "";
-      if (!to || !to.includes("@")) continue;
-      const link = connectInviteUrl(origin, invite.token);
-      const r = await sendEmail({
-        to,
-        subject: `Connect ${invite.platform} for ${company?.name ?? "your business"}`,
-        html: `<p>Please connect your <strong>${invite.platform}</strong> account for <strong>${company?.name}</strong>:</p><p><a href="${link}">${link}</a></p><p>This is a one-time OAuth link — we never ask for your password.</p>`,
-      });
-      if (r.ok) emailsSent += 1;
-    }
+  let createdTotal = 0;
+  let skippedTotal = 0;
+  let emailsAttempted = 0;
+  for (const companyId of companyIds) {
+    const company = await getCompany(companyId);
+    const result = await requestSocialConnectInvites({
+      agencyTenantId: user.tenantId,
+      companyId,
+      platforms,
+      invitedBy: user,
+      source: "staff",
+      recipientEmail: company?.profile.approvalContact?.trim() || undefined,
+      emailInvites: sendEmailFlag,
+    });
+    createdTotal += result.createdCount;
+    skippedTotal += result.skippedCount;
+    emailsAttempted += result.emailsAttempted;
   }
 
   await logAction(user, "integration.bulk_invites_created", {
-    detail: `created ${created.length}, skipped ${skipped.length}${emailsSent ? `, emailed ${emailsSent}` : ""}`,
+    detail: `created ${createdTotal}, skipped ${skippedTotal}${emailsAttempted ? `, emailed ${emailsAttempted}` : ""}`,
   });
   refresh();
 }

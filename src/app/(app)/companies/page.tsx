@@ -3,9 +3,11 @@ import {
   listCompanies,
   listContent,
   listIntegrations,
+  listUsers,
   usersForCompany,
 } from "@/lib/db";
 import { clientCompaniesOnly } from "@/lib/content-create-scope";
+import { salespersonNameForCompany } from "@/lib/agency-control-plane";
 import { onboardingScore } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { AddClientModalTrigger } from "@/components/add-client-modal";
@@ -16,12 +18,14 @@ import {
 
 export default async function CompaniesPage() {
   const user = await requireAdmin();
-  const [companiesRaw, allContent, allIntegrations] = await Promise.all([
+  const [companiesRaw, allContent, allIntegrations, users] = await Promise.all([
     listCompanies(user.tenantId),
     listContent(user.tenantId),
     listIntegrations(user.tenantId),
+    listUsers(user.tenantId),
   ]);
   const companies = clientCompaniesOnly(companiesRaw);
+  const namesByUserId = new Map(users.map((u) => [u.id, u.name]));
   const userCounts = new Map(
     await Promise.all(
       companies.map(
@@ -100,6 +104,7 @@ export default async function CompaniesPage() {
                 industry={c.profile.industry ?? "Industry not set"}
                 location={c.profile.serviceAreas[0] ?? "No location"}
                 userCount={userCounts.get(c.id) ?? 0}
+                salespersonName={salespersonNameForCompany(c, namesByUserId)}
                 steps={steps}
               />
             );
