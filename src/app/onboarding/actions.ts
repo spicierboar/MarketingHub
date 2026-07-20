@@ -26,6 +26,7 @@ import { enqueueManagedDeliveryForCompany } from "@/lib/managed-service/delivery
 import { defaultServiceLevel } from "@/lib/managed-service/authority";
 import {
   isMarketingPackageId,
+  resolvePackageById,
   resolveSelectionForPackage,
 } from "@/lib/marketing-packages";
 import { now } from "@/lib/utils";
@@ -69,6 +70,7 @@ import {
   initialCompanyServiceBilling,
   parseCompanyServiceOptionsFromFormData,
 } from "@/lib/managed-service-billing";
+import { ensureOnboardingSocialConnectInvites } from "@/lib/onboarding-social-connect";
 import type {
   ActingUser,
   Company,
@@ -779,6 +781,24 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
 
   const seat = await ensureClientPortalOnAgency(agency.id, user.id, company.id);
 
+  // OAuth connect invites for package social channels (same flow as Publishing).
+  const catalogForChannels = packageId
+    ? resolvePackageById(agency, packageId)
+    : null;
+  const packageChannels =
+    packageId === "custom" && customModules?.channels?.length
+      ? customModules.channels
+      : catalogForChannels?.channels;
+  await ensureOnboardingSocialConnectInvites({
+    agencyTenantId: agency.id,
+    companyId: company.id,
+    companyName: company.name,
+    packageChannels,
+    invitedBy: user,
+    recipientEmail: draft.contactEmail,
+    emailInvites: true,
+  });
+
   if (!mockCheckout) {
     const configurationError = marketingPackageCheckoutConfigurationError(
       packageId!,
@@ -794,7 +814,7 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
       packageId!,
       resolveOrigin((key) => h.get(key)),
       {
-        successPath: "/client?checkout=success",
+        successPath: "/client/connect?checkout=success&setup=1",
         cancelPath: "/onboarding?step=payment&checkout=cancelled",
       },
       draft.serviceOptions,
@@ -838,7 +858,7 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
     await logAction(user, "onboarding.completed", {
       detail: `${packageId ?? "done"} · company=${company.id} on ${platformAgencyCanonicalName()} (ops seat)`,
     });
-    redirect("/companies");
+    redirect(`/publishing?company=${encodeURIComponent(company.id)}`);
   }
 
   // Self-serve holding tenant: mark complete + suspend (orphan — safe to ignore/clean later).
@@ -854,7 +874,7 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
   });
 
   if (seat === "portal") {
-    redirect("/client");
+    redirect("/client/connect?setup=1");
   }
-  redirect("/companies");
+  redirect(`/publishing?company=${encodeURIComponent(company.id)}`);
 }

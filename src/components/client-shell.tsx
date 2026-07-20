@@ -51,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
     short: "Account",
     matchPrefixes: [
       "/client/account",
+      "/client/connect",
       "/client/payments",
       "/client/billing",
       "/client/requests",

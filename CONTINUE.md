@@ -16,7 +16,8 @@ Parked Content Stack backlog stubs ship on branch
 `backlog/post-split-foundations` (base `split/10-billing-onboarding-glue`):
 plan-seeded strategy/guardrails, sales home, salesperson on agency clients,
 autopilot T−7/T−3 + publish-day auto-approve scaffolding (email gated off),
-AI brief draft stub, and client portal hub stubs.
+AI brief draft stub, client portal hub stubs, and onboarding social connect
+(package-channel OAuth invites → `/client/connect`).
 
 Human review / copy / secrets checklist:
 `C:\Projects\Content-Stack-PLACEHOLDERS.md`

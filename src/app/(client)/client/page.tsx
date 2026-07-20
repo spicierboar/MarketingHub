@@ -12,6 +12,7 @@ import {
   MIN_CREDIT_FLOOR_USD,
   getOrCreateCreditWallet,
 } from "@/lib/credit-wallet";
+import { listPendingSocialConnectInvites } from "@/lib/onboarding-social-connect";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { formatDate } from "@/lib/utils";
 
 export default async function ClientDashboardPage() {
   const { user, companyId } = await requirePortalUser();
-  const [content, deliveryRuns, company, openGaps, wallet, allPosts] =
+  const [content, deliveryRuns, company, openGaps, wallet, allPosts, pendingConnect] =
     await Promise.all([
       visibleContent(user),
       listManagedDeliveryRuns(user.tenantId, companyId),
@@ -27,6 +28,7 @@ export default async function ClientDashboardPage() {
       listGaps({ companyId, openOnly: true }),
       getOrCreateCreditWallet(companyId),
       listScheduledPosts(user.tenantId),
+      listPendingSocialConnectInvites(user.tenantId, companyId),
     ]);
   const pendingApprovals = content.filter(
     (c) => c.status === "pending_approval" && c.clientReview?.status === "pending",
@@ -37,7 +39,11 @@ export default async function ClientDashboardPage() {
     : "Your marketing service is active";
 
   const creditLow = wallet.balanceUsd < MIN_CREDIT_FLOOR_USD;
-  const needsCount = pendingApprovals.length + openGaps.length + (creditLow ? 1 : 0);
+  const needsCount =
+    pendingApprovals.length +
+    openGaps.length +
+    (creditLow ? 1 : 0) +
+    (pendingConnect.length > 0 ? 1 : 0);
   const titleByContentId = new Map(content.map((item) => [item.id, item.title]));
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = allPosts
@@ -72,6 +78,24 @@ export default async function ClientDashboardPage() {
       </PageHeader>
 
       <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
+        {pendingConnect.length > 0 ? (
+          <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+            <p className="text-sm font-medium">
+              Connect your social accounts ({pendingConnect.length} pending)
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Authorize Facebook, Instagram, and other package channels with a
+              one-time secure link — we never ask for your password.
+            </p>
+            <Link
+              href="/client/connect"
+              className={buttonClasses("default", "sm") + " mt-2"}
+            >
+              Connect accounts →
+            </Link>
+          </div>
+        ) : null}
+
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
           <p className="text-sm font-medium">{statusLine}</p>
           <p className="text-xs text-muted-foreground">
