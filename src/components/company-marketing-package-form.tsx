@@ -16,6 +16,7 @@ import {
 } from "@/lib/marketing-packages";
 import type {
   ManagedServiceLevel,
+  CompanyServiceOptions,
   MarketingPackageCustomModules,
   MarketingPackageId,
 } from "@/lib/types";
@@ -61,6 +62,7 @@ export function CompanyMarketingPackageForm({
   packageId,
   assigned = true,
   customModules,
+  serviceOptions,
   options,
   action,
 }: {
@@ -69,6 +71,7 @@ export function CompanyMarketingPackageForm({
   /** False when Overview only shows Basic as a display fallback (not saved). */
   assigned?: boolean;
   customModules?: MarketingPackageCustomModules;
+  serviceOptions?: CompanyServiceOptions;
   options: PackageOption[];
   action: (formData: FormData) => Promise<void>;
 }) {
@@ -209,6 +212,53 @@ export function CompanyMarketingPackageForm({
                 ))}
               </Select>
             </Field>
+
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <p className="text-sm font-medium">Commercial service options</p>
+              <p className="text-xs text-muted-foreground">
+                Website Connection Setup is always A$299 once-off. Media spend is
+                charged directly to the client card.
+              </p>
+              {selected === "growth" ? (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="searchVisibility"
+                    defaultChecked={serviceOptions?.searchVisibility}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  Search Visibility — A$249/month
+                </label>
+              ) : null}
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="websitePublishing"
+                  defaultChecked={serviceOptions?.websitePublishing}
+                  className="mt-0.5 h-4 w-4"
+                />
+                Website Publishing — A$99/month
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="hostedLandingPage"
+                  defaultChecked={serviceOptions?.hostedLandingPage}
+                  className="mt-0.5 h-4 w-4"
+                />
+                Hosted Landing Page — A$79/month + A$299 setup
+              </label>
+              <Field label="Monthly ad cap (A$)" htmlFor="monthlyAdCapAud">
+                <Input
+                  id="monthlyAdCapAud"
+                  name="monthlyAdCapAud"
+                  type="number"
+                  min={0}
+                  step={1}
+                  defaultValue={serviceOptions?.monthlyAdCapAud ?? 0}
+                />
+              </Field>
+            </div>
 
             {selected === "custom" ? (
               <div className="space-y-3 rounded-md border border-border p-3">

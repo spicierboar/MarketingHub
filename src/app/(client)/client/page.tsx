@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany, listGaps, listManagedDeliveryRuns } from "@/lib/db";
-import { visibleContent, visibleRequests } from "@/lib/scope";
-import { buildClientRoiReport } from "@/lib/client-reports";
+import {
+  getCompany,
+  listGaps,
+  listManagedDeliveryRuns,
+  listScheduledPosts,
+} from "@/lib/db";
+import { visibleContent } from "@/lib/scope";
 import { clientStatusMessage } from "@/lib/managed-service/status-copy";
 import {
   MIN_CREDIT_FLOOR_USD,
@@ -10,25 +14,20 @@ import {
 } from "@/lib/credit-wallet";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
-import { formatDate, formatMoney } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 
 export default async function ClientDashboardPage() {
   const { user, companyId } = await requirePortalUser();
-  const [requests, content, roi, deliveryRuns, company, openGaps, wallet] =
+  const [content, deliveryRuns, company, openGaps, wallet, allPosts] =
     await Promise.all([
-      visibleRequests(user),
       visibleContent(user),
-      buildClientRoiReport(user.tenantId, companyId),
       listManagedDeliveryRuns(user.tenantId, companyId),
       getCompany(companyId),
       listGaps({ companyId, openOnly: true }),
       getOrCreateCreditWallet(companyId),
+      listScheduledPosts(user.tenantId),
     ]);
-  const openRequests = requests.filter(
-    (r) => !["completed", "cancelled", "published"].includes(r.status),
-  );
   const pendingApprovals = content.filter(
     (c) => c.status === "pending_approval" && c.clientReview?.status === "pending",
   );
@@ -38,8 +37,21 @@ export default async function ClientDashboardPage() {
     : "Your marketing service is active";
 
   const creditLow = wallet.balanceUsd < MIN_CREDIT_FLOOR_USD;
-  const needsCount =
-    pendingApprovals.length + openGaps.length + (creditLow ? 1 : 0);
+  const needsCount = pendingApprovals.length + openGaps.length + (creditLow ? 1 : 0);
+  const titleByContentId = new Map(content.map((item) => [item.id, item.title]));
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = allPosts
+    .filter(
+      (post) =>
+        post.companyId === companyId &&
+        post.status === "scheduled" &&
+        post.scheduledDate >= today,
+    )
+    .slice(0, 5);
+  const recentPublished = allPosts
+    .filter((post) => post.companyId === companyId && post.status === "published")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 5);
 
   return (
     <div>
@@ -59,7 +71,7 @@ export default async function ClientDashboardPage() {
         ) : null}
       </PageHeader>
 
-      <div className="space-y-4 p-4 sm:p-5">
+      <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
           <p className="text-sm font-medium">{statusLine}</p>
           <p className="text-xs text-muted-foreground">
@@ -68,156 +80,103 @@ export default async function ClientDashboardPage() {
               : `${needsCount} item${needsCount === 1 ? "" : "s"} need${needsCount === 1 ? "s" : ""} your attention.`}
             {company ? ` · ${company.name}` : null}
           </p>
-          <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium">
-            <Link href="/client/strategy" className="text-primary hover:underline">
-              View strategy →
-            </Link>
-            <Link href="/client/content" className="text-primary hover:underline">
-              Content status →
-            </Link>
-            <Link href="/client/account" className="text-primary hover:underline">
-              Full account →
-            </Link>
-          </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <Link href="/client/approvals">
-            <Card className="h-full transition-colors hover:border-primary/40">
-              <CardContent className="p-3 sm:p-4">
-                <p className="text-[11px] text-muted-foreground sm:text-xs">Approvals</p>
-                <p className="mt-0.5 text-2xl font-semibold tabular-nums">
-                  {pendingApprovals.length}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/client/reports">
-            <Card className="h-full transition-colors hover:border-primary/40">
-              <CardContent className="p-3 sm:p-4">
-                <p className="text-[11px] text-muted-foreground sm:text-xs">Leads</p>
-                <p className="mt-0.5 text-2xl font-semibold tabular-nums">
-                  {roi.combined.totalLeads}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/client/account">
-            <Card className="h-full transition-colors hover:border-primary/40">
-              <CardContent className="p-3 sm:p-4">
-                <p className="text-[11px] text-muted-foreground sm:text-xs">Open asks</p>
-                <p className="mt-0.5 text-2xl font-semibold tabular-nums">
-                  {openRequests.length}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
-
-        {creditLow && (
-          <section>
-            <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-sm text-amber-950">
-              <p className="font-medium">Credit below minimum</p>
-              <p className="text-xs opacity-90">
-                Balance {formatMoney(wallet.balanceUsd, { fractionDigits: 2 })} — paid ads stay
-                paused until you top up to at least{" "}
-                {formatMoney(MIN_CREDIT_FLOOR_USD, { fractionDigits: 2 })}.
-              </p>
-              <Link
-                href="/client/payments"
-                className="mt-1.5 inline-block text-xs font-medium text-primary hover:underline"
-              >
-                Top up →
-              </Link>
-            </div>
-          </section>
-        )}
-
-        {openGaps.length > 0 && (
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Questions for you</h2>
-              <Badge tone="warning">{openGaps.length}</Badge>
-            </div>
-            <div className="space-y-1.5">
-              {openGaps.slice(0, 5).map((g) => (
+        <section aria-labelledby="needs-approval">
+          <h2 id="needs-approval" className="mb-2 text-base font-semibold">
+            Needs your approval
+          </h2>
+          <Card>
+            <CardContent className="divide-y divide-border p-0">
+              {pendingApprovals.map((item) => (
                 <Link
-                  key={g.id}
-                  href={g.requestId ? `/client/requests/${g.requestId}` : "/client/requests"}
-                  className="block rounded-md border border-border bg-card px-3 py-2.5 text-sm hover:border-primary/40"
+                  key={item.id}
+                  href={`/client/approvals/${item.id}`}
+                  className="flex min-h-14 items-center justify-between gap-3 px-4 py-3 hover:bg-muted"
                 >
-                  <p className="font-medium">{g.question}</p>
-                  {g.blocking ? (
-                    <p className="mt-0.5 text-[11px] text-amber-700">Required answer</p>
-                  ) : null}
+                  <span className="font-medium">{item.title}</span>
+                  <span className="text-sm text-primary">Review →</span>
                 </Link>
               ))}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Ready for your review</h2>
-            <Badge tone={pendingApprovals.length ? "warning" : "neutral"}>
-              {pendingApprovals.length}
-            </Badge>
-          </div>
-          {pendingApprovals.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-              All caught up — nothing needs approval right now.
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {pendingApprovals.slice(0, 5).map((c) => (
+              {openGaps.map((gap) => (
                 <Link
-                  key={c.id}
-                  href={`/client/approvals/${c.id}`}
-                  className="block rounded-md border border-border bg-card px-3 py-2.5 text-sm hover:border-primary/40"
+                  key={gap.id}
+                  href={gap.requestId ? `/client/requests/${gap.requestId}` : "/client/requests"}
+                  className="flex min-h-14 items-center justify-between gap-3 px-4 py-3 hover:bg-muted"
                 >
-                  <p className="font-medium">{c.title}</p>
+                  <span className="font-medium">{gap.question}</span>
+                  <span className="text-sm text-primary">Answer →</span>
                 </Link>
               ))}
-            </div>
-          )}
+              {creditLow && (
+                <Link
+                  href="/client/payments"
+                  className="flex min-h-14 items-center justify-between gap-3 px-4 py-3 hover:bg-muted"
+                >
+                  <span className="font-medium">Payment needs attention</span>
+                  <span className="text-sm text-primary">Resolve →</span>
+                </Link>
+              )}
+              {needsCount === 0 && (
+                <p className="px-4 py-6 text-sm text-muted-foreground">
+                  You’re all caught up. We’ll email you when something needs a decision.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </section>
 
-        {openRequests.length > 0 && (
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Your asks</h2>
-              <Badge tone="primary">{openRequests.length}</Badge>
-            </div>
-            <div className="space-y-1.5">
-              {openRequests.slice(0, 3).map((r) => (
-                <Link
-                  key={r.id}
-                  href={`/client/requests/${r.id}`}
-                  className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2.5 text-sm hover:border-primary/40"
-                >
-                  <span className="font-medium">{r.topic}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {formatDate(r.createdAt)}
-                  </span>
-                </Link>
+        <section aria-labelledby="upcoming-scheduled">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 id="upcoming-scheduled" className="text-base font-semibold">
+              Upcoming scheduled
+            </h2>
+            <Link href="/client/calendar" className="text-sm text-primary hover:underline">
+              Full schedule
+            </Link>
+          </div>
+          <Card>
+            <CardContent className="divide-y divide-border p-0">
+              {upcoming.map((post) => (
+                <div key={post.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div>
+                    <p className="font-medium">{titleByContentId.get(post.contentId) ?? "Scheduled content"}</p>
+                    <p className="text-xs text-muted-foreground">{post.platform}</p>
+                  </div>
+                  <time className="text-sm text-muted-foreground">{post.scheduledDate}</time>
+                </div>
               ))}
-            </div>
-          </section>
-        )}
+              {upcoming.length === 0 && (
+                <p className="px-4 py-6 text-sm text-muted-foreground">
+                  Nothing is scheduled yet. Approved work will appear here with its date.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
 
-        <section>
-          <Link
-            href="/client/account#extra-work"
-            className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2.5 text-sm hover:border-primary/40"
-          >
-            <div>
-              <p className="font-medium">Need an extra promo or custom work?</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Request from Account — we draft, you approve
-              </p>
-            </div>
-            <span className="text-xs text-primary">Account →</span>
-          </Link>
+        <section aria-labelledby="recent-published">
+          <h2 id="recent-published" className="mb-2 text-base font-semibold">
+            Recent published
+          </h2>
+          <Card>
+            <CardContent className="divide-y divide-border p-0">
+              {recentPublished.map((post) => (
+                <div key={post.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div>
+                    <p className="font-medium">{titleByContentId.get(post.contentId) ?? "Published content"}</p>
+                    <p className="text-xs text-muted-foreground">{post.platform}</p>
+                  </div>
+                  <time className="text-sm text-muted-foreground">{formatDate(post.updatedAt)}</time>
+                </div>
+              ))}
+              {recentPublished.length === 0 && (
+                <p className="px-4 py-6 text-sm text-muted-foreground">
+                  Published work will appear here after it goes live.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </section>
       </div>
     </div>

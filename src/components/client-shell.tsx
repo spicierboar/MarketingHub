@@ -98,6 +98,7 @@ function NavLinks({
             key={item.href}
             href={item.href}
             onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
               active
@@ -167,6 +168,7 @@ export function ClientShell({
             <p className="truncate text-[10px] text-muted-foreground">
               {user.email}
             </p>
+            <p className="text-[10px] font-medium text-primary">Client Approver</p>
           </div>
           <form action={signOut}>
             <button
@@ -193,6 +195,7 @@ export function ClientShell({
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">
             {companyName}
           </span>
+          <span className="text-[10px] font-medium text-primary">Client Approver</span>
           <form action={signOut}>
             <button type="submit" className="text-xs text-muted-foreground">
               Sign out
@@ -215,6 +218,11 @@ export function ClientShell({
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={
+                  pathname === item.href || pathname.startsWith(`${item.href}/`)
+                    ? "page"
+                    : undefined
+                }
                 className={cn(
                   "shrink-0 rounded-md px-2.5 py-1 text-center text-[11px] font-medium",
                   pathname === item.href || pathname.startsWith(`${item.href}/`)

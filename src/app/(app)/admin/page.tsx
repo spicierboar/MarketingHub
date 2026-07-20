@@ -192,7 +192,7 @@ export default async function AdminPage() {
               </Field>
               <div className="flex items-end">
                 <div className="text-sm">
-                  <p className="text-muted-foreground">This month's AI spend</p>
+                  <p className="text-muted-foreground">This month&apos;s AI spend</p>
                   <p className={`text-lg font-bold ${s.aiMonthlyCapUsd > 0 && spend >= s.aiMonthlyCapUsd ? "text-red-600" : ""}`}>
                     {money(spend)}
                     {s.aiMonthlyCapUsd > 0 && ` / ${money(s.aiMonthlyCapUsd)}`}

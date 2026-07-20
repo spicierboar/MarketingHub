@@ -81,6 +81,12 @@ export async function saveMarketingPackageOverrideAction(formData: FormData) {
     channels: parseChannels(formData),
     postsPerMonth: Math.max(0, num(formData, "postsPerMonth", base.postsPerMonth)),
     campaignsPerMonth: Math.max(0, num(formData, "campaignsPerMonth", base.campaignsPerMonth)),
+    campaignConceptsPerMonth: Math.max(
+      0,
+      num(formData, "campaignConceptsPerMonth", base.campaignConceptsPerMonth),
+    ),
+    searchVisibilityIncluded:
+      formData.get("searchVisibilityIncluded") === "on",
     promosIncludedPerMonth: Math.max(
       0,
       num(formData, "promosIncludedPerMonth", base.promosIncludedPerMonth),

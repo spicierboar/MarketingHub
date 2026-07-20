@@ -10,7 +10,10 @@
 // Create/update gate: verifyBusinessNameAgainstAbr — live ABR only for hard
 // blocks; simulated / unconfigured / network fail soft-skips (demos keep working).
 
-import { appEnv } from "@/lib/env";
+import {
+  liveIntegrationsAllowed,
+  providerLiveFlagEnabled,
+} from "@/lib/env";
 import type { CompanyProfile } from "@/lib/types";
 
 // ---- types -------------------------------------------------------------------
@@ -55,9 +58,10 @@ export function abnLookupConfigured(): boolean {
 /** True when live ABR calls are enabled (GUID + env gate). */
 export function isAbnLookupLive(): boolean {
   if (!abnLookupConfigured()) return false;
-  const env = appEnv();
-  if (env === "development" || env === "staging") return true;
-  return process.env.ABN_LOOKUP_LIVE === "true";
+  return (
+    providerLiveFlagEnabled(process.env.ABN_LOOKUP_LIVE) &&
+    liveIntegrationsAllowed()
+  );
 }
 
 function abnLookupLive(): boolean {

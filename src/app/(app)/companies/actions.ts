@@ -44,16 +44,22 @@ import {
   type CompanyProfile,
   type ManagedServiceLevel,
   type ManagedServiceSettings,
-  type MarketingPackageId,
   type SocialLink,
   type UploadedAsset,
 } from "@/lib/types";
 import {
-  customModulesEqual,
   isMarketingPackageId,
   resolveCompanyPackage,
   resolveSelectionForPackage,
 } from "@/lib/marketing-packages";
+import {
+  applyServiceOptionsEdit,
+  currentPackageId,
+  initialCompanyServiceBilling,
+  packageChangeKind,
+  parseCompanyServiceOptionsFromFormData,
+  requestPackageChange,
+} from "@/lib/managed-service-billing";
 
 const SERVICE_LEVELS: ManagedServiceLevel[] = [
   "approval",
@@ -456,49 +462,75 @@ export async function saveMarketingPackageAction(formData: FormData) {
 
   const idRaw = String(formData.get("marketingPackageId") || "").trim();
   if (!isMarketingPackageId(idRaw)) throw new Error("Invalid marketing package");
-  const marketingPackageId = idRaw as MarketingPackageId;
+  const marketingPackageId = currentPackageId(idRaw);
 
   const tenant = await getTenant(user.tenantId);
-  const { serviceLevel, customModules } = resolveSelectionForPackage(
+  const { serviceLevel } = resolveSelectionForPackage(
     tenant,
     marketingPackageId,
     formData,
   );
   const prev = company.profile.managedService;
   const hadExplicitPackage = Boolean(prev?.marketingPackageId);
-  const prevPackageId = (prev?.marketingPackageId ?? "basic") as MarketingPackageId;
+  const prevPackageId = currentPackageId(prev?.marketingPackageId);
+  const serviceOptions = parseCompanyServiceOptionsFromFormData(
+    marketingPackageId,
+    formData,
+  );
 
   // First explicit assign counts as a change even when choosing Basic (display
   // fallback used to hide prevPackageId === "basic" and skip enqueue).
   const packageChanged =
-    !hadExplicitPackage ||
-    prevPackageId !== marketingPackageId ||
-    (marketingPackageId === "custom" &&
-      !customModulesEqual(prev?.customModules, customModules));
+    !hadExplicitPackage || prevPackageId !== marketingPackageId;
 
   const oldResolved = resolveCompanyPackage(company, tenant);
+  const billingBefore =
+    prev?.serviceBilling ??
+    initialCompanyServiceBilling(prevPackageId, prev?.serviceOptions);
+  const billingDirection = packageChangeKind(prevPackageId, marketingPackageId);
+  const billingAfter = packageChanged
+    ? requestPackageChange(billingBefore, marketingPackageId, now())
+    : applyServiceOptionsEdit(billingBefore, marketingPackageId, serviceOptions);
+  const applyImmediately = localDemoEnabled() && packageChanged;
   const nextMs: ManagedServiceSettings = {
     ...(prev ?? { serviceLevel }),
-    serviceLevel,
-    marketingPackageId,
-    customModules,
+    serviceLevel: applyImmediately || !packageChanged ? serviceLevel : prev?.serviceLevel ?? serviceLevel,
+    marketingPackageId: applyImmediately ? marketingPackageId : prevPackageId,
+    customModules: undefined,
+    serviceOptions: applyImmediately || !packageChanged ? serviceOptions : prev?.serviceOptions,
+    serviceBilling: {
+      ...billingAfter,
+      ...(!packageChanged ? { serviceOptions } : {}),
+      ...(applyImmediately
+        ? {
+            activePackageId: marketingPackageId,
+            serviceOptions,
+            status: "active" as const,
+            pendingPackageId: undefined,
+            pendingChangeKind: undefined,
+            pendingEffectiveAt: undefined,
+          }
+        : {}),
+    },
   };
   if (packageChanged) {
-    // Stripe package Checkout / proration not wired — stamp for ops; no fake charges.
-    nextMs.packageChangePendingBilling = true;
+    if (!localDemoEnabled()) nextMs.packageChangePendingBilling = true;
     delete nextMs.implementationPlanEmailedAt;
   }
   const newResolved = resolveCompanyPackage(
-    { ...company, profile: { ...company.profile, managedService: nextMs } },
+    {
+      ...company,
+      profile: {
+        ...company.profile,
+        managedService: {
+          ...nextMs,
+          marketingPackageId,
+          serviceOptions,
+        },
+      },
+    },
     tenant,
   );
-  const billingDirection =
-    newResolved.priceAudMonthly > oldResolved.priceAudMonthly
-      ? "upgrade"
-      : newResolved.priceAudMonthly < oldResolved.priceAudMonthly
-        ? "downgrade"
-        : "lateral";
-
   await updateCompany(companyId, {
     profile: {
       ...company.profile,
@@ -510,10 +542,7 @@ export async function saveMarketingPackageAction(formData: FormData) {
     targetType: "company",
     targetId: companyId,
     companyId,
-    detail:
-      marketingPackageId === "custom"
-        ? `custom · ${serviceLevel}`
-        : `${marketingPackageId} · ${serviceLevel}`,
+    detail: `${marketingPackageId} · ${serviceLevel}`,
   });
 
   if (packageChanged) {
@@ -526,13 +555,15 @@ export async function saveMarketingPackageAction(formData: FormData) {
         `A$${oldResolved.priceAudMonthly}→A$${newResolved.priceAudMonthly}`,
         billingDirection,
         "packageChangePendingBilling",
-        // Next: Stripe proration / Checkout + credit note for downgrades.
+        billingDirection === "upgrade"
+          ? "activate after successful immediate prorated invoice"
+          : "activate at next renewal",
       ].join(" · "),
     });
 
     const anchor =
       tenant?.onboardingCompletedAt ?? (localDemoEnabled() ? now() : null);
-    if (company.status !== "archived" && anchor) {
+    if (applyImmediately && company.status !== "archived" && anchor) {
       await supersedeOpenManagedDeliveryRuns(user.tenantId, companyId);
       const run = await enqueueManagedDeliveryForCompany({
         tenantId: user.tenantId,

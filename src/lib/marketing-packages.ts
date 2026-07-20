@@ -8,9 +8,11 @@ import type {
   ManagedServiceLevel,
   MarketingPackageCustomModules,
   MarketingPackageId,
+  CurrentMarketingPackageId,
   Tenant,
   AddonId,
 } from "@/lib/types";
+import { normaliseCompanyServiceOptions } from "@/lib/managed-service-billing";
 
 /** Ad media spend is never included in any package — always prepaid credit. */
 export const ADS_MEDIA_ALWAYS_EXTRA = true as const;
@@ -23,6 +25,10 @@ export interface MarketingPackageDef {
   channels: string[];
   postsPerMonth: number;
   campaignsPerMonth: number;
+  /** A concept consumes allowance once; channel adaptations do not consume more. */
+  campaignConceptsPerMonth: number;
+  /** One substantial website article or landing update each month. */
+  searchVisibilityIncluded: boolean;
   /** Included ready-made promos per month (Basic is 1/quarter ≈ documented in blurb). */
   promosIncludedPerMonth: number;
   adsManagementIncluded: boolean;
@@ -45,13 +51,15 @@ export interface MarketingPackageDef {
 
 /** Effective entitlements for a company after catalog + custom modules. */
 export interface ResolvedCompanyPackage {
-  id: MarketingPackageId;
+  id: CurrentMarketingPackageId;
   name: string;
   priceAudMonthly: number;
   blurb: string;
   channels: string[];
   postsPerMonth: number;
   campaignsPerMonth: number;
+  campaignConceptsPerMonth: number;
+  searchVisibilityIncluded: boolean;
   promosIncludedPerMonth: number;
   adsManagementIncluded: boolean;
   includedAddonIds: AddonId[];
@@ -372,85 +380,83 @@ export function quoteCustomPackagePrice(
  * - Custom: a-la-carte line items (modules may raise via customModules.*QuotaPerMonth)
  * Ads media always extra (never included in these quotas).
  */
-export const PLATFORM_PACKAGES: Record<MarketingPackageId, MarketingPackageDef> = {
-  basic: {
-    id: "basic",
-    name: "Basic",
-    priceAudMonthly: 349,
+export const PLATFORM_PACKAGES: Record<
+  CurrentMarketingPackageId,
+  MarketingPackageDef
+> = {
+  starter: {
+    id: "starter",
+    name: "Starter",
+    priceAudMonthly: 299,
     blurb:
-      "Always on presence — IG + FB, ~8 posts/mo, 1 always-on theme, 1 promo/quarter, 8 AI images + 2 short videos/mo. Ads media always extra.",
+      "4 campaign concepts each month, adapted across agreed social channels. Search visibility is not included. Excludes GST.",
     channels: ["instagram", "facebook"],
-    postsPerMonth: 8,
-    campaignsPerMonth: 1,
-    // 1 ready-made promo per quarter (documented); stored as monthly average.
-    promosIncludedPerMonth: 1 / 3,
+    postsPerMonth: 4,
+    campaignsPerMonth: 4,
+    campaignConceptsPerMonth: 4,
+    searchVisibilityIncluded: false,
+    promosIncludedPerMonth: 0,
     adsManagementIncluded: false,
     includedAddonIds: [],
-    imageQuotaPerMonth: 8,
-    videoQuotaPerMonth: 2,
+    imageQuotaPerMonth: 4,
+    videoQuotaPerMonth: 0,
     defaultServiceLevel: "managed_exceptions",
     active: true,
   },
-  pro: {
-    id: "pro",
-    name: "Pro",
-    priceAudMonthly: 649,
+  growth: {
+    id: "growth",
+    name: "Growth",
+    priceAudMonthly: 699,
     blurb:
-      "Multi-channel growth — IG + FB + GBP (± email), ~16 posts/mo, always-on + 1 growth campaign, 1 promo/mo, 16 AI images + 4 short videos/mo. Ads media always extra.",
+      "12 campaign concepts each month, adapted across agreed channels. Optional Search Visibility is A$249/month. Excludes GST.",
     channels: ["instagram", "facebook", "gbp", "email"],
-    postsPerMonth: 16,
-    campaignsPerMonth: 2,
-    promosIncludedPerMonth: 1,
+    postsPerMonth: 12,
+    campaignsPerMonth: 12,
+    campaignConceptsPerMonth: 12,
+    searchVisibilityIncluded: false,
+    promosIncludedPerMonth: 0,
     adsManagementIncluded: false,
     includedAddonIds: [],
-    imageQuotaPerMonth: 16,
-    videoQuotaPerMonth: 4,
+    imageQuotaPerMonth: 12,
+    videoQuotaPerMonth: 0,
     defaultServiceLevel: "managed_exceptions",
     active: true,
   },
-  blast: {
-    id: "blast",
-    name: "Blast",
-    priceAudMonthly: 999,
+  managed: {
+    id: "managed",
+    name: "Managed",
+    priceAudMonthly: 1499,
     blurb:
-      "Full funnel push — IG + FB + GBP + TikTok + email, ~24 posts/mo, always-on + 2 themes, 2 promos/mo, AI video included (32 images + 8 videos/mo floor). Ads management included; media always extra.",
+      "24 campaign concepts each month plus Search Visibility: one substantial website article or landing update monthly. Excludes GST and ad media.",
     channels: ["instagram", "facebook", "gbp", "tiktok", "email"],
     postsPerMonth: 24,
-    campaignsPerMonth: 3,
-    promosIncludedPerMonth: 2,
+    campaignsPerMonth: 24,
+    campaignConceptsPerMonth: 24,
+    searchVisibilityIncluded: true,
+    promosIncludedPerMonth: 0,
     adsManagementIncluded: true,
-    // Package-included AI video → unlimited image/video creation (see visuals-allowance).
     includedAddonIds: ["video"],
-    imageQuotaPerMonth: 32,
+    imageQuotaPerMonth: 24,
     videoQuotaPerMonth: 8,
     defaultServiceLevel: "fully_managed",
     active: true,
   },
-  custom: {
-    id: "custom",
-    name: "Custom",
-    priceAudMonthly: CUSTOM_FLOOR_AUD,
-    blurb:
-      "A-la-carte modules at published unit rates (sum of line items). Minimum commitment A$349/mo. Includes 8 AI images + 2 short videos/mo floor. Ads media always extra.",
-    channels: [],
-    postsPerMonth: 0,
-    campaignsPerMonth: 0,
-    promosIncludedPerMonth: 0,
-    adsManagementIncluded: false,
-    includedAddonIds: [],
-    // Custom floor matches Basic free visuals unless modules raise quotas.
-    imageQuotaPerMonth: 8,
-    videoQuotaPerMonth: 2,
-    defaultServiceLevel: "managed_exceptions",
-    active: true,
-    customModuleRates: {},
-  },
 };
 
-export const PACKAGE_ORDER: MarketingPackageId[] = ["basic", "pro", "blast", "custom"];
+export const PACKAGE_ORDER: CurrentMarketingPackageId[] = [
+  "starter",
+  "growth",
+  "managed",
+];
 
 export function packageFor(id: string | undefined): MarketingPackageDef {
-  return PLATFORM_PACKAGES[id as MarketingPackageId] ?? PLATFORM_PACKAGES.basic;
+  const current =
+    id === "managed" || id === "blast"
+      ? "managed"
+      : id === "growth" || id === "pro" || id === "custom"
+        ? "growth"
+        : "starter";
+  return PLATFORM_PACKAGES[current];
 }
 
 function mergeOverride(
@@ -466,6 +472,10 @@ function mergeOverride(
     channels: ov.channels ?? [...base.channels],
     postsPerMonth: ov.postsPerMonth ?? base.postsPerMonth,
     campaignsPerMonth: ov.campaignsPerMonth ?? base.campaignsPerMonth,
+    campaignConceptsPerMonth:
+      ov.campaignConceptsPerMonth ?? base.campaignConceptsPerMonth,
+    searchVisibilityIncluded:
+      ov.searchVisibilityIncluded ?? base.searchVisibilityIncluded,
     promosIncludedPerMonth: ov.promosIncludedPerMonth ?? base.promosIncludedPerMonth,
     adsManagementIncluded: ov.adsManagementIncluded ?? base.adsManagementIncluded,
     includedAddonIds: ov.includedAddonIds ?? [...base.includedAddonIds],
@@ -487,7 +497,7 @@ export function resolveMarketingPackages(
   tenant: Pick<Tenant, "marketingPackageCatalog"> | null | undefined,
 ): MarketingPackageDef[] {
   const overrides = new Map(
-    (tenant?.marketingPackageCatalog ?? []).map((o) => [o.id, o]),
+    (tenant?.marketingPackageCatalog ?? []).map((o) => [packageFor(o.id).id, o]),
   );
   return PACKAGE_ORDER.map((id) =>
     mergeOverride(PLATFORM_PACKAGES[id], overrides.get(id)),
@@ -498,8 +508,10 @@ export function resolvePackageById(
   tenant: Pick<Tenant, "marketingPackageCatalog"> | null | undefined,
   id: MarketingPackageId,
 ): MarketingPackageDef {
+  const currentId = packageFor(id).id;
   return (
-    resolveMarketingPackages(tenant).find((p) => p.id === id) ?? packageFor(id)
+    resolveMarketingPackages(tenant).find((p) => p.id === currentId) ??
+    packageFor(currentId)
   );
 }
 
@@ -533,10 +545,14 @@ export function resolveCompanyPackage(
   tenant: Pick<Tenant, "marketingPackageCatalog"> | null | undefined,
 ): ResolvedCompanyPackage {
   const ms = company.profile.managedService;
-  const packageId: MarketingPackageId = ms?.marketingPackageId ?? "basic";
+  const packageId = packageFor(ms?.marketingPackageId).id;
   const catalogPkg = resolvePackageById(tenant, packageId);
+  const serviceOptions = normaliseCompanyServiceOptions(
+    packageId,
+    ms?.serviceOptions,
+  );
 
-  if (packageId === "custom") {
+  if (ms?.marketingPackageId === "custom") {
     const mods = ms?.customModules ?? emptyCustomModules(catalogPkg.defaultServiceLevel);
     const quote = quoteCustomPackagePrice(
       mods,
@@ -557,13 +573,15 @@ export function resolveCompanyPackage(
         : 0,
     );
     return {
-      id: "custom",
+      id: "growth",
       name: catalogPkg.name,
       priceAudMonthly: quote.priceAudMonthly,
       blurb: catalogPkg.blurb,
       channels: [...mods.channels],
       postsPerMonth: mods.postsPerMonth,
       campaignsPerMonth: mods.campaignsPerMonth,
+      campaignConceptsPerMonth: mods.campaignsPerMonth,
+      searchVisibilityIncluded: false,
       promosIncludedPerMonth: mods.promosIncludedPerMonth,
       adsManagementIncluded: mods.adsManagementIncluded,
       includedAddonIds: [...mods.addonIds],
@@ -578,13 +596,16 @@ export function resolveCompanyPackage(
   }
 
   return {
-    id: catalogPkg.id,
+    id: packageFor(catalogPkg.id).id as CurrentMarketingPackageId,
     name: catalogPkg.name,
     priceAudMonthly: catalogPkg.priceAudMonthly,
     blurb: catalogPkg.blurb,
     channels: [...catalogPkg.channels],
     postsPerMonth: catalogPkg.postsPerMonth,
     campaignsPerMonth: catalogPkg.campaignsPerMonth,
+    campaignConceptsPerMonth: catalogPkg.campaignConceptsPerMonth,
+    searchVisibilityIncluded:
+      catalogPkg.searchVisibilityIncluded || serviceOptions.searchVisibility,
     promosIncludedPerMonth: catalogPkg.promosIncludedPerMonth,
     adsManagementIncluded: catalogPkg.adsManagementIncluded,
     includedAddonIds: [...catalogPkg.includedAddonIds],
@@ -599,7 +620,13 @@ export function resolveCompanyPackage(
 }
 
 export function isMarketingPackageId(v: string): v is MarketingPackageId {
-  return PACKAGE_ORDER.includes(v as MarketingPackageId);
+  return [
+    ...PACKAGE_ORDER,
+    "basic",
+    "pro",
+    "blast",
+    "custom",
+  ].includes(v as MarketingPackageId);
 }
 
 /** Stable compare for custom module picks (order-insensitive channels/addons). */
@@ -729,7 +756,7 @@ export function resolveSelectionForPackage(
     };
   }
   return {
-    marketingPackageId: packageId,
+    marketingPackageId: catalogPkg.id,
     serviceLevel: catalogPkg.defaultServiceLevel,
     customModules: undefined,
   };

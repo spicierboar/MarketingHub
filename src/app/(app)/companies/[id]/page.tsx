@@ -39,7 +39,7 @@ import {
 } from "../actions";
 import { CompanyMarketingPackageForm } from "@/components/company-marketing-package-form";
 import { resolveMarketingPackages } from "@/lib/marketing-packages";
-import type { MarketingPackageId } from "@/lib/types";
+import { currentPackageId } from "@/lib/managed-service-billing";
 import {
   markPromoOnCalendarAction,
   savePromoMarkupAction,
@@ -240,7 +240,7 @@ export default async function CompanyOnboardingPage({
   const packageUpdated = sp.package === "updated";
   const profileSaved = sp.saved === "1";
   const profileError = sp.error ? decodeURIComponent(sp.error) : null;
-  const packageId = (p.managedService?.marketingPackageId ?? "basic") as MarketingPackageId;
+  const packageId = currentPackageId(p.managedService?.marketingPackageId);
   const packageExplicitlyAssigned = Boolean(p.managedService?.marketingPackageId);
   const serviceLevel = p.managedService?.serviceLevel ?? defaultServiceLevel();
   const serviceLevelLabel =
@@ -316,6 +316,7 @@ export default async function CompanyOnboardingPage({
               packageId={packageId}
               assigned={packageExplicitlyAssigned}
               customModules={p.managedService?.customModules}
+              serviceOptions={p.managedService?.serviceOptions}
               options={marketingPackages.map((pkg) => ({
                 id: pkg.id,
                 name: pkg.name,
@@ -1251,6 +1252,7 @@ export default async function CompanyOnboardingPage({
                 packageId={packageId}
                 assigned={packageExplicitlyAssigned}
                 customModules={p.managedService?.customModules}
+                serviceOptions={p.managedService?.serviceOptions}
                 options={marketingPackages.map((pkg) => ({
                   id: pkg.id,
                   name: pkg.name,

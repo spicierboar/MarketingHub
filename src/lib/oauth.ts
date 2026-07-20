@@ -19,6 +19,8 @@
 // or replayed state cannot cross tenants.
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { publishingLive } from "@/lib/publishing-connectors";
+import { publishingTokenKey } from "@/lib/token";
 
 export type OAuthPlatform = "facebook" | "linkedin" | "google";
 
@@ -72,23 +74,21 @@ export function isOAuthPlatform(v: string): v is OAuthPlatform {
 }
 
 function clientId(p: ProviderDef): string | undefined {
-  return process.env[p.clientIdEnv] || undefined;
+  return process.env[p.clientIdEnv]?.trim() || undefined;
 }
 function clientSecret(p: ProviderDef): string | undefined {
-  return process.env[p.clientSecretEnv] || undefined;
+  return process.env[p.clientSecretEnv]?.trim() || undefined;
 }
 
 // A platform is connectable via OAuth only when its shared app is configured
 // AND publishing is live (the same gate the connectors use) AND the state-
-// signing key is set. Co-gating PUBLISHING_TOKEN_KEY means the world-known demo
-// fallback key can NEVER sign a real OAuth state: an operator who enables live
-// OAuth without setting the key simply gets no OAuth flow (fails safe) rather
-// than a forgeable-state cliff.
+// signing key is set. An operator who enables live OAuth without setting the
+// key gets no OAuth flow rather than a forgeable-state cliff.
 export function oauthConfigured(platform: OAuthPlatform): boolean {
   const p = PROVIDERS[platform];
   return (
-    process.env.PUBLISHING_LIVE === "true" &&
-    !!process.env.PUBLISHING_TOKEN_KEY &&
+    publishingLive() &&
+    !!process.env.PUBLISHING_TOKEN_KEY?.trim() &&
     !!clientId(p) &&
     !!clientSecret(p)
   );
@@ -131,12 +131,7 @@ export interface OAuthState {
 }
 
 function stateSecret(): string {
-  // Reuse the token key as the state-signing secret (already required for live
-  // publishing). Falls back to a clearly-marked demo key.
-  return (
-    process.env.PUBLISHING_TOKEN_KEY ||
-    "demo-only-key--set-PUBLISHING_TOKEN_KEY-in-production"
-  );
+  return publishingTokenKey();
 }
 
 function b64url(buf: Buffer): string {
@@ -156,7 +151,13 @@ export function verifyState(raw: string | null): OAuthState | null {
   if (dot <= 0) return null;
   const payload = raw.slice(0, dot);
   const sig = raw.slice(dot + 1);
-  const expected = b64url(createHmac("sha256", stateSecret()).update(payload).digest());
+  let key: string;
+  try {
+    key = stateSecret();
+  } catch {
+    return null;
+  }
+  const expected = b64url(createHmac("sha256", key).update(payload).digest());
   const a = Buffer.from(sig, "utf8");
   const b = Buffer.from(expected, "utf8");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
@@ -188,6 +189,7 @@ export function verifyState(raw: string | null): OAuthState | null {
 
 export function authorizeUrl(platform: OAuthPlatform, state: string, redirectUri: string): string | null {
   const p = PROVIDERS[platform];
+  if (!oauthConfigured(platform)) return null;
   const id = clientId(p);
   if (!id) return null;
   const params = new URLSearchParams({
@@ -215,6 +217,9 @@ export async function exchangeCodeForToken(
   redirectUri: string,
 ): Promise<TokenResult> {
   const p = PROVIDERS[platform];
+  if (!oauthConfigured(platform)) {
+    return { ok: false, detail: "OAuth publishing is not live" };
+  }
   const id = clientId(p);
   const secret = clientSecret(p);
   if (!id || !secret) return { ok: false, detail: "OAuth app not configured" };

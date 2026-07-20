@@ -1,7 +1,16 @@
-import { getAsset, getTenant, listContentComments } from "@/lib/db";
+import {
+  getAsset,
+  getTenant,
+  listContentComments,
+  listManagedApprovalRequests,
+  listScheduledPosts,
+} from "@/lib/db";
 import { canClientApproveRoute } from "@/lib/routing";
 import { Button } from "@/components/ui/button";
+import { ActionSubmitButton } from "@/components/action-submit-button";
 import { ShieldCheck } from "lucide-react";
+import { ClientApprovalSummaryPanel } from "@/components/client-approval-summary";
+import { clientApprovalSummary } from "@/lib/managed-service/client-ux";
 import {
   resolveApprovalToken,
   clientApproveAction,
@@ -14,7 +23,7 @@ export const metadata = { title: "Content approval" };
 function Shell({ accent, logoUrl, brand, children }: { accent: string; logoUrl?: string; brand: string; children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-muted/30" style={{ ["--primary" as string]: accent }}>
-      <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mx-auto max-w-2xl px-4 py-5 sm:py-10">
         <div className="mb-6 flex items-center gap-2.5">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -55,7 +64,11 @@ export default async function ClientApprovalPage({
 
   const { token, content, company } = resolved;
   const tenant = await getTenant(token.tenantId);
-  const comments = await listContentComments(content.id);
+  const [comments, posts, approvalRequests] = await Promise.all([
+    listContentComments(content.id),
+    listScheduledPosts(token.tenantId),
+    listManagedApprovalRequests(token.tenantId, company.id),
+  ]);
   // Attached approved assets with real media — served through the token-scoped,
   // consent-gated media route (a withdrawn-consent image simply won't load).
   const mediaAssets = (
@@ -78,11 +91,15 @@ export default async function ClientApprovalPage({
     review.email === token.clientEmail;
   const routedTo = content.routedTo ?? "admin";
   const canApprove = canClientApproveRoute(routedTo) && (content.compliance?.canProceed ?? true);
+  const managedRequest = approvalRequests
+    .filter((request) => request.contentId === content.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const summary = clientApprovalSummary({ content, posts, request: managedRequest });
 
   return (
     <Shell accent={accent} logoUrl={b.logoUrl} brand={brand}>
-      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="rounded-lg border border-border bg-card p-4 shadow-sm sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               For {company.name}
@@ -98,7 +115,12 @@ export default async function ClientApprovalPage({
           <p className="mb-4 rounded-md bg-muted/50 p-3 text-sm">{b.approvalMessage}</p>
         )}
 
-        <article className="whitespace-pre-wrap rounded-md border border-border bg-background p-4 text-sm leading-relaxed">
+        <ClientApprovalSummaryPanel
+          summary={summary}
+          hasVisual={mediaAssets.length > 0}
+        />
+
+        <article className="mt-4 whitespace-pre-wrap rounded-md border border-border bg-background p-4 text-sm leading-relaxed">
           {content.body}
         </article>
 
@@ -138,7 +160,13 @@ export default async function ClientApprovalPage({
           <div className="mt-6 space-y-4">
             <form action={clientApproveAction}>
               <input type="hidden" name="token" value={raw} />
-              <Button type="submit" className="w-full">Approve this content</Button>
+              <ActionSubmitButton
+                type="submit"
+                className="h-12 w-full text-base"
+                pendingLabel="Approving…"
+              >
+                Approve
+              </ActionSubmitButton>
             </form>
             <form action={clientRequestChangesAction} className="space-y-2">
               <input type="hidden" name="token" value={raw} />
@@ -148,7 +176,14 @@ export default async function ClientApprovalPage({
                 placeholder="Or request changes — tell your agency what to adjust…"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
-              <Button type="submit" variant="outline" className="w-full">Request changes</Button>
+              <ActionSubmitButton
+                type="submit"
+                variant="outline"
+                className="h-12 w-full text-base"
+                pendingLabel="Sending request…"
+              >
+                Request changes
+              </ActionSubmitButton>
             </form>
           </div>
         )}

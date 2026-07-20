@@ -29,7 +29,12 @@ import {
   OAUTH_NONCE_COOKIE,
   signState,
 } from "@/lib/oauth";
-import { publishDuePosts, publishPostNow } from "@/lib/publish-queue";
+import {
+  publishDuePosts,
+  publishPostNow,
+  reconcileDeliveryUnknown,
+  retryFailedPosts,
+} from "@/lib/publish-queue";
 import { isValidIanaTimezone, SCHEDULE_TIMEZONE_OPTIONS } from "@/lib/tenant-timezone";
 import {
   bulkCreateConnectInvites,
@@ -222,7 +227,27 @@ export async function publishDueAction(formData?: FormData) {
   const counts = await publishDuePosts(user, companyId ? { companyId } : undefined);
   await logAction(user, "publishing.run", {
     companyId,
-    detail: `published ${counts.published}, failed ${counts.failed}, skipped ${counts.skipped}, deferred ${counts.deferred} (platform ceilings), dead-lettered ${counts.dead}${companyId ? ` · company ${companyId}` : ""}`,
+    detail: `published ${counts.published}, failed ${counts.failed}, skipped ${counts.skipped}, unknown ${counts.unknown}, deferred ${counts.deferred} (platform ceilings), dead-lettered ${counts.dead}${companyId ? ` · company ${companyId}` : ""}`,
+  });
+  refresh();
+}
+
+/** Retry only failed records whose backoff has elapsed; never runs scheduled work. */
+export async function retryFailedPublishingAction(formData?: FormData) {
+  const user = await requireAdmin();
+  const companyId = formData
+    ? String(formData.get("companyId") || "").trim() || undefined
+    : undefined;
+  if (companyId && !(await canAccessCompany(user, companyId))) {
+    throw new Error("Forbidden: no access to this company");
+  }
+  const counts = await retryFailedPosts(
+    user,
+    companyId ? { companyId } : undefined,
+  );
+  await logAction(user, "publishing.retry_failed", {
+    companyId,
+    detail: `retry-only: published ${counts.published}, failed ${counts.failed}, skipped ${counts.skipped}, unknown ${counts.unknown}, deferred ${counts.deferred}, dead-lettered ${counts.dead}`,
   });
   refresh();
 }
@@ -245,6 +270,30 @@ export async function publishNowAction(formData: FormData) {
     throw new Error(
       "This post is already being published (or is no longer publishable).",
     );
+  }
+  refresh();
+}
+
+export async function reconcileUnknownDeliveryAction(formData: FormData) {
+  const user = await requireAdmin();
+  const postId = text(formData, "postId");
+  const outcome = text(formData, "outcome");
+  const evidence = text(formData, "evidence");
+  if (!["delivered", "not_delivered"].includes(outcome) || !evidence) {
+    throw new Error("A valid outcome and provider evidence are required.");
+  }
+  const post = await getScheduledPost(postId);
+  if (!post || !(await canAccessCompany(user, post.companyId))) {
+    throw new Error("Unknown delivery not found.");
+  }
+  const reconciled = await reconcileDeliveryUnknown(
+    user,
+    postId,
+    outcome as "delivered" | "not_delivered",
+    evidence,
+  );
+  if (!reconciled) {
+    throw new Error("This delivery is no longer awaiting reconciliation.");
   }
   refresh();
 }

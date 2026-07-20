@@ -138,6 +138,33 @@ export default async function ClientAssetsPage() {
                     accept="image/*,video/*,.pdf"
                   />
                 </Field>
+                <div className="rounded-md border border-border bg-muted/30 p-4">
+                  <Field
+                    label="Confirmation email"
+                    htmlFor="confirmationEmail"
+                    hint="We record this with the date and file details as permanent evidence."
+                  >
+                    <Input
+                      id="confirmationEmail"
+                      name="confirmationEmail"
+                      type="email"
+                      value={user.email}
+                      readOnly
+                    />
+                  </Field>
+                  <label className="mt-3 flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="rightsConfirmed"
+                      required
+                      className="mt-0.5 h-4 w-4 rounded border-input"
+                    />
+                    <span>
+                      I confirm I own this file or have permission to use it for this
+                      business’s marketing.
+                    </span>
+                  </label>
+                </div>
                 <label className="flex items-start gap-2 text-sm text-muted-foreground">
                   <input
                     type="checkbox"

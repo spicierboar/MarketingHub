@@ -5,8 +5,8 @@
 // retries and logging. Only the final "send to the platform" step changes: when
 // publishingLive() is true and the relevant OAuth app is configured,
 // dispatchPublish makes the real API call using decryptToken(integration.encryptedToken).
-// Otherwise it returns null and the engine uses the deterministic simulator, so
-// the demo still runs with zero external accounts.
+// Simulation is selected explicitly before this module is called. A live
+// request that is not fully configured fails closed and is never simulated.
 //
 // Live gate: appEnv() + PUBLISHING_LIVE + PUBLISHING_TOKEN_KEY. Staging preview
 // deployments never call platform APIs even if PUBLISHING_LIVE is set (see
@@ -36,12 +36,31 @@ export interface PublishingPlatformHealthRow {
   detail: string;
 }
 
-/** True when outbound platform publish calls are permitted. */
+export type PublishingMode =
+  | { kind: "simulate" }
+  | { kind: "live" }
+  | { kind: "blocked"; detail: string };
+
+export function resolvePublishingMode(): PublishingMode {
+  if (process.env.PUBLISHING_LIVE !== "true") return { kind: "simulate" };
+  if (!process.env.PUBLISHING_TOKEN_KEY?.trim()) {
+    return {
+      kind: "blocked",
+      detail: "Live publishing requested but PUBLISHING_TOKEN_KEY is missing",
+    };
+  }
+  if (!liveIntegrationsAllowed()) {
+    return {
+      kind: "blocked",
+      detail: "Live publishing requested but this environment forbids live integrations",
+    };
+  }
+  return { kind: "live" };
+}
+
+/** True only when outbound platform publish calls are permitted. */
 export function publishingLive(): boolean {
-  if (!process.env.PUBLISHING_TOKEN_KEY?.trim()) return false;
-  if (process.env.PUBLISHING_LIVE !== "true") return false;
-  if (!liveIntegrationsAllowed()) return false;
-  return true;
+  return resolvePublishingMode().kind === "live";
 }
 
 export function metaPublishingConfigured(): boolean {
@@ -119,13 +138,33 @@ export function buildPublishingPlatformHealth(): PublishingPlatformHealthRow[] {
 export interface ConnectorResult {
   ok: boolean;
   detail: string;
+  blocked?: boolean;
+  /** Request dispatch began but no authoritative provider response arrived. */
+  deliveryUnknown?: boolean;
 }
 
 export async function dispatchPublish(
   integration: PublishingIntegration,
   body: string,
-): Promise<ConnectorResult | null> {
-  if (!publishingLive()) return null;
+  options: {
+    signal?: AbortSignal;
+    fetcher?: typeof fetch;
+    idempotencyKey?: string;
+  } = {},
+): Promise<ConnectorResult> {
+  const mode = resolvePublishingMode();
+  if (mode.kind !== "live") {
+    return {
+      ok: false,
+      blocked: true,
+      detail:
+        mode.kind === "blocked"
+          ? mode.detail
+          : "Live publishing was not requested",
+    };
+  }
+  options.signal?.throwIfAborted();
+  const fetcher = options.fetcher ?? fetch;
   // Capability gate before any live publish attempt (registry is live-ready;
   // flags remain OFF so this path is only hit when PUBLISHING_LIVE is on).
   try {
@@ -133,39 +172,99 @@ export async function dispatchPublish(
   } catch (err) {
     return {
       ok: false,
+      blocked: true,
       detail: err instanceof Error ? err.message : "Connector publish not supported",
+    };
+  }
+  const platform = integration.platform.toLowerCase();
+  if (
+    (platform.includes("facebook") || platform.includes("instagram")) &&
+    !metaPublishingConfigured()
+  ) {
+    return {
+      ok: false,
+      blocked: true,
+      detail: "Live Meta publishing requested but OAuth credentials are missing",
+    };
+  }
+  if (platform.includes("google") && !gbpPublishingConfigured()) {
+    return {
+      ok: false,
+      blocked: true,
+      detail:
+        "Live Google Business publishing requested but OAuth credentials are missing",
+    };
+  }
+  if (platform.includes("tiktok") && !tiktokPublishingConfigured()) {
+    return {
+      ok: false,
+      blocked: true,
+      detail: "Live TikTok publishing requested but OAuth credentials are missing",
+    };
+  }
+  if (
+    !["facebook", "instagram", "linkedin", "google", "tiktok", "email"].some(
+      (name) => platform.includes(name),
+    )
+  ) {
+    return {
+      ok: false,
+      blocked: true,
+      detail: `Live publishing is unsupported for ${integration.platform}`,
     };
   }
   let token: string;
   try {
     token = decryptToken(integration.encryptedToken);
   } catch {
-    return { ok: false, detail: "Could not decrypt the stored token (rotate PUBLISHING_TOKEN_KEY?)" };
+    return {
+      ok: false,
+      blocked: true,
+      detail: "Could not decrypt the stored token (rotate PUBLISHING_TOKEN_KEY?)",
+    };
   }
-  const platform = integration.platform.toLowerCase();
   try {
     if (platform.includes("facebook") || platform.includes("instagram")) {
-      if (!metaPublishingConfigured()) return null;
-      return await postToMeta(integration, token, body);
+      return await postToMeta(integration, token, body, fetcher, options.signal);
     }
     if (platform.includes("linkedin")) {
-      return await postToLinkedIn(integration, token, body);
+      return await postToLinkedIn(
+        integration,
+        token,
+        body,
+        fetcher,
+        options.signal,
+        options.idempotencyKey,
+      );
     }
     if (platform.includes("google")) {
-      if (!gbpPublishingConfigured()) return null;
-      return await postToGoogleBusiness(integration, token, body);
+      return await postToGoogleBusiness(
+        integration,
+        token,
+        body,
+        fetcher,
+        options.signal,
+      );
     }
     if (platform.includes("tiktok")) {
-      if (!tiktokPublishingConfigured()) return null;
-      return await postToTikTok(integration, token, body);
+      return await postToTikTok(integration, token, body, fetcher, options.signal);
     }
     if (platform.includes("email")) {
-      return await postToEmail(integration, body);
+      return await postToEmail(integration, body, options.idempotencyKey);
     }
   } catch (err) {
-    return { ok: false, detail: `Platform API error: ${String(err)}` };
+    if (options.signal?.aborted) throw options.signal.reason ?? err;
+    return {
+      ok: false,
+      deliveryUnknown: true,
+      detail: `Platform response unavailable after dispatch: ${String(err)}`,
+    };
   }
-  return null;
+  return {
+    ok: false,
+    blocked: true,
+    detail: `Live publishing is unsupported for ${integration.platform}`,
+  };
 }
 
 function metaGraphError(json: unknown, fallback: string): string {
@@ -179,6 +278,8 @@ async function postToMeta(
   integration: PublishingIntegration,
   token: string,
   body: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
 ): Promise<ConnectorResult> {
   const accountId = integration.accountName?.trim();
   if (!accountId) {
@@ -186,14 +287,15 @@ async function postToMeta(
   }
   const platform = integration.platform.toLowerCase();
   if (platform.includes("instagram")) {
-    return postToInstagram(accountId, token, body);
+    return postToInstagram(accountId, token, body, fetcher, signal);
   }
-  const res = await fetch(
+  const res = await fetcher(
     `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(accountId)}/feed`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: body, access_token: token }),
+      signal,
     },
   );
   const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
@@ -207,6 +309,8 @@ async function postToInstagram(
   igUserId: string,
   token: string,
   body: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
 ): Promise<ConnectorResult> {
   const imageMatch = body.match(/\[image:\s*(https?:\/\/[^\]\s]+)\s*]/i);
   const imageUrl = imageMatch?.[1]?.trim();
@@ -218,12 +322,13 @@ async function postToInstagram(
     };
   }
   const caption = body.replace(/\[image:\s*https?:\/\/[^\]\s]+\s*]/i, "").trim();
-  const createRes = await fetch(
+  const createRes = await fetcher(
     `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(igUserId)}/media`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_url: imageUrl, caption, access_token: token }),
+      signal,
     },
   );
   const createJson = (await createRes.json().catch(() => ({}))) as {
@@ -233,12 +338,13 @@ async function postToInstagram(
   if (!createRes.ok || createJson.error || !createJson.id) {
     return { ok: false, detail: `Instagram: ${metaGraphError(createJson, createRes.statusText)}` };
   }
-  const publishRes = await fetch(
+  const publishRes = await fetcher(
     `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(igUserId)}/media_publish`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ creation_id: createJson.id, access_token: token }),
+      signal,
     },
   );
   const publishJson = (await publishRes.json().catch(() => ({}))) as {
@@ -255,17 +361,23 @@ async function postToLinkedIn(
   integration: PublishingIntegration,
   token: string,
   body: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
+  idempotencyKey?: string,
 ): Promise<ConnectorResult> {
   const author = integration.accountName?.trim();
   if (!author) {
     return { ok: false, detail: "LinkedIn: author URN missing on integration" };
   }
-  const res = await fetch("https://api.linkedin.com/v2/ugcPosts", {
+  const res = await fetcher("https://api.linkedin.com/v2/ugcPosts", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       "X-Restli-Protocol-Version": "2.0.0",
+      ...(idempotencyKey
+        ? { "X-Restli-Idempotency-Key": idempotencyKey }
+        : {}),
     },
     body: JSON.stringify({
       author,
@@ -278,6 +390,7 @@ async function postToLinkedIn(
       },
       visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
     }),
+    signal,
   });
   if (!res.ok) {
     const errText = await res.text().catch(() => res.statusText);
@@ -290,6 +403,8 @@ async function postToGoogleBusiness(
   integration: PublishingIntegration,
   token: string,
   body: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
 ): Promise<ConnectorResult> {
   const parent = integration.accountName?.trim();
   if (!parent) {
@@ -304,7 +419,7 @@ async function postToGoogleBusiness(
       detail: `Google Business Profile: invalid location path "${parent}" — expected accounts/{id}/locations/{id}`,
     };
   }
-  const res = await fetch(`https://mybusiness.googleapis.com/v4/${parent}/localPosts`, {
+  const res = await fetcher(`https://mybusiness.googleapis.com/v4/${parent}/localPosts`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -315,6 +430,7 @@ async function postToGoogleBusiness(
       summary: body.slice(0, 1500),
       topicType: "STANDARD",
     }),
+    signal,
   });
   const json = (await res.json().catch(() => null)) as {
     name?: string;
@@ -333,6 +449,8 @@ async function postToTikTok(
   integration: PublishingIntegration,
   token: string,
   body: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
 ): Promise<ConnectorResult> {
   const openId = integration.accountName?.trim();
   if (!openId) {
@@ -348,7 +466,7 @@ async function postToTikTok(
     };
   }
   const title = body.replace(/\[image:\s*https?:\/\/[^\]\s]+\s*]/i, "").trim().slice(0, 2200);
-  const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
+  const res = await fetcher("https://open.tiktokapis.com/v2/post/publish/content/init/", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -368,6 +486,7 @@ async function postToTikTok(
       post_mode: "DIRECT_POST",
       media_type: "PHOTO",
     }),
+    signal,
   });
   const json = (await res.json().catch(() => ({}))) as {
     data?: { publish_id?: string };
@@ -382,6 +501,7 @@ async function postToTikTok(
 async function postToEmail(
   integration: PublishingIntegration,
   body: string,
+  idempotencyKey?: string,
 ): Promise<ConnectorResult> {
   const to = integration.accountName?.trim();
   if (!to) {
@@ -391,6 +511,7 @@ async function postToEmail(
     to,
     subject: body.split("\n")[0]?.slice(0, 120) || "Update",
     html: `<div>${body.replace(/\n/g, "<br/>")}</div>`,
+    idempotencyKey,
   });
   return { ok: result.ok, detail: `Email: ${result.detail}` };
 }

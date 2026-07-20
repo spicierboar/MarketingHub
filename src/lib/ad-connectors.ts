@@ -18,6 +18,16 @@
 
 import { decryptToken } from "@/lib/crypto";
 import { liveIntegrationsAllowed } from "@/lib/env";
+import {
+  getCompany,
+  listManagedApprovalRequests,
+  listManagedPaidAuthorizations,
+  updateCompany,
+} from "@/lib/db";
+import {
+  refreshFailedPaymentPause,
+  serviceOperationsAllowed,
+} from "@/lib/managed-service-billing";
 import type {
   AdAccount,
   AdCampaign,
@@ -25,6 +35,7 @@ import type {
   AdPlatform,
   AdTargeting,
 } from "@/lib/types";
+import { paidAuthorizationGate } from "@/lib/managed-service/workflow";
 
 export function adsLive(): boolean {
   if (process.env.ADS_LIVE !== "true") return false;
@@ -154,6 +165,77 @@ export async function dispatchCampaignSync(args: {
   op: CampaignLifecycleOp;
 }): Promise<AdConnectorResult | null> {
   if (!adsConfigured()) return null;
+  const company = await getCompany(args.campaign.companyId);
+  const service = company?.profile.managedService;
+  if (
+    args.op !== "pause" &&
+    !serviceOperationsAllowed(service?.serviceBilling)
+  ) {
+    if (
+      company &&
+      service?.serviceBilling?.status === "past_due_grace"
+    ) {
+      await updateCompany(company.id, {
+        profile: {
+          ...company.profile,
+          managedService: {
+            ...service,
+            serviceBilling: refreshFailedPaymentPause(
+              service.serviceBilling,
+              new Date().toISOString(),
+            ),
+          },
+        },
+      });
+    }
+    return { ok: false, detail: "Managed ads are paused for failed payment" };
+  }
+  if (args.op !== "pause") {
+    if (!company) return { ok: false, detail: "Company not found" };
+    const authorizations = await listManagedPaidAuthorizations(
+      company.tenantId,
+      company.id,
+    );
+    const authorization = authorizations.find(
+      (row) => row.adCampaignId === args.campaign.id,
+    );
+    if (!authorization) {
+      return { ok: false, detail: "Paid campaign approvals are incomplete" };
+    }
+    const approvals = await listManagedApprovalRequests(
+      company.tenantId,
+      company.id,
+    );
+    const gate = paidAuthorizationGate({
+      authorization,
+      creativeApproval: approvals.find(
+        (row) => row.id === authorization.creativeApprovalId,
+      ),
+      budgetTargetingApproval: approvals.find(
+        (row) => row.id === authorization.budgetTargetingApprovalId,
+      ),
+      approvedMonthTotalAud: authorizations
+        .filter(
+          (row) =>
+            row.id !== authorization.id &&
+            row.monthKey === authorization.monthKey &&
+            row.status === "approved",
+        )
+        .reduce((sum, row) => sum + row.requestedBudgetAud, 0),
+      billing: service?.serviceBilling,
+    });
+    if (!gate.ok) return { ok: false, detail: gate.reason! };
+  }
+  const adCap = service?.serviceOptions?.monthlyAdCapAud ?? 0;
+  if (
+    args.op !== "pause" &&
+    (adCap <= 0 || args.campaign.dailyBudgetUsd * 30 > adCap)
+  ) {
+    return {
+      ok: false,
+      detail: "Campaign exceeds the client-authorised monthly ad cap",
+    };
+  }
   let token: string;
   try {
     token = decryptToken(args.account.encryptedToken);

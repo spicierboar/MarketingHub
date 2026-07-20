@@ -29,6 +29,8 @@ type PackageCard = Pick<
   | "channels"
   | "postsPerMonth"
   | "campaignsPerMonth"
+  | "campaignConceptsPerMonth"
+  | "searchVisibilityIncluded"
   | "promosIncludedPerMonth"
   | "adsManagementIncluded"
   | "imageQuotaPerMonth"
@@ -36,12 +38,6 @@ type PackageCard = Pick<
   | "defaultServiceLevel"
   | "customModuleRates"
 >;
-
-function formatPromos(n: number): string {
-  if (n > 0 && n < 1) return "1 / quarter";
-  if (n === 1) return "1 / mo";
-  return `${n} / mo`;
-}
 
 function money(n: number) {
   return `A$${n}`;
@@ -81,9 +77,9 @@ export function OnboardingPackagePicker({
   /** Extra hidden inputs (e.g. companyId for sales wizard). */
   hiddenFields?: Record<string, string>;
 }) {
-  const recommended = packages.find((p) => p.id === "pro")?.id ?? packages[0]?.id;
+  const recommended = packages.find((p) => p.id === "growth")?.id ?? packages[0]?.id;
   const [selected, setSelected] = useState<MarketingPackageId>(
-    initialPackageId ?? recommended ?? "basic",
+    initialPackageId ?? recommended ?? "starter",
   );
   const [customMods, setCustomMods] = useState<MarketingPackageCustomModules>(() =>
     defaultCustomModules(initialCustomModules),
@@ -132,7 +128,7 @@ export function OnboardingPackagePicker({
       <div className="flex flex-col gap-2">
         {packages.map((p) => {
           const isSelected = selected === p.id;
-          const isPro = p.id === "pro";
+          const isPro = p.id === "growth";
           const price = displayPrice(p);
           return (
             <button
@@ -156,7 +152,9 @@ export function OnboardingPackagePicker({
               </div>
               <span className="mt-1 text-2xl font-bold">
                 {money(price)}
-                <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                <span className="text-sm font-normal text-muted-foreground">
+                  /mo excl GST
+                </span>
               </span>
               {p.id === "custom" ? (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -170,18 +168,14 @@ export function OnboardingPackagePicker({
                 <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                   <li>{p.channels.map(customChannelLabel).join(" · ") || "Channels TBD"}</li>
                   <li>
-                    ~{p.postsPerMonth} posts/mo · {p.campaignsPerMonth} campaign
-                    {p.campaignsPerMonth === 1 ? "" : "s"}
-                  </li>
-                  <li>Promos {formatPromos(p.promosIncludedPerMonth)}</li>
-                  <li>
-                    {p.imageQuotaPerMonth ?? 0} AI images · {p.videoQuotaPerMonth ?? 0}{" "}
-                    short videos / mo
+                    {p.campaignConceptsPerMonth} campaign concepts / month
                   </li>
                   <li>
-                    {p.adsManagementIncluded
-                      ? "Ads management included"
-                      : "Ads management not included"}
+                    {p.searchVisibilityIncluded
+                      ? "Search Visibility included"
+                      : p.id === "growth"
+                        ? "Search Visibility optional (+A$249/mo)"
+                        : "No SEO / AEO / GEO"}
                   </li>
                 </ul>
               ) : (
@@ -197,6 +191,55 @@ export function OnboardingPackagePicker({
 
       <form action={action} className="space-y-4">
         <input type="hidden" name="marketingPackageId" value={selected} />
+        <div className="space-y-3 rounded-lg border border-border p-4">
+          <p className="text-sm font-medium">Website and advertising services</p>
+          <p className="text-xs text-muted-foreground">
+            Website Connection Setup is always A$299 once-off. Ad-platform
+            charges go directly to your card and are separate from service fees.
+          </p>
+          {selected === "growth" ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="searchVisibility" className="mt-0.5 h-4 w-4" />
+              <span>Search Visibility — A$249/month (one substantial article or landing update)</span>
+            </label>
+          ) : null}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="websitePublishing" className="mt-0.5 h-4 w-4" />
+            <span>Website Publishing — A$99/month</span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="hostedLandingPage" className="mt-0.5 h-4 w-4" />
+            <span>Hosted Landing Page — A$79/month + A$299 setup</span>
+          </label>
+          <Field
+            label="Monthly ad cap (A$)"
+            htmlFor="monthlyAdCapAud"
+            hint="Maximum client-authorised media spend; 0 means no managed ad spend."
+          >
+            <Input
+              id="monthlyAdCapAud"
+              name="monthlyAdCapAud"
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={0}
+            />
+          </Field>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="directPlatformChargeAccepted"
+              required
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              I understand advertising platforms charge my card directly. Those
+              charges are separate from service fees and cannot exceed the monthly
+              cap entered above without a new approval.
+            </span>
+          </label>
+        </div>
+
         {hiddenFields
           ? Object.entries(hiddenFields).map(([k, v]) => (
               <input key={k} type="hidden" name={k} value={v} />

@@ -7,13 +7,54 @@
 // token binds tenant + company + content so it can never reach anything else;
 // verification is timing-safe and the payload is rejected once stale.
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  appEnv,
+  localDemoEnabled,
+  looksLikeLocalOrigin,
+  type AppEnv,
+} from "@/lib/env";
 
-function secret(): string {
-  return (
-    process.env.PUBLISHING_TOKEN_KEY ||
-    "demo-only-key--set-PUBLISHING_TOKEN_KEY-in-production"
+const localSimulationKey = randomBytes(32).toString("base64url");
+
+export function resolvePublishingTokenKey(input: {
+  env: AppEnv;
+  configuredKey?: string;
+  localKey?: string;
+  localSimulation?: boolean;
+}): string {
+  const configured = input.configuredKey?.trim();
+  if (configured) return configured;
+  if (
+    input.env === "development" &&
+    input.localSimulation === true &&
+    input.localKey
+  ) {
+    return input.localKey;
+  }
+  throw new Error(
+    "PUBLISHING_TOKEN_KEY is required outside explicit local/test simulation.",
   );
+}
+
+function localTokenSimulationAllowed(): boolean {
+  if (appEnv() !== "development") return false;
+  if (process.env.NODE_ENV === "test") return true;
+  if (localDemoEnabled() || looksLikeLocalOrigin()) return true;
+  return (
+    !process.env.VERCEL &&
+    process.env.CI !== "true" &&
+    !(process.env.APP_ORIGIN || "").trim()
+  );
+}
+
+export function publishingTokenKey(): string {
+  return resolvePublishingTokenKey({
+    env: appEnv(),
+    configuredKey: process.env.PUBLISHING_TOKEN_KEY,
+    localKey: localSimulationKey,
+    localSimulation: localTokenSimulationAllowed(),
+  });
 }
 
 function b64url(buf: Buffer): string {
@@ -31,7 +72,7 @@ export function signPayload<T extends object>(
 ): string {
   const body = { ...payload, iat: opts.issuedAt, exp: opts.issuedAt + opts.ttlMs };
   const encoded = b64url(Buffer.from(JSON.stringify(body), "utf8"));
-  const sig = b64url(createHmac("sha256", secret()).update(encoded).digest());
+  const sig = b64url(createHmac("sha256", publishingTokenKey()).update(encoded).digest());
   return `${encoded}.${sig}`;
 }
 
@@ -49,7 +90,13 @@ export function verifyPayload<T extends object>(
   if (dot <= 0) return null;
   const encoded = raw.slice(0, dot);
   const sig = raw.slice(dot + 1);
-  const expected = b64url(createHmac("sha256", secret()).update(encoded).digest());
+  let key: string;
+  try {
+    key = publishingTokenKey();
+  } catch {
+    return null;
+  }
+  const expected = b64url(createHmac("sha256", key).update(encoded).digest());
   const a = Buffer.from(sig, "utf8");
   const b = Buffer.from(expected, "utf8");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;

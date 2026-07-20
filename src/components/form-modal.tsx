@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const subscribeToBrowser = () => () => {};
+const browserSnapshot = () => true;
+const serverSnapshot = () => false;
 
 /** Overlay form dialog — Escape / backdrop click to close. Portaled to body so
  *  ancestors with overflow (e.g. main overflow-x-hidden) cannot clip it. */
@@ -23,11 +27,11 @@ export function FormModal({
   className?: string;
 }) {
   const titleId = useId();
-  const [mounted, setMounted] = useState(false);
-
-  useLayoutEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    subscribeToBrowser,
+    browserSnapshot,
+    serverSnapshot,
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

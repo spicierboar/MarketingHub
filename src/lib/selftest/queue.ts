@@ -20,10 +20,14 @@ import {
   appendPublishLog,
   createCompany,
   createContent,
+  createCampaignItem,
   createIntegration,
+  createRequest,
   createScheduledPost,
   createTenant,
   getContent,
+  getCampaignItem,
+  getRequest,
   getScheduledPost,
   listPublishLogsForPosts,
   purgeTenant,
@@ -44,6 +48,7 @@ import {
   publishIdempotencyKey,
   publishPostNow,
   queueNowParts,
+  reconcileDeliveryUnknown,
   retryEligibleAt,
   STALE_CLAIM_MINUTES,
 } from "@/lib/publish-queue";
@@ -170,6 +175,11 @@ export async function runQueueSelfTest(): Promise<QueueReport> {
         status: "connected",
         connectedById: "system:queue-selftest",
       });
+      // Preview keeps outbound publishing disabled. The deterministic simulator
+      // must still advance governed queue state without any external side effect.
+      await updatePublishingControls(tenantQ.id, {
+        automatedPublishingDisabled: true,
+      });
 
       // Same wall-clock the engine gates due-ness on (CC_TZ_OFFSET_MINUTES aware).
       const { nowIso, today, hhmm } = queueNowParts();
@@ -275,8 +285,10 @@ export async function runQueueSelfTest(): Promise<QueueReport> {
       const { post: postOk, content: contentOk } = await makePost({
         company, platform: "Facebook", title: "happy post", body: "hello world", date: today,
       });
-      await expect("queue.happyPathPublishes", async () => {
-        const counts = await processPublishQueue(actorQ);
+      await expect("queue.simulatedPublishAdvancesWhenLiveDisabled", async () => {
+        const counts = await processPublishQueue(actorQ, {
+          publishMode: { kind: "simulate" },
+        });
         const post = await getScheduledPost(postOk.id);
         const content = await getContent(contentOk.id);
         const logs = await listPublishLogsForPosts(tenantQ.id, [postOk.id]);
@@ -478,7 +490,7 @@ export async function runQueueSelfTest(): Promise<QueueReport> {
       });
 
       // ---- 12. Idempotent retry skips re-send when already published ----------
-      const { post: postIdem, content: contentIdem } = await makePost({
+      const { post: postIdem } = await makePost({
         company, platform: "Facebook", title: "idem post", body: "idem body", date: today,
       });
       await expect("queue.idempotentRetrySkipsResend", async () => {
@@ -526,6 +538,169 @@ export async function runQueueSelfTest(): Promise<QueueReport> {
         const recovered = logs.some((l) => l.detail.includes("stale-claim recovered"));
         const ok = post?.status === "published" && counts.failed === 0 && recovered;
         return { ok, detail: `status=${post?.status} failed=${counts.failed} recovered=${recovered}` };
+      });
+
+      const { post: postUnknown } = await makePost({
+        company,
+        platform: "Facebook",
+        title: "accepted then timeout",
+        body: "accepted then timeout body",
+        date: today,
+      });
+      await expect("queue.acceptedThenTimeoutRequiresReconciliation", async () => {
+        const controller = new AbortController();
+        let dispatches = 0;
+        let providerIdempotencyKey: string | undefined;
+        const timer = setTimeout(() => controller.abort(), 10);
+        const outcome = await publishPostNow(postUnknown.id, actorQ, {
+          publishMode: { kind: "live" },
+          signal: controller.signal,
+          dispatchPublishOverride: async (_integration, _body, options) => {
+            dispatches += 1;
+            providerIdempotencyKey = options?.idempotencyKey;
+            return await new Promise<never>((_resolve, reject) => {
+              options?.signal?.addEventListener(
+                "abort",
+                () => reject(options?.signal?.reason),
+                { once: true },
+              );
+            });
+          },
+        });
+        clearTimeout(timer);
+        const unknown = await getScheduledPost(postUnknown.id);
+        const unknownStatus = unknown?.status;
+        const retryBeforeReconciliation = await publishPostNow(
+          postUnknown.id,
+          actorQ,
+          { publishMode: { kind: "live" } },
+        );
+        const reconciled = await reconcileDeliveryUnknown(
+          actorQ,
+          postUnknown.id,
+          "not_delivered",
+          "provider lookup returned no matching delivery",
+        );
+        const after = await getScheduledPost(postUnknown.id);
+        const ok =
+          outcome?.deliveryUnknown === true &&
+          unknownStatus === "delivery_unknown" &&
+          retryBeforeReconciliation === null &&
+          reconciled &&
+          after?.status === "failed" &&
+          dispatches === 1 &&
+          providerIdempotencyKey === publishIdempotencyKey(postUnknown.id, 1);
+        return {
+          ok,
+          detail: `unknown=${unknownStatus} retryBlocked=${retryBeforeReconciliation === null} reconciled=${reconciled} after=${after?.status} dispatches=${dispatches} idem=${providerIdempotencyKey}`,
+        };
+      });
+
+      const request = await createRequest({
+        companyId: company.id,
+        requesterId: actorQ.id,
+        requestType: "social_post",
+        objective: "Verify reconciliation workflow",
+        topic: "Delivery reconciliation",
+        urgency: "normal",
+        consent: {
+          customerNamed: false,
+          customerInPhotos: false,
+          consentObtained: false,
+          mentionsPricing: false,
+          mentionsOffer: false,
+          performanceClaims: false,
+        },
+        uploads: [],
+        assignedReviewerId: null,
+      });
+      const { post: postReconciled, content: contentReconciled } =
+        await makePost({
+          company,
+          platform: "Facebook",
+          title: "reconciled delivery",
+          body: "reconciled delivery body",
+          date: today,
+        });
+      const campaignItem = await createCampaignItem({
+        campaignId: "cmp_reconciliation_workflow",
+        companyId: company.id,
+        dayOffset: 1,
+        channel: "Facebook",
+        contentType: "social_post",
+        title: "Reconciled delivery",
+        brief: "Verify all workflow records advance",
+        contentId: contentReconciled.id,
+        status: "scheduled",
+      });
+      await updateContent(contentReconciled.id, {
+        requestId: request.id,
+        campaignId: campaignItem.campaignId,
+        campaignItemId: campaignItem.id,
+      });
+      await expect("queue.reconciliationFinalizesWorkflowState", async () => {
+        const idempotencyKey = publishIdempotencyKey(postReconciled.id, 1);
+        await transitionScheduledPost(tenantQ.id, postReconciled.id, {
+          from: ["scheduled"],
+          to: "publishing",
+        });
+        await transitionScheduledPost(tenantQ.id, postReconciled.id, {
+          from: ["publishing"],
+          to: "delivery_unknown",
+        });
+        await updateScheduledPost(postReconciled.id, {
+          deliveryIdempotencyKey: idempotencyKey,
+          deliveryUnknownAt: now(),
+          deliveryUnknownReason: "Provider response lost",
+        });
+        await appendPublishLog({
+          companyId: company.id,
+          platform: postReconciled.platform,
+          scheduledPostId: postReconciled.id,
+          contentId: contentReconciled.id,
+          status: "skipped",
+          attempt: 1,
+          detail: `[idem:${idempotencyKey}] Delivery outcome unknown`,
+          actorId: actorQ.id,
+        });
+        const reconciled = await reconcileDeliveryUnknown(
+          actorQ,
+          postReconciled.id,
+          "delivered",
+          "provider post fb_12345",
+        );
+        const [post, content, item, workflow, logs, audit] =
+          await Promise.all([
+            getScheduledPost(postReconciled.id),
+            getContent(contentReconciled.id),
+            getCampaignItem(campaignItem.id),
+            getRequest(request.id),
+            listPublishLogsForPosts(tenantQ.id, [postReconciled.id]),
+            listAudit(tenantQ.id),
+          ]);
+        const publishedLog = logs.find(
+          (entry) =>
+            entry.status === "published" &&
+            idempotencyKeyFromDetail(entry.detail) === idempotencyKey,
+        );
+        const actions = new Set(
+          audit
+            .filter((entry) => entry.targetId === postReconciled.id)
+            .map((entry) => entry.action),
+        );
+        const ok =
+          reconciled &&
+          post?.status === "published" &&
+          content?.status === "published" &&
+          item?.status === "published" &&
+          workflow?.status === "published" &&
+          Boolean(publishedLog) &&
+          actions.has("content.published") &&
+          actions.has("publishing.delivery_reconciled");
+        return {
+          ok,
+          detail: `post=${post?.status} content=${content?.status} item=${item?.status} request=${workflow?.status} idem=${Boolean(publishedLog)} audits=${[...actions].join(",")}`,
+        };
       });
     });
   } finally {

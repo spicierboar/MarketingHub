@@ -49,7 +49,10 @@ export async function sendEmailCampaign(input: { actor: ActingUser; campaign: Em
   const result = await sendBulkEmail(messages, input.fromName);
   const stats = simulateCampaignStats(input.campaign.id, input.recipients.length, result.sent, result.failed);
   const configured = emailConfigured();
-  await logAction(input.actor, "email_campaign.sent", { companyId: input.company.id, detail: configured ? `sent ${result.sent}` : "not sent (no RESEND_API_KEY)" });
+  await logAction(input.actor, "email_campaign.sent", {
+    companyId: input.company.id,
+    detail: result.detail ?? `sent ${result.sent}`,
+  });
   return { stats, emailConfigured: configured };
 }
 

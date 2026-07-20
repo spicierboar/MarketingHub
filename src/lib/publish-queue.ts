@@ -25,7 +25,8 @@
 //     "publishing"; after STALE_CLAIM_MINUTES the next tick verifies prior
 //     publish_logs / the simulated-platform registry before re-sending. When a
 //     prior successful publish is found the post is settled as published
-//     (idempotent no-op); otherwise it becomes a counted failed attempt.
+//     (idempotent no-op); otherwise it becomes delivery_unknown and cannot
+//     retry until provider reconciliation confirms non-delivery.
 //   • PUBLISH IDEMPOTENCY — each attempt carries a dedupe key (scheduled_post
 //     id + attempt). Retries and stale-claim recovery verify platform state /
 //     prior publish_log before calling the connector; duplicate outcomes are
@@ -44,13 +45,23 @@ import {
   listPublishLogsSince,
   listScheduledPosts,
   transitionScheduledPost,
+  updateScheduledPost,
 } from "@/lib/db";
 import { logAction } from "@/lib/audit";
-import { attemptScheduledPost } from "@/lib/publishing";
+import {
+  attemptScheduledPost,
+  finalizeSuccessfulDelivery,
+} from "@/lib/publishing";
+import {
+  dispatchPublish,
+  resolvePublishingMode,
+  type PublishingMode,
+} from "@/lib/publishing-connectors";
 import { CEILING_WINDOW_HOURS, platformCeiling } from "@/lib/platform-limits";
 import { getTenant } from "@/lib/db";
 import { resolveQueueClock } from "@/lib/tenant-timezone";
 import { now } from "@/lib/utils";
+import { registerStoreResetHook } from "@/lib/reset-hooks";
 import type {
   ActingUser,
   PublishLog,
@@ -75,11 +86,19 @@ export interface QueueCounts {
   failed: number;
   skipped: number;
   deferred: number; // over a platform ceiling — waiting for capacity, not an error
+  unknown: number; // provider may have accepted; requires reconciliation
   dead: number; // dead-lettered this tick (includes settled failures)
 }
 
 export function emptyQueueCounts(): QueueCounts {
-  return { published: 0, failed: 0, skipped: 0, deferred: 0, dead: 0 };
+  return {
+    published: 0,
+    failed: 0,
+    skipped: 0,
+    deferred: 0,
+    unknown: 0,
+    dead: 0,
+  };
 }
 
 // ---- Publish idempotency (verify-before-retry) ---------------------------------
@@ -111,6 +130,7 @@ export function withIdempotencyDetail(key: string, detail: string): string {
 // Simulated-platform registry: survives stale-claim when the worker died after
 // the connector accepted but before publish_logs was written (demo mode).
 const simPublishedByKey = new Map<string, string>();
+registerStoreResetHook(() => simPublishedByKey.clear());
 
 export function registerSimulatedPublish(key: string, platformDetail: string): void {
   simPublishedByKey.set(key, platformDetail);
@@ -188,28 +208,19 @@ export function resolvePriorPublish(
 
 async function settleIdempotentPublish(
   actor: ActingUser,
-  post: Pick<ScheduledPost, "id" | "companyId" | "platform" | "contentId">,
+  post: ScheduledPost,
   attempt: number,
   prior: PriorPublishEvidence,
   note: string,
 ): Promise<PublishLog> {
-  await transitionScheduledPost(actor.tenantId, post.id, {
-    from: ["publishing"],
-    to: "published",
-  });
-  return appendPublishLog({
-    companyId: post.companyId,
-    platform: post.platform,
-    integrationId: prior.integrationId,
-    scheduledPostId: post.id,
-    contentId: post.contentId,
-    status: "published",
+  return finalizeSuccessfulDelivery({
+    post,
+    actor,
     attempt,
-    detail: withIdempotencyDetail(
-      prior.key,
-      `${prior.detail} (${note})`,
-    ),
-    actorId: actor.id,
+    detail: `${prior.detail} (${note})`,
+    integrationId: prior.integrationId,
+    idempotencyKey: prior.key,
+    from: ["publishing"],
   });
 }
 
@@ -232,6 +243,21 @@ export function attemptsSinceRequeue(logsNewestFirst: PublishLog[]): {
     }
   }
   return { attempts, lastFailedAt };
+}
+
+export function isRetryEligiblePost(
+  post: ScheduledPost,
+  logsNewestFirst: PublishLog[],
+  clock: { nowIso: string; today: string; hhmm: string },
+): boolean {
+  if (post.status !== "failed" || !isDue(post, clock.today, clock.hhmm)) {
+    return false;
+  }
+  const { attempts, lastFailedAt } = attemptsSinceRequeue(logsNewestFirst);
+  return (
+    attempts < MAX_PUBLISH_ATTEMPTS &&
+    (!lastFailedAt || retryEligibleAt(attempts, lastFailedAt) <= clock.nowIso)
+  );
 }
 
 // When a post that has failed `attempts` times (most recently at lastFailedAt)
@@ -303,6 +329,7 @@ export function ceilingUsage(recentLogs: PublishLog[]): Map<string, number> {
 export interface PublishOutcome {
   log: PublishLog;
   becameDead: boolean;
+  deliveryUnknown: boolean;
 }
 
 // Claim → attempt → settle. Returns null when the claim was lost (another
@@ -316,8 +343,12 @@ export async function publishPostNow(
   opts: {
     claimFrom?: ScheduledPostStatus[];
     bypassCeilingCheck?: boolean;
+    publishMode?: PublishingMode;
+    signal?: AbortSignal;
+    dispatchPublishOverride?: typeof dispatchPublish;
   } = {},
 ): Promise<PublishOutcome | null> {
+  if (opts.signal?.aborted) return null;
   const before = await getScheduledPost(postId);
   if (!before) throw new Error("Scheduled post not found");
   // Restore target on a skip. Read pre-claim; in the rare race where the
@@ -359,18 +390,68 @@ export async function publishPostNow(
       prior,
       "idempotent — skipped duplicate send",
     );
-    return { log, becameDead: false };
+    return { log, becameDead: false, deliveryUnknown: false };
   }
 
   const idemKey = publishIdempotencyKey(postId, attempt);
   let log: PublishLog;
   try {
     log = await attemptScheduledPost(claimed, priorStatus, actor, attempt, {
+      publishMode: opts.publishMode,
+      signal: opts.signal,
+      dispatchPublishOverride: opts.dispatchPublishOverride,
       idempotencyKey: idemKey,
       lookupSimulatedDetail: () => lookupSimulatedPublish(idemKey),
       onSimulatedPublish: (detail) => registerSimulatedPublish(idemKey, detail),
     });
   } catch (err) {
+    if (
+      opts.signal?.aborted &&
+      opts.publishMode?.kind === "live"
+    ) {
+      await transitionScheduledPost(actor.tenantId, postId, {
+        from: ["publishing"],
+        to: "delivery_unknown",
+      });
+      await updateScheduledPost(postId, {
+        deliveryIdempotencyKey: idemKey,
+        deliveryUnknownAt: now(),
+        deliveryUnknownReason:
+          "Live dispatch response was lost and reconciliation bookkeeping was interrupted",
+      });
+      try {
+        log = await appendPublishLog({
+          companyId: claimed.companyId,
+          platform: claimed.platform,
+          scheduledPostId: postId,
+          contentId: claimed.contentId,
+          status: "skipped",
+          attempt,
+          detail: withIdempotencyDetail(
+            idemKey,
+            "Live delivery outcome unknown; reconcile before retry",
+          ),
+          actorId: actor.id,
+        });
+      } catch {
+        log = {
+          id: `pl_unknown_${postId}`,
+          companyId: claimed.companyId,
+          platform: claimed.platform,
+          scheduledPostId: postId,
+          contentId: claimed.contentId,
+          status: "skipped",
+          attempt,
+          detail: withIdempotencyDetail(
+            idemKey,
+            "Live delivery outcome unknown; reconciliation log write failed",
+          ),
+          actorId: actor.id,
+          createdAt: now(),
+        };
+      }
+      return { log, becameDead: false, deliveryUnknown: true };
+    }
     // A bug or infra error mid-attempt must not strand the claim in-flight:
     // release it honestly as a counted failure.
     await transitionScheduledPost(actor.tenantId, postId, {
@@ -393,7 +474,12 @@ export async function publishPostNow(
   if (log.status === "failed" && attempt >= MAX_PUBLISH_ATTEMPTS) {
     becameDead = await deadLetter(actor, claimed, attempt);
   }
-  return { log, becameDead };
+  return {
+    log,
+    becameDead,
+    deliveryUnknown:
+      (await getScheduledPost(postId))?.status === "delivery_unknown",
+  };
 }
 
 async function deadLetter(
@@ -419,7 +505,13 @@ async function deadLetter(
 
 export async function processPublishQueue(
   actor: ActingUser,
-  opts?: { companyId?: string },
+  opts?: {
+    companyId?: string;
+    mode?: "all_due" | "retry_only";
+    deadlineMs?: number;
+    signal?: AbortSignal;
+    publishMode?: PublishingMode;
+  },
 ): Promise<QueueCounts> {
   const counts = emptyQueueCounts();
   const { nowIso, today, hhmm } = await queueNowPartsForTenant(actor.tenantId);
@@ -428,21 +520,28 @@ export async function processPublishQueue(
     posts = posts.filter((p) => p.companyId === opts.companyId);
   }
 
-  // 1. Recover stale in-flight claims (a worker died mid-send). Counted as a
-  //    failed attempt — the platform may or may not have received the post, and
-  //    silently re-posting on an unbounded loop is worse than a human reading
-  //    the log after MAX attempts. This bookkeeping runs even when automated
+  // 1. Quarantine stale in-flight claims (a worker died mid-send). Without
+  //    provider evidence, retrying could duplicate a live post, so the row
+  //    becomes delivery_unknown and requires reconciliation. This bookkeeping
+  //    runs even when automated
   //    publishing is DISABLED: an admin who flips the kill switch while
   //    investigating a crash must still see stuck posts become failed (and
   //    cancellable) instead of frozen in "publishing" forever.
   const staleBefore = minutesAgo(nowIso, STALE_CLAIM_MINUTES);
-  const inFlight = posts.filter((p) => p.status === "publishing");
+  const inFlight =
+    opts?.mode === "retry_only"
+      ? []
+      : posts.filter((p) => p.status === "publishing");
   if (inFlight.length > 0) {
     const staleHistory = await listPublishLogsForPosts(
       actor.tenantId,
       inFlight.map((p) => p.id),
     );
     for (const p of inFlight) {
+      if (
+        opts?.signal?.aborted ||
+        (opts?.deadlineMs && Date.now() >= opts.deadlineMs)
+      ) break;
       try {
         if (p.updatedAt >= staleBefore) continue; // still legitimately in-flight
         const postLogs = staleHistory.filter((l) => l.scheduledPostId === p.id);
@@ -475,7 +574,7 @@ export async function processPublishQueue(
         }
         const rec = await transitionScheduledPost(actor.tenantId, p.id, {
           from: ["publishing"],
-          to: "failed",
+          to: "delivery_unknown",
           updatedBefore: staleBefore,
         });
         if (!rec) continue;
@@ -488,33 +587,43 @@ export async function processPublishQueue(
           platform: p.platform,
           scheduledPostId: p.id,
           contentId: p.contentId,
-          status: "failed",
+          status: "skipped",
           attempt,
-          detail: `Recovered a stale in-flight attempt (worker stopped mid-publish >${STALE_CLAIM_MINUTES}m ago). The platform may or may not have received it — check before requeueing if it dead-letters.`,
+          detail: `Stale live delivery has an unknown outcome after >${STALE_CLAIM_MINUTES}m. Reconcile with the provider before retrying.`,
           actorId: actor.id,
         });
-        counts.failed += 1;
-        if (attempt >= MAX_PUBLISH_ATTEMPTS) {
-          if (await deadLetter(actor, p, attempt)) counts.dead += 1;
-        }
-        p.status = "failed"; // keep the local snapshot honest for step 2
+        await updateScheduledPost(p.id, {
+          deliveryIdempotencyKey: publishIdempotencyKey(p.id, attempt),
+          deliveryUnknownAt: nowIso,
+          deliveryUnknownReason: "Worker stopped before recording provider response",
+        });
+        counts.unknown += 1;
+        p.status = "delivery_unknown";
       } catch {
         /* one broken row must not abort the recovery of the others */
       }
     }
   }
 
-  if ((await getPublishingControls(actor.tenantId)).automatedPublishingDisabled) {
-    // Blanket disable: nothing PUBLISHES (recovery above is bookkeeping only).
+  const publishMode = opts?.publishMode ?? resolvePublishingMode();
+  if (
+    (await getPublishingControls(actor.tenantId)).automatedPublishingDisabled &&
+    publishMode.kind !== "simulate"
+  ) {
+    // The operational kill switch blocks real outbound sends. With the live
+    // connector gate off, deterministic simulation still advances workflow.
     return counts;
   }
 
   // 2. Select candidates: due scheduled posts + failed posts whose backoff has
   //    elapsed AND whose schedule has arrived — a failed early manual publish
   //    of a future-dated post must NOT be auto-retried ahead of its date.
-  const dueScheduled = posts.filter(
-    (p) => p.status === "scheduled" && isDue(p, today, hhmm),
-  );
+  const dueScheduled =
+    opts?.mode === "retry_only"
+      ? []
+      : posts.filter(
+          (p) => p.status === "scheduled" && isDue(p, today, hhmm),
+        );
 
   const failedPosts = posts.filter((p) => p.status === "failed");
   const failedHistory = await listPublishLogsForPosts(
@@ -523,9 +632,14 @@ export async function processPublishQueue(
   );
   const retryable: ScheduledPost[] = [];
   for (const p of failedPosts) {
-    const { attempts, lastFailedAt } = attemptsSinceRequeue(
-      failedHistory.filter((l) => l.scheduledPostId === p.id),
+    if (
+      opts?.signal?.aborted ||
+      (opts?.deadlineMs && Date.now() >= opts.deadlineMs)
+    ) break;
+    const postLogs = failedHistory.filter(
+      (log) => log.scheduledPostId === p.id,
     );
+    const { attempts } = attemptsSinceRequeue(postLogs);
     if (attempts >= MAX_PUBLISH_ATTEMPTS) {
       // Legacy/pre-queue failures that already exhausted the budget: park them.
       try {
@@ -535,8 +649,7 @@ export async function processPublishQueue(
       }
       continue;
     }
-    if (!isDue(p, today, hhmm)) continue;
-    if (!lastFailedAt || retryEligibleAt(attempts, lastFailedAt) <= nowIso) {
+    if (isRetryEligiblePost(p, postLogs, { nowIso, today, hhmm })) {
       retryable.push(p);
     }
   }
@@ -562,6 +675,10 @@ export async function processPublishQueue(
     ),
   );
   for (const post of candidates) {
+    if (
+      opts?.signal?.aborted ||
+      (opts?.deadlineMs && Date.now() >= opts.deadlineMs)
+    ) break;
     try {
       const integration = await findConnectedIntegration(post.companyId, post.platform);
       const ceiling = integration ? platformCeiling(integration.platform) : null;
@@ -572,6 +689,8 @@ export async function processPublishQueue(
       const outcome = await publishPostNow(post.id, actor, {
         claimFrom: [post.status as "scheduled" | "failed"],
         bypassCeilingCheck: true, // the tick already checked against `used`
+        publishMode,
+        signal: opts?.signal,
       });
       if (!outcome) {
         counts.skipped += 1; // lost the claim race — someone else has it
@@ -585,6 +704,7 @@ export async function processPublishQueue(
         if (outcome.becameDead) counts.dead += 1;
       } else {
         counts.skipped += 1;
+        if (outcome.deliveryUnknown) counts.unknown += 1;
       }
     } catch {
       counts.skipped += 1; // this post's turn comes again next tick
@@ -597,7 +717,89 @@ export async function processPublishQueue(
 // scheduler tick): the queue IS the due-post publisher now.
 export async function publishDuePosts(
   actor: ActingUser,
-  opts?: { companyId?: string },
+  opts?: {
+    companyId?: string;
+    deadlineMs?: number;
+    signal?: AbortSignal;
+    publishMode?: PublishingMode;
+  },
 ): Promise<QueueCounts> {
   return processPublishQueue(actor, opts);
+}
+
+/** Manual control-plane action: failed, due, backoff-eligible records only. */
+export async function retryFailedPosts(
+  actor: ActingUser,
+  opts?: { companyId?: string },
+): Promise<QueueCounts> {
+  return processPublishQueue(actor, { ...opts, mode: "retry_only" });
+}
+
+export async function reconcileDeliveryUnknown(
+  actor: ActingUser,
+  postId: string,
+  outcome: "delivered" | "not_delivered",
+  evidence: string,
+): Promise<boolean> {
+  const post = await getScheduledPost(postId);
+  if (!post || post.status !== "delivery_unknown") return false;
+  const history = await listPublishLogsForPosts(actor.tenantId, [post.id]);
+  const unknownLog = history.find(
+    (log) =>
+      log.scheduledPostId === post.id &&
+      (post.deliveryIdempotencyKey
+        ? idempotencyKeyFromDetail(log.detail) ===
+          post.deliveryIdempotencyKey
+        : log.status === "skipped"),
+  );
+  const attempt =
+    unknownLog?.attempt ?? attemptsSinceRequeue(history).attempts + 1;
+  if (outcome === "delivered") {
+    await finalizeSuccessfulDelivery({
+      post,
+      actor,
+      attempt,
+      detail: `Provider reconciliation confirmed delivery: ${evidence}`,
+      integrationId: unknownLog?.integrationId,
+      idempotencyKey:
+        post.deliveryIdempotencyKey ??
+        publishIdempotencyKey(post.id, attempt),
+      from: ["delivery_unknown"],
+    });
+    await updateScheduledPost(postId, {
+      deliveryUnknownReason: `Reconciled delivered: ${evidence}`,
+    });
+    await logAction(actor, "publishing.delivery_reconciled", {
+      targetType: "scheduled_post",
+      targetId: post.id,
+      companyId: post.companyId,
+      detail: `${post.platform} delivery reconciled as delivered: ${evidence}`,
+    });
+    return true;
+  }
+  const changed = await transitionScheduledPost(actor.tenantId, postId, {
+    from: ["delivery_unknown"],
+    to: "failed",
+  });
+  if (!changed) return false;
+  await updateScheduledPost(postId, {
+    deliveryUnknownReason: `Reconciled ${outcome}: ${evidence}`,
+  });
+  await appendPublishLog({
+    companyId: post.companyId,
+    platform: post.platform,
+    scheduledPostId: post.id,
+    contentId: post.contentId,
+    status: "requeued",
+    attempt,
+    detail: `requeued after provider reconciliation confirmed no delivery: ${evidence}`,
+    actorId: actor.id,
+  });
+  await logAction(actor, "publishing.delivery_reconciled", {
+    targetType: "scheduled_post",
+    targetId: post.id,
+    companyId: post.companyId,
+    detail: `${post.platform} delivery reconciled as ${outcome}: ${evidence}`,
+  });
+  return true;
 }

@@ -5,6 +5,7 @@
 import { AI_MODEL, aiConfigured, callClaudeDetailed } from "@/lib/ai/claude";
 import { assertAiBudget } from "@/lib/ai/budget";
 import { recordAiUsage } from "@/lib/ai/metering";
+import { appEnv, type AppEnv } from "@/lib/env";
 import {
   suggestProfileFields,
   type ProfileSuggestions,
@@ -51,6 +52,13 @@ export interface OnboardingAiEnrichment {
   /** Keys the model filled by inference (not copied from scrape). */
   inferredKeys: string[];
   mode: "claude" | "template";
+}
+
+export function onboardingEnrichmentLiveFor(
+  env: AppEnv,
+  configured: boolean,
+): boolean {
+  return env === "production" && configured;
 }
 
 const INFERABLE_KEYS: AutoOnboardingFieldKey[] = [
@@ -676,7 +684,7 @@ export async function enrichOnboardingPreview(input: {
     input.contacts ?? extractContactSignalsFromPreview(input.preview);
 
   let enrichment: OnboardingAiEnrichment | null = null;
-  if (aiConfigured()) {
+  if (onboardingEnrichmentLiveFor(appEnv(), aiConfigured())) {
     enrichment = await claudeEnrich(
       input.company,
       input.preview,

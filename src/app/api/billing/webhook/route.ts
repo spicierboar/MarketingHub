@@ -14,15 +14,19 @@ import {
   getRestaurantOrder,
   getTenant,
   getTenantByStripeCustomer,
+  hasProcessedStripeWebhookEvent,
+  recordProcessedStripeWebhookEvent,
   updateCompany,
   updateRestaurantOrder,
   updateTenant,
   upsertCompanyEntitlement,
 } from "@/lib/db";
 import {
+  changeMarketingPackageSubscription,
   isMarketingPackageCheckoutKind,
   planForPriceId,
-  stripeConfigured,
+  retrieveMarketingPackageSubscriptionCorrelation,
+  retrieveMarketingPackageSubscriptionState,
   verifyStripeSignature,
 } from "@/lib/billing";
 import { applyPaidCreditTopUp } from "@/lib/credit-top-up";
@@ -33,10 +37,21 @@ import { logAction } from "@/lib/audit";
 import type {
   ActingUser,
   ManagedServiceSettings,
+  MarketingPackageId,
   PlanId,
   Tenant,
 } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
+import {
+  applyInvoicePaymentFailed,
+  applyInvoicePaymentSucceeded,
+  checkoutMatchesPendingServiceTransition,
+  currentPackageId,
+  initialCompanyServiceBilling,
+  isCurrentServiceSubscriptionEvent,
+  normaliseCompanyServiceOptions,
+} from "@/lib/managed-service-billing";
+import { ensureAndKickManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
 
 const WEBHOOK_ACTOR = { id: "stripe_webhook", email: "webhooks@stripe.com" };
 
@@ -57,6 +72,28 @@ type StripeObject = Record<string, unknown>;
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
+}
+
+function stripeId(value: unknown): string | undefined {
+  return typeof value === "string"
+    ? value
+    : str((value as StripeObject | null | undefined)?.id);
+}
+
+async function auditStaleManagedSubscriptionEvent(args: {
+  tenantId: string;
+  companyId: string;
+  eventKind: string;
+  incomingSubscriptionId?: string;
+  currentSubscriptionId?: string;
+}): Promise<void> {
+  await logAction(WEBHOOK_ACTOR, "company.service_webhook_stale_ignored", {
+    tenantId: args.tenantId,
+    targetType: "company",
+    targetId: args.companyId,
+    companyId: args.companyId,
+    detail: `${args.eventKind} · incoming=${args.incomingSubscriptionId ?? "missing"} · current=${args.currentSubscriptionId ?? "missing"}`,
+  });
 }
 
 // checkout.session.completed → link the Stripe customer/subscription and set
@@ -90,7 +127,8 @@ async function onCheckoutCompleted(session: StripeObject): Promise<void> {
   const plan = str((session.metadata as StripeObject | undefined)?.planId);
   const nextPlan = plan ? planFor(plan).id : tenant.plan;
   const nextCustomer = str(session.customer) ?? tenant.stripeCustomerId;
-  const nextSubscription = str(session.subscription) ?? tenant.stripeSubscriptionId;
+  const nextSubscription =
+    str(session.subscription) ?? tenant.stripeSubscriptionId;
   // Idempotency: Stripe legitimately redelivers the same event on retry. If
   // this checkout has already been applied (plan + linkage unchanged), skip the
   // write and the audit row so redelivery doesn't pollute the compliance trail.
@@ -120,25 +158,135 @@ async function onCheckoutCompleted(session: StripeObject): Promise<void> {
  * packageChangePendingBilling only. Never writes tenant.plan /
  * stripeSubscriptionId (those are SaaS plan Checkout fields).
  */
-async function onMarketingPackageCheckout(session: StripeObject): Promise<void> {
+async function onMarketingPackageCheckout(
+  session: StripeObject,
+): Promise<void> {
   const meta = session.metadata as StripeObject | undefined;
   const tenantId = str(session.client_reference_id) ?? str(meta?.tenantId);
   const companyId = str(meta?.companyId);
   const packageId = str(meta?.packageId);
   if (!tenantId || !companyId) return;
   const paymentStatus = str(session.payment_status);
-  if (paymentStatus && paymentStatus !== "paid" && paymentStatus !== "no_payment_required") {
+  if (
+    paymentStatus &&
+    paymentStatus !== "paid" &&
+    paymentStatus !== "no_payment_required"
+  ) {
     return;
   }
   await runInServiceContext(tenantId, async () => {
     const company = await getCompany(companyId);
     if (!company || company.tenantId !== tenantId) return;
     const prev = company.profile.managedService;
-    if (!prev?.packageChangePendingBilling) return;
-    const nextMs: ManagedServiceSettings = { ...prev };
+    if (!prev) return;
+    const paidAt = new Date().toISOString();
+    const before =
+      prev.serviceBilling ??
+      initialCompanyServiceBilling(
+        prev.marketingPackageId ?? packageId ?? "starter",
+        prev.serviceOptions,
+      );
+    if (!packageId) return;
+    const requested = currentPackageId(packageId);
+    const checkoutSubscriptionId = stripeId(session.subscription);
+    if (!checkoutSubscriptionId) return;
+    const correlation = await retrieveMarketingPackageSubscriptionCorrelation(
+      checkoutSubscriptionId,
+      {
+        tenantId,
+        companyId,
+        packageId: packageId as MarketingPackageId,
+      },
+    );
+    if (!correlation) {
+      await logAction(
+        WEBHOOK_ACTOR,
+        "company.marketing_package_correlation_failed",
+        {
+          tenantId,
+          targetType: "company",
+          targetId: companyId,
+          companyId,
+          detail: `subscription=${checkoutSubscriptionId}`,
+        },
+      );
+      return;
+    }
+    if (
+      requested === before.activePackageId &&
+      checkoutSubscriptionId === before.stripeSubscriptionId &&
+      (before.status === "active" || before.status === "cancel_at_period_end")
+    ) {
+      await ensureAndKickManagedDeliveryForCompany({
+        actor: webhookUser(tenantId),
+        tenantId,
+        companyId,
+        reason: "signup",
+        process: true,
+        demoForceGenerate: false,
+      });
+      return;
+    }
+    const metadataKind = str(meta?.pendingChangeKind);
+    const metadataEffectiveAt = str(meta?.pendingEffectiveAt);
+    if (
+      !checkoutMatchesPendingServiceTransition(before, {
+        packageId,
+        pendingTransitionId: str(meta?.pendingTransitionId),
+        pendingChangeKind: metadataKind,
+        pendingEffectiveAt: metadataEffectiveAt,
+      })
+    ) {
+      await logAction(
+        WEBHOOK_ACTOR,
+        "company.marketing_package_checkout_mismatch",
+        {
+          tenantId,
+          targetType: "company",
+          targetId: companyId,
+          companyId,
+          detail: `package=${requested} expected=${before.pendingPackageId ?? before.activePackageId} kind=${metadataKind ?? "none"} effective=${metadataEffectiveAt ?? "none"}`,
+        },
+      );
+      return;
+    }
+    const paidOptions = normaliseCompanyServiceOptions(requested, {
+      searchVisibility: str(meta?.searchVisibility) === "true",
+      websiteConnectionSetup: true,
+      websitePublishing: str(meta?.websitePublishing) === "true",
+      hostedLandingPage: str(meta?.hostedLandingPage) === "true",
+      monthlyAdCapAud: Number(str(meta?.monthlyAdCapAud) ?? 0),
+    });
+    const nextBilling = applyInvoicePaymentSucceeded(
+      {
+        ...before,
+        pendingServiceOptions:
+          before.pendingServiceOptions ??
+          (before.status === "pending_payment" ? paidOptions : undefined),
+        stripeCustomerId: stripeId(session.customer) ?? before.stripeCustomerId,
+        stripeSubscriptionId: checkoutSubscriptionId,
+        stripeSubscriptionItemId: correlation.subscriptionItemId,
+        stripePriceId: correlation.priceId,
+      },
+      paidAt,
+    );
+    const nextMs: ManagedServiceSettings = {
+      ...prev,
+      marketingPackageId: nextBilling.activePackageId,
+      serviceOptions: nextBilling.serviceOptions,
+      serviceBilling: nextBilling,
+    };
     delete nextMs.packageChangePendingBilling;
     await updateCompany(companyId, {
       profile: { ...company.profile, managedService: nextMs },
+    });
+    await ensureAndKickManagedDeliveryForCompany({
+      actor: webhookUser(tenantId),
+      tenantId,
+      companyId,
+      reason: "signup",
+      process: true,
+      demoForceGenerate: false,
     });
     const sessionId = str(session.id);
     await logAction(WEBHOOK_ACTOR, "company.marketing_package_paid", {
@@ -154,6 +302,148 @@ async function onMarketingPackageCheckout(session: StripeObject): Promise<void> 
         .filter(Boolean)
         .join(" · "),
     });
+  });
+}
+
+function invoiceMetadata(invoice: StripeObject): StripeObject | undefined {
+  const direct = invoice.metadata as StripeObject | undefined;
+  if (str(direct?.companyId)) return direct;
+  const parent = invoice.parent as StripeObject | undefined;
+  const subscriptionDetails = parent?.subscription_details as
+    StripeObject | undefined;
+  const subscriptionMeta = subscriptionDetails?.metadata as
+    StripeObject | undefined;
+  if (str(subscriptionMeta?.companyId)) return subscriptionMeta;
+  const lines = (invoice.lines as StripeObject | undefined)?.data as
+    StripeObject[] | undefined;
+  return lines
+    ?.map((line) => line.metadata as StripeObject | undefined)
+    .find((meta) => Boolean(str(meta?.companyId)));
+}
+
+function invoiceSubscriptionId(invoice: StripeObject): string | undefined {
+  const direct = stripeId(invoice.subscription);
+  if (direct) return direct;
+  const parent = invoice.parent as StripeObject | undefined;
+  return stripeId(
+    (parent?.subscription_details as StripeObject | undefined)?.subscription,
+  );
+}
+
+async function onManagedServiceInvoice(
+  invoice: StripeObject,
+  succeeded: boolean,
+): Promise<void> {
+  const meta = invoiceMetadata(invoice);
+  if (str(meta?.kind) !== "marketing_package") return;
+  const tenantId = str(meta?.tenantId);
+  const companyId = str(meta?.companyId);
+  if (!tenantId || !companyId) return;
+  await runInServiceContext(tenantId, async () => {
+    const company = await getCompany(companyId);
+    if (!company || company.tenantId !== tenantId) return;
+    const prev = company.profile.managedService;
+    if (!prev) return;
+    const occurredAt = new Date().toISOString();
+    const before =
+      prev.serviceBilling ??
+      initialCompanyServiceBilling(
+        prev.marketingPackageId ?? "starter",
+        prev.serviceOptions,
+      );
+    const incomingSubscriptionId = invoiceSubscriptionId(invoice);
+    if (!isCurrentServiceSubscriptionEvent(before, incomingSubscriptionId)) {
+      await auditStaleManagedSubscriptionEvent({
+        tenantId,
+        companyId,
+        eventKind: succeeded
+          ? "invoice.payment_succeeded"
+          : "invoice.payment_failed",
+        incomingSubscriptionId,
+        currentSubscriptionId: before.stripeSubscriptionId,
+      });
+      return;
+    }
+    if (
+      succeeded &&
+      before.pendingTransitionId &&
+      str(meta?.pendingTransitionId) !== before.pendingTransitionId
+    ) {
+      await auditStaleManagedSubscriptionEvent({
+        tenantId,
+        companyId,
+        eventKind: "invoice.pending_transition_mismatch",
+        incomingSubscriptionId,
+        currentSubscriptionId: before.stripeSubscriptionId,
+      });
+      return;
+    }
+    const invoiceLines = (invoice.lines as StripeObject | undefined)?.data as
+      StripeObject[] | undefined;
+    const firstPeriod = invoiceLines?.[0]?.period as StripeObject | undefined;
+    const periodEndSeconds = Number(firstPeriod?.end);
+    const periodEnd = Number.isFinite(periodEndSeconds)
+      ? new Date(periodEndSeconds * 1000).toISOString()
+      : undefined;
+    let settlementBase = before;
+    if (
+      succeeded &&
+      before.pendingChangeKind &&
+      ["downgrade", "options_downgrade", "mixed"].includes(
+        before.pendingChangeKind,
+      ) &&
+      before.pendingPackageId &&
+      before.pendingEffectiveAt &&
+      Date.parse(before.pendingEffectiveAt) <= Date.parse(occurredAt)
+    ) {
+      const changed = await changeMarketingPackageSubscription({
+        tenantId,
+        companyId,
+        packageId: before.pendingPackageId,
+        changeKind: before.pendingChangeKind,
+        billing: before,
+        serviceOptions: before.pendingServiceOptions ?? before.serviceOptions,
+        applyDowngradeAtRenewal: true,
+      });
+      if (!changed.ok || changed.mode !== "downgrade_applied") {
+        throw new Error(
+          `Could not apply scheduled Stripe downgrade (${changed.ok ? changed.mode : changed.reason})`,
+        );
+      }
+      settlementBase = {
+        ...before,
+        stripeSubscriptionItemId: changed.subscriptionItemId,
+        stripePriceId: changed.priceId,
+      };
+    }
+    const nextBilling = succeeded
+      ? applyInvoicePaymentSucceeded(settlementBase, occurredAt, periodEnd)
+      : applyInvoicePaymentFailed(before, occurredAt);
+    const nextMs: ManagedServiceSettings = {
+      ...prev,
+      marketingPackageId: nextBilling.activePackageId,
+      serviceOptions: nextBilling.serviceOptions,
+      serviceBilling: nextBilling,
+    };
+    if (succeeded) delete nextMs.packageChangePendingBilling;
+    await updateCompany(companyId, {
+      profile: { ...company.profile, managedService: nextMs },
+    });
+    await logAction(
+      WEBHOOK_ACTOR,
+      succeeded
+        ? "company.service_invoice_paid"
+        : "company.service_invoice_failed",
+      {
+        tenantId,
+        targetType: "company",
+        targetId: companyId,
+        companyId,
+        detail: succeeded
+          ? `invoice=${str(invoice.id) ?? "?"} · service active`
+          : `invoice=${str(invoice.id) ?? "?"} · seven-day grace started`,
+      },
+    );
   });
 }
 
@@ -230,8 +520,7 @@ async function onCreditTopUpCheckout(session: StripeObject): Promise<void> {
             : {}),
           ...(customerFromSession || pm?.customerId
             ? {
-                stripeCustomerId:
-                  customerFromSession ?? pm?.customerId,
+                stripeCustomerId: customerFromSession ?? pm?.customerId,
               }
             : {}),
         });
@@ -317,14 +606,19 @@ async function onAddonSubscriptionDeleted(sub: StripeObject): Promise<void> {
 // tenant plan subscriptions — ignore them here.
 async function onSubscriptionUpdated(sub: StripeObject): Promise<void> {
   const kind = str((sub.metadata as StripeObject | undefined)?.kind);
-  if (kind === "addon" || kind === "marketing_package") return;
+  if (kind === "addon") return;
+  if (kind === "marketing_package") {
+    await onMarketingPackageSubscriptionUpdated(sub);
+    return;
+  }
   const tenant = await tenantForSubscription(sub);
   if (!tenant) return;
   const items = (sub.items as StripeObject | undefined)?.data as
-    | StripeObject[]
-    | undefined;
+    StripeObject[] | undefined;
   const priceId = str((items?.[0]?.price as StripeObject | undefined)?.id);
-  const plan: PlanId | undefined = priceId ? planForPriceId(priceId) : undefined;
+  const plan: PlanId | undefined = priceId
+    ? planForPriceId(priceId)
+    : undefined;
   if (!plan || plan === tenant.plan) return;
   await updateTenant(tenant.id, { plan, stripeSubscriptionId: str(sub.id) });
   await logAction(WEBHOOK_ACTOR, "billing.plan_synced", {
@@ -332,6 +626,68 @@ async function onSubscriptionUpdated(sub: StripeObject): Promise<void> {
     targetType: "tenant",
     targetId: tenant.id,
     detail: `Plan synced to ${plan} from Stripe subscription`,
+  });
+}
+
+async function onMarketingPackageSubscriptionUpdated(
+  sub: StripeObject,
+): Promise<void> {
+  const meta = sub.metadata as StripeObject | undefined;
+  const tenantId = str(meta?.tenantId);
+  const companyId = str(meta?.companyId);
+  if (!tenantId || !companyId) return;
+  await runInServiceContext(tenantId, async () => {
+    const company = await getCompany(companyId);
+    if (!company || company.tenantId !== tenantId) return;
+    const prev = company.profile.managedService;
+    if (!prev) return;
+    const before =
+      prev.serviceBilling ??
+      initialCompanyServiceBilling(
+        prev.marketingPackageId ?? "starter",
+        prev.serviceOptions,
+      );
+    const incomingSubscriptionId = str(sub.id);
+    if (!isCurrentServiceSubscriptionEvent(before, incomingSubscriptionId)) {
+      await auditStaleManagedSubscriptionEvent({
+        tenantId,
+        companyId,
+        eventKind: "customer.subscription.updated",
+        incomingSubscriptionId,
+        currentSubscriptionId: before.stripeSubscriptionId,
+      });
+      return;
+    }
+    const currentState =
+      incomingSubscriptionId &&
+      (await retrieveMarketingPackageSubscriptionState(
+        incomingSubscriptionId,
+        { tenantId, companyId },
+      ));
+    if (!currentState) {
+      throw new Error("Stripe marketing-package item correlation failed");
+    }
+    const currentPeriodEnd = currentState.currentPeriodEnd
+      ? new Date(currentState.currentPeriodEnd * 1000).toISOString()
+      : before.currentPeriodEnd;
+    const cancelAtPeriodEnd = currentState.cancelAtPeriodEnd;
+    const nextBilling = {
+      ...before,
+      stripeSubscriptionId: str(sub.id) ?? before.stripeSubscriptionId,
+      stripeSubscriptionItemId: currentState.subscriptionItemId,
+      stripePriceId: currentState.priceId,
+      currentPeriodEnd,
+      cancelAtPeriodEnd,
+      status: cancelAtPeriodEnd
+        ? ("cancel_at_period_end" as const)
+        : before.status,
+    };
+    await updateCompany(companyId, {
+      profile: {
+        ...company.profile,
+        managedService: { ...prev, serviceBilling: nextBilling },
+      },
+    });
   });
 }
 
@@ -346,7 +702,49 @@ async function onSubscriptionDeleted(sub: StripeObject): Promise<void> {
     await onAddonSubscriptionDeleted(sub);
     return;
   }
-  if (kind === "marketing_package") return;
+  if (kind === "marketing_package") {
+    const meta = sub.metadata as StripeObject | undefined;
+    const tenantId = str(meta?.tenantId);
+    const companyId = str(meta?.companyId);
+    if (!tenantId || !companyId) return;
+    await runInServiceContext(tenantId, async () => {
+      const company = await getCompany(companyId);
+      if (!company || company.tenantId !== tenantId) return;
+      const prev = company.profile.managedService;
+      if (!prev?.serviceBilling) return;
+      const deletedSubscriptionId = str(sub.id);
+      if (
+        !isCurrentServiceSubscriptionEvent(
+          prev.serviceBilling,
+          deletedSubscriptionId,
+        )
+      ) {
+        await auditStaleManagedSubscriptionEvent({
+          tenantId,
+          companyId,
+          eventKind: "customer.subscription.deleted",
+          incomingSubscriptionId: deletedSubscriptionId,
+          currentSubscriptionId: prev.serviceBilling.stripeSubscriptionId,
+        });
+        return;
+      }
+      await updateCompany(companyId, {
+        profile: {
+          ...company.profile,
+          managedService: {
+            ...prev,
+            serviceBilling: {
+              ...prev.serviceBilling,
+              status: "paused",
+              pausedAt: new Date().toISOString(),
+              cancelAtPeriodEnd: true,
+            },
+          },
+        },
+      });
+    });
+    return;
+  }
   const tenant = await tenantForSubscription(sub);
   if (!tenant || tenant.plan === "starter") return;
   // Only downgrade when the deleted subscription is the tenant's CURRENT plan
@@ -356,8 +754,15 @@ async function onSubscriptionDeleted(sub: StripeObject): Promise<void> {
   // that deletion must NOT force-downgrade a tenant whose current subscription is
   // alive and billing. (If we have no recorded subscription id, don't guess.)
   const deletedSubId = str(sub.id);
-  if (!tenant.stripeSubscriptionId || deletedSubId !== tenant.stripeSubscriptionId) return;
-  await updateTenant(tenant.id, { plan: "starter", stripeSubscriptionId: undefined });
+  if (
+    !tenant.stripeSubscriptionId ||
+    deletedSubId !== tenant.stripeSubscriptionId
+  )
+    return;
+  await updateTenant(tenant.id, {
+    plan: "starter",
+    stripeSubscriptionId: undefined,
+  });
   await logAction(WEBHOOK_ACTOR, "billing.subscription_cancelled", {
     tenantId: tenant.id,
     targetType: "tenant",
@@ -366,7 +771,9 @@ async function onSubscriptionDeleted(sub: StripeObject): Promise<void> {
   });
 }
 
-async function tenantForSubscription(sub: StripeObject): Promise<Tenant | undefined> {
+async function tenantForSubscription(
+  sub: StripeObject,
+): Promise<Tenant | undefined> {
   const tenantId = str((sub.metadata as StripeObject | undefined)?.tenantId);
   if (tenantId) return getTenant(tenantId);
   const customer = str(sub.customer);
@@ -375,11 +782,16 @@ async function tenantForSubscription(sub: StripeObject): Promise<Tenant | undefi
 
 export async function POST(req: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!stripeConfigured() || !secret) {
-    return NextResponse.json({ error: "billing not configured" }, { status: 503 });
+  if (!secret?.trim()) {
+    return NextResponse.json(
+      { error: "billing not configured" },
+      { status: 503 },
+    );
   }
   const rawBody = await req.text();
-  if (!verifyStripeSignature(rawBody, req.headers.get("stripe-signature"), secret)) {
+  if (
+    !verifyStripeSignature(rawBody, req.headers.get("stripe-signature"), secret)
+  ) {
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
   }
 
@@ -390,18 +802,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid payload" }, { status: 400 });
   }
   const object = (event.data as StripeObject | undefined)?.object as
-    | StripeObject
-    | undefined;
+    StripeObject | undefined;
   if (!object) return NextResponse.json({ received: true });
+  const eventId = str(event.id);
+  const eventType = str(event.type);
+  if (!eventId || !eventType) {
+    return NextResponse.json(
+      { error: "event id/type missing" },
+      { status: 400 },
+    );
+  }
 
-  // Handlers are defensive against odd payload shapes, but the data layer may
-  // throw once it's a real Postgres adapter (not the in-memory store). Catch so
-  // a single deterministic "poison" event can't 500 and be retried by Stripe
-  // forever, wedging the endpoint and delaying every later event. We ack (200)
-  // and log server-side; genuinely retryable failures are handled by Stripe's
-  // own dashboard replay.
   try {
-    switch (event.type) {
+    if (await hasProcessedStripeWebhookEvent(eventId)) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+    switch (eventType) {
       case "checkout.session.completed":
         await onCheckoutCompleted(object);
         break;
@@ -411,11 +827,25 @@ export async function POST(req: NextRequest) {
       case "customer.subscription.deleted":
         await onSubscriptionDeleted(object);
         break;
+      case "invoice.payment_failed":
+        await onManagedServiceInvoice(object, false);
+        break;
+      case "invoice.payment_succeeded":
+        await onManagedServiceInvoice(object, true);
+        break;
       default:
         break; // other events acknowledged, unprocessed
     }
+    await recordProcessedStripeWebhookEvent({
+      eventId,
+      eventType,
+    });
   } catch (err) {
-    console.error(`[billing] webhook handler failed for ${event.type}:`, err);
+    console.error(`[billing] webhook handler failed for ${eventType}:`, err);
+    return NextResponse.json(
+      { error: "temporary webhook processing failure" },
+      { status: 500 },
+    );
   }
   return NextResponse.json({ received: true });
 }

@@ -70,6 +70,13 @@ import type {
   KnowledgeGap,
   LocalAreaProfile,
   MarketingRequest,
+  ManagedApprovalRequest,
+  ManagedChannelAdaptation,
+  ManagedContentConcept,
+  ManagedEngagementRoute,
+  ManagedPaidAuthorization,
+  ManagedPlannedSlot,
+  ManagedStrategyCycle,
   Offer,
   PromptTemplate,
   LegalHold,
@@ -123,8 +130,13 @@ import type {
   User,
   UtmLink,
 } from "@/lib/types";
-import { readFileSync, writeFileSync, renameSync } from "node:fs";
-import { encryptToken } from "@/lib/crypto";
+import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { basename, join } from "node:path";
+import {
+  extendLocalDemoSeed,
+  LOCAL_DEMO_RESET_ANCHOR_ISO,
+} from "@/lib/fixtures/local-demo";
+import { runStoreResetHooks } from "@/lib/reset-hooks";
 
 export interface DataStore {
   // SaaS T1: tenancy
@@ -242,6 +254,13 @@ export interface DataStore {
   privacyRequests: PrivacyRequest[];
   // Managed service delivery (0038)
   managedDeliveryRuns: ManagedDeliveryRun[];
+  managedStrategyCycles: ManagedStrategyCycle[];
+  managedContentConcepts: ManagedContentConcept[];
+  managedChannelAdaptations: ManagedChannelAdaptation[];
+  managedPlannedSlots: ManagedPlannedSlot[];
+  managedApprovalRequests: ManagedApprovalRequest[];
+  managedPaidAuthorizations: ManagedPaidAuthorization[];
+  managedEngagementRoutes: ManagedEngagementRoute[];
   // Prepaid credit wallet (0039)
   companyCreditWallets: CompanyCreditWallet[];
   companyCreditLedger: CompanyCreditLedgerEntry[];
@@ -265,6 +284,7 @@ export interface DataStore {
   // Client onboarding + versioned Terms & Conditions
   termsVersions: TermsVersion[]; // platform-level
   termsAcceptances: TermsAcceptance[];
+  processedStripeWebhookEventIds: string[];
 }
 
 function seed(): DataStore {
@@ -1486,7 +1506,7 @@ function seed(): DataStore {
     },
   ];
 
-  return {
+  const store: DataStore = {
     tenants,
     tenantMembers,
     users,
@@ -1601,7 +1621,7 @@ function seed(): DataStore {
         companyId: "c_iga_millbrook",
         platform: "Facebook",
         accountName: "Millbrook IGA Facebook Page",
-        encryptedToken: encryptToken("demo-oauth-token-millbrook-fb-4821"),
+        encryptedToken: "SIMULATED-DETERMINISTIC-MILLBROOK-FB",
         tokenLastFour: "4821",
         status: "connected",
         connectedById: "u_admin",
@@ -1613,7 +1633,7 @@ function seed(): DataStore {
         companyId: "c_motel",
         platform: "Facebook",
         accountName: "Golden Wattle Motel Page",
-        encryptedToken: encryptToken("demo-oauth-token-motel-fb-9377"),
+        encryptedToken: "SIMULATED-DETERMINISTIC-MOTEL-FB",
         tokenLastFour: "9377",
         status: "connected",
         connectedById: "u_admin",
@@ -1660,7 +1680,7 @@ function seed(): DataStore {
         platform: "meta_ads",
         accountName: "Millbrook IGA — Meta Ads",
         externalAccountId: "act_5567891234",
-        encryptedToken: encryptToken("demo-delegated-ads-token-iga-meta"),
+        encryptedToken: "SIMULATED-DETERMINISTIC-IGA-META",
         tokenLastFour: "meta",
         status: "connected",
         connectedById: "u_priya",
@@ -2032,7 +2052,10 @@ function seed(): DataStore {
         guestEmail: "jordan@example.com",
         guestPhone: "0400 111 222",
         partySize: 4,
-        scheduledAt: new Date(Date.now() + 86400000).toISOString().slice(0, 11) + "12:00:00.000Z",
+        scheduledAt:
+          new Date(Date.parse(LOCAL_DEMO_RESET_ANCHOR_ISO) + 86_400_000)
+            .toISOString()
+            .slice(0, 11) + "12:00:00.000Z",
         confirmationMode: "simulated",
         createdAt: t,
         updatedAt: t,
@@ -2049,6 +2072,13 @@ function seed(): DataStore {
     campaignPerformanceSnapshots: [],
     privacyRequests: [],
     managedDeliveryRuns: [],
+    managedStrategyCycles: [],
+    managedContentConcepts: [],
+    managedChannelAdaptations: [],
+    managedPlannedSlots: [],
+    managedApprovalRequests: [],
+    managedPaidAuthorizations: [],
+    managedEngagementRoutes: [],
     companyCreditWallets: [
       {
         id: "cw_dental",
@@ -2085,6 +2115,7 @@ function seed(): DataStore {
     aiMosOpportunities: [],
     aiMosSignalRuns: [],
     calendarAssistSuggestions: [],
+    processedStripeWebhookEventIds: [],
     security: tenants.map((tn) => ({
       tenantId: tn.id,
       crisisMode: false,
@@ -2184,6 +2215,7 @@ function seed(): DataStore {
       },
     ],
   };
+  return extendLocalDemoSeed(store);
 }
 
 const g = globalThis as unknown as {
@@ -2193,7 +2225,7 @@ const g = globalThis as unknown as {
 
 // ---- Dev persistence (devtool placeholder for the Supabase production path) --
 //
-// Set CC_STORE_FILE=<path> to make the in-memory store SURVIVE RESTARTS: the
+// Set CC_STORE_FILE=<filename> to make the in-memory store SURVIVE RESTARTS: the
 // store hydrates from the file on first access and is snapshotted back every
 // few seconds (plus on clean exit). This closes the "resets to seed on restart"
 // gap for LOCAL / single-node dev + demos with zero external accounts.
@@ -2202,7 +2234,10 @@ const g = globalThis as unknown as {
 // across serverless instances. Production persistence is Supabase (the env-gated
 // adapter). Leave CC_STORE_FILE unset for the classic reset-to-seed behaviour
 // the verification workflow relies on.
-const STORE_FILE = process.env.CC_STORE_FILE?.trim() || undefined;
+const configuredStoreFile = process.env.CC_STORE_FILE?.trim();
+const STORE_FILE = configuredStoreFile
+  ? join(process.cwd(), ".dev-data", basename(configuredStoreFile))
+  : undefined;
 
 function hydrateOrSeed(): DataStore {
   if (STORE_FILE) {
@@ -2232,6 +2267,7 @@ function startPersistence(): void {
   g.__ccPersistStarted = true;
   const flush = () => {
     try {
+      mkdirSync(join(process.cwd(), ".dev-data"), { recursive: true });
       const tmp = `${STORE_FILE}.tmp`;
       writeFileSync(tmp, JSON.stringify(g.__ccStore ?? {}));
       renameSync(tmp, STORE_FILE); // atomic-ish: never leave a half-written file
@@ -2254,5 +2290,6 @@ export function db(): DataStore {
 
 // Test/dev helper to reset state.
 export function resetStore() {
+  runStoreResetHooks();
   g.__ccStore = seed();
 }

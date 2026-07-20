@@ -132,49 +132,31 @@ function PackageEditModal({
             ))}
           </div>
         </Field>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Posts / mo" htmlFor={`posts-${pkg.id}`}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Campaign concepts / mo" htmlFor={`concepts-${pkg.id}`}>
             <Input
-              id={`posts-${pkg.id}`}
-              name="postsPerMonth"
+              id={`concepts-${pkg.id}`}
+              name="campaignConceptsPerMonth"
               type="number"
               min={0}
               step={1}
-              defaultValue={pkg.postsPerMonth}
-              placeholder="16"
+              defaultValue={pkg.campaignConceptsPerMonth}
+              placeholder="12"
             />
           </Field>
-          <Field label="Campaigns / mo" htmlFor={`campaigns-${pkg.id}`}>
-            <Input
-              id={`campaigns-${pkg.id}`}
-              name="campaignsPerMonth"
-              type="number"
-              min={0}
-              step={1}
-              defaultValue={pkg.campaignsPerMonth}
-              placeholder="2"
+          <label className="mt-7 inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="searchVisibilityIncluded"
+              defaultChecked={pkg.searchVisibilityIncluded}
+              className="h-4 w-4"
             />
-          </Field>
-          <Field
-            label="Promos / mo"
-            htmlFor={`promos-${pkg.id}`}
-            hint="0.33 ≈ 1 / quarter"
-          >
-            <Input
-              id={`promos-${pkg.id}`}
-              name="promosIncludedPerMonth"
-              type="number"
-              min={0}
-              step={0.01}
-              defaultValue={
-                Number.isInteger(pkg.promosIncludedPerMonth)
-                  ? pkg.promosIncludedPerMonth
-                  : Math.round(pkg.promosIncludedPerMonth * 100) / 100
-              }
-              placeholder="1"
-            />
-          </Field>
+            Search Visibility included
+          </label>
         </div>
+        <input type="hidden" name="postsPerMonth" value={pkg.postsPerMonth} />
+        <input type="hidden" name="campaignsPerMonth" value={pkg.campaignConceptsPerMonth} />
+        <input type="hidden" name="promosIncludedPerMonth" value={pkg.promosIncludedPerMonth} />
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
             label="Free AI images / mo"
@@ -353,12 +335,8 @@ export function MarketingPackagesBrowser({
                     <span className="text-muted-foreground">/mo</span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
-                    {pkg.postsPerMonth} posts · {pkg.campaignsPerMonth} camps ·{" "}
-                    {Number.isInteger(pkg.promosIncludedPerMonth)
-                      ? pkg.promosIncludedPerMonth
-                      : Math.round(pkg.promosIncludedPerMonth * 100) / 100}{" "}
-                    promos · {pkg.imageQuotaPerMonth} img · {pkg.videoQuotaPerMonth}{" "}
-                    vid
+                    {pkg.campaignConceptsPerMonth} concepts ·{" "}
+                    {pkg.searchVisibilityIncluded ? "Search included" : "No Search"}
                   </td>
                   <td className="max-w-[180px] truncate px-3 py-3 text-muted-foreground">
                     {pkg.channels.join(", ") || "—"}

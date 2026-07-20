@@ -12,6 +12,7 @@ import { requirePortalUser } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { MAX_MEDIA_BYTES, mediaKey, putObject, storageConfigured } from "@/lib/storage";
 import type { AssetType } from "@/lib/types";
+import { confirmClientAssetRights } from "@/lib/managed-service/workflow-service";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
@@ -69,6 +70,14 @@ export async function createClientAssetAction(formData: FormData) {
 
   const assetType = text(formData, "assetType") as AssetType;
   const consentObtained = formData.get("consentObtained") === "on";
+  const rightsConfirmed = formData.get("rightsConfirmed") === "on";
+  const confirmationEmail = text(formData, "confirmationEmail").toLowerCase();
+  if (!rightsConfirmed) {
+    throw new Error("Confirm you own this file or have permission to use it.");
+  }
+  if (confirmationEmail !== user.email.trim().toLowerCase()) {
+    throw new Error("Use the email address for your signed-in account.");
+  }
   const file = formData.get("file");
   const hasFile = file instanceof File && file.size > 0;
 
@@ -116,6 +125,11 @@ export async function createClientAssetAction(formData: FormData) {
     targetId: asset.id,
     companyId,
     detail: `${asset.name} (${asset.assetType}) · client portal`,
+  });
+  await confirmClientAssetRights({
+    actor: user,
+    assetId: asset.id,
+    confirmationEmail,
   });
 
   if (hasFile) {

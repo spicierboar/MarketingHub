@@ -1,7 +1,6 @@
 // Stripe Connect + guest checkout for Order Now (Module 5). Env-gated via
 // orderingStripeReady(); demo mode simulates Connect + payment locally.
 
-import { stripeConfigured } from "@/lib/billing";
 import { orderingStripeReady } from "@/lib/ordering-connectors";
 import type { OrderingSettings, RestaurantOrder } from "@/lib/types";
 
@@ -9,10 +8,11 @@ async function stripePost(
   path: string,
   params: Record<string, string>,
 ): Promise<Record<string, unknown> | null> {
+  if (!orderingStripeReady()) return null;
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return null;
+  if (!key?.trim()) return null;
   try {
-    const res = await fetch(`https://api.stripe.com/v1/${path}`, {
+    const response = await fetch(`https://api.stripe.com/v1/${path}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
@@ -20,14 +20,17 @@ async function stripePost(
       },
       body: new URLSearchParams(params).toString(),
     });
-    const body = (await res.json()) as Record<string, unknown>;
-    if (!res.ok) {
-      console.error(`[ordering] Stripe ${path} failed (${res.status}):`, body);
+    const responseBody = (await response.json()) as Record<string, unknown>;
+    if (!response.ok) {
+      console.error(
+        `[ordering] Stripe ${path} failed (${response.status}):`,
+        responseBody,
+      );
       return null;
     }
-    return body;
-  } catch (err) {
-    console.error(`[ordering] Stripe ${path} request error:`, err);
+    return responseBody;
+  } catch (error) {
+    console.error(`[ordering] Stripe ${path} request error:`, error);
     return null;
   }
 }
@@ -97,9 +100,13 @@ export async function createOrderCheckoutSession(
 }
 
 export function canUseLiveOrderingCheckout(settings: OrderingSettings): boolean {
-  return orderingStripeReady() && !!settings.stripeConnectAccountId && settings.connectStatus === "active";
+  return (
+    orderingStripeReady() &&
+    Boolean(settings.stripeConnectAccountId) &&
+    settings.connectStatus === "active"
+  );
 }
 
 export function stripeOrderingConfigured(): boolean {
-  return stripeConfigured();
+  return orderingStripeReady();
 }

@@ -39,6 +39,7 @@ import {
   freezeScopeAction,
   publishDueAction,
   publishNowAction,
+  reconcileUnknownDeliveryAction,
   requeueDeadPostAction,
   saveScheduleTimezoneAction,
   startOAuthConnectAction,
@@ -87,6 +88,9 @@ export default async function PublishingPage({
   const failed = posts.filter((p) => p.status === "failed");
   const dead = posts.filter((p) => p.status === "dead");
   const inFlight = posts.filter((p) => p.status === "publishing");
+  const deliveryUnknown = posts.filter(
+    (p) => p.status === "delivery_unknown",
+  );
   const failedContent = await Promise.all(failed.map((p) => getContent(p.contentId)));
   const deadContent = await Promise.all(dead.map((p) => getContent(p.contentId)));
   const campaigns = await listCampaigns(user.tenantId);
@@ -207,11 +211,65 @@ export default async function PublishingPage({
           {inFlight.length > 0 && (
             <Badge tone="info">{inFlight.length} in flight</Badge>
           )}
+          {deliveryUnknown.length > 0 && (
+            <Badge tone="danger">
+              {deliveryUnknown.length} awaiting reconciliation
+            </Badge>
+          )}
           <Badge tone={connectedAccounts.length ? "success" : "neutral"}>
             {connectedAccounts.length} connected
           </Badge>
           {controls.freezeAll && <Badge tone="danger">FREEZE ALL on</Badge>}
         </div>
+
+        {deliveryUnknown.length > 0 && (
+          <Card className="border-amber-400 lg:col-span-2">
+            <CardContent className="p-6">
+              <h2 className="font-semibold">Delivery outcome unknown</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                These live dispatches may have reached the provider. They are
+                quarantined from retries until an operator reconciles provider
+                evidence.
+              </p>
+              <div className="mt-3 space-y-2">
+                {deliveryUnknown.map((post) => (
+                  <div key={post.id} className="rounded border p-3 text-sm">
+                    <strong>{post.platform}</strong>
+                    <span className="ml-2 text-muted-foreground">
+                      {post.deliveryUnknownReason ?? "Provider response was lost"}
+                    </span>
+                    <form
+                      action={reconcileUnknownDeliveryAction}
+                      className="mt-2 flex flex-wrap gap-2"
+                    >
+                      <input type="hidden" name="postId" value={post.id} />
+                      <Input
+                        name="evidence"
+                        required
+                        placeholder="Provider post ID or lookup evidence"
+                        className="min-w-64 flex-1"
+                      />
+                      <button
+                        name="outcome"
+                        value="delivered"
+                        className="rounded border px-3 py-2 text-xs font-medium"
+                      >
+                        Confirm delivered
+                      </button>
+                      <button
+                        name="outcome"
+                        value="not_delivered"
+                        className="rounded border px-3 py-2 text-xs font-medium"
+                      >
+                        Confirm not delivered
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Failure monitor */}
         <Card className={failed.length ? "border-red-300" : ""}>

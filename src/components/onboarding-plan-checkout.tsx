@@ -13,7 +13,7 @@ function errClass(hasError: boolean) {
   return hasError ? "border-red-500 focus-visible:ring-red-500" : undefined;
 }
 
-/** Demo / staging card capture for client marketing package (no live charge). */
+/** Local-only demo card form; production renders a Stripe Checkout redirect. */
 export function OnboardingPlanCheckout({
   packageName,
   priceAudMonthly,
@@ -55,7 +55,7 @@ export function OnboardingPlanCheckout({
     <div className="space-y-5">
       {cancelled && (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-          Checkout was cancelled — complete the demo payment below to finish setup.
+          Checkout was cancelled — retry payment below to finish setup.
         </p>
       )}
 
@@ -67,13 +67,18 @@ export function OnboardingPlanCheckout({
             <span className="font-medium text-foreground">{packageName}</span>
           </span>
           <span className="font-semibold text-foreground">
-            ${priceAudMonthly}
-            <span className="font-normal text-muted-foreground"> / month</span>
+            A${priceAudMonthly}
+            <span className="font-normal text-muted-foreground"> / month excl GST</span>
           </span>
         </div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border pt-2">
+          <span>Website connection setup</span>
+          <span className="font-semibold text-foreground">A$299 once-off excl GST</span>
+        </div>
         <p className="text-muted-foreground">
-          Ads media spend is always extra and prepaid. Card details are never
-          stored in Command Centre.
+          Advertising-platform charges go directly to your card, are separate from
+          service fees, and stay within your approved monthly cap. Card details are
+          never stored in Command Centre.
         </p>
       </div>
 
@@ -178,13 +183,16 @@ export function OnboardingPlanCheckout({
               />
             </Field>
           </div>
-          <Button type="submit">Complete demo payment →</Button>
+          <Button type="submit">Activate service →</Button>
         </form>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          You should have been redirected to Stripe Checkout. If you cancelled,
-          go back and accept terms again, then retry payment.
-        </p>
+        <form action={action} className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Card details are collected only on Stripe&apos;s hosted Checkout page.
+            Service delivery starts after Stripe confirms settlement by signed webhook.
+          </p>
+          <Button type="submit">Continue to secure Stripe Checkout →</Button>
+        </form>
       )}
     </div>
   );

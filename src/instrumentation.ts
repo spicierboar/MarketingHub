@@ -8,12 +8,20 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     try {
-      const { blockedLiveFlagNames, appEnv } = await import("@/lib/env");
+      const { blockedLiveFlagNames, providerActivationStatuses, appEnv } =
+        await import("@/lib/env");
       const blocked = blockedLiveFlagNames();
       if (blocked.length > 0) {
         console.warn(
           `[env] ${blocked.join(", ")} set but soft-blocked (appEnv=${appEnv()}; staging / local demo / localhost APP_ORIGIN). See docs/ENVIRONMENTS.md.`,
         );
+      }
+      for (const provider of providerActivationStatuses()) {
+        if (provider.issue === "live_flag_without_credential") {
+          console.error(
+            `[env] ${provider.provider} is BLOCKED: its live flag is true but its credential is not configured.`,
+          );
+        }
       }
     } catch {
       /* ignore — env import must not break boot */

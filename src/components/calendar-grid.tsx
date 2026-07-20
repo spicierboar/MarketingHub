@@ -292,6 +292,12 @@ export function CalendarGrid({
                                 Publishing now — it can&apos;t be moved or cancelled mid-send.
                               </p>
                             )}
+                            {entry.status === "delivery_unknown" && (
+                              <p className="text-[10px] text-amber-700">
+                                Delivery may have succeeded — reconcile with the
+                                provider before retrying.
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>

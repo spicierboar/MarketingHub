@@ -3,17 +3,15 @@
 //
 // AES-256-GCM with a key derived from PUBLISHING_TOKEN_KEY. In production the
 // key comes from the deployment secret store (and rotating it re-encrypts via
-// a migration); the demo fallback key keeps the app runnable with zero
-// external configuration but is clearly marked.
+// a migration). Local/test simulation uses the process-ephemeral key provided
+// by the central publishing-token policy.
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { publishingTokenKey } from "@/lib/token";
 
 function key(): Buffer {
   return createHash("sha256")
-    .update(
-      process.env.PUBLISHING_TOKEN_KEY ||
-        "demo-only-key--set-PUBLISHING_TOKEN_KEY-in-production",
-    )
+    .update(publishingTokenKey())
     .digest();
 }
 

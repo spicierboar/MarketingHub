@@ -7,8 +7,19 @@ import {
   updatePartnerWebhook,
 } from "@/lib/db";
 import { decryptToken, encryptToken } from "@/lib/crypto";
+import {
+  liveIntegrationsAllowed,
+  providerLiveFlagEnabled,
+} from "@/lib/env";
 import type { PartnerWebhook, PartnerWebhookEvent } from "@/lib/types";
 import { now } from "@/lib/utils";
+
+export function partnerWebhooksLive(): boolean {
+  return (
+    providerLiveFlagEnabled(process.env.PARTNER_WEBHOOKS_LIVE) &&
+    liveIntegrationsAllowed()
+  );
+}
 
 export function generateWebhookSecret(): string {
   return randomBytes(32).toString("base64url");
@@ -69,6 +80,9 @@ export async function registerPartnerWebhook(
 export async function verifyPartnerWebhookEndpoint(
   webhook: PartnerWebhook,
 ): Promise<{ ok: boolean; detail: string }> {
+  if (!partnerWebhooksLive()) {
+    return { ok: false, detail: "partner webhook delivery is not live" };
+  }
   const challenge = randomBytes(16).toString("hex");
   const url = new URL(webhook.url);
   url.searchParams.set("cc_challenge", challenge);
@@ -95,6 +109,7 @@ export async function dispatchPartnerWebhook(
   event: PartnerWebhookEvent,
   payload: Record<string, unknown>,
 ): Promise<void> {
+  if (!partnerWebhooksLive()) return;
   const hooks = (await listPartnerWebhooks(tenantId)).filter(
     (h) => h.status === "active" && h.events.includes(event),
   );

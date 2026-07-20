@@ -23,10 +23,11 @@ import {
   assertCompanyQuota,
   createAddonCheckoutSession,
   createMarketingPackageCheckoutSession,
+  changeMarketingPackageSubscription,
+  marketingPackageCheckoutConfigurationError,
   retrieveCheckoutSession,
   stripeConfigured,
-  stripeMarketingPackagePriceId,
-  useMockPackageCheckout,
+  mockPackageCheckoutEnabled,
   verifyMarketingPackageCheckoutSession,
 } from "@/lib/billing";
 import { isAddonId } from "@/lib/addons";
@@ -44,6 +45,16 @@ import {
   resolvePackageById,
   resolveSelectionForPackage,
 } from "@/lib/marketing-packages";
+import {
+  applyInvoicePaymentSucceeded,
+  applyServiceOptionsEdit,
+  checkoutMatchesPendingServiceTransition,
+  currentPackageId,
+  initialCompanyServiceBilling,
+  parseCompanyServiceOptionsFromFormData,
+  requestPackageChange,
+  serviceOperationsAllowed,
+} from "@/lib/managed-service-billing";
 import { resolveOrigin, resolveAuthRedirectOrigin } from "@/lib/origin";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { ensureAndKickManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
@@ -217,7 +228,7 @@ export async function saveWebsiteStepAction(formData: FormData) {
       formData.get("consent") === "on" || formData.get("consent") === "true";
 
     // Back-edit: empty ABN field keeps the existing company ABN (I1).
-    let existingCompany =
+    const existingCompany =
       existingId ? (await assertSalesCompanyInTenant(existingId)).company : null;
     const existingAbnParsed = existingCompany?.profile.abn
       ? parseAbnInput(existingCompany.profile.abn)
@@ -389,7 +400,7 @@ export async function savePackageStepAction(formData: FormData) {
   const { user, company } = await assertSalesCompanyInTenant(companyId);
   const idRaw = String(formData.get("marketingPackageId") || "").trim();
   if (!isMarketingPackageId(idRaw)) throw new Error("Unknown marketing package.");
-  const marketingPackageId = idRaw as MarketingPackageId;
+  const marketingPackageId = currentPackageId(idRaw);
   const tenant = await getTenant(user.tenantId);
   const { serviceLevel, customModules } = resolveSelectionForPackage(
     tenant,
@@ -397,12 +408,39 @@ export async function savePackageStepAction(formData: FormData) {
     formData,
   );
   const prev = company.profile.managedService;
+  const serviceOptions = parseCompanyServiceOptionsFromFormData(
+    marketingPackageId,
+    formData,
+  );
+  const existingBilling = prev?.serviceBilling;
+  const packageChanged =
+    Boolean(existingBilling) &&
+    existingBilling!.activePackageId !== marketingPackageId;
+  const nextBilling = existingBilling
+    ? applyServiceOptionsEdit(
+        packageChanged
+          ? requestPackageChange(existingBilling, marketingPackageId, new Date().toISOString())
+          : existingBilling,
+        marketingPackageId,
+        serviceOptions,
+      )
+    : initialCompanyServiceBilling(marketingPackageId, serviceOptions);
   const nextMs: ManagedServiceSettings = {
     ...(prev ?? { serviceLevel }),
     serviceLevel,
-    marketingPackageId,
+    marketingPackageId: existingBilling
+      ? existingBilling.activePackageId
+      : marketingPackageId,
     customModules,
-    packageChangePendingBilling: true,
+    serviceOptions: existingBilling
+      ? existingBilling.serviceOptions
+      : serviceOptions,
+    serviceBilling: nextBilling,
+    ...(packageChanged ||
+    !existingBilling ||
+    Boolean(nextBilling.pendingServiceOptions)
+      ? { packageChangePendingBilling: true }
+      : {}),
   };
   await updateCompany(companyId, {
     profile: { ...company.profile, managedService: nextMs },
@@ -411,23 +449,43 @@ export async function savePackageStepAction(formData: FormData) {
     targetType: "company",
     targetId: companyId,
     companyId,
-    detail:
-      marketingPackageId === "custom"
-        ? `custom · ${serviceLevel} (field sales)`
-        : `${marketingPackageId} · ${serviceLevel} (field sales)`,
+    detail: `${marketingPackageId} · ${serviceLevel} (field sales)`,
   });
-  redirect(wizardPath("checkout", companyId));
+  redirect(
+    packageChanged || !existingBilling || Boolean(nextBilling.pendingServiceOptions)
+      ? wizardPath("checkout", companyId)
+      : wizardPath("provision", companyId),
+  );
 }
 
 /** Clear packageChangePendingBilling after demo or live Checkout success. */
 async function settlePackageBilling(
   companyId: string,
   detail: string,
+  stripeLink?: { customerId?: string; subscriptionId?: string },
 ): Promise<void> {
   const { user, company } = await assertSalesCompanyInTenant(companyId);
   const prev = company.profile.managedService;
   if (!prev) return;
-  const nextMs: ManagedServiceSettings = { ...prev };
+  const nextMs: ManagedServiceSettings = {
+    ...prev,
+    serviceBilling: applyInvoicePaymentSucceeded(
+      {
+        ...(prev.serviceBilling ??
+        initialCompanyServiceBilling(
+          prev.marketingPackageId ?? "starter",
+          prev.serviceOptions,
+        )),
+        ...(stripeLink?.customerId
+          ? { stripeCustomerId: stripeLink.customerId }
+          : {}),
+        ...(stripeLink?.subscriptionId
+          ? { stripeSubscriptionId: stripeLink.subscriptionId }
+          : {}),
+      },
+      new Date().toISOString(),
+    ),
+  };
   delete nextMs.packageChangePendingBilling;
   await updateCompany(companyId, {
     profile: { ...company.profile, managedService: nextMs },
@@ -442,7 +500,7 @@ async function settlePackageBilling(
 
 /**
  * Step 4 — marketing package Checkout.
- * Local demo / no Stripe keys / no STRIPE_PRICE_PACKAGE_* → mock settle.
+ * Explicit local mock mode → mock settle.
  * Live path: hosted Checkout; failed session create throws (never mock-settles).
  */
 export async function startPackageCheckoutAction(formData: FormData) {
@@ -450,11 +508,60 @@ export async function startPackageCheckoutAction(formData: FormData) {
   const { user, company } = await assertSalesCompanyInTenant(companyId);
   const tenant = await getTenant(user.tenantId);
   if (!tenant) throw new Error("Workspace not found.");
-  const packageId = (company.profile.managedService?.marketingPackageId ??
-    "pro") as MarketingPackageId;
+  const billing = company.profile.managedService?.serviceBilling;
+  const packageId = (billing?.pendingPackageId ??
+    company.profile.managedService?.marketingPackageId ??
+    "growth") as MarketingPackageId;
 
-  const livePrice = stripeMarketingPackagePriceId(packageId);
-  if (!useMockPackageCheckout() && livePrice) {
+  if (!mockPackageCheckoutEnabled() && billing?.stripeSubscriptionId) {
+    if (!billing.pendingChangeKind || !billing.pendingServiceOptions) {
+      throw new Error("No validated package transition is pending.");
+    }
+    const changed = await changeMarketingPackageSubscription({
+      tenantId: user.tenantId,
+      companyId,
+      packageId,
+      changeKind: billing.pendingChangeKind,
+      billing,
+      serviceOptions: billing.pendingServiceOptions,
+    });
+    if (!changed.ok) {
+      throw new Error(`Could not modify the existing Stripe subscription (${changed.reason}).`);
+    }
+    await updateCompany(companyId, {
+      profile: {
+        ...company.profile,
+        managedService: {
+          ...company.profile.managedService!,
+          serviceBilling: {
+            ...billing,
+            stripeSubscriptionItemId: changed.subscriptionItemId,
+            ...(changed.mode === "upgrade_invoiced"
+              ? { stripePriceId: changed.priceId }
+              : {}),
+          },
+        },
+      },
+    });
+    redirect(
+      wizardPath("provision", companyId, {
+        billing:
+          changed.mode === "upgrade_invoiced"
+            ? "awaiting_webhook"
+            : "downgrade_scheduled",
+      }),
+    );
+  }
+
+  if (!mockPackageCheckoutEnabled()) {
+    const configurationError = marketingPackageCheckoutConfigurationError(
+      packageId,
+      billing?.pendingServiceOptions ??
+        company.profile.managedService?.serviceOptions,
+    );
+    if (configurationError) {
+      throw new Error(`Could not start Stripe Checkout: ${configurationError}.`);
+    }
     const url = await createMarketingPackageCheckoutSession(
       tenant,
       companyId,
@@ -464,6 +571,8 @@ export async function startPackageCheckoutAction(formData: FormData) {
         successPath: wizardPath("checkout", companyId, { checkout: "success" }),
         cancelPath: wizardPath("checkout", companyId, { checkout: "cancelled" }),
       },
+      company.profile.managedService?.serviceOptions,
+      company.profile.managedService?.serviceBilling,
     );
     if (!url) {
       throw new Error(
@@ -514,11 +623,37 @@ export async function confirmPackageCheckoutSuccessAction(
       }),
     );
   }
-  await settlePackageBilling(
-    companyId,
-    `stripe checkout verified · session=${verified.sessionId} · packageChangePendingBilling cleared`,
+  const billing = company.profile.managedService?.serviceBilling;
+  const meta = session?.metadata as Record<string, unknown> | undefined;
+  if (
+    !billing ||
+    !checkoutMatchesPendingServiceTransition(billing, {
+      packageId: verified.packageId,
+      pendingChangeKind:
+        typeof meta?.pendingChangeKind === "string"
+          ? meta.pendingChangeKind
+          : undefined,
+      pendingEffectiveAt:
+        typeof meta?.pendingEffectiveAt === "string"
+          ? meta.pendingEffectiveAt
+          : undefined,
+    })
+  ) {
+    redirect(
+      wizardPath("checkout", companyId, {
+        checkout: "cancelled",
+        error: "Checkout no longer matches the pending package change.",
+      }),
+    );
+  }
+  // Browser return verification is informational only. The signed Stripe
+  // webhook is the sole production settlement writer and delivery trigger.
+  redirect(
+    wizardPath("provision", companyId, {
+      paid: "awaiting_webhook",
+      session: verified.sessionId,
+    }),
   );
-  redirect(wizardPath("provision", companyId, { paid: "stripe" }));
 }
 
 /** @deprecated Add-ons moved to AI Visuals / Billing — kept for any stale forms. */
@@ -575,7 +710,12 @@ export async function provisionClientAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   const name = String(formData.get("name") || "").trim();
   if (!email || !name) throw new Error("Client name and email are required");
-  const { user } = await assertSalesCompanyInTenant(companyId);
+  const { user, company } = await assertSalesCompanyInTenant(companyId);
+  if (!serviceOperationsAllowed(company.profile.managedService?.serviceBilling)) {
+    throw new Error(
+      "Client provisioning is unavailable until the managed-service payment is active.",
+    );
+  }
   const client =
     (await getUserByEmail(email)) ??
     (await createUser({ email, name, role: "user" }));

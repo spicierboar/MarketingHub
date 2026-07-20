@@ -108,6 +108,13 @@ import type {
   PrivacyRequestStatus,
   PrivacyRequestType,
   ManagedDeliveryRun,
+  ManagedApprovalRequest,
+  ManagedChannelAdaptation,
+  ManagedContentConcept,
+  ManagedEngagementRoute,
+  ManagedPaidAuthorization,
+  ManagedPlannedSlot,
+  ManagedStrategyCycle,
   CompanyCreditWallet,
   CompanyCreditLedgerEntry,
   CreditLedgerKind,
@@ -170,6 +177,28 @@ export async function getTenantByStripeCustomer(
 ): Promise<Tenant | undefined> {
   if (isSupabaseConfigured()) return supabaseRepo.getTenantByStripeCustomer(customerId);
   return db().tenants.find((t) => t.stripeCustomerId === customerId);
+}
+
+/** Durable Stripe event idempotency ledger (record only after successful handling). */
+export async function hasProcessedStripeWebhookEvent(
+  eventId: string,
+): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.hasProcessedStripeWebhookEvent(eventId);
+  }
+  return db().processedStripeWebhookEventIds.includes(eventId);
+}
+
+export async function recordProcessedStripeWebhookEvent(input: {
+  eventId: string;
+  eventType: string;
+}): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.recordProcessedStripeWebhookEvent(input);
+  }
+  if (db().processedStripeWebhookEventIds.includes(input.eventId)) return false;
+  db().processedStripeWebhookEventIds.push(input.eventId);
+  return true;
 }
 
 // ---- Legal docs (versioned, platform-level) + acceptance ----------------------
@@ -849,6 +878,13 @@ export async function purgeTenant(tenantId: string): Promise<void> {
   s.calendarAssistSuggestions = keepTenant(s.calendarAssistSuggestions);
   s.privacyRequests = keepCompany(s.privacyRequests ?? []);
   s.managedDeliveryRuns = keepCompany(s.managedDeliveryRuns ?? []);
+  s.managedStrategyCycles = keepCompany(s.managedStrategyCycles ?? []);
+  s.managedContentConcepts = keepCompany(s.managedContentConcepts ?? []);
+  s.managedChannelAdaptations = keepCompany(s.managedChannelAdaptations ?? []);
+  s.managedPlannedSlots = keepCompany(s.managedPlannedSlots ?? []);
+  s.managedApprovalRequests = keepCompany(s.managedApprovalRequests ?? []);
+  s.managedPaidAuthorizations = keepCompany(s.managedPaidAuthorizations ?? []);
+  s.managedEngagementRoutes = keepCompany(s.managedEngagementRoutes ?? []);
   s.companyCreditWallets = keepCompany(s.companyCreditWallets ?? []);
   s.companyCreditLedger = keepCompany(s.companyCreditLedger ?? []);
   s.taxInvoices = keepCompany(s.taxInvoices ?? []);
@@ -1451,7 +1487,11 @@ export async function activeSchedulesForContent(contentId: string): Promise<Sche
   return db().scheduledPosts.filter(
     (p) =>
       p.contentId === contentId &&
-      (p.status === "scheduled" || p.status === "publishing"),
+      (
+        p.status === "scheduled" ||
+        p.status === "publishing" ||
+        p.status === "delivery_unknown"
+      ),
   );
 }
 // Schedules that must be cancelled when content is demoted: pending ones,
@@ -4035,6 +4075,493 @@ export async function updateManagedDeliveryRun(
 }
 
 export type { ManagedDeliveryRun };
+
+// ---- Durable managed-service workflow (0048) ---------------------------------
+
+export async function listManagedStrategyCycles(
+  tenantId: string,
+  companyId?: string,
+): Promise<ManagedStrategyCycle[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listManagedStrategyCycles(tenantId, companyId);
+  return (db().managedStrategyCycles ?? [])
+    .filter((row) => row.tenantId === tenantId && (!companyId || row.companyId === companyId))
+    .sort((a, b) => b.quarterStart.localeCompare(a.quarterStart));
+}
+
+export async function createManagedStrategyCycle(
+  input: Omit<ManagedStrategyCycle, "id" | "createdAt" | "updatedAt">,
+): Promise<ManagedStrategyCycle> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedStrategyCycle(input);
+  const stamp = now();
+  const row = { ...input, id: id("msc"), createdAt: stamp, updatedAt: stamp };
+  (db().managedStrategyCycles ??= []).push(row);
+  return row;
+}
+
+export async function updateManagedStrategyCycle(
+  cycleId: string,
+  patch: Partial<ManagedStrategyCycle>,
+): Promise<ManagedStrategyCycle | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateManagedStrategyCycle(cycleId, patch);
+  const row = (db().managedStrategyCycles ?? []).find((item) => item.id === cycleId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listManagedContentConcepts(
+  tenantId: string,
+  companyId?: string,
+): Promise<ManagedContentConcept[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listManagedContentConcepts(tenantId, companyId);
+  return (db().managedContentConcepts ?? []).filter(
+    (row) => row.tenantId === tenantId && (!companyId || row.companyId === companyId),
+  );
+}
+
+export async function createManagedContentConcept(
+  input: Omit<ManagedContentConcept, "id" | "createdAt" | "updatedAt">,
+): Promise<ManagedContentConcept> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedContentConcept(input);
+  const existing = (db().managedContentConcepts ?? []).find(
+    (row) =>
+      row.companyId === input.companyId &&
+      row.packagePeriod === input.packagePeriod &&
+      row.unitKey === input.unitKey,
+  );
+  if (existing) return existing;
+  const stamp = now();
+  const row = { ...input, id: id("mcc"), createdAt: stamp, updatedAt: stamp };
+  (db().managedContentConcepts ??= []).push(row);
+  return row;
+}
+
+export async function updateManagedContentConcept(
+  conceptId: string,
+  patch: Partial<ManagedContentConcept>,
+): Promise<ManagedContentConcept | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateManagedContentConcept(conceptId, patch);
+  const row = (db().managedContentConcepts ?? []).find((item) => item.id === conceptId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listManagedChannelAdaptations(
+  tenantId: string,
+  conceptId?: string,
+): Promise<ManagedChannelAdaptation[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listManagedChannelAdaptations(tenantId, conceptId);
+  return (db().managedChannelAdaptations ?? []).filter(
+    (row) => row.tenantId === tenantId && (!conceptId || row.conceptId === conceptId),
+  );
+}
+
+export async function createManagedChannelAdaptation(
+  input: Omit<ManagedChannelAdaptation, "id" | "createdAt" | "updatedAt">,
+): Promise<ManagedChannelAdaptation> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedChannelAdaptation(input);
+  const existing = (db().managedChannelAdaptations ?? []).find(
+    (row) => row.conceptId === input.conceptId && row.channelKey === input.channelKey,
+  );
+  if (existing) return existing;
+  const stamp = now();
+  const row = { ...input, id: id("mca"), createdAt: stamp, updatedAt: stamp };
+  (db().managedChannelAdaptations ??= []).push(row);
+  return row;
+}
+
+export async function updateManagedChannelAdaptation(
+  adaptationId: string,
+  patch: Partial<ManagedChannelAdaptation>,
+): Promise<ManagedChannelAdaptation | undefined> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.updateManagedChannelAdaptation(adaptationId, patch);
+  }
+  const row = (db().managedChannelAdaptations ?? []).find(
+    (item) => item.id === adaptationId,
+  );
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listManagedPlannedSlots(
+  tenantId: string,
+  companyId?: string,
+): Promise<ManagedPlannedSlot[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listManagedPlannedSlots(tenantId, companyId);
+  return (db().managedPlannedSlots ?? []).filter(
+    (row) => row.tenantId === tenantId && (!companyId || row.companyId === companyId),
+  );
+}
+
+export async function createManagedPlannedSlot(
+  input: Omit<ManagedPlannedSlot, "id" | "finalContentDueAt" | "createdAt" | "updatedAt">,
+): Promise<ManagedPlannedSlot> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedPlannedSlot(input);
+  const stamp = now();
+  const due = new Date(new Date(input.plannedPublishAt).getTime() - 14 * 86_400_000).toISOString();
+  const row = { ...input, id: id("mps"), finalContentDueAt: due, createdAt: stamp, updatedAt: stamp };
+  (db().managedPlannedSlots ??= []).push(row);
+  return row;
+}
+
+export async function updateManagedPlannedSlot(
+  slotId: string,
+  patch: Partial<ManagedPlannedSlot>,
+): Promise<ManagedPlannedSlot | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateManagedPlannedSlot(slotId, patch);
+  const row = (db().managedPlannedSlots ?? []).find((item) => item.id === slotId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function listManagedApprovalRequests(
+  tenantId: string,
+  companyId?: string,
+): Promise<ManagedApprovalRequest[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listManagedApprovalRequests(tenantId, companyId);
+  return (db().managedApprovalRequests ?? []).filter(
+    (row) => row.tenantId === tenantId && (!companyId || row.companyId === companyId),
+  );
+}
+
+export async function createManagedApprovalRequest(
+  input: Omit<ManagedApprovalRequest, "id" | "createdAt" | "updatedAt">,
+): Promise<ManagedApprovalRequest> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedApprovalRequest(input);
+  const stamp = now();
+  const row = { ...input, id: id("mar"), createdAt: stamp, updatedAt: stamp };
+  (db().managedApprovalRequests ??= []).push(row);
+  return row;
+}
+
+export async function updateManagedApprovalRequest(
+  requestId: string,
+  patch: Partial<ManagedApprovalRequest>,
+): Promise<ManagedApprovalRequest | undefined> {
+  if (isSupabaseConfigured()) return supabaseRepo.updateManagedApprovalRequest(requestId, patch);
+  const row = (db().managedApprovalRequests ?? []).find((item) => item.id === requestId);
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function claimManagedApprovalReminder(
+  requestId: string,
+  kind: "client_7d" | "client_3d" | "staff_1d",
+  owner: string,
+  atIso: string,
+  leaseSeconds = 300,
+): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.claimManagedApprovalReminder(
+      requestId,
+      kind,
+      owner,
+      atIso,
+      leaseSeconds,
+    );
+  }
+  const row = (db().managedApprovalRequests ?? []).find(
+    (item) => item.id === requestId,
+  );
+  if (!row || row.status !== "pending") return false;
+  if (
+    row.reminderClaimExpiresAt &&
+    Date.parse(row.reminderClaimExpiresAt) > Date.parse(atIso)
+  ) {
+    return false;
+  }
+  const alreadySent =
+    kind === "client_7d"
+      ? row.reminder7dAt
+      : kind === "client_3d"
+        ? row.reminder3dAt
+        : row.staffEscalationAt;
+  if (alreadySent) return false;
+  row.reminderClaimKind = kind;
+  row.reminderClaimOwner = owner;
+  row.reminderClaimedAt = atIso;
+  row.reminderClaimExpiresAt = new Date(
+    Date.parse(atIso) + leaseSeconds * 1_000,
+  ).toISOString();
+  row.updatedAt = atIso;
+  return true;
+}
+
+export async function completeManagedApprovalReminderClaim(
+  requestId: string,
+  kind: "client_7d" | "client_3d" | "staff_1d",
+  owner: string,
+  idempotencyKey: string,
+  sentAt?: string,
+): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.completeManagedApprovalReminderClaim(
+      requestId,
+      kind,
+      owner,
+      idempotencyKey,
+      sentAt,
+    );
+  }
+  const row = (db().managedApprovalRequests ?? []).find(
+    (item) => item.id === requestId,
+  );
+  if (
+    !row ||
+    row.reminderClaimKind !== kind ||
+    row.reminderClaimOwner !== owner
+  ) {
+    return false;
+  }
+  if (sentAt) {
+    if (kind === "client_7d") {
+      row.reminder7dAt = sentAt;
+      row.reminder7dKey = idempotencyKey;
+    } else if (kind === "client_3d") {
+      row.reminder3dAt = sentAt;
+      row.reminder3dKey = idempotencyKey;
+    } else {
+      row.staffEscalationAt = sentAt;
+      row.staffEscalationKey = idempotencyKey;
+    }
+  }
+  row.reminderClaimKind = null;
+  row.reminderClaimOwner = null;
+  row.reminderClaimedAt = null;
+  row.reminderClaimExpiresAt = null;
+  row.updatedAt = sentAt ?? now();
+  return true;
+}
+
+export async function respondManagedApprovalAsClient(
+  requestId: string,
+  decision: "approved" | "changes_requested",
+  acceptDirectChargeDisclosure = false,
+): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.respondManagedApprovalAsClient(
+      requestId,
+      decision,
+      acceptDirectChargeDisclosure,
+    );
+  }
+  const row = (db().managedApprovalRequests ?? []).find(
+    (item) => item.id === requestId,
+  );
+  if (
+    !row ||
+    row.status !== "pending" ||
+    (decision === "changes_requested" && row.revisionRound >= 2)
+  ) return false;
+  if (
+    decision === "approved" &&
+    row.scope === "paid_budget_targeting" &&
+    !acceptDirectChargeDisclosure
+  ) {
+    throw new Error("Direct platform charge disclosure acceptance is required.");
+  }
+  const stamp = now();
+  const priorRevisionRound = row.revisionRound;
+  row.status = decision;
+  row.respondedAt = stamp;
+  if (decision === "changes_requested") {
+    row.revisionRound = (priorRevisionRound + 1) as 1 | 2;
+  }
+  if (acceptDirectChargeDisclosure) {
+    row.directChargeDisclosureAcceptedAt = stamp;
+  }
+  row.updatedAt = stamp;
+  if (decision === "approved" && row.adCampaignId) {
+    const related = (db().managedApprovalRequests ?? []).filter(
+      (item) => item.adCampaignId === row.adCampaignId,
+    );
+    const creativeApproved = related.some(
+      (item) => item.scope === "paid_creative" && item.status === "approved",
+    );
+    const budgetApproved = related.some(
+      (item) =>
+        item.scope === "paid_budget_targeting" &&
+        item.status === "approved" &&
+        Boolean(item.directChargeDisclosureAcceptedAt),
+    );
+    if (creativeApproved && budgetApproved) {
+      const authorization = (db().managedPaidAuthorizations ?? []).find(
+        (item) => item.adCampaignId === row.adCampaignId,
+      );
+      if (authorization) {
+        const approvedMonthTotal = (db().managedPaidAuthorizations ?? [])
+          .filter(
+            (item) =>
+              item.id !== authorization.id &&
+              item.companyId === authorization.companyId &&
+              item.monthKey === authorization.monthKey &&
+              item.status === "approved",
+          )
+          .reduce((total, item) => total + item.requestedBudgetAud, 0);
+        if (
+          approvedMonthTotal + authorization.requestedBudgetAud >
+          authorization.clientMonthlyCapAud
+        ) {
+          authorization.status = "blocked";
+          authorization.updatedAt = stamp;
+          return true;
+        }
+        authorization.status = "approved";
+        authorization.disclosureAcceptedAt =
+          related.find((item) => item.scope === "paid_budget_targeting")
+            ?.directChargeDisclosureAcceptedAt ??
+          authorization.disclosureAcceptedAt;
+        authorization.updatedAt = stamp;
+      }
+    }
+  }
+  return true;
+}
+
+export async function respondManagedApprovalWithToken(
+  tokenHash: string,
+  companyId: string,
+  decision: "approved" | "changes_requested",
+  responsePayload: Record<string, unknown> = {},
+  acceptDirectChargeDisclosure = false,
+): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.respondManagedApprovalWithToken(
+      tokenHash,
+      companyId,
+      decision,
+      responsePayload,
+      acceptDirectChargeDisclosure,
+    );
+  }
+  const row = (db().managedApprovalRequests ?? []).find(
+    (item) => item.tokenHash === tokenHash && item.companyId === companyId,
+  );
+  if (!row) return false;
+  if (row.status === decision && row.respondedAt) return true;
+  if (
+    row.status !== "pending" ||
+    Boolean(row.supersededById) ||
+    Date.parse(row.dueAt) <= Date.now() ||
+    (decision === "changes_requested" && row.revisionRound >= 2)
+  ) {
+    return false;
+  }
+  if (
+    decision === "approved" &&
+    row.scope === "paid_budget_targeting" &&
+    !acceptDirectChargeDisclosure
+  ) {
+    throw new Error("Direct platform charge disclosure acceptance is required.");
+  }
+  const stamp = now();
+  row.status = decision;
+  row.respondedAt = stamp;
+  row.responsePayload = responsePayload;
+  if (decision === "changes_requested") {
+    row.revisionRound = (row.revisionRound + 1) as 1 | 2;
+  }
+  if (acceptDirectChargeDisclosure) {
+    row.directChargeDisclosureAcceptedAt = stamp;
+  }
+  row.updatedAt = stamp;
+  if (decision === "approved" && row.adCampaignId) {
+    const authorization = (db().managedPaidAuthorizations ?? []).find(
+      (item) =>
+        item.adCampaignId === row.adCampaignId &&
+        item.companyId === row.companyId &&
+        item.tenantId === row.tenantId,
+    );
+    if (authorization) {
+      const creative = (db().managedApprovalRequests ?? []).find(
+        (item) => item.id === authorization.creativeApprovalId,
+      );
+      const budget = (db().managedApprovalRequests ?? []).find(
+        (item) => item.id === authorization.budgetTargetingApprovalId,
+      );
+      if (
+        creative?.status === "approved" &&
+        budget?.status === "approved" &&
+        budget.directChargeDisclosureAcceptedAt
+      ) {
+        const approvedMonthTotal = (db().managedPaidAuthorizations ?? [])
+          .filter(
+            (item) =>
+              item.id !== authorization.id &&
+              item.companyId === authorization.companyId &&
+              item.monthKey === authorization.monthKey &&
+              item.status === "approved",
+          )
+          .reduce((total, item) => total + item.requestedBudgetAud, 0);
+        authorization.status =
+          approvedMonthTotal + authorization.requestedBudgetAud <=
+          authorization.clientMonthlyCapAud
+            ? "approved"
+            : "blocked";
+        authorization.disclosureAcceptedAt =
+          budget.directChargeDisclosureAcceptedAt;
+        authorization.updatedAt = stamp;
+      }
+    }
+  }
+  return true;
+}
+
+export async function createManagedPaidAuthorization(
+  input: Omit<ManagedPaidAuthorization, "id" | "createdAt" | "updatedAt">,
+): Promise<ManagedPaidAuthorization> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedPaidAuthorization(input);
+  const stamp = now();
+  const row = { ...input, id: id("mpa"), createdAt: stamp, updatedAt: stamp };
+  (db().managedPaidAuthorizations ??= []).push(row);
+  return row;
+}
+
+export async function listManagedPaidAuthorizations(
+  tenantId: string,
+  companyId?: string,
+): Promise<ManagedPaidAuthorization[]> {
+  if (isSupabaseConfigured()) return supabaseRepo.listManagedPaidAuthorizations(tenantId, companyId);
+  return (db().managedPaidAuthorizations ?? []).filter(
+    (row) => row.tenantId === tenantId && (!companyId || row.companyId === companyId),
+  );
+}
+
+export async function updateManagedPaidAuthorization(
+  authorizationId: string,
+  patch: Partial<ManagedPaidAuthorization>,
+): Promise<ManagedPaidAuthorization | undefined> {
+  if (isSupabaseConfigured()) {
+    return supabaseRepo.updateManagedPaidAuthorization(authorizationId, patch);
+  }
+  const row = (db().managedPaidAuthorizations ?? []).find(
+    (item) => item.id === authorizationId,
+  );
+  if (!row) return undefined;
+  Object.assign(row, patch, { updatedAt: now() });
+  return row;
+}
+
+export async function createManagedEngagementRoute(
+  input: Omit<ManagedEngagementRoute, "id" | "createdAt">,
+): Promise<ManagedEngagementRoute> {
+  if (isSupabaseConfigured()) return supabaseRepo.createManagedEngagementRoute(input);
+  const existing = (db().managedEngagementRoutes ?? []).find(
+    (row) =>
+      row.companyId === input.companyId &&
+      row.sourceKind === input.sourceKind &&
+      row.sourceId === input.sourceId,
+  );
+  if (existing) return existing;
+  const row = { ...input, id: id("mer"), createdAt: now() };
+  (db().managedEngagementRoutes ??= []).push(row);
+  return row;
+}
 
 // ---- Prepaid company credit wallet (0039) ------------------------------------
 

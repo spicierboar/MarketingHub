@@ -38,7 +38,7 @@ export default async function PlatformAdminPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Publishing a new version forces <span className="font-medium">every user</span> to re-accept
               before they can keep using the app, and emails all active clients that the terms changed.
-              {!emailConfigured() && <span className="text-amber-600"> (Email isn&apos;t configured — RESEND_API_KEY unset — so notices are recorded but not sent.)</span>}
+              {!emailConfigured() && <span className="text-amber-600"> (Live app email requires EMAIL_SEND_LIVE=true plus RESEND_API_KEY; otherwise notices are simulated and recorded.)</span>}
             </p>
             <div className="mb-5 space-y-2">
               {versions.map((v) => (

@@ -5,9 +5,16 @@
 // simulators in this module.
 
 import type { FunnelAbVariant, FunnelLandingPage } from "@/lib/types";
+import {
+  liveIntegrationsAllowed,
+  providerLiveFlagEnabled,
+} from "@/lib/env";
 
 export function funnelLive(): boolean {
-  return process.env.FUNNEL_LIVE === "true";
+  return (
+    providerLiveFlagEnabled(process.env.FUNNEL_LIVE) &&
+    liveIntegrationsAllowed()
+  );
 }
 
 export function funnelApiKey(): string | undefined {

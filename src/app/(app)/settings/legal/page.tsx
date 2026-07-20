@@ -167,8 +167,8 @@ function LegalDocPanel({
           {!emailConfigured() && (
             <span className="text-muted-foreground">
               {" "}
-              Email delivery is optional — without RESEND_API_KEY, publish still works; notices are
-              recorded but not emailed.
+              Email delivery is optional — without EMAIL_SEND_LIVE=true and a configured
+              RESEND_API_KEY, publish still works; notices are simulated and recorded.
             </span>
           )}
         </p>

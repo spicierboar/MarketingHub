@@ -265,7 +265,7 @@ export async function setAgencyPromoTemplateActive(input: {
   const tenant = await getTenant(input.user.tenantId);
   if (!tenant) throw new Error("Workspace not found.");
   const list = [...(tenant.promoCatalog ?? [])];
-  let idx = list.findIndex((t) => t.id === input.templateId);
+  const idx = list.findIndex((t) => t.id === input.templateId);
 
   // Hiding/showing a built-in that has no override yet → clone then set active.
   if (idx < 0 && isPlatformPromoId(input.templateId)) {

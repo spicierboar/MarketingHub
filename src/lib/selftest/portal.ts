@@ -9,6 +9,7 @@ import {
   getContent,
   getCompany,
   grantAccess,
+  listScheduledPosts,
   purgeTenant,
   updateCompany,
 } from "@/lib/db";
@@ -284,6 +285,40 @@ export async function runPortalSelfTest(): Promise<PortalReport> {
         tenantId: tenant.id,
       });
       return { ok: outcome === "skipped", detail: outcome };
+    });
+
+    await expect("portal.autoPublish.requiresPlannedSlot", async () => {
+      const existing = await getCompany(companyA.id);
+      if (!existing) return { ok: false, detail: "company missing" };
+      const enabled = await updateCompany(companyA.id, {
+        profile: {
+          ...existing.profile,
+          autoPublishOnClientApprove: true,
+        } as typeof existing.profile & { autoPublishOnClientApprove: true },
+      });
+      if (!enabled) return { ok: false, detail: "company update failed" };
+      const content = await createContent({
+        companyId: companyA.id,
+        type: "social_post",
+        title: "Approval without publishing slot",
+        body: APPROVAL_BODY,
+        status: "approved",
+        createdById: adminUser.id,
+      });
+      const before = await listScheduledPosts(tenant.id);
+      const outcome = await autoPublishOnApprove({
+        content,
+        company: enabled,
+        userId: portalUser.id,
+        actorEmail: portalUser.email,
+        tenantId: tenant.id,
+      });
+      const after = await listScheduledPosts(tenant.id);
+      const ok = outcome === "skipped" && after.length === before.length;
+      return {
+        ok,
+        detail: `outcome=${outcome} scheduledBefore=${before.length} scheduledAfter=${after.length}`,
+      };
     });
 
     await expect("portal.rbac.canAccessCompany_scoped", async () => {

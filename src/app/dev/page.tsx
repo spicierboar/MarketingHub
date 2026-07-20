@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
+import { localDemoMutationAllowed } from "@/lib/dev-access";
 import { isSupabaseConfigured } from "@/lib/db/supabase";
 import {
   clearAndReseedAction,
@@ -14,8 +16,18 @@ import {
 export const dynamic = "force-dynamic";
 
 const DEMO_LOGINS = [
-  { email: "sasha@brightspark.dev", label: "Agency — operates the service" },
-  { email: "liam@brightspark.dev", label: "Client — review & approve only" },
+  {
+    email: "admin@staging-fixture.invalid",
+    label: "Admin — ten-restaurant agency fixture",
+  },
+  {
+    email: "staff-1@staging-fixture.invalid",
+    label: "Staff — content operations fixture",
+  },
+  {
+    email: "approver-saffron-laneway@staging-fixture.invalid",
+    label: "Client Approver — Saffron Laneway Kitchen only",
+  },
 ] as const;
 
 export default async function DevToolsPage({
@@ -27,9 +39,10 @@ export default async function DevToolsPage({
 
   const params = (await searchParams) ?? {};
   const error = typeof params.error === "string" ? params.error.trim() : "";
-  const demo = localDemoEnabled();
+  const demoFlag = localDemoEnabled();
+  const demoMutations = localDemoMutationAllowed(await headers());
   const staging = appEnv() === "staging";
-  const quickLoginOk = demo || staging;
+  const quickLoginOk = demoFlag || staging;
   const supabaseActive = isSupabaseConfigured();
 
   return (
@@ -71,7 +84,7 @@ export default async function DevToolsPage({
             <div>
               <dt className="text-muted-foreground">Local demo bypass</dt>
               <dd>
-                {demo ? (
+                {demoFlag ? (
                   <Badge tone="success">ON — memory + cookie auth</Badge>
                 ) : (
                   <Badge tone="warning">OFF — Supabase / magic link</Badge>
@@ -87,7 +100,7 @@ export default async function DevToolsPage({
               <dd>
                 {quickLoginOk ? (
                   <Badge tone="success">
-                    {staging && !demo ? "ON — staging (no email)" : "ON"}
+                    {staging && !demoFlag ? "ON — staging (no email)" : "ON"}
                   </Badge>
                 ) : (
                   <Badge tone="warning">OFF</Badge>
@@ -95,7 +108,7 @@ export default async function DevToolsPage({
               </dd>
             </div>
           </dl>
-          {!demo && !staging && (
+          {!demoFlag && !staging && (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               Add to <code className="font-mono">.env.local</code> then restart{" "}
               <code className="font-mono">npm run dev</code>:
@@ -108,7 +121,7 @@ export default async function DevToolsPage({
               work without magic link / Google billing.
             </p>
           )}
-          {staging && !demo && (
+          {staging && !demoFlag && (
             <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
               Staging: Seed stays local-demo-only. Quick login signs you in
               without a magic link (avoids Supabase email rate limits) and
@@ -122,20 +135,21 @@ export default async function DevToolsPage({
         <CardContent className="space-y-4 p-6">
           <h2 className="font-semibold">Data</h2>
           <p className="text-sm text-muted-foreground">
-            In-memory only. Re-seed restores Wattle + BrightSpark (campaigns, CRM,
-            RAG, recommendations, AI-MOS, etc.).
-            {staging && !demo
+            In-memory only. Re-seed restores the ten fictional Australian Indian
+            restaurants and their linked agency, client, delivery, billing and
+            operations records. No external side effects are enabled.
+            {staging && !demoMutations
               ? " Disabled on staging Supabase — use Quick login instead."
               : ""}
           </p>
           <div className="flex flex-wrap gap-2">
             <form action={seedDemoDataAction}>
-              <Button type="submit" disabled={!demo}>
+              <Button type="submit" disabled={!demoMutations}>
                 Seed / reset demo data
               </Button>
             </form>
             <form action={clearAndReseedAction}>
-              <Button type="submit" variant="secondary" disabled={!demo}>
+              <Button type="submit" variant="secondary" disabled={!demoMutations}>
                 Clear session + re-seed
               </Button>
             </form>
@@ -146,14 +160,13 @@ export default async function DevToolsPage({
       <Card>
         <CardContent className="space-y-4 p-6">
           <h2 className="font-semibold">Quick login (bypass magic link)</h2>
-          {staging && !demo && (
+          {staging && !demoFlag && (
             <p className="text-sm text-muted-foreground">
-              Enter any email (e.g. <span className="font-mono">nick.madahar@gmail.com</span>)
-              or use a Sign in button below. Missing users are provisioned as
-              agency owners on the staging tenant.
+              Enter any email or use a Sign in button below. Missing users are
+              provisioned as agency owners on the staging tenant.
             </p>
           )}
-          {(staging || demo) && (
+          {(staging || demoFlag) && (
             <form action={quickLoginAction} className="flex flex-wrap items-end gap-2">
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">Email</span>
@@ -162,7 +175,6 @@ export default async function DevToolsPage({
                   name="email"
                   required
                   placeholder="you@example.com"
-                  defaultValue={staging ? "nick.madahar@gmail.com" : ""}
                   className="h-9 min-w-[16rem] rounded-md border border-input bg-background px-3 text-sm"
                 />
               </label>

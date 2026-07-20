@@ -95,11 +95,6 @@ export function CampaignBuilderPanel({
       el.addEventListener("change", onChange);
       return () => el.removeEventListener("change", onChange);
     }
-    // LockedCompanyField renders a hidden input + read-only label.
-    const hidden = el.parentElement?.querySelector(
-      'input[name="companyId"]',
-    ) as HTMLInputElement | null;
-    if (hidden?.value) setCompanyId(hidden.value);
   }, []);
 
   const verticalGoals = goalsByCompany.get(companyId) ?? [];

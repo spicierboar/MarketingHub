@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STORAGE_PREFIX = "cc-page-explainer:";
+const EXPLAINER_CHANGE_EVENT = "cc-page-explainer-change";
+const sessionDismissed = new Set<string>();
 
 function storageKey(id: string) {
   return `${STORAGE_PREFIX}${id}`;
@@ -23,25 +25,35 @@ export function PageExplainer({
   children: React.ReactNode;
   className?: string;
 }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
+  const subscribe = useCallback((onChange: () => void) => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === storageKey(id)) onChange();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(EXPLAINER_CHANGE_EVENT, onChange);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(EXPLAINER_CHANGE_EVENT, onChange);
+    };
+  }, [id]);
+  const getSnapshot = useCallback(() => {
+    if (sessionDismissed.has(id)) return false;
     try {
-      if (typeof window === "undefined") return;
-      if (window.localStorage.getItem(storageKey(id)) === "1") return;
-      setVisible(true);
+      return window.localStorage.getItem(storageKey(id)) !== "1";
     } catch {
-      setVisible(true);
+      return true;
     }
   }, [id]);
+  const visible = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
   function dismiss() {
+    sessionDismissed.add(id);
     try {
       window.localStorage.setItem(storageKey(id), "1");
     } catch {
       /* private mode — still hide for this session */
     }
-    setVisible(false);
+    window.dispatchEvent(new Event(EXPLAINER_CHANGE_EVENT));
   }
 
   if (!visible) return null;

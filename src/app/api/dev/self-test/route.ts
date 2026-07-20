@@ -18,7 +18,6 @@
 // up as createTenant / relation errors in those fields.
 
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { runIsolationSelfTest } from "@/lib/selftest/isolation";
 import { runPortalSelfTest } from "@/lib/selftest/portal";
 import { runClientReportsSelfTest } from "@/lib/selftest/client-reports";
@@ -33,8 +32,11 @@ import { runLocalSeoSelfTest } from "@/lib/selftest/local-seo";
 import { runLearningSelfTest } from "@/lib/selftest/learning";
 import { runRagSelfTest } from "@/lib/selftest/rag";
 import { runAiMosSelfTest } from "@/lib/selftest/ai-mos";
-import { appEnv, devToolsOpen } from "@/lib/env";
+import { runManagedWorkflowSelfTest } from "@/lib/selftest/managed-workflow";
+import { appEnv } from "@/lib/env";
 import { isSupabaseConfigured } from "@/lib/db/supabase";
+import { diagnosticAccessAllowed } from "@/lib/dev-access";
+import { getCurrentUser } from "@/lib/auth/session";
 
 /** Preview/staging suites hit real Supabase — allow up to 60s on Vercel. */
 export const maxDuration = 60;
@@ -48,29 +50,26 @@ type SuiteReport = {
   checks: { name: string; ok: boolean; detail?: string }[];
 };
 
-function constantTimeEquals(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
-}
-
-function authorize(req: NextRequest): { ok: true } | { ok: false; status: number; error: string } {
-  const secret = process.env.CC_SELFTEST_SECRET?.trim();
-  if (secret) {
-    const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    const key = new URL(req.url).searchParams.get("key");
-    const provided = bearer || key || "";
-    return constantTimeEquals(provided, secret)
-      ? { ok: true }
-      : { ok: false, status: 401, error: "unauthorized" };
-  }
-  // No secret configured: OPEN on development + staging (all dev-tools), LOCKED
-  // in production. Note: on Vercel a staging (preview) build has NODE_ENV=
-  // production, so we gate on appEnv() (VERCEL_ENV-aware), NOT NODE_ENV.
-  if (!devToolsOpen()) {
-    return { ok: false, status: 403, error: "self-test disabled in production (set CC_SELFTEST_SECRET to enable)" };
-  }
-  return { ok: true };
+async function authorize(req: NextRequest): Promise<
+  { ok: true } | { ok: false; status: number; error: string }
+> {
+  const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const key = new URL(req.url).searchParams.get("key");
+  const user = await getCurrentUser();
+  return diagnosticAccessAllowed({
+    headers: req.headers,
+    requestUrl: req.url,
+    providedSecret: bearer || key,
+    user,
+  })
+    ? { ok: true }
+    : {
+        ok: false,
+        status: process.env.CC_SELFTEST_SECRET?.trim() ? 401 : 403,
+        error: process.env.CC_SELFTEST_SECRET?.trim()
+          ? "unauthorized"
+          : "self-test disabled in production (set CC_SELFTEST_SECRET to enable)",
+      };
 }
 
 function diagnostics() {
@@ -88,7 +87,7 @@ function diagnostics() {
     hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     supabaseHost,
     hint:
-      "If checks fail with relation/table errors: apply numbered supabase/migrations (0001→0046) to the staging project. " +
+      "If checks fail with relation/table errors: apply numbered supabase/migrations through 0048 to the staging project. " +
       "If this URL redirects to Vercel SSO: disable Deployment Protection for Preview, or use a bypass token.",
   };
 }
@@ -121,7 +120,7 @@ async function settle(
 }
 
 async function handle(req: NextRequest) {
-  const auth = authorize(req);
+  const auth = await authorize(req);
   if (!auth.ok) {
     return NextResponse.json(
       { error: auth.error, diag: diagnostics() },
@@ -146,6 +145,7 @@ async function handle(req: NextRequest) {
       settle("learning", runLearningSelfTest),
       settle("rag", runRagSelfTest),
       settle("aiMos", runAiMosSelfTest),
+      settle("managedWorkflow", runManagedWorkflowSelfTest),
     ]);
 
     const checks = settled.flatMap((s) => s.report.checks);

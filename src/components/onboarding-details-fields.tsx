@@ -25,6 +25,7 @@ type Props = {
   /** Server action for Continue (details save). */
   action: (formData: FormData) => void | Promise<void>;
   defaults?: {
+    businessName?: string;
     abn?: string;
     industry?: string;
     natureOfBusiness?: string;
@@ -77,7 +78,7 @@ function clearField(
   });
 }
 
-/** Website-first details; optional scrape prefill via Places + AI/template enrich. */
+/** Website-first details with an editable public-information preview. */
 export function OnboardingDetailsFields({
   action,
   defaults,
@@ -104,15 +105,13 @@ export function OnboardingDetailsFields({
 
   const natures = useMemo(() => naturesForIndustry(industry), [industry]);
 
-  const initialNatureId = useMemo(() => {
-    if (!defaults?.natureOfBusiness || !industry) return "";
-    const hit = natures.find(
-      (n) =>
-        n.id === defaults.natureOfBusiness ||
-        n.label === defaults.natureOfBusiness,
-    );
-    return hit?.id ?? "";
-  }, [defaults?.natureOfBusiness, industry, natures]);
+  const initialNatureId = !defaults?.natureOfBusiness || !industry
+    ? ""
+    : natures.find(
+        (n) =>
+          n.id === defaults.natureOfBusiness ||
+          n.label === defaults.natureOfBusiness,
+      )?.id ?? "";
 
   const [natureId, setNatureId] = useState(initialNatureId);
 
@@ -175,10 +174,20 @@ export function OnboardingDetailsFields({
 
       {showWebsiteScrape ? (
         <div className="space-y-3 rounded-md border border-border p-4">
+          <Field label="Business name" htmlFor="businessName">
+            <Input
+              id="businessName"
+              name="businessName"
+              required
+              defaultValue={defaults?.businessName ?? ""}
+              autoComplete="organization"
+              placeholder="e.g. Harbour View Cafe"
+            />
+          </Field>
           <Field
             label="Website"
             htmlFor="website"
-            hint="Start here — with consent we scrape public pages, then use AI/templates and Google Places / Business Profile signals to pre-fill the fields below."
+            hint="With your consent, we use public website and business-listing details to prepare an editable staging preview."
             error={errors.website}
           >
             <Input
@@ -227,6 +236,11 @@ export function OnboardingDetailsFields({
         </div>
       ) : null}
 
+      <div className="rounded-md border border-border bg-muted/20 p-4">
+        <h2 className="text-sm font-semibold">Confirm your business profile</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Review these details. They remain editable until you continue.
+        </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
           label="ABN"
@@ -362,6 +376,7 @@ export function OnboardingDetailsFields({
           placeholder="e.g. Two locations in Bondi — want more weekday lunch trade"
         />
       </Field>
+      </div>
       <Button type="submit">Continue →</Button>
     </form>
   );
