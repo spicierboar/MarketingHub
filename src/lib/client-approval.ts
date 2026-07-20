@@ -6,7 +6,10 @@ import {
   getContent,
   isUnderLegalHold,
   listContent,
+  listManagedApprovalRequests,
   maybeCompleteCampaign,
+  respondManagedApprovalAsClient,
+  respondManagedApprovalWithToken,
   updateCampaignItem,
   updateContent,
 } from "@/lib/db";
@@ -16,7 +19,8 @@ import { autoPublishOnApprove } from "@/lib/auto-publish-on-approve";
 import { governContent } from "@/lib/content-governance";
 import { canClientApproveRoute, ROUTE_LABEL } from "@/lib/routing";
 import { now } from "@/lib/utils";
-import type { ActingUser } from "@/lib/types";
+import { hashApprovalToken, nextRevisionRoute } from "@/lib/managed-service/workflow";
+import type { ActingUser, ManagedApprovalRequest } from "@/lib/types";
 
 export type ClientApprovalActor =
   | {
@@ -65,6 +69,7 @@ async function assertCanAct(
   content: NonNullable<Awaited<ReturnType<typeof getContent>>>;
   company: NonNullable<Awaited<ReturnType<typeof getCompany>>>;
   logActor: ReturnType<typeof approvalActor>;
+  durableRequest?: ManagedApprovalRequest;
 }> {
   const content = await getContent(contentId);
   if (!content) throw new Error("Content not found");
@@ -76,6 +81,7 @@ async function assertCanAct(
 
   const company = await getCompany(content.companyId);
   if (!company) throw new Error("Company not found");
+  let durableRequest: ManagedApprovalRequest | undefined;
 
   if (actor.kind === "token") {
     if (company.tenantId !== actor.tenantId) {
@@ -91,6 +97,18 @@ async function assertCanAct(
         "This approval link has already been used or has been superseded — please ask for a fresh link.",
       );
     }
+    const durable = (await listManagedApprovalRequests(actor.tenantId, actor.companyId))
+      .filter((request) => request.contentId === content.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const pendingDurable = durable.find((request) => request.status === "pending");
+    if (
+      durable.length > 0 &&
+      (!pendingDurable ||
+        pendingDurable.recipientEmail !== actor.clientEmail)
+    ) {
+      throw new Error("This approval link is invalid, expired or superseded.");
+    }
+    durableRequest = pendingDurable;
   } else {
     if (!(await canAccessCompany(actor.user, actor.companyId))) {
       throw new Error("Forbidden: no access to this company");
@@ -108,7 +126,10 @@ async function assertCanAct(
     throw new Error("This content is no longer awaiting approval.");
   }
 
-  return { content, company, logActor: approvalActor(actor) };
+  durableRequest ??= (await listManagedApprovalRequests(company.tenantId, company.id))
+    .filter((request) => request.contentId === content.id && request.status === "pending")
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  return { content, company, logActor: approvalActor(actor), durableRequest };
 }
 
 export async function completeClientApproval(args: {
@@ -117,11 +138,36 @@ export async function completeClientApproval(args: {
   decision: ClientApprovalDecision;
   note?: string;
 }): Promise<ClientApprovalResult> {
-  const { content, company, logActor } = await assertCanAct(args.contentId, args.actor);
+  const { content, company, logActor, durableRequest } = await assertCanAct(
+    args.contentId,
+    args.actor,
+  );
 
   if (args.decision === "changes_requested") {
+    const revision = durableRequest ? nextRevisionRoute(durableRequest) : null;
+    if (durableRequest) {
+      if (args.actor.kind === "portal") {
+        if (
+          !(await respondManagedApprovalAsClient(
+            durableRequest.id,
+            "changes_requested",
+          ))
+        ) {
+          throw new Error("This approval is no longer available.");
+        }
+      } else if (
+        !(await respondManagedApprovalWithToken(
+          hashApprovalToken(args.actor.token),
+          company.id,
+          "changes_requested",
+          { note: args.note?.trim() || null, contentId: content.id },
+        ))
+      ) {
+        throw new Error("This approval link is invalid, expired, superseded, or has used both revisions.");
+      }
+    }
     await updateContent(content.id, {
-      status: "changes_required",
+      status: revision?.route === "staff_exception" ? "pending_approval" : "changes_required",
       approvedById: null,
       approvedAt: null,
       clientReview: {
@@ -144,7 +190,9 @@ export async function completeClientApproval(args: {
       targetId: content.id,
       companyId: content.companyId,
       tenantId: logActor.tenantId,
-      detail: args.note
+      detail: revision?.route === "staff_exception"
+        ? "Third revision request routed to staff exception review"
+        : args.note
         ? `Client ${logActor.email}: ${args.note}`
         : `Client ${logActor.email} requested changes`,
     });
@@ -172,6 +220,27 @@ export async function completeClientApproval(args: {
       respondedAt: now(),
     },
   });
+  if (durableRequest) {
+    if (args.actor.kind === "portal") {
+      if (
+        !(await respondManagedApprovalAsClient(
+          durableRequest.id,
+          "approved",
+        ))
+      ) {
+        throw new Error("This approval is no longer available.");
+      }
+    } else if (
+      !(await respondManagedApprovalWithToken(
+        hashApprovalToken(args.actor.token),
+        company.id,
+        "approved",
+        { contentId: content.id },
+      ))
+    ) {
+      throw new Error("This approval link is invalid, expired or superseded.");
+    }
+  }
 
   if (content.requestId) {
     await advanceRequest(content.requestId, "approved", logActor.id);
