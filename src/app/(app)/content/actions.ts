@@ -48,6 +48,7 @@ import {
   submitHeldContentToClient,
 } from "@/lib/managed-service/quality-routing";
 import { progressManagedSchedulesForCompany } from "@/lib/managed-service/auto-progress";
+import { autoPublishOnApprove } from "@/lib/auto-publish-on-approve";
 import { generateVoice, type VoiceStyle } from "@/lib/ai/voicegen";
 import { generateImage } from "@/lib/ai/imagegen";
 import { generateVideo } from "@/lib/ai/videogen";
@@ -80,6 +81,7 @@ export async function shareForClientApprovalAction(formData: FormData) {
   const content = await getContent(contentId);
   if (!content) throw new Error("Content not found");
   const user = await assertAdminCompanyAccess(content.companyId);
+  await assertNotOnHold(content);
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     throw new Error("A valid client email is required.");
   }
@@ -87,40 +89,14 @@ export async function shareForClientApprovalAction(formData: FormData) {
   if (content.status !== "pending_approval") {
     throw new Error("Submit the content for approval first, then share it with the client.");
   }
-  const company = (await getCompany(content.companyId))!;
-  const tenant = await getTenant(user.tenantId);
 
-  const issuedAt = Date.now();
-  const ttlMs = 7 * 24 * 60 * 60 * 1000; // 7 days
-  const token = signPayload(
-    {
-      tenantId: user.tenantId,
-      companyId: content.companyId,
-      contentId: content.id,
-      clientEmail: email,
-      purpose: "client_approval",
-    },
-    { issuedAt, ttlMs },
-  );
-  const link = `${await requestOrigin()}/approve/${token}`;
-
-  await updateContent(contentId, {
-    clientReview: {
-      email,
-      sharedById: user.id,
-      sharedAt: now(),
-      expiresAt: new Date(issuedAt + ttlMs).toISOString(),
-      link,
-      status: "pending",
-    },
-  });
-  await sendEmail({
-    to: email,
-    fromName: tenant?.branding?.emailFromName,
-    subject: `Please review: ${content.title}`,
-    html: `<p>${company.name} has content ready for your approval.</p>
-           <p><a href="${link}">Review &amp; approve →</a></p>
-           <p style="color:#888">This secure link expires in 7 days. No account needed.</p>`,
+  // Always go through stampClientReview (durable token hash) so re-sends
+  // supersede prior managed approval requests instead of orphaning the ACK.
+  await submitHeldContentToClient({
+    contentId,
+    actor: user,
+    origin: await requestOrigin(),
+    clientEmail: email,
   });
   await logAction(user, "content.client_link_shared", {
     targetType: "content",
@@ -129,6 +105,8 @@ export async function shareForClientApprovalAction(formData: FormData) {
     detail: `Shared with ${email}`,
   });
   revalidatePath(`/content/${contentId}`);
+  revalidatePath("/approvals");
+  revalidatePath("/client/approvals");
 }
 
 // Collaborative comment from an internal team member (tenant-pinned).
@@ -269,6 +247,7 @@ export async function submitHeldToClientAction(formData: FormData) {
   const content = await getContent(contentId);
   if (!content) throw new Error("Content not found");
   const user = await assertAdminCompanyAccess(content.companyId);
+  await assertNotOnHold(content);
   await submitHeldContentToClient({
     contentId,
     actor: user,
@@ -371,12 +350,26 @@ export async function approveContentAction(formData: FormData) {
     detail: ROUTE_LABEL[governed.routedTo],
   });
 
-  // Managed levels: after staff approve, try critique-gated scheduleOne for
-  // assist/campaign planned dates so approved work is not left orphaned.
+  // Managed levels: after staff approve, progress scheduled assist work and
+  // mirror the client-approve auto-schedule path so staff override is not orphaned.
   try {
     await progressManagedSchedulesForCompany(user, content.companyId);
   } catch {
     /* best-effort — cron tick will retry */
+  }
+  try {
+    const company = await getCompany(content.companyId);
+    if (company) {
+      await autoPublishOnApprove({
+        content: { ...content, status: "approved" },
+        company,
+        userId: user.id,
+        actorEmail: user.email,
+        tenantId: user.tenantId,
+      });
+    }
+  } catch {
+    /* best-effort — approval itself already succeeded */
   }
 
   revalidatePath(`/content/${contentId}`);
@@ -409,6 +402,8 @@ export async function rejectContentAction(formData: FormData) {
     // A rejected/returned item carries no approval provenance.
     approvedById: null,
     approvedAt: null,
+    // Clear open client review so stale links cannot act after staff reject.
+    ...(content.clientReview ? { clientReview: undefined } : {}),
   });
   if (content.requestId) {
     await advanceRequest(

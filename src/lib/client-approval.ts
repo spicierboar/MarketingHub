@@ -116,6 +116,14 @@ async function assertCanAct(
     if (content.clientReview?.status !== "pending") {
       throw new Error("This item is not awaiting your approval.");
     }
+    if (
+      content.clientReview.email.toLowerCase() !==
+      actor.user.email.toLowerCase()
+    ) {
+      throw new Error(
+        "This item was shared with a different contact on your account.",
+      );
+    }
   }
 
   if (await isUnderLegalHold("content", content.id, content.companyId)) {

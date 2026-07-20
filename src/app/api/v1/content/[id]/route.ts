@@ -68,9 +68,12 @@ export async function PATCH(
       { status: 423 },
     );
   }
-  if (["published", "archived"].includes(existing.status)) {
+  if (["published", "archived", "approved", "scheduled"].includes(existing.status)) {
     return NextResponse.json(
-      { error: "terminal content cannot be modified via API" },
+      {
+        error:
+          "approved/scheduled/terminal content cannot be modified via API — use the editor demotion flow",
+      },
       { status: 409 },
     );
   }

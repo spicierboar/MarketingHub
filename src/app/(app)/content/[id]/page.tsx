@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser, canAccessCompany, isAdmin } from "@/lib/auth/rbac";
+import { requireUser, canAccessCompany, isAdmin, userHasPermission } from "@/lib/auth/rbac";
 import {
   activeSchedulesForContent,
   getAsset,
@@ -18,6 +18,7 @@ import {
   scheduleAtOptimalWindowAction,
   schedulePostAction,
 } from "../../calendar/actions";
+import { ActionSubmitButton } from "@/components/action-submit-button";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge, RiskBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +71,8 @@ export default async function ContentDetailPage({
   const company = (await getCompany(content.companyId))!;
   const comments = await listContentComments(content.id);
   const admin = isAdmin(user);
+  const canApprove = userHasPermission(user, "approve_content");
+  const waitingOnClient = content.clientReview?.status === "pending";
   const locked = content.status === "approved" || content.status === "scheduled";
   // Terminal content is read-only — the server actions enforce this too.
   const terminal = ["published", "archived", "rejected"].includes(content.status);
@@ -366,7 +369,26 @@ export default async function ContentDetailPage({
             </Card>
           )}
 
-          {admin && awaitingApproval && (
+          {canApprove && awaitingApproval && waitingOnClient && (
+            <Card className="border-amber-200">
+              <CardContent className="p-6">
+                <h2 className="mb-1 font-semibold">Waiting on client</h2>
+                <p className="text-sm text-muted-foreground">
+                  Shared with {content.clientReview?.email}. Agency Approve/Reject
+                  is hidden here so an open client review is not overridden — use
+                  Approvals → Waiting on client, or re-send the link below if needed.
+                </p>
+                <Link
+                  href="/approvals"
+                  className="mt-3 inline-block text-sm text-primary hover:underline"
+                >
+                  Open Approvals →
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+
+          {canApprove && awaitingApproval && !waitingOnClient && (
             <Card className="border-primary/40">
               <CardContent className="p-6">
                 <div className="mb-3 flex items-center justify-between">
@@ -389,27 +411,41 @@ export default async function ContentDetailPage({
                 )}
                 <form action={approveContentAction} className="mb-3">
                   <input type="hidden" name="contentId" value={content.id} />
-                  <Button
+                  <ActionSubmitButton
                     type="submit"
                     className="w-full"
+                    pendingLabel="Approving…"
                     disabled={
                       (!!c && !c.canProceed) ||
                       !canApproveRoute(user, content.routedTo ?? "admin")
                     }
                   >
                     Approve
-                  </Button>
+                  </ActionSubmitButton>
                 </form>
                 <form action={rejectContentAction} className="space-y-2">
                   <input type="hidden" name="contentId" value={content.id} />
-                  <Textarea name="note" placeholder="Reason / changes needed…" className="min-h-16" />
+                  <label className="sr-only" htmlFor={`detail-reject-note-${content.id}`}>
+                    Rejection reason
+                  </label>
+                  <Textarea
+                    id={`detail-reject-note-${content.id}`}
+                    name="note"
+                    placeholder="Reason / changes needed…"
+                    className="min-h-16"
+                  />
                   <label className="flex items-center gap-2 text-sm text-muted-foreground">
                     <input type="checkbox" name="changesOnly" className="h-4 w-4" />
                     Request changes (return to editor)
                   </label>
-                  <Button type="submit" variant="destructive" className="w-full">
+                  <ActionSubmitButton
+                    type="submit"
+                    variant="destructive"
+                    className="w-full"
+                    pendingLabel="Rejecting…"
+                  >
                     Reject
-                  </Button>
+                  </ActionSubmitButton>
                 </form>
               </CardContent>
             </Card>
@@ -434,23 +470,28 @@ export default async function ContentDetailPage({
                       name="clientEmail"
                       placeholder="client@example.com (optional if profile has email)"
                     />
-                    <Button type="submit" className="w-full">
+                    <ActionSubmitButton type="submit" className="w-full" pendingLabel="Submitting…">
                       Submit to client review
-                    </Button>
+                    </ActionSubmitButton>
                   </form>
                 </CardContent>
               </Card>
             )}
 
-          {/* T6 — tokenised no-login client approval */}
-          {admin && awaitingApproval && (
+          {/* Client approval link — status + re-send (durable stamp). Hidden while
+              hold_agency still needs the Needs-attention card first. */}
+          {admin &&
+            awaitingApproval &&
+            !(
+              content.qualityRouting?.decision === "hold_agency" &&
+              !content.clientReview
+            ) && (
             <Card>
               <CardContent className="p-6">
                 <h2 className="mb-1 font-semibold">Client approval link</h2>
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Send the client a secure no-login link to approve this content.
-                  Their decision runs the same governed checks and is recorded in
-                  the audit trail.
+                  Send or re-send a secure no-login link. Re-sends supersede the prior
+                  managed approval request so the new token still ACKs correctly.
                 </p>
                 {content.clientReview ? (
                   <div className="space-y-2 rounded-md border border-border p-3 text-sm">
@@ -484,9 +525,14 @@ export default async function ContentDetailPage({
                 <form action={shareForClientApprovalAction} className="mt-3 space-y-2">
                   <input type="hidden" name="contentId" value={content.id} />
                   <Input type="email" name="clientEmail" placeholder="client@example.com" required />
-                  <Button type="submit" variant="outline" className="w-full">
+                  <ActionSubmitButton
+                    type="submit"
+                    variant="outline"
+                    className="w-full"
+                    pendingLabel="Sharing…"
+                  >
                     {content.clientReview ? "Re-send / update link" : "Share for client approval"}
-                  </Button>
+                  </ActionSubmitButton>
                 </form>
               </CardContent>
             </Card>
