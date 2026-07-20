@@ -140,6 +140,7 @@ function emptyTenantResult(
     tenantId,
     taskClass,
     ...emptyQueueCounts(),
+    unknown: 0,
     automationOutcomes: 0,
     clientReportsSent: 0,
     managedDeliveryProcessed: 0,
@@ -257,13 +258,7 @@ async function runScheduledTickWithExecution(
               runInServiceContext(tenant.id, async () => {
           switch (taskClass) {
             case "publishing":
-              Object.assign(
-                result,
-                await publishDuePosts(actor, {
-                  deadlineMs: taskDeadlineMs,
-                  signal: taskExecution.signal,
-                }),
-              );
+              Object.assign(result, await publishDuePosts(actor));
               break;
             case "automation": {
               const settings = await getAutomationSettings(tenant.id);
@@ -275,8 +270,6 @@ async function runScheduledTickWithExecution(
                 result.automationOutcomes = (
                   await runAutomations(actor, {
                     trigger: "cron",
-                    signal: taskExecution.signal,
-                    deadlineMs: taskDeadlineMs,
                   })
                 ).outcomes.length;
               }
@@ -284,24 +277,15 @@ async function runScheduledTickWithExecution(
             }
             case "managed_delivery":
               result.managedDeliveryProcessed =
-                await processDueManagedDeliveries(actor, tenant.id, {
-                  signal: taskExecution.signal,
-                  deadlineMs: taskDeadlineMs,
-                });
+                await processDueManagedDeliveries(actor, tenant.id);
               break;
             case "rolling_calendar":
               result.rollingCalendarSuggestions =
-                await maintainRollingCalendarsForTenant(actor, tenant.id, {
-                  signal: taskExecution.signal,
-                  deadlineMs: taskDeadlineMs,
-                });
+                await maintainRollingCalendarsForTenant(actor, tenant.id);
               break;
             case "managed_auto_schedule":
               result.managedAutoScheduled =
-                await progressManagedSchedulesForTenant(actor, tenant.id, {
-                  signal: taskExecution.signal,
-                  deadlineMs: taskDeadlineMs,
-                });
+                await progressManagedSchedulesForTenant(actor, tenant.id);
               break;
             case "approval_reminders":
               result.approvalRemindersSent =
