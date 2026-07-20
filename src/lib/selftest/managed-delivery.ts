@@ -27,7 +27,11 @@ import {
   shouldPromoteAwaitingApprovalToActive,
 } from "@/lib/managed-service/delivery-runner";
 import { TENANT_ROLE_TIER } from "@/lib/types";
-import type { ActingUser, User } from "@/lib/types";
+import type {
+  ActingUser,
+  CompanyServiceBillingState,
+  User,
+} from "@/lib/types";
 
 function acting(user: User, tenantId: string): ActingUser {
   return {
@@ -35,6 +39,29 @@ function acting(user: User, tenantId: string): ActingUser {
     tenantId,
     tenantRole: "owner",
     role: TENANT_ROLE_TIER.owner,
+  };
+}
+
+function activeServiceBilling(): CompanyServiceBillingState {
+  return {
+    status: "active",
+    activePackageId: "managed",
+    lastPaidAt: new Date().toISOString(),
+    serviceOptions: {
+      searchVisibility: true,
+      websiteConnectionSetup: false,
+      websitePublishing: false,
+      hostedLandingPage: false,
+      monthlyAdCapAud: 0,
+    },
+  };
+}
+
+function activeManagedService() {
+  return {
+    serviceLevel: defaultServiceLevel(),
+    marketingPackageId: "managed" as const,
+    serviceBilling: activeServiceBilling(),
   };
 }
 
@@ -69,6 +96,7 @@ export async function checkManagedDeliveryEnqueueDueWithin24h(): Promise<{
       services: ["Coffee", "Brunch"],
       serviceAreas: ["Wattle Valley"],
       industry: "restaurant",
+      managedService: activeManagedService(),
     },
   });
 
@@ -98,6 +126,67 @@ export async function checkManagedDeliveryEnqueueDueWithin24h(): Promise<{
     };
   } finally {
     await purgeTenant(t.id);
+  }
+}
+
+export async function checkManagedDeliveryBillingBlocks(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  const tenant = await createTenant({
+    name: `Managed Billing Blocks ${Date.now()}`,
+    kind: "agency",
+    plan: "starter",
+    status: "active",
+  });
+  try {
+    const user = await createUser({
+      email: `md-billing-${Date.now()}@example.dev`,
+      name: "Billing Fixture Admin",
+      role: "admin",
+    });
+    await addMembership({
+      tenantId: tenant.id,
+      userId: user.id,
+      role: "owner",
+    });
+    const blockedStatuses = ["pending_payment", "paused"] as const;
+    const blocked: string[] = [];
+    for (const status of blockedStatuses) {
+      const company = await createCompany({
+        tenantId: tenant.id,
+        name: `Billing ${status}`,
+        createdBy: user.id,
+      });
+      await updateCompany(company.id, {
+        profile: {
+          ...company.profile,
+          managedService: {
+            ...activeManagedService(),
+            serviceBilling: {
+              ...activeServiceBilling(),
+              status,
+              ...(status === "paused"
+                ? { pausedAt: new Date().toISOString() }
+                : {}),
+            },
+          },
+        },
+      });
+      try {
+        await enqueueManagedDeliveryForCompany({
+          tenantId: tenant.id,
+          companyId: company.id,
+          onboardingCompletedAt: new Date().toISOString(),
+        });
+      } catch {
+        blocked.push(status);
+      }
+    }
+    const ok = blocked.length === blockedStatuses.length;
+    return { ok, detail: `blocked=${blocked.join(",")}` };
+  } finally {
+    await purgeTenant(tenant.id);
   }
 }
 
@@ -134,6 +223,7 @@ export async function checkManagedDeliveryRespects6hFloor(): Promise<{
       serviceAreas: ["Town"],
       industry: "cafe",
       approvalContact: "owner@example.dev",
+      managedService: activeManagedService(),
     },
   });
 
@@ -198,8 +288,7 @@ export async function checkManagedDeliveryProcessNoSchedule(): Promise<{
       targetCustomers: "Weekend travellers",
       approvalContact: "owner@example.dev",
       managedService: {
-        serviceLevel: defaultServiceLevel(),
-        marketingPackageId: "pro",
+        ...activeManagedService(),
       },
     },
   });
@@ -274,6 +363,7 @@ export async function checkManagedDeliveryPlanEmailIdempotent(): Promise<{
       serviceAreas: ["Suburb"],
       industry: "retail",
       approvalContact: "owner@example.dev",
+      managedService: activeManagedService(),
     },
   });
 
@@ -385,6 +475,7 @@ export async function checkManagedDeliveryPromotesToActive(): Promise<{
       services: ["Coffee"],
       serviceAreas: ["Town"],
       industry: "cafe",
+      managedService: activeManagedService(),
     },
   });
 

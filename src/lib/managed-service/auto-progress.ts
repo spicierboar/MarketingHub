@@ -206,6 +206,7 @@ export async function progressManagedSchedulesForCompany(
 export async function progressManagedSchedulesForTenant(
   actor: ActingUser,
   tenantId: string,
+  options: { signal?: AbortSignal; deadlineMs?: number } = {},
 ): Promise<number> {
   const companies = await listCompanies(tenantId);
   const managed = companies.filter(
@@ -218,6 +219,10 @@ export async function progressManagedSchedulesForTenant(
   let processed = 0;
 
   for (const company of managed) {
+    if (
+      options.signal?.aborted ||
+      (options.deadlineMs && Date.now() >= options.deadlineMs)
+    ) break;
     if (processed >= MAX_COMPANIES_PER_TICK) break;
     const result = await progressManagedSchedulesForCompany(actor, company.id);
     totalScheduled += result.scheduled;

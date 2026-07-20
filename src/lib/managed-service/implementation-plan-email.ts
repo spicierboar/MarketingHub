@@ -1,5 +1,6 @@
 // Client implementation-plan email after managed strategy + calendar succeed.
-// Soft no-op without RESEND_API_KEY; always audits the attempt.
+// Simulated unless EMAIL_SEND_LIVE=true and RESEND_API_KEY is configured;
+// always audits the attempt.
 
 import { logAction } from "@/lib/audit";
 import {
@@ -201,10 +202,13 @@ Nothing publishes without your approval.`;
     detail: `${to}: ${result.detail}`,
   });
 
-  // Soft no-op when email isn't configured still counts as "attempted" for the stamp.
+  // Soft no-op still lets delivery advance, but never claims an email was sent.
   return {
-    ok: result.ok || result.detail.includes("not configured"),
+    ok:
+      result.ok ||
+      result.simulated ||
+      result.detail.includes("not configured"),
     detail: result.detail,
-    emailed: true,
+    emailed: result.ok,
   };
 }

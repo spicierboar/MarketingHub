@@ -79,7 +79,11 @@ export async function countPlannedHorizon(
   const posts = (await listScheduledPosts(tenantId)).filter(
     (p) =>
       p.companyId === companyId &&
-      (p.status === "scheduled" || p.status === "publishing") &&
+      (
+        p.status === "scheduled" ||
+        p.status === "publishing" ||
+        p.status === "delivery_unknown"
+      ) &&
       inHorizon(p.scheduledDate, todayIso),
   );
   const open = (await listCalendarAssistSuggestions(tenantId, [companyId], "open")).filter(
@@ -170,6 +174,7 @@ export async function maintainRollingCalendarForCompany(
 export async function maintainRollingCalendarsForTenant(
   actor: ActingUser,
   tenantId: string,
+  options: { signal?: AbortSignal; deadlineMs?: number } = {},
 ): Promise<number> {
   const todayIso = todayIsoDefault();
   const companies = await listCompanies(tenantId);
@@ -186,6 +191,10 @@ export async function maintainRollingCalendarsForTenant(
   let autoDraftBudget = MAX_AUTO_DRAFTS_PER_TICK;
 
   for (const company of eligible) {
+    if (
+      options.signal?.aborted ||
+      (options.deadlineMs && Date.now() >= options.deadlineMs)
+    ) break;
     if (processed >= MAX_COMPANIES_PER_TICK) break;
     if (!(await companyNeedsCalendarTopUp(tenantId, company.id, todayIso))) continue;
 
