@@ -6,18 +6,23 @@ import {
   connectInviteUrl,
   oauthAvailableForPlatform,
 } from "@/lib/connect-invites";
-import { listPendingSocialConnectInvites } from "@/lib/onboarding-social-connect";
+import {
+  listPendingSocialConnectInvites,
+  V1_CONNECT_PLATFORMS,
+} from "@/lib/onboarding-social-connect";
 import { resolveOrigin } from "@/lib/origin";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { requestClientSocialConnectAction } from "./actions";
 
 export const metadata = { title: "Connect social accounts" };
 
 /**
- * Post-onboarding (and anytime) client setup: open the same OAuth invite links
- * Publishing uses. Never asks for social passwords.
+ * Post-onboarding + anytime: connect package channels and request later accounts.
+ * Same /connect/[token] OAuth flow as Publishing. Staff and system/AI use the
+ * same invite helper; this page is the client path.
  */
 export default async function ClientConnectSocialsPage({
   searchParams,
@@ -35,26 +40,37 @@ export default async function ClientConnectSocialsPage({
   ]);
 
   const connected = integrations.filter((i) => i.status === "connected");
+  const connectedPlatforms = new Set(connected.map((i) => i.platform));
+  const pendingPlatforms = new Set(pending.map((i) => i.platform));
+  const addable = V1_CONNECT_PLATFORMS.filter(
+    (p) => !connectedPlatforms.has(p) && !pendingPlatforms.has(p),
+  );
+
   const h = await headers();
   const origin = resolveOrigin((key) => h.get(key));
+  const defaultEmail =
+    company?.profile.approvalContact?.trim() || user.email || "";
 
   return (
     <div>
       <PageHeader
         title="Connect your social accounts"
         explainerId="client-connect-socials"
-        explainer="Authorize Facebook, Instagram, and other channels with a one-time secure link. We never ask for your password."
+        explainer="Authorize Facebook, Instagram, and other channels with a one-time secure link. We never ask for your password. Staff or automation can also send these links."
       />
 
       <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
         {isSetup ? (
           <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-            Payment is sorted for{" "}
-            <span className="font-medium text-foreground">
-              {company?.name ?? "your business"}
-            </span>
-            . Connect the channels in your package so we can publish when content
-            is approved. You can skip and finish this later from Account.
+            At signup we only asked for channels on your plan
+            {company ? (
+              <>
+                {" "}
+                for <span className="font-medium text-foreground">{company.name}</span>
+              </>
+            ) : null}
+            . Connect those below. You can add more accounts later — we&apos;ll
+            email a fresh OAuth link for each.
           </p>
         ) : null}
 
@@ -89,9 +105,9 @@ export default async function ClientConnectSocialsPage({
             <CardContent className="divide-y divide-border p-0">
               {pending.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-muted-foreground">
-                  No pending connect links. If you expected channels here, ask
-                  your marketing team to send invites from Publishing — or your
-                  package may not include social posting.
+                  No pending links. If your plan included social channels, they
+                  may already be connected — or use &quot;Add another account&quot;
+                  below.
                 </p>
               ) : (
                 pending.map((invite) => {
@@ -126,6 +142,59 @@ export default async function ClientConnectSocialsPage({
             </CardContent>
           </Card>
         </section>
+
+        {addable.length > 0 ? (
+          <section aria-labelledby="add-later">
+            <h2 id="add-later" className="mb-2 text-base font-semibold">
+              Add another account later
+            </h2>
+            <Card>
+              <CardContent className="p-4">
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Create an account on the platform first if you need a new Page
+                  or profile, then request a connect link here. We email the
+                  same OAuth invite staff and automation use.
+                </p>
+                <form action={requestClientSocialConnectAction} className="space-y-3">
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-medium text-muted-foreground">
+                      Platforms
+                    </legend>
+                    {addable.map((platform) => (
+                      <label
+                        key={platform}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          name="platform"
+                          value={platform}
+                          className="rounded border-border"
+                        />
+                        {platform}
+                      </label>
+                    ))}
+                  </fieldset>
+                  <label className="block text-sm">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Email for connect link
+                    </span>
+                    <input
+                      type="email"
+                      name="email"
+                      defaultValue={defaultEmail}
+                      required
+                      className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <button type="submit" className={buttonClasses("default", "sm")}>
+                    Email OAuth connect link(s)
+                  </button>
+                </form>
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
 
         <div className="flex flex-wrap gap-3">
           <Link href="/client" className={buttonClasses("default", "md")}>

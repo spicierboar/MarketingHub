@@ -792,7 +792,6 @@ export async function completeOnboardingPaymentAction(formData: FormData) {
   await ensureOnboardingSocialConnectInvites({
     agencyTenantId: agency.id,
     companyId: company.id,
-    companyName: company.name,
     packageChannels,
     invitedBy: user,
     recipientEmail: draft.contactEmail,
