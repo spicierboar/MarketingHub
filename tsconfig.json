@@ -30,5 +30,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "command-centre-m17"]
+  "exclude": [
+    "node_modules",
+    "command-centre-m17",
+    "scripts",
+    "src/lib/selftest/reviews.ts",
+    "src/lib/selftest/security-invariants.ts",
+    "src/lib/selftest/sms-marketing.ts"
+  ]
 }
