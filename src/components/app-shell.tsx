@@ -37,6 +37,10 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
+  /** Visible when the user can approve content (admins always can). */
+  approveAccess?: boolean;
+  /** Visible when the user can create content (hub + studio). */
+  createAccess?: boolean;
   ownerOnly?: boolean;
   platformAdminOnly?: boolean;
   salesAccess?: boolean;
@@ -94,7 +98,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Queues",
     pinned: true,
     items: [
-      { href: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
+      { href: "/approvals", label: "Approvals", icon: CheckSquare, approveAccess: true },
     ],
   },
   {
@@ -132,7 +136,12 @@ const NAV_GROUPS: NavGroup[] = [
       // Usage order: plan → produce → schedule → publish
       { href: "/campaigns", label: "Campaigns", icon: Megaphone },
       { href: "/content", label: "Content", icon: FileText },
-      { href: "/studio", label: "Content Studio", icon: Sparkles, memberOnly: true },
+      {
+        href: "/studio",
+        label: "Studio / repurpose",
+        icon: Sparkles,
+        createAccess: true,
+      },
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
     ],
@@ -232,6 +241,8 @@ function itemVisible(
     isAdmin: boolean;
     isOwner: boolean;
     isPlatformAdmin: boolean;
+    canApprove: boolean;
+    canCreate: boolean;
     canFieldSales: boolean;
     /** Non-admin sales_rep — show only salesHome items. */
     isSalesRepFocused: boolean;
@@ -245,6 +256,8 @@ function itemVisible(
   if (n.memberOnly && opts.isAdmin) return false;
   return (
     (!n.adminOnly || opts.isAdmin) &&
+    (!n.approveAccess || opts.canApprove) &&
+    (!n.createAccess || opts.canCreate) &&
     (!n.ownerOnly || opts.isOwner) &&
     (!n.platformAdminOnly || opts.isPlatformAdmin) &&
     (!n.salesAccess || opts.canFieldSales)
@@ -356,6 +369,9 @@ export function AppShell({
   isAdmin,
   isOwner = false,
   isPlatformAdmin = false,
+  canApprove = false,
+  canCreate = false,
+  canViewAudit = false,
   canFieldSales = false,
   isSalesRepFocused = false,
   branding = null,
@@ -371,6 +387,9 @@ export function AppShell({
   isAdmin: boolean;
   isOwner?: boolean;
   isPlatformAdmin?: boolean;
+  canApprove?: boolean;
+  canCreate?: boolean;
+  canViewAudit?: boolean;
   canFieldSales?: boolean;
   isSalesRepFocused?: boolean;
   branding?: { accentColor?: string; logoUrl?: string } | null;
@@ -384,9 +403,12 @@ export function AppShell({
     isAdmin,
     isOwner,
     isPlatformAdmin,
+    canApprove,
+    canCreate,
     canFieldSales,
     isSalesRepFocused,
   };
+  const toolsAccess = { isAdmin, canApprove, canViewAudit, canCreate };
 
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
@@ -532,7 +554,7 @@ export function AppShell({
         )}
         {companies.length > 0 && (
           <Suspense fallback={null}>
-            <CompanyContextBar companies={companies} />
+            <CompanyContextBar companies={companies} access={toolsAccess} />
           </Suspense>
         )}
         <main className="flex-1 overflow-x-hidden">{children}</main>

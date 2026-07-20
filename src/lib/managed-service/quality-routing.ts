@@ -237,7 +237,9 @@ export async function applyQualityRoutingAfterDraft(input: {
       claimAudit: content.claimAudit,
     });
 
-  const platform = input.platform?.trim() || "facebook";
+  // Only apply platform length limits when a real channel is known. Defaulting
+  // to Facebook (~500 chars) incorrectly fails long Instagram/blog drafts.
+  const platform = input.platform?.trim() || "";
   const critique = await critiqueForPublish({ content, company, platform });
   const gate = mapCritiqueToQualityGate(critique, route);
   const serviceLevel =

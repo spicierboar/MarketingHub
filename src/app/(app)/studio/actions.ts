@@ -8,7 +8,7 @@ import {
   getCompany,
   getContent,
 } from "@/lib/db";
-import { assertCompanyAccess } from "@/lib/auth/rbac";
+import { assertCompanyAccess, canCreateContent } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { draftContent } from "@/lib/ai/draft";
 import { auditClaims, checkCompliance } from "@/lib/ai/compliance";
@@ -41,6 +41,9 @@ async function requestOrigin(): Promise<string> {
 export async function generateStudioDraftAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
+  if (!canCreateContent(user)) {
+    throw new Error("You do not have permission to create content.");
+  }
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
   if (company.status !== "ai_ready" && company.status !== "approved") {
@@ -213,6 +216,9 @@ export async function repurposeForPlatformsAction(formData: FormData) {
   if (!source) throw new Error("Source content not found");
 
   const user = await assertCompanyAccess(source.companyId);
+  if (!canCreateContent(user)) {
+    throw new Error("You do not have permission to create content.");
+  }
   const company = await getCompany(source.companyId);
   if (!company) throw new Error("Company not found");
   if (company.status !== "ai_ready" && company.status !== "approved") {

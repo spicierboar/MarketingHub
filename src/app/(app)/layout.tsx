@@ -9,6 +9,8 @@ import {
   isSalesRep,
   canAccessFieldSales,
   accessibleCompanyIds,
+  userHasPermission,
+  canCreateContent,
 } from "@/lib/auth/rbac";
 import {
   getSecuritySettings,
@@ -62,6 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const banner = s.crisisMode
     ? { tone: "danger" as const, text: `Crisis Communications Mode is active — publishing is frozen and all social replies are escalated.${s.crisisNote ? ` (${s.crisisNote})` : ""}` }
     : s.sandboxMode ? { tone: "warning" as const, text: "Sandbox / training mode is active — publishing is disabled." } : null;
+  const admin = isAdmin(user);
   return (
     <AppShell
       user={{ name: user.name, email: user.email, role: user.role }}
@@ -69,9 +72,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       activeTenantId={user.tenantId}
       tenants={tenants}
       companies={companies}
-      isAdmin={isAdmin(user)}
+      isAdmin={admin}
       isOwner={isTenantOwner(user)}
       isPlatformAdmin={isPlatformAdmin(user)}
+      canApprove={userHasPermission(user, "approve_content")}
+      canCreate={canCreateContent(user)}
+      canViewAudit={userHasPermission(user, "view_audit")}
       canFieldSales={canAccessFieldSales(user)}
       isSalesRepFocused={isSalesRep(user) && !isAdmin(user)}
       branding={tenant?.branding ?? null}

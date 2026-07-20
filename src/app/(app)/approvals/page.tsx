@@ -21,16 +21,30 @@ import {
   type LookaheadStatus,
 } from "@/components/approvals-lookahead";
 import { ApprovalAssistNotes } from "@/components/approval-assist-notes";
+import { ActionSubmitButton } from "@/components/action-submit-button";
 import { RiskBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form";
 import { titleCase } from "@/lib/utils";
 import { approveContentAction, rejectContentAction } from "../content/actions";
 import type { ContentItem, User } from "@/lib/types";
 
-async function ApprovalCard({ c, user }: { c: ContentItem; user: User }) {
+function waitingOnClient(c: ContentItem): boolean {
+  return (
+    c.status === "pending_approval" && c.clientReview?.status === "pending"
+  );
+}
+
+async function ApprovalCard({
+  c,
+  user,
+  waitingOnClient = false,
+}: {
+  c: ContentItem;
+  user: User;
+  waitingOnClient?: boolean;
+}) {
   const blocked = !!c.compliance && !c.compliance.canProceed;
   const route = c.routedTo ?? "admin";
   const mayApprove = canApproveRoute(user, route) && !blocked;
@@ -48,9 +62,13 @@ async function ApprovalCard({ c, user }: { c: ContentItem; user: User }) {
             </Link>
             <p className="text-xs text-muted-foreground">
               {companyName} · {titleCase(c.type)}
+              {waitingOnClient && c.clientReview?.email
+                ? ` · waiting on ${c.clientReview.email}`
+                : ""}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {waitingOnClient && <Badge tone="warning">Waiting on client</Badge>}
             {c.groundingLabel && (
               <Badge tone={c.groundingLabel === "grounded" ? "success" : "warning"}>
                 {titleCase(c.groundingLabel)}
@@ -76,26 +94,53 @@ async function ApprovalCard({ c, user }: { c: ContentItem; user: User }) {
             Routed to {ROUTE_LABEL[route]} — requires the super admin.
           </p>
         )}
+        {waitingOnClient && (
+          <p className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-800">
+            Shared with the client for sign-off. Prefer waiting for their response;
+            use Staff exception below only when you must override the open review.
+          </p>
+        )}
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <form action={approveContentAction}>
             <input type="hidden" name="contentId" value={c.id} />
-            <Button type="submit" disabled={!mayApprove}>
-              Approve
-            </Button>
+            <ActionSubmitButton
+              type="submit"
+              disabled={!mayApprove}
+              pendingLabel="Approving…"
+              className="w-full sm:w-auto"
+            >
+              {waitingOnClient ? "Staff approve" : "Approve"}
+            </ActionSubmitButton>
           </form>
-          <form action={rejectContentAction} className="flex flex-1 items-end gap-2">
+          <form
+            action={rejectContentAction}
+            className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-end"
+          >
             <input type="hidden" name="contentId" value={c.id} />
             <div className="flex-1">
-              <Textarea name="note" placeholder="Reason (optional)" className="min-h-10" />
+              <label className="sr-only" htmlFor={`reject-note-${c.id}`}>
+                Rejection reason
+              </label>
+              <Textarea
+                id={`reject-note-${c.id}`}
+                name="note"
+                placeholder="Reason (optional)"
+                className="min-h-10"
+              />
             </div>
             <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
               <input type="checkbox" name="changesOnly" className="h-4 w-4" />
               Changes only
             </label>
-            <Button type="submit" variant="destructive">
-              Reject
-            </Button>
+            <ActionSubmitButton
+              type="submit"
+              variant="destructive"
+              pendingLabel="Rejecting…"
+              className="w-full sm:w-auto"
+            >
+              {waitingOnClient ? "Staff reject" : "Reject"}
+            </ActionSubmitButton>
           </form>
           <Link href={`/content/${c.id}`} className="text-sm text-primary hover:underline">
             Open
@@ -146,11 +191,13 @@ export default async function ApprovalsPage({
       c.status === "pending_approval" &&
       (!companyId || c.companyId === companyId),
   );
+  const clientWaiting = pending.filter(waitingOnClient);
+  const agencyPending = pending.filter((c) => !waitingOnClient(c));
   // Phase 3: content is routed to the right queue (§26).
-  const standard = pending.filter(
+  const standard = agencyPending.filter(
     (c) => (c.routedTo ?? "admin") === "admin" || c.routedTo === "company_admin",
   );
-  const elevated = pending.filter(
+  const elevated = agencyPending.filter(
     (c) => c.routedTo === "senior" || c.routedTo === "compliance",
   );
 
@@ -304,8 +351,8 @@ export default async function ApprovalsPage({
         explainerId="approvals"
         explainer={
           focusCompany
-            ? `Pending approvals for ${focusCompany.name}. Content routes by risk and type — nothing publishes until someone here approves.`
-            : "Agency approval inbox. Content routes by risk and type — nothing publishes until someone here approves."
+            ? `Agency review for ${focusCompany.name}. Managed drafts may go to the client first; items here need staff sign-off before schedule/publish.`
+            : "Agency approval inbox. Managed service can auto-route drafts to the client; this queue is for staff review before schedule/publish."
         }
       />
       <div className="space-y-8 p-6">
@@ -315,6 +362,25 @@ export default async function ApprovalsPage({
           itemsByDay={itemsByDay}
           companyFilterName={focusCompany?.name}
         />
+
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="font-semibold">Waiting on client</h2>
+            <Badge tone={clientWaiting.length ? "warning" : "neutral"}>
+              {clientWaiting.length}
+            </Badge>
+          </div>
+          <div className="space-y-4">
+            {clientWaiting.map((c) => (
+              <ApprovalCard key={c.id} c={c} user={user} waitingOnClient />
+            ))}
+            {clientWaiting.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                No open client reviews right now.
+              </div>
+            )}
+          </div>
+        </section>
 
         <section>
           <div className="mb-3 flex items-center gap-2">
@@ -344,7 +410,7 @@ export default async function ApprovalsPage({
             ))}
             {standard.length === 0 && (
               <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-                Nothing awaiting standard approval. 🎉
+                Nothing awaiting standard approval.
               </div>
             )}
           </div>

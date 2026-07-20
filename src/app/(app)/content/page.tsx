@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser, accessibleCompanyIds, isAdmin } from "@/lib/auth/rbac";
+import { requireUser, accessibleCompanyIds, isAdmin, canCreateContent } from "@/lib/auth/rbac";
 import { visibleContent, visibleCompanies } from "@/lib/scope";
 import { getCompany, getTenant } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
@@ -19,6 +19,7 @@ export default async function ContentPage({
   searchParams: Promise<{ company?: string }>;
 }) {
   const user = await requireUser();
+  const mayCreate = canCreateContent(user);
   const tenant = await getTenant(user.tenantId);
   const allowed = new Set(await accessibleCompanyIds(user));
   const { company: companyParam } = await searchParams;
@@ -56,24 +57,36 @@ export default async function ContentPage({
           scopedCompany ? `Content · ${scopedCompany.name}` : "Content"
         }
         explainerId="content-library"
-        explainer="Create with AI at the top, then manage the library below. Drafts always need review and approval — nothing publishes automatically."
+        explainer="Create with AI at the top, then manage drafts below. Drafts need review before schedule or publish — managed clients may get auto-routed to client sign-off first."
       >
-        <a
-          href={exportHref}
-          className={buttonClasses("outline")}
-          aria-disabled={approvedCount === 0}
-        >
-          Export approved (CSV)
-        </a>
+        {approvedCount === 0 ? (
+          <button
+            type="button"
+            disabled
+            className={buttonClasses("outline")}
+            aria-disabled="true"
+          >
+            Export approved (CSV)
+          </button>
+        ) : (
+          <a href={exportHref} className={buttonClasses("outline")}>
+            Export approved (CSV)
+          </a>
+        )}
       </PageHeader>
 
       <div className="space-y-8 p-6">
+        {mayCreate ? (
         <section className="space-y-3">
           <div>
             <h2 className="text-sm font-semibold">Create</h2>
             <p className="text-xs text-muted-foreground">
-              Draft copy, images, video, reels, or voice for a client, an industry
-              template, or general — all land in Library for review.
+              Primary place to draft copy, images, video, reels, or voice — Client,
+              Industry, or General. For templates and repurpose tools, use{" "}
+              <Link href={companyId ? `/studio?company=${companyId}` : "/studio"} className="text-primary hover:underline">
+                Studio
+              </Link>
+              .
             </p>
           </div>
           <ContentHubActions
@@ -84,6 +97,13 @@ export default async function ContentPage({
             isAdmin={isAdmin(user)}
           />
         </section>
+        ) : (
+        <section className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+          You can browse the library below. Creating new drafts needs the{" "}
+          <span className="font-medium text-foreground">Create content</span> permission —
+          ask an admin if you need it.
+        </section>
+        )}
 
         <section className="space-y-3">
           <div>

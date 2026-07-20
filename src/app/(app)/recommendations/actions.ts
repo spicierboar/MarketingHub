@@ -14,7 +14,7 @@ import {
   updateRecommendation,
   updateTask,
 } from "@/lib/db";
-import { assertCompanyAccess, requireUser } from "@/lib/auth/rbac";
+import { assertAdminCompanyAccess } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import {
   dismissedTypesFromHistory,
@@ -35,7 +35,7 @@ function addDaysIso(days: number): string {
 
 export async function generateRecommendationsAction(formData: FormData) {
   const companyId = text(formData, "companyId");
-  const user = await assertCompanyAccess(companyId);
+  const user = await assertAdminCompanyAccess(companyId);
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
   if (company.status !== "ai_ready" && company.status !== "approved") {
@@ -76,7 +76,7 @@ export async function dismissRecommendationAction(formData: FormData) {
   const dismissReason = text(formData, "dismissReason");
   const rec = await getRecommendation(recId);
   if (!rec) throw new Error("Recommendation not found");
-  const user = await assertCompanyAccess(rec.companyId);
+  const user = await assertAdminCompanyAccess(rec.companyId);
   await updateRecommendation(recId, {
     status: "dismissed",
     dismissReason: dismissReason || undefined,
@@ -112,7 +112,7 @@ export async function snoozeRecommendationAction(formData: FormData) {
   const days = Math.min(90, Math.max(1, Number.parseInt(daysRaw || "7", 10) || 7));
   const rec = await getRecommendation(recId);
   if (!rec) throw new Error("Recommendation not found");
-  const user = await assertCompanyAccess(rec.companyId);
+  const user = await assertAdminCompanyAccess(rec.companyId);
   const until = addDaysIso(days);
   await updateRecommendation(recId, { status: "snoozed", snoozedUntil: until });
   await logAction(user, "recommendation.snoozed", {
@@ -128,7 +128,7 @@ export async function toRequestAction(formData: FormData) {
   const recId = text(formData, "recId");
   const rec = await getRecommendation(recId);
   if (!rec) throw new Error("Recommendation not found");
-  const user = await assertCompanyAccess(rec.companyId);
+  const user = await assertAdminCompanyAccess(rec.companyId);
   await updateRecommendation(recId, { status: "actioned", resultType: "request" });
   await logAction(user, "recommendation.to_request", {
     targetType: "recommendation",
@@ -150,7 +150,7 @@ export async function toCampaignAction(formData: FormData) {
   const recId = text(formData, "recId");
   const rec = await getRecommendation(recId);
   if (!rec) throw new Error("Recommendation not found");
-  const user = await assertCompanyAccess(rec.companyId);
+  const user = await assertAdminCompanyAccess(rec.companyId);
   await updateRecommendation(recId, { status: "actioned", resultType: "campaign" });
   await logAction(user, "recommendation.to_campaign", {
     targetType: "recommendation",
@@ -183,7 +183,7 @@ export async function toggleTaskAction(formData: FormData) {
   const taskId = text(formData, "taskId");
   const task = await getTask(taskId);
   if (!task) throw new Error("Task not found");
-  const user = await assertCompanyAccess(task.companyId);
+  const user = await assertAdminCompanyAccess(task.companyId);
   const done = task.status !== "done";
   await updateTask(taskId, {
     status: done ? "done" : "open",

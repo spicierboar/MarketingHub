@@ -16,17 +16,21 @@ import {
   getTenant,
   isUnderLegalHold,
   listContent,
+  listManagedApprovalRequests,
   maybeCompleteCampaign,
   revertCampaignItemAfterDemotion,
   transitionScheduledPost,
   updateCampaignItem,
   updateContent,
+  updateManagedApprovalRequest,
 } from "@/lib/db";
 import { assetChannelBlockReason } from "@/lib/assets";
 import {
   assertAdminCompanyAccess,
   assertCompanyAccess,
   canAccessCompany,
+  canCreateContent,
+  canManageCampaigns,
   requireUser,
   requireAdmin,
   userHasPermission,
@@ -48,6 +52,7 @@ import {
   submitHeldContentToClient,
 } from "@/lib/managed-service/quality-routing";
 import { progressManagedSchedulesForCompany } from "@/lib/managed-service/auto-progress";
+import { autoPublishOnApprove } from "@/lib/auto-publish-on-approve";
 import { generateVoice, type VoiceStyle } from "@/lib/ai/voicegen";
 import { generateImage } from "@/lib/ai/imagegen";
 import { generateVideo } from "@/lib/ai/videogen";
@@ -70,6 +75,35 @@ async function requestOrigin(): Promise<string> {
   return resolveOrigin((k) => h.get(k));
 }
 
+/** Close open managed approval shares before staff override mutates content.
+ *  Uses the repo update path (service-capable) — never the client-bound RPC
+ *  `respondManagedApprovalAsClient`, which requires auth.uid() = recipient email. */
+async function closePendingManagedApprovalsForContent(args: {
+  tenantId: string;
+  companyId: string;
+  contentId: string;
+  decision: "approved" | "superseded";
+}): Promise<void> {
+  const pending = (await listManagedApprovalRequests(args.tenantId, args.companyId))
+    .filter((r) => r.contentId === args.contentId && r.status === "pending");
+  const stamp = now();
+  for (const request of pending) {
+    // Re-check before write so a concurrent client ACK is not overwritten.
+    const latest = (await listManagedApprovalRequests(args.tenantId, args.companyId)).find(
+      (r) => r.id === request.id,
+    );
+    if (!latest || latest.status !== "pending") {
+      throw new Error(
+        "This item was already actioned by the client. Refresh and try again.",
+      );
+    }
+    await updateManagedApprovalRequest(request.id, {
+      status: args.decision,
+      ...(args.decision === "approved" ? { respondedAt: stamp } : {}),
+    });
+  }
+}
+
 // T6 — share a pending content item for tokenised no-login CLIENT approval.
 // Admin-only, tenant-pinned. Mints a signed, expiring token bound to
 // tenant+company+content, stores the link for the admin to copy, and emails
@@ -80,6 +114,7 @@ export async function shareForClientApprovalAction(formData: FormData) {
   const content = await getContent(contentId);
   if (!content) throw new Error("Content not found");
   const user = await assertAdminCompanyAccess(content.companyId);
+  await assertNotOnHold(content);
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     throw new Error("A valid client email is required.");
   }
@@ -87,40 +122,14 @@ export async function shareForClientApprovalAction(formData: FormData) {
   if (content.status !== "pending_approval") {
     throw new Error("Submit the content for approval first, then share it with the client.");
   }
-  const company = (await getCompany(content.companyId))!;
-  const tenant = await getTenant(user.tenantId);
 
-  const issuedAt = Date.now();
-  const ttlMs = 7 * 24 * 60 * 60 * 1000; // 7 days
-  const token = signPayload(
-    {
-      tenantId: user.tenantId,
-      companyId: content.companyId,
-      contentId: content.id,
-      clientEmail: email,
-      purpose: "client_approval",
-    },
-    { issuedAt, ttlMs },
-  );
-  const link = `${await requestOrigin()}/approve/${token}`;
-
-  await updateContent(contentId, {
-    clientReview: {
-      email,
-      sharedById: user.id,
-      sharedAt: now(),
-      expiresAt: new Date(issuedAt + ttlMs).toISOString(),
-      link,
-      status: "pending",
-    },
-  });
-  await sendEmail({
-    to: email,
-    fromName: tenant?.branding?.emailFromName,
-    subject: `Please review: ${content.title}`,
-    html: `<p>${company.name} has content ready for your approval.</p>
-           <p><a href="${link}">Review &amp; approve →</a></p>
-           <p style="color:#888">This secure link expires in 7 days. No account needed.</p>`,
+  // Always go through stampClientReview (durable token hash) so re-sends
+  // supersede prior managed approval requests instead of orphaning the ACK.
+  await submitHeldContentToClient({
+    contentId,
+    actor: user,
+    origin: await requestOrigin(),
+    clientEmail: email,
   });
   await logAction(user, "content.client_link_shared", {
     targetType: "content",
@@ -129,6 +138,8 @@ export async function shareForClientApprovalAction(formData: FormData) {
     detail: `Shared with ${email}`,
   });
   revalidatePath(`/content/${contentId}`);
+  revalidatePath("/approvals");
+  revalidatePath("/client/approvals");
 }
 
 // Collaborative comment from an internal team member (tenant-pinned).
@@ -269,6 +280,7 @@ export async function submitHeldToClientAction(formData: FormData) {
   const content = await getContent(contentId);
   if (!content) throw new Error("Content not found");
   const user = await assertAdminCompanyAccess(content.companyId);
+  await assertNotOnHold(content);
   await submitHeldContentToClient({
     contentId,
     actor: user,
@@ -314,11 +326,32 @@ export async function approveContentAction(formData: FormData) {
     throw new Error("Critical compliance issues must be resolved before approval.");
   }
 
+  // Durable ACK first when overriding an open client share — never mark content
+  // approved while a pending ManagedApprovalRequest remains actionable.
+  if (content.clientReview?.status === "pending") {
+    await closePendingManagedApprovalsForContent({
+      tenantId: user.tenantId,
+      companyId: content.companyId,
+      contentId,
+      decision: "approved",
+    });
+  }
+
   await updateContent(contentId, {
     ...governed,
     status: "approved",
     approvedById: user.id,
     approvedAt: now(),
+    // Staff override supersedes any open client-review share.
+    ...(content.clientReview?.status === "pending"
+      ? {
+          clientReview: {
+            ...content.clientReview,
+            status: "approved" as const,
+            respondedAt: now(),
+          },
+        }
+      : {}),
   });
   if (content.requestId) await advanceRequest(content.requestId, "approved", user.id);
   // Campaign items track their content's approval individually (Phase 4);
@@ -361,12 +394,26 @@ export async function approveContentAction(formData: FormData) {
     detail: ROUTE_LABEL[governed.routedTo],
   });
 
-  // Managed levels: after staff approve, try critique-gated scheduleOne for
-  // assist/campaign planned dates so approved work is not left orphaned.
+  // Managed levels: after staff approve, progress scheduled assist work and
+  // mirror the client-approve auto-schedule path so staff override is not orphaned.
   try {
     await progressManagedSchedulesForCompany(user, content.companyId);
   } catch {
     /* best-effort — cron tick will retry */
+  }
+  try {
+    const company = await getCompany(content.companyId);
+    if (company) {
+      await autoPublishOnApprove({
+        content: { ...content, status: "approved" },
+        company,
+        userId: user.id,
+        actorEmail: user.email,
+        tenantId: user.tenantId,
+      });
+    }
+  } catch {
+    /* best-effort — approval itself already succeeded */
   }
 
   revalidatePath(`/content/${contentId}`);
@@ -394,11 +441,24 @@ export async function rejectContentAction(formData: FormData) {
     throw new Error("Only content pending approval can be rejected.");
   }
 
+  // Close durable client shares before clearing clientReview so token links
+  // cannot still ACK after staff reject / changes-required.
+  if (content.clientReview?.status === "pending") {
+    await closePendingManagedApprovalsForContent({
+      tenantId: user.tenantId,
+      companyId: content.companyId,
+      contentId,
+      decision: "superseded",
+    });
+  }
+
   await updateContent(contentId, {
     status: changesOnly ? "changes_required" : "rejected",
     // A rejected/returned item carries no approval provenance.
     approvedById: null,
     approvedAt: null,
+    // Clear open client review so stale links cannot act after staff reject.
+    ...(content.clientReview ? { clientReview: undefined } : {}),
   });
   if (content.requestId) {
     await advanceRequest(
@@ -430,6 +490,10 @@ export async function saveReuseAction(formData: FormData) {
   // Tenant pin: an admin may only set reuse policy for content in their tenant.
   if (!(await canAccessCompany(user, content.companyId))) {
     throw new Error("Forbidden: no access to this company");
+  }
+  await assertNotOnHold(content);
+  if (!["approved", "published"].includes(content.status)) {
+    throw new Error("Reuse policy can only be set on approved or published content.");
   }
 
   await updateContent(contentId, {
@@ -648,14 +712,57 @@ export async function attachAssetAction(formData: FormData) {
   }
   const assetIds = content.assetIds ?? [];
   if (assetIds.includes(assetId)) return; // idempotent
-  await updateContent(contentId, { assetIds: [...assetIds, assetId] });
+
+  // Creative change on approved/scheduled content must re-enter approval —
+  // the prior approver never saw this package.
+  const wasApproved =
+    content.status === "approved" || content.status === "scheduled";
+  if (content.status === "scheduled") {
+    for (const s of await cancellableSchedulesForContent(content.id)) {
+      await transitionScheduledPost(user.tenantId, s.id, {
+        from: ["scheduled", "failed", "dead"],
+        to: "cancelled",
+      });
+    }
+    await logAction(user, "content.schedule_cancelled", {
+      targetType: "content",
+      targetId: contentId,
+      companyId: content.companyId,
+      detail: "Asset attached — schedules cancelled pending re-approval",
+    });
+  }
+
+  await updateContent(contentId, {
+    assetIds: [...assetIds, assetId],
+    ...(wasApproved
+      ? {
+          status: "pending_approval" as const,
+          approvedById: null,
+          approvedAt: null,
+          ...(content.clientReview ? { clientReview: undefined } : {}),
+        }
+      : {}),
+  });
+  if (wasApproved && content.campaignItemId) {
+    if (await revertCampaignItemAfterDemotion(content.campaignItemId)) {
+      await logAction(user, "campaign.item_reverted", {
+        targetType: "campaign_item",
+        targetId: content.campaignItemId,
+        companyId: content.companyId,
+        detail: "Approved content asset changed — back to review",
+      });
+    }
+  }
   await logAction(user, "content.asset_attached", {
     targetType: "content",
     targetId: contentId,
     companyId: content.companyId,
-    detail: asset.name,
+    detail: wasApproved
+      ? `${asset.name} (demoted for re-approval)`
+      : asset.name,
   });
   revalidatePath(`/content/${contentId}`);
+  if (wasApproved) revalidatePath("/approvals");
 }
 
 export async function detachAssetAction(formData: FormData) {
@@ -668,16 +775,56 @@ export async function detachAssetAction(formData: FormData) {
   if (["archived", "rejected", "published"].includes(content.status)) {
     throw new Error("Assets cannot be changed on terminal content.");
   }
+
+  const assetIds = content.assetIds ?? [];
+  if (!assetIds.includes(assetId)) return; // idempotent — nothing to detach
+
+  const wasApproved =
+    content.status === "approved" || content.status === "scheduled";
+  if (content.status === "scheduled") {
+    for (const s of await cancellableSchedulesForContent(content.id)) {
+      await transitionScheduledPost(user.tenantId, s.id, {
+        from: ["scheduled", "failed", "dead"],
+        to: "cancelled",
+      });
+    }
+    await logAction(user, "content.schedule_cancelled", {
+      targetType: "content",
+      targetId: contentId,
+      companyId: content.companyId,
+      detail: "Asset detached — schedules cancelled pending re-approval",
+    });
+  }
+
   await updateContent(contentId, {
-    assetIds: (content.assetIds ?? []).filter((a) => a !== assetId),
+    assetIds: assetIds.filter((a) => a !== assetId),
+    ...(wasApproved
+      ? {
+          status: "pending_approval" as const,
+          approvedById: null,
+          approvedAt: null,
+          ...(content.clientReview ? { clientReview: undefined } : {}),
+        }
+      : {}),
   });
+  if (wasApproved && content.campaignItemId) {
+    if (await revertCampaignItemAfterDemotion(content.campaignItemId)) {
+      await logAction(user, "campaign.item_reverted", {
+        targetType: "campaign_item",
+        targetId: content.campaignItemId,
+        companyId: content.companyId,
+        detail: "Approved content asset changed — back to review",
+      });
+    }
+  }
   await logAction(user, "content.asset_detached", {
     targetType: "content",
     targetId: contentId,
     companyId: content.companyId,
-    detail: assetId,
+    detail: wasApproved ? `${assetId} (demoted for re-approval)` : assetId,
   });
   revalidatePath(`/content/${contentId}`);
+  if (wasApproved) revalidatePath("/approvals");
 }
 
 export async function recheckComplianceAction(formData: FormData) {
@@ -703,6 +850,9 @@ function textFd(fd: FormData, key: string): string {
 
 async function resolveHubTarget(formData: FormData) {
   const user = await requireUser();
+  if (!canCreateContent(user)) {
+    throw new Error("You do not have permission to create content.");
+  }
   const target = await resolveContentCreateTarget(formData, user, {
     assertCompanyAccess,
     getCompany,

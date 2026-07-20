@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import {
   Clapperboard,
   FileText,
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { FormModal } from "@/components/form-modal";
 import { LockedCompanyField } from "@/components/locked-company-field";
+import { ActionSubmitButton } from "@/components/action-submit-button";
 import {
   generateAiVoiceAction,
   hubGenerateContentAction,
@@ -62,13 +64,22 @@ type CreateScope = "client" | "industry" | "general";
 type CompanyOpt = { id: string; name: string };
 type IndustryOpt = { id: string; label: string };
 
+function ModalCancelButton({ onClose }: { onClose: () => void }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+      Cancel
+    </Button>
+  );
+}
+
 function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLabel: string }) {
   return (
     <div className="flex justify-end gap-2 border-t border-border pt-4">
-      <Button type="button" variant="ghost" onClick={onClose}>
-        Cancel
-      </Button>
-      <Button type="submit">{submitLabel}</Button>
+      <ModalCancelButton onClose={onClose} />
+      <ActionSubmitButton type="submit" pendingLabel="Generating…">
+        {submitLabel}
+      </ActionSubmitButton>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { requireUser, accessibleCompanyIds } from "@/lib/auth/rbac";
+import { requireAdmin, accessibleCompanyIds } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
 import {
   listAiCampaignRecommendations,
@@ -22,7 +22,7 @@ import { AiCampaignRecommendationsPanel } from "@/components/ai-campaign-recomme
 import { generateRecommendationsAction } from "./actions";
 
 export default async function RecommendationsPage() {
-  const user = await requireUser();
+  const user = await requireAdmin();
   const companies = (await visibleCompanies(user)).filter((c) => c.status !== "archived");
   const scope = await accessibleCompanyIds(user);
   await resurfaceExpiredSnoozedRecommendations(user.tenantId, scope);

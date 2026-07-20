@@ -17,7 +17,7 @@ export const API_ROUTE_CATALOG: ApiRouteDescriptor[] = [
   { method: "GET", path: "/api/v1/content", scope: "content:read", auth: "api_key", description: "List content items (optional companyId filter)" },
   { method: "POST", path: "/api/v1/content", scope: "content:write", auth: "api_key", description: "Create a content item (ai_draft)" },
   { method: "GET", path: "/api/v1/content/{id}", scope: "content:read", auth: "api_key", description: "Get one content item" },
-  { method: "PATCH", path: "/api/v1/content/{id}", scope: "content:write", auth: "api_key", description: "Update content title/body/status" },
+  { method: "PATCH", path: "/api/v1/content/{id}", scope: "content:write", auth: "api_key", description: "Update content title/body/draft status (not approve/schedule/publish)" },
   { method: "GET", path: "/api/v1/leads", scope: "leads:read", auth: "api_key", description: "List leads (optional companyId filter)" },
   { method: "POST", path: "/api/v1/leads", scope: "leads:write", auth: "api_key", description: "Record a manual lead" },
   { method: "GET", path: "/api/v1/campaigns", scope: "campaigns:read", auth: "api_key", description: "List campaign plans (optional companyId filter)" },

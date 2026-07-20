@@ -23,7 +23,7 @@ import {
   updateCampaignItem,
   updateContent,
 } from "@/lib/db";
-import { assertCompanyAccess, assertAdminCompanyAccess } from "@/lib/auth/rbac";
+import { assertCompanyAccess, assertAdminCompanyAccess, canManageCampaigns } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { generateCampaignPlan } from "@/lib/ai/campaign";
 import { executeCampaignBuilder } from "@/lib/campaign-builder";
@@ -170,6 +170,9 @@ async function buildCampaign(args: {
 export async function createCampaignAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
+  if (!canManageCampaigns(user)) {
+    throw new Error("You do not have permission to manage campaigns.");
+  }
 
   const objective = text(formData, "objective");
   if (!objective) throw new Error("Objective is required");
@@ -208,6 +211,9 @@ export async function createCampaignAction(formData: FormData) {
 export async function createCampaignFromGoalAction(formData: FormData) {
   const companyId = text(formData, "companyId");
   const user = await assertCompanyAccess(companyId);
+  if (!canManageCampaigns(user)) {
+    throw new Error("You do not have permission to manage campaigns.");
+  }
 
   const goal = text(formData, "goal");
   if (!goal) throw new Error("Goal is required");
@@ -288,6 +294,9 @@ export async function convertRequestToCampaignAction(requestId: string) {
   const req = await getRequest(requestId);
   if (!req) throw new Error("Request not found");
   const user = await assertCompanyAccess(req.companyId);
+  if (!canManageCampaigns(user)) {
+    throw new Error("You do not have permission to manage campaigns.");
+  }
 
   if ((await listCampaigns(user.tenantId)).some((c) => c.requestId === requestId)) {
     throw new Error("This request has already been converted to a campaign.");
