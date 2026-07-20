@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth/rbac";
-import { accessibleCompanyIds } from "@/lib/auth/rbac";
+import { requireUser, accessibleCompanyIds, canManageCampaigns } from "@/lib/auth/rbac";
 import { getCompany, listCampaignItems, listCampaigns } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -13,6 +12,7 @@ export default async function CampaignsPage({
   searchParams: Promise<{ company?: string }>;
 }) {
   const user = await requireUser();
+  const mayManage = canManageCampaigns(user);
   const allowed = new Set(await accessibleCompanyIds(user));
   const { company: companyParam } = await searchParams;
   const companyId =
@@ -50,19 +50,28 @@ export default async function CampaignsPage({
         explainerId="campaigns"
         explainer="Full campaign plans — every item still goes through draft → review → approval before anything publishes. Package campaign-slot counts are planning guidance only (not hard-gated yet)."
       >
-        <Link href={newHref} className={buttonClasses()}>
-          New campaign
-        </Link>
+        {mayManage ? (
+          <Link href={newHref} className={buttonClasses()}>
+            New campaign
+          </Link>
+        ) : null}
       </PageHeader>
 
       <div className="p-6">
         {campaigns.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
-            No campaigns yet.{" "}
-            <Link href={newHref} className="text-primary hover:underline">
-              Plan the first one
-            </Link>
-            {" "}or convert a campaign-type support request.
+            No campaigns yet.
+            {mayManage ? (
+              <>
+                {" "}
+                <Link href={newHref} className="text-primary hover:underline">
+                  Plan the first one
+                </Link>{" "}
+                or convert a campaign-type support request.
+              </>
+            ) : (
+              " Ask an admin if you need campaign planning access."
+            )}
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

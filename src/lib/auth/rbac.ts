@@ -20,10 +20,15 @@ import {
   listCompanies,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
-import { userHasPermission, type Permission } from "@/lib/rbac-matrix";
+import {
+  userHasPermission,
+  canCreateContent,
+  canManageCampaigns,
+  type Permission,
+} from "@/lib/rbac-matrix";
 import type { ActingUser, User } from "@/lib/types";
 export type { ActingUser } from "@/lib/types";
-export { userHasPermission } from "@/lib/rbac-matrix";
+export { userHasPermission, canCreateContent, canManageCampaigns } from "@/lib/rbac-matrix";
 export type { Permission } from "@/lib/rbac-matrix";
 
 // Company ids a portal client may access — member role, scoped to the active tenant.
@@ -174,6 +179,20 @@ export async function requireAdmin(): Promise<ActingUser> {
 export async function requirePermission(permission: Permission): Promise<ActingUser> {
   const user = await requireUser();
   if (!userHasPermission(user, permission)) redirect("/dashboard");
+  return user;
+}
+
+/** Content create surfaces — redirects when capability (or legacy access) fails. */
+export async function requireCreateContent(): Promise<ActingUser> {
+  const user = await requireUser();
+  if (!canCreateContent(user)) redirect("/content");
+  return user;
+}
+
+/** Campaign mutations — list viewing stays requireUser; create/edit uses this. */
+export async function requireManageCampaigns(): Promise<ActingUser> {
+  const user = await requireUser();
+  if (!canManageCampaigns(user)) redirect("/campaigns");
   return user;
 }
 

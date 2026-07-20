@@ -149,6 +149,29 @@ export function userHasPermission(user: User, permission: Permission): boolean {
   return isAdmin(user);
 }
 
+/**
+ * Content create/edit (Content hub, Studio generate, AI drafts).
+ * Legacy members (no capabilities field) keep today's create access.
+ * Once capabilities are set, `create_content` is required (admins always pass).
+ */
+export function canCreateContent(user: User): boolean {
+  if (isPlatformAdmin(user) || isAdmin(user) || isTenantOwner(user)) return true;
+  const caps = capabilitiesOf(user);
+  if (caps !== undefined) return caps.includes("create_content");
+  return user.role === "user" || user.tenantRole === "member";
+}
+
+/**
+ * Campaign create/manage.
+ * Legacy members keep today's access; explicit caps require `manage_campaigns`.
+ */
+export function canManageCampaigns(user: User): boolean {
+  if (isPlatformAdmin(user) || isAdmin(user) || isTenantOwner(user)) return true;
+  const caps = capabilitiesOf(user);
+  if (caps !== undefined) return caps.includes("manage_campaigns");
+  return user.role === "user" || user.tenantRole === "member";
+}
+
 export function isPermission(value: string): value is Permission {
   return value in PERMISSION_CATALOG;
 }

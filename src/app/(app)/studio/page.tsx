@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth/rbac";
+import { requireCreateContent } from "@/lib/auth/rbac";
 import { visibleCompanies, visibleContent } from "@/lib/scope";
 import { getContent, getPromptTemplate, listPromptTemplates } from "@/lib/db";
 import {
@@ -46,7 +46,7 @@ export default async function StudioPage({
     company?: string;
   }>;
 }) {
-  const user = await requireUser();
+  const user = await requireCreateContent();
   const companies = (await visibleCompanies(user)).filter(
     (c) => c.status === "ai_ready" || c.status === "approved",
   );
@@ -97,10 +97,17 @@ export default async function StudioPage({
   return (
     <div>
       <PageHeader
-        title={scopedCompany ? `Studio · ${scopedCompany.name}` : "Content Studio"}
+        title={scopedCompany ? `Studio · ${scopedCompany.name}` : "Studio / repurpose"}
         explainerId="studio"
-        explainer="Generate any content type here. Drafts are compliance-checked and routed for approval — never published automatically."
-      />
+        explainer="Templates, multi-variant drafts, and repurpose tools. For day-to-day AI create, prefer Content."
+      >
+        <Link
+          href={contextCompanyId ? `/content?company=${contextCompanyId}` : "/content"}
+          className="text-sm text-primary hover:underline"
+        >
+          ← Content (primary create)
+        </Link>
+      </PageHeader>
       <p className="px-6 text-sm text-muted-foreground">
         AI images and short videos use package free quotas — manage remaining capacity and content
         add-ons on{" "}

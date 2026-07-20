@@ -69,6 +69,7 @@ export type CompanyToolsAccess = {
   isAdmin: boolean;
   canApprove: boolean;
   canViewAudit: boolean;
+  canCreate: boolean;
 };
 
 function buildTools(
@@ -119,14 +120,18 @@ function buildTools(
       ],
     });
   }
+  const produceItems: ToolLink[] = [
+    { href: `/assets?${q}`, label: "Assets" },
+    { href: `/library?${q}`, label: "Reuse library" },
+  ];
+  // Studio is secondary to Content — only when the user can create.
+  if (access.canCreate) {
+    produceItems.unshift({ href: `/studio?${q}`, label: "Studio / repurpose" });
+  }
   groups.push({
     id: "produce",
     label: "Produce",
-    items: [
-      { href: `/studio?${q}`, label: "Studio" },
-      { href: `/assets?${q}`, label: "Assets" },
-      { href: `/library?${q}`, label: "Reuse library" },
-    ],
+    items: produceItems,
   });
   const channelItems: ToolLink[] = [
     { href: `/inbox?${q}`, label: "Social inbox" },
@@ -210,7 +215,7 @@ export function CompanyToolsNav({
   businessType,
   activeAddons = [],
   serviceLevel,
-  access = { isAdmin: true, canApprove: true, canViewAudit: true },
+  access = { isAdmin: true, canApprove: true, canViewAudit: true, canCreate: true },
 }: {
   companyId: string;
   companyName: string;

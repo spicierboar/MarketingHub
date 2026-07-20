@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { isAdmin, requireUser } from "@/lib/auth/rbac";
+import { requireManageCampaigns, isAdmin } from "@/lib/auth/rbac";
 import { visibleCompanies } from "@/lib/scope";
 import { liveOffers, getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
@@ -22,7 +22,7 @@ export default async function NewCampaignPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireManageCampaigns();
   const admin = isAdmin(user);
   const companies = (await visibleCompanies(user)).filter(
     (c) => c.status === "ai_ready" || c.status === "approved",

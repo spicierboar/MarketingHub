@@ -10,6 +10,7 @@ import {
   canAccessFieldSales,
   accessibleCompanyIds,
   userHasPermission,
+  canCreateContent,
 } from "@/lib/auth/rbac";
 import {
   getSecuritySettings,
@@ -75,6 +76,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       isOwner={isTenantOwner(user)}
       isPlatformAdmin={isPlatformAdmin(user)}
       canApprove={userHasPermission(user, "approve_content")}
+      canCreate={canCreateContent(user)}
       canViewAudit={userHasPermission(user, "view_audit")}
       canFieldSales={canAccessFieldSales(user)}
       isSalesRepFocused={isSalesRep(user) && !isAdmin(user)}

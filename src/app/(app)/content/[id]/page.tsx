@@ -372,18 +372,67 @@ export default async function ContentDetailPage({
           {canApprove && awaitingApproval && waitingOnClient && (
             <Card className="border-amber-200">
               <CardContent className="p-6">
-                <h2 className="mb-1 font-semibold">Waiting on client</h2>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="font-semibold">Waiting on client</h2>
+                  {content.routedTo && (
+                    <Badge tone={content.routedTo === "admin" ? "neutral" : "warning"}>
+                      {ROUTE_LABEL[content.routedTo]}
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">
-                  Shared with {content.clientReview?.email}. Agency Approve/Reject
-                  is hidden here so an open client review is not overridden — use
-                  Approvals → Waiting on client, or re-send the link below if needed.
+                  Shared with {content.clientReview?.email}. Prefer waiting for
+                  their response; use Staff exception only when you must override
+                  the open review.
                 </p>
-                <Link
-                  href="/approvals"
-                  className="mt-3 inline-block text-sm text-primary hover:underline"
-                >
-                  Open Approvals →
-                </Link>
+                {c && !c.canProceed && (
+                  <p className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700">
+                    Critical compliance issue — resolve before approving.
+                  </p>
+                )}
+                {!canApproveRoute(user, content.routedTo ?? "admin") && (
+                  <p className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-700">
+                    This item requires the super admin ({ROUTE_LABEL[content.routedTo ?? "admin"]}).
+                  </p>
+                )}
+                <form action={approveContentAction} className="mt-4 mb-3">
+                  <input type="hidden" name="contentId" value={content.id} />
+                  <ActionSubmitButton
+                    type="submit"
+                    className="w-full"
+                    pendingLabel="Approving…"
+                    disabled={
+                      (!!c && !c.canProceed) ||
+                      !canApproveRoute(user, content.routedTo ?? "admin")
+                    }
+                  >
+                    Staff approve
+                  </ActionSubmitButton>
+                </form>
+                <form action={rejectContentAction} className="space-y-2">
+                  <input type="hidden" name="contentId" value={content.id} />
+                  <label className="sr-only" htmlFor={`detail-staff-reject-note-${content.id}`}>
+                    Rejection reason
+                  </label>
+                  <Textarea
+                    id={`detail-staff-reject-note-${content.id}`}
+                    name="note"
+                    placeholder="Reason / changes needed…"
+                    className="min-h-16"
+                  />
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input type="checkbox" name="changesOnly" className="h-4 w-4" />
+                    Request changes (return to editor)
+                  </label>
+                  <ActionSubmitButton
+                    type="submit"
+                    variant="destructive"
+                    className="w-full"
+                    pendingLabel="Rejecting…"
+                  >
+                    Staff reject
+                  </ActionSubmitButton>
+                </form>
               </CardContent>
             </Card>
           )}

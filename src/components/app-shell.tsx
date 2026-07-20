@@ -39,6 +39,8 @@ interface NavItem {
   adminOnly?: boolean;
   /** Visible when the user can approve content (admins always can). */
   approveAccess?: boolean;
+  /** Visible when the user can create content (hub + studio). */
+  createAccess?: boolean;
   ownerOnly?: boolean;
   platformAdminOnly?: boolean;
   salesAccess?: boolean;
@@ -134,7 +136,12 @@ const NAV_GROUPS: NavGroup[] = [
       // Usage order: plan → produce → schedule → publish
       { href: "/campaigns", label: "Campaigns", icon: Megaphone },
       { href: "/content", label: "Content", icon: FileText },
-      { href: "/studio", label: "Content Studio", icon: Sparkles, memberOnly: true },
+      {
+        href: "/studio",
+        label: "Studio / repurpose",
+        icon: Sparkles,
+        createAccess: true,
+      },
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/publishing", label: "Publishing", icon: Send, adminOnly: true },
     ],
@@ -235,6 +242,7 @@ function itemVisible(
     isOwner: boolean;
     isPlatformAdmin: boolean;
     canApprove: boolean;
+    canCreate: boolean;
     canFieldSales: boolean;
     /** Non-admin sales_rep — show only salesHome items. */
     isSalesRepFocused: boolean;
@@ -249,6 +257,7 @@ function itemVisible(
   return (
     (!n.adminOnly || opts.isAdmin) &&
     (!n.approveAccess || opts.canApprove) &&
+    (!n.createAccess || opts.canCreate) &&
     (!n.ownerOnly || opts.isOwner) &&
     (!n.platformAdminOnly || opts.isPlatformAdmin) &&
     (!n.salesAccess || opts.canFieldSales)
@@ -361,6 +370,7 @@ export function AppShell({
   isOwner = false,
   isPlatformAdmin = false,
   canApprove = false,
+  canCreate = false,
   canViewAudit = false,
   canFieldSales = false,
   isSalesRepFocused = false,
@@ -378,6 +388,7 @@ export function AppShell({
   isOwner?: boolean;
   isPlatformAdmin?: boolean;
   canApprove?: boolean;
+  canCreate?: boolean;
   canViewAudit?: boolean;
   canFieldSales?: boolean;
   isSalesRepFocused?: boolean;
@@ -393,10 +404,11 @@ export function AppShell({
     isOwner,
     isPlatformAdmin,
     canApprove,
+    canCreate,
     canFieldSales,
     isSalesRepFocused,
   };
-  const toolsAccess = { isAdmin, canApprove, canViewAudit };
+  const toolsAccess = { isAdmin, canApprove, canViewAudit, canCreate };
 
   const groups = NAV_GROUPS.map((g) => ({
     ...g,

@@ -39,18 +39,18 @@ function waitingOnClient(c: ContentItem): boolean {
 async function ApprovalCard({
   c,
   user,
-  readOnly = false,
+  waitingOnClient = false,
 }: {
   c: ContentItem;
   user: User;
-  readOnly?: boolean;
+  waitingOnClient?: boolean;
 }) {
   const blocked = !!c.compliance && !c.compliance.canProceed;
   const route = c.routedTo ?? "admin";
-  const mayApprove = !readOnly && canApproveRoute(user, route) && !blocked;
+  const mayApprove = canApproveRoute(user, route) && !blocked;
   const company = await getCompany(c.companyId);
   const companyName = company?.name;
-  const assist = !readOnly && company ? await buildApprovalAssist(c, company) : null;
+  const assist = company ? await buildApprovalAssist(c, company) : null;
 
   return (
     <Card>
@@ -62,13 +62,13 @@ async function ApprovalCard({
             </Link>
             <p className="text-xs text-muted-foreground">
               {companyName} · {titleCase(c.type)}
-              {readOnly && c.clientReview?.email
+              {waitingOnClient && c.clientReview?.email
                 ? ` · waiting on ${c.clientReview.email}`
                 : ""}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {readOnly && <Badge tone="warning">Waiting on client</Badge>}
+            {waitingOnClient && <Badge tone="warning">Waiting on client</Badge>}
             {c.groundingLabel && (
               <Badge tone={c.groundingLabel === "grounded" ? "success" : "warning"}>
                 {titleCase(c.groundingLabel)}
@@ -89,64 +89,59 @@ async function ApprovalCard({
             Critical compliance issue — resolve in the editor before approving.
           </p>
         )}
-        {!readOnly && !blocked && !canApproveRoute(user, route) && (
+        {!blocked && !canApproveRoute(user, route) && (
           <p className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-700">
             Routed to {ROUTE_LABEL[route]} — requires the super admin.
           </p>
         )}
-        {readOnly && (
+        {waitingOnClient && (
           <p className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-800">
-            Shared with the client for sign-off. Agency Approve/Reject is hidden
-            here so we do not override an open client review — open the item if
-            you need a staff exception.
+            Shared with the client for sign-off. Prefer waiting for their response;
+            use Staff exception below only when you must override the open review.
           </p>
         )}
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          {!readOnly && (
-            <>
-              <form action={approveContentAction}>
-                <input type="hidden" name="contentId" value={c.id} />
-                <ActionSubmitButton
-                  type="submit"
-                  disabled={!mayApprove}
-                  pendingLabel="Approving…"
-                  className="w-full sm:w-auto"
-                >
-                  Approve
-                </ActionSubmitButton>
-              </form>
-              <form
-                action={rejectContentAction}
-                className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-end"
-              >
-                <input type="hidden" name="contentId" value={c.id} />
-                <div className="flex-1">
-                  <label className="sr-only" htmlFor={`reject-note-${c.id}`}>
-                    Rejection reason
-                  </label>
-                  <Textarea
-                    id={`reject-note-${c.id}`}
-                    name="note"
-                    placeholder="Reason (optional)"
-                    className="min-h-10"
-                  />
-                </div>
-                <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                  <input type="checkbox" name="changesOnly" className="h-4 w-4" />
-                  Changes only
-                </label>
-                <ActionSubmitButton
-                  type="submit"
-                  variant="destructive"
-                  pendingLabel="Rejecting…"
-                  className="w-full sm:w-auto"
-                >
-                  Reject
-                </ActionSubmitButton>
-              </form>
-            </>
-          )}
+          <form action={approveContentAction}>
+            <input type="hidden" name="contentId" value={c.id} />
+            <ActionSubmitButton
+              type="submit"
+              disabled={!mayApprove}
+              pendingLabel="Approving…"
+              className="w-full sm:w-auto"
+            >
+              {waitingOnClient ? "Staff approve" : "Approve"}
+            </ActionSubmitButton>
+          </form>
+          <form
+            action={rejectContentAction}
+            className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-end"
+          >
+            <input type="hidden" name="contentId" value={c.id} />
+            <div className="flex-1">
+              <label className="sr-only" htmlFor={`reject-note-${c.id}`}>
+                Rejection reason
+              </label>
+              <Textarea
+                id={`reject-note-${c.id}`}
+                name="note"
+                placeholder="Reason (optional)"
+                className="min-h-10"
+              />
+            </div>
+            <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+              <input type="checkbox" name="changesOnly" className="h-4 w-4" />
+              Changes only
+            </label>
+            <ActionSubmitButton
+              type="submit"
+              variant="destructive"
+              pendingLabel="Rejecting…"
+              className="w-full sm:w-auto"
+            >
+              {waitingOnClient ? "Staff reject" : "Reject"}
+            </ActionSubmitButton>
+          </form>
           <Link href={`/content/${c.id}`} className="text-sm text-primary hover:underline">
             Open
           </Link>
@@ -377,7 +372,7 @@ export default async function ApprovalsPage({
           </div>
           <div className="space-y-4">
             {clientWaiting.map((c) => (
-              <ApprovalCard key={c.id} c={c} user={user} readOnly />
+              <ApprovalCard key={c.id} c={c} user={user} waitingOnClient />
             ))}
             {clientWaiting.length === 0 && (
               <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">

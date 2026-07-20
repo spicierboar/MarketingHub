@@ -16,17 +16,21 @@ import {
   getTenant,
   isUnderLegalHold,
   listContent,
+  listManagedApprovalRequests,
   maybeCompleteCampaign,
   revertCampaignItemAfterDemotion,
   transitionScheduledPost,
   updateCampaignItem,
   updateContent,
+  updateManagedApprovalRequest,
 } from "@/lib/db";
 import { assetChannelBlockReason } from "@/lib/assets";
 import {
   assertAdminCompanyAccess,
   assertCompanyAccess,
   canAccessCompany,
+  canCreateContent,
+  canManageCampaigns,
   requireUser,
   requireAdmin,
   userHasPermission,
@@ -69,6 +73,35 @@ async function assertNotOnHold(content: { id: string; companyId: string }): Prom
 async function requestOrigin(): Promise<string> {
   const h = await headers();
   return resolveOrigin((k) => h.get(k));
+}
+
+/** Close open managed approval shares before staff override mutates content.
+ *  Uses the repo update path (service-capable) — never the client-bound RPC
+ *  `respondManagedApprovalAsClient`, which requires auth.uid() = recipient email. */
+async function closePendingManagedApprovalsForContent(args: {
+  tenantId: string;
+  companyId: string;
+  contentId: string;
+  decision: "approved" | "superseded";
+}): Promise<void> {
+  const pending = (await listManagedApprovalRequests(args.tenantId, args.companyId))
+    .filter((r) => r.contentId === args.contentId && r.status === "pending");
+  const stamp = now();
+  for (const request of pending) {
+    // Re-check before write so a concurrent client ACK is not overwritten.
+    const latest = (await listManagedApprovalRequests(args.tenantId, args.companyId)).find(
+      (r) => r.id === request.id,
+    );
+    if (!latest || latest.status !== "pending") {
+      throw new Error(
+        "This item was already actioned by the client. Refresh and try again.",
+      );
+    }
+    await updateManagedApprovalRequest(request.id, {
+      status: args.decision,
+      ...(args.decision === "approved" ? { respondedAt: stamp } : {}),
+    });
+  }
 }
 
 // T6 — share a pending content item for tokenised no-login CLIENT approval.
@@ -293,6 +326,17 @@ export async function approveContentAction(formData: FormData) {
     throw new Error("Critical compliance issues must be resolved before approval.");
   }
 
+  // Durable ACK first when overriding an open client share — never mark content
+  // approved while a pending ManagedApprovalRequest remains actionable.
+  if (content.clientReview?.status === "pending") {
+    await closePendingManagedApprovalsForContent({
+      tenantId: user.tenantId,
+      companyId: content.companyId,
+      contentId,
+      decision: "approved",
+    });
+  }
+
   await updateContent(contentId, {
     ...governed,
     status: "approved",
@@ -395,6 +439,17 @@ export async function rejectContentAction(formData: FormData) {
   // tab can no longer reject content that was approved and scheduled since.
   if (content.status !== "pending_approval") {
     throw new Error("Only content pending approval can be rejected.");
+  }
+
+  // Close durable client shares before clearing clientReview so token links
+  // cannot still ACK after staff reject / changes-required.
+  if (content.clientReview?.status === "pending") {
+    await closePendingManagedApprovalsForContent({
+      tenantId: user.tenantId,
+      companyId: content.companyId,
+      contentId,
+      decision: "superseded",
+    });
   }
 
   await updateContent(contentId, {
@@ -721,6 +776,9 @@ export async function detachAssetAction(formData: FormData) {
     throw new Error("Assets cannot be changed on terminal content.");
   }
 
+  const assetIds = content.assetIds ?? [];
+  if (!assetIds.includes(assetId)) return; // idempotent — nothing to detach
+
   const wasApproved =
     content.status === "approved" || content.status === "scheduled";
   if (content.status === "scheduled") {
@@ -739,7 +797,7 @@ export async function detachAssetAction(formData: FormData) {
   }
 
   await updateContent(contentId, {
-    assetIds: (content.assetIds ?? []).filter((a) => a !== assetId),
+    assetIds: assetIds.filter((a) => a !== assetId),
     ...(wasApproved
       ? {
           status: "pending_approval" as const,
@@ -792,6 +850,9 @@ function textFd(fd: FormData, key: string): string {
 
 async function resolveHubTarget(formData: FormData) {
   const user = await requireUser();
+  if (!canCreateContent(user)) {
+    throw new Error("You do not have permission to create content.");
+  }
   const target = await resolveContentCreateTarget(formData, user, {
     assertCompanyAccess,
     getCompany,
