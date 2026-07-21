@@ -13,3 +13,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Scope every list** through `src/lib/scope.ts` and gate every action with `src/lib/auth/rbac.ts`. Users only ever see companies they're assigned to.
 - **AI calls** go through `src/lib/ai/claude.ts`, which returns `null` (→ template fallback) when no key. Keep everything runnable with no external accounts.
 - Core rule to preserve: AI drafts → user reviews → admin approves → export. Nothing unapproved is published.
+- **Marketing content work:** use the Anthropic official skills under `.agents/skills/` and `.cursor/skills/` (`content-creation`, `draft-content`, `campaign-plan`, `brand-review`, `competitive-brief`, `seo-audit`, `email-sequence`, `performance-report`). See `.cursor/rules/marketing-content-skills.mdc`.
