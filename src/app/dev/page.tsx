@@ -14,6 +14,7 @@ import {
   clearAndReseedAction,
   quickLoginAction,
   seedDemoDataAction,
+  seedStagingAgencyFixtureAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -53,18 +54,26 @@ function QuickLoginSecretFields({ required }: { required: boolean }) {
 export default async function DevToolsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string; seeded?: string; cleared?: string }>;
+  searchParams?: Promise<{
+    error?: string;
+    seeded?: string;
+    cleared?: string;
+    companies?: string;
+    approvers?: string;
+  }>;
 }) {
   if (!devToolsOpen()) redirect("/login");
 
   const params = (await searchParams) ?? {};
   const error = typeof params.error === "string" ? params.error.trim() : "";
+  const seededOk = params.seeded === "staging" || params.seeded === "1";
   const demoFlag = localDemoEnabled();
   const demoMutations = localDemoMutationAllowed(await headers());
   const staging = appEnv() === "staging";
   const quickLoginOk = demoFlag || staging;
   const supabaseActive = isSupabaseConfigured();
   const secretRequired = selfTestSecretConfigured();
+  const stagingSeedOk = staging && !demoFlag && supabaseActive;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-10">
@@ -91,6 +100,17 @@ export default async function DevToolsPage({
           className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
         >
           {error}
+        </p>
+      ) : null}
+
+      {seededOk ? (
+        <p
+          role="status"
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+        >
+          {params.seeded === "staging"
+            ? `Staging restaurants ready (${params.companies ?? "10"} companies, ${params.approvers ?? "10"} approvers). Use Quick login below.`
+            : "Demo data re-seeded."}
         </p>
       ) : null}
 
@@ -148,8 +168,10 @@ export default async function DevToolsPage({
           )}
           {staging && !demoFlag && (
             <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
-              Staging: Seed stays local-demo-only. Quick login is limited to the
-              fixture emails below (same-origin POST
+              Staging: use <strong>Seed staging restaurants</strong> once (or
+              Sign in as an approver — it auto-seeds if restaurants are
+              missing). Quick login is limited to the fixture emails below
+              (same-origin POST
               {secretRequired
                 ? "; CC_SELFTEST_SECRET required"
                 : ""}
@@ -162,26 +184,39 @@ export default async function DevToolsPage({
       <Card>
         <CardContent className="space-y-4 p-6">
           <h2 className="font-semibold">Data</h2>
-          <p className="text-sm text-muted-foreground">
-            In-memory only. Re-seed restores the ten fictional Australian Indian
-            restaurants and their linked agency, client, delivery, billing and
-            operations records. No external side effects are enabled.
-            {staging && !demoMutations
-              ? " Disabled on staging Supabase — use Quick login instead."
-              : ""}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <form action={seedDemoDataAction}>
-              <Button type="submit" disabled={!demoMutations}>
-                Seed / reset demo data
-              </Button>
-            </form>
-            <form action={clearAndReseedAction}>
-              <Button type="submit" variant="secondary" disabled={!demoMutations}>
-                Clear session + re-seed
-              </Button>
-            </form>
-          </div>
+          {stagingSeedOk ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Upserts the ten fictional Australian Indian restaurants into
+                this staging Supabase project (agency tenant, approvers, access,
+                sample assets). Idempotent; no billing or live connectors.
+              </p>
+              <form action={seedStagingAgencyFixtureAction} className="space-y-2">
+                <QuickLoginSecretFields required={secretRequired} />
+                <Button type="submit">Seed staging restaurants</Button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                In-memory only. Re-seed restores the ten fictional Australian Indian
+                restaurants and their linked agency, client, delivery, billing and
+                operations records. No external side effects are enabled.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <form action={seedDemoDataAction}>
+                  <Button type="submit" disabled={!demoMutations}>
+                    Seed / reset demo data
+                  </Button>
+                </form>
+                <form action={clearAndReseedAction}>
+                  <Button type="submit" variant="secondary" disabled={!demoMutations}>
+                    Clear session + re-seed
+                  </Button>
+                </form>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

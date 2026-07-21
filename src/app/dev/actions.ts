@@ -8,6 +8,7 @@ import {
   addMembership,
   createUser,
   getMembership,
+  getTenant,
   getUserByEmail,
   grantAccess,
   listCompanies,
@@ -29,8 +30,10 @@ import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { runInServiceContext } from "@/lib/db/service-context";
 import { logAction } from "@/lib/audit";
 import { resolvePlatformAgencyTenant } from "@/lib/platform-agency";
+import { applyStagingAgencyFixture } from "@/lib/fixtures/apply-staging-agency";
 import {
   STAGING_FIXTURE_KEY,
+  STAGING_FIXTURE_TENANT_ID,
   stagingFixtureDisplayName,
 } from "@/lib/fixtures/staging-agency";
 import type { ActingUser, TenantMember, TenantRole, User } from "@/lib/types";
@@ -165,26 +168,116 @@ async function resolveApproverCompanyId(
 ): Promise<string> {
   // Quick-login has no cookie session yet — listCompanies uses the RLS client,
   // and anon cannot EXECUTE has_company_access. Resolve under service context.
-  const companies = await runInServiceContext(tenantId, () =>
-    listCompanies(tenantId),
-  );
-  const fixtureKey = `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
-  const byFixture = companies.find((c) => {
-    const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
-      .stagingFixture;
-    return meta?.fixtureKey === fixtureKey;
-  });
-  if (byFixture) return byFixture.id;
-  const needle = companySlug.replace(/-/g, " ").toLowerCase();
-  const byName = companies.find((c) => c.name.toLowerCase().includes(needle));
-  if (byName) return byName.id;
+  const find = async () => {
+    const companies = await runInServiceContext(tenantId, () =>
+      listCompanies(tenantId),
+    );
+    const fixtureKey = `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
+    const byFixture = companies.find((c) => {
+      const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
+        .stagingFixture;
+      return meta?.fixtureKey === fixtureKey;
+    });
+    if (byFixture) return byFixture.id;
+    const needle = companySlug.replace(/-/g, " ").toLowerCase();
+    const byName = companies.find((c) => c.name.toLowerCase().includes(needle));
+    return byName?.id ?? null;
+  };
+
+  let companyId = await find();
+  if (!companyId && appEnv() === "staging" && isSupabaseConfigured()) {
+    await ensureStagingAgencyFixtureApplied();
+    // Seed always lands under the fixture tenant id.
+    const seededTenantId = STAGING_FIXTURE_TENANT_ID;
+    const companies = await runInServiceContext(seededTenantId, () =>
+      listCompanies(seededTenantId),
+    );
+    const fixtureKey = `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
+    companyId =
+      companies.find((c) => {
+        const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
+          .stagingFixture;
+        return meta?.fixtureKey === fixtureKey;
+      })?.id ??
+      companies.find((c) =>
+        c.name.toLowerCase().includes(companySlug.replace(/-/g, " ").toLowerCase()),
+      )?.id ??
+      null;
+  }
+  if (companyId) return companyId;
   throw new Error(
-    `No client company for approver slug "${companySlug}". Seed the staging restaurant fixture first.`,
+    `No client company for approver slug "${companySlug}". On /dev, click “Seed staging restaurants”, then try again.`,
   );
 }
 
 async function resolveStagingTenant() {
+  // Prefer the deterministic fixture tenant so restaurant companies resolve.
+  const fixture = await getTenant(STAGING_FIXTURE_TENANT_ID);
+  if (fixture?.status === "active") {
+    return resolvePlatformAgencyTenant(STAGING_FIXTURE_TENANT_ID);
+  }
   return resolvePlatformAgencyTenant();
+}
+
+async function ensureStagingAgencyFixtureApplied() {
+  const sb = getServiceSupabase();
+  if (!sb) throw new Error("Supabase service role is not configured.");
+  return applyStagingAgencyFixture(sb);
+}
+
+/** Create/refresh restaurants when the staging DB has an empty agency seat. */
+async function ensureStagingRestaurantsReady(): Promise<void> {
+  const fixtureTenant = await getTenant(STAGING_FIXTURE_TENANT_ID);
+  if (!fixtureTenant) {
+    await ensureStagingAgencyFixtureApplied();
+    return;
+  }
+  const companies = await runInServiceContext(STAGING_FIXTURE_TENANT_ID, () =>
+    listCompanies(STAGING_FIXTURE_TENANT_ID),
+  );
+  if (companies.length < 10) {
+    await ensureStagingAgencyFixtureApplied();
+  }
+}
+
+/** Staging-only: upsert ten restaurants + approvers into Supabase (idempotent). */
+export async function seedStagingAgencyFixtureAction(
+  formData: FormData,
+): Promise<void> {
+  try {
+    if (!devToolsOpen() || appEnv() !== "staging") {
+      throw new Error("Staging restaurant seed is only available on staging.");
+    }
+    if (localDemoEnabled()) {
+      throw new Error("Local demo uses in-memory seed — use Seed / reset demo data.");
+    }
+    if (!isSupabaseConfigured()) {
+      throw new Error("Supabase is not configured on this deployment.");
+    }
+    const hdrs = await headers();
+    const providedSecret = String(formData.get("selftestSecret") || "");
+    if (
+      !quickLoginRequestAllowed({
+        headers: hdrs,
+        providedSecret,
+      })
+    ) {
+      throw new Error(
+        selfTestSecretConfigured()
+          ? "Seed requires same-origin POST and a valid CC_SELFTEST_SECRET."
+          : "Seed requires a same-origin browser request.",
+      );
+    }
+    const summary = await ensureStagingAgencyFixtureApplied();
+    revalidatePath("/dev");
+    redirect(
+      `/dev?seeded=staging&companies=${summary.companies}&approvers=${summary.approvers}`,
+    );
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "Staging seed failed";
+    failQuickLogin(msg);
+  }
 }
 
 /**
@@ -236,6 +329,12 @@ async function linkExistingAuthUser(email: string, appRole: User["role"]): Promi
 /** Ensure the allowlisted fixture email has the correct staging seat (not always owner). */
 async function ensureStagingUser(email: string): Promise<User> {
   const seat = stagingQuickSeat(email);
+
+  // Approver login needs the ten restaurants under the fixture tenant.
+  if (appEnv() === "staging" && isSupabaseConfigured()) {
+    await ensureStagingRestaurantsReady();
+  }
+
   let user = await getUserByEmail(email);
   if (!user) {
     try {
