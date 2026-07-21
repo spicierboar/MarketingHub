@@ -60,7 +60,13 @@ export default async function ContentDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ scheduleError?: string; scheduledAt?: string }>;
+  searchParams?: Promise<{
+    scheduleError?: string;
+    scheduledAt?: string;
+    submitError?: string;
+    submitted?: string;
+    queue?: string;
+  }>;
 }) {
   const { id } = await params;
   const qs = searchParams ? await searchParams : {};
@@ -157,6 +163,24 @@ export default async function ContentDetailPage({
           {qs.scheduleError && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {qs.scheduleError}
+            </div>
+          )}
+          {qs.submitError && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              Could not submit for approval: {qs.submitError}
+            </div>
+          )}
+          {qs.submitted === "1" && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              Submitted for approval
+              {qs.queue === "in_client_review"
+                ? " — in client review."
+                : qs.queue === "in_agency_review"
+                  ? " — in agency review (Approvals queue)."
+                  : "."}{" "}
+              <Link href="/approvals" className="font-medium underline">
+                Open Approvals
+              </Link>
             </div>
           )}
           {qs.scheduledAt && (
@@ -297,7 +321,9 @@ export default async function ContentDetailPage({
             {canSubmit && (
               <form action={submitForApprovalAction}>
                 <input type="hidden" name="contentId" value={content.id} />
-                <Button type="submit">Submit for approval</Button>
+                <ActionSubmitButton type="submit" pendingLabel="Submitting…">
+                  Submit for approval
+                </ActionSubmitButton>
               </form>
             )}
             {locked && (

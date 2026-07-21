@@ -247,12 +247,14 @@ export async function applyQualityRoutingAfterDraft(input: {
   const { decision, reason } = decideQualityRouting(gate, serviceLevel);
 
   // Client-facing auto-submit only when the route is client-approvable.
+  // Content-library shelf (industry/general) has no client contact — hold for agency.
   let finalDecision = decision;
   let finalReason = reason;
-  if (
-    decision === "auto_submit_client" &&
-    !canClientApproveRoute(route)
-  ) {
+  const isShelf = Boolean(company.profile.contentLibraryShelf);
+  if (decision === "auto_submit_client" && isShelf) {
+    finalDecision = "hold_agency";
+    finalReason = "Agency library content (industry/general) — held for staff review";
+  } else if (decision === "auto_submit_client" && !canClientApproveRoute(route)) {
     finalDecision = "hold_agency";
     finalReason = `Route ${route} is not client-approvable — held for agency`;
   }

@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { headers } from "next/headers";
 import {
   cancellableSchedulesForContent,
@@ -245,33 +246,43 @@ export async function saveContentAction(formData: FormData) {
 
 export async function submitForApprovalAction(formData: FormData) {
   const contentId = String(formData.get("contentId") || "");
-  const content = await getContent(contentId);
-  if (!content) throw new Error("Content not found");
-  const user = await assertCompanyAccess(content.companyId);
-  await assertNotOnHold(content);
-  // Only editable drafts may be submitted — the server action is the boundary.
-  if (!["ai_draft", "user_edited", "changes_required"].includes(content.status)) {
-    throw new Error("Only editable drafts can be submitted for approval.");
+  try {
+    const content = await getContent(contentId);
+    if (!content) throw new Error("Content not found");
+    const user = await assertCompanyAccess(content.companyId);
+    await assertNotOnHold(content);
+    // Only editable drafts may be submitted — the server action is the boundary.
+    if (!["ai_draft", "user_edited", "changes_required"].includes(content.status)) {
+      throw new Error("Only editable drafts can be submitted for approval.");
+    }
+
+    // Quality gate → service-level routing (auto client vs agency hold).
+    const routed = await applyQualityRoutingAfterDraft({
+      contentId,
+      actor: user,
+      origin: await requestOrigin(),
+    });
+
+    if (content.requestId) await advanceRequest(content.requestId, "pending_approval", user.id);
+
+    await logAction(user, "content.submitted_for_approval", {
+      targetType: "content",
+      targetId: contentId,
+      companyId: content.companyId,
+      detail: `${routed.gate} → ${routed.decision} · ${ROUTE_LABEL[routed.content.routedTo ?? "admin"]}`,
+    });
+    revalidatePath(`/content/${contentId}`);
+    revalidatePath("/approvals");
+    revalidatePath("/dashboard");
+    redirect(
+      `/content/${contentId}?submitted=1&queue=${encodeURIComponent(routed.record.queue)}`,
+    );
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "Submit for approval failed.";
+    if (!contentId) throw e;
+    redirect(`/content/${contentId}?submitError=${encodeURIComponent(msg.slice(0, 300))}`);
   }
-
-  // Quality gate → service-level routing (auto client vs agency hold).
-  const routed = await applyQualityRoutingAfterDraft({
-    contentId,
-    actor: user,
-    origin: await requestOrigin(),
-  });
-
-  if (content.requestId) await advanceRequest(content.requestId, "pending_approval", user.id);
-
-  await logAction(user, "content.submitted_for_approval", {
-    targetType: "content",
-    targetId: contentId,
-    companyId: content.companyId,
-    detail: `${routed.gate} → ${routed.decision} · ${ROUTE_LABEL[routed.content.routedTo ?? "admin"]}`,
-  });
-  revalidatePath(`/content/${contentId}`);
-  revalidatePath("/approvals");
-  revalidatePath("/dashboard");
 }
 
 export async function submitHeldToClientAction(formData: FormData) {
