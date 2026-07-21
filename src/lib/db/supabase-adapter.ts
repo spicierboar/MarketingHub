@@ -588,7 +588,13 @@ export const supabaseRepo = {
   },
   async updateContent(contentId: string, patch: Partial<ContentItem>): Promise<ContentItem | undefined> {
     const sb = await usr(); if (!sb) return undefined;
-    const { data } = await sb.from("content_items").update({ ...toRow(patch), updated_at: now() }).eq("id", contentId).select("*").maybeSingle();
+    const { data, error } = await sb
+      .from("content_items")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", contentId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error("updateContent: " + error.message);
     return data ? toDomain<ContentItem>(data) : undefined;
   },
 

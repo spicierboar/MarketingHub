@@ -281,6 +281,12 @@ export async function applyQualityRoutingAfterDraft(input: {
       ? { clientReview: undefined }
       : {}),
   });
+  const afterRoute = await getContent(content.id);
+  if (!afterRoute || afterRoute.status !== "pending_approval") {
+    throw new Error(
+      "Failed to move content to pending approval (database update did not stick).",
+    );
+  }
 
   if (finalDecision === "auto_submit_client") {
     try {
