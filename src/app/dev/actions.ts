@@ -9,6 +9,8 @@ import {
   createUser,
   getMembership,
   getUserByEmail,
+  grantAccess,
+  listCompanies,
   membershipsForUser,
   updateMembership,
 } from "@/lib/db";
@@ -25,8 +27,10 @@ import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
 import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { logAction } from "@/lib/audit";
 import { resolvePlatformAgencyTenant } from "@/lib/platform-agency";
-import type { ActingUser, TenantMember, User } from "@/lib/types";
+import { STAGING_FIXTURE_KEY } from "@/lib/fixtures/staging-agency";
+import type { ActingUser, TenantMember, TenantRole, User } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
+
 
 function failQuickLogin(message: string): never {
   redirect(`/dev?error=${encodeURIComponent(message.slice(0, 300))}`);
@@ -103,6 +107,71 @@ function nameFromEmail(email: string): string {
   return named || email;
 }
 
+type StagingQuickSeat =
+  | { kind: "agency_owner"; appRole: User["role"]; tenantRole: TenantRole; roleTitle: "group_admin" }
+  | { kind: "agency_staff"; appRole: User["role"]; tenantRole: TenantRole; roleTitle: "content_operator" }
+  | {
+      kind: "client_approver";
+      appRole: User["role"];
+      tenantRole: TenantRole;
+      roleTitle: "approver";
+      companySlug: string;
+    };
+
+/** Map allowlisted fixture emails to the seat they must hold on staging. */
+function stagingQuickSeat(email: string): StagingQuickSeat {
+  const normalized = email.trim().toLowerCase();
+  if (normalized === "admin@staging-fixture.invalid") {
+    return {
+      kind: "agency_owner",
+      appRole: "admin",
+      tenantRole: "owner",
+      roleTitle: "group_admin",
+    };
+  }
+  if (normalized === "staff-1@staging-fixture.invalid") {
+    return {
+      kind: "agency_staff",
+      appRole: "admin",
+      tenantRole: "admin",
+      roleTitle: "content_operator",
+    };
+  }
+  const approver = normalized.match(
+    /^approver-([a-z0-9-]+)@staging-fixture\.invalid$/,
+  );
+  if (approver?.[1]) {
+    return {
+      kind: "client_approver",
+      appRole: "user",
+      tenantRole: "member",
+      roleTitle: "approver",
+      companySlug: approver[1],
+    };
+  }
+  throw new Error(`No staging seat mapping for ${email}`);
+}
+
+async function resolveApproverCompanyId(
+  tenantId: string,
+  companySlug: string,
+): Promise<string> {
+  const companies = await listCompanies(tenantId);
+  const fixtureKey = `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
+  const byFixture = companies.find((c) => {
+    const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
+      .stagingFixture;
+    return meta?.fixtureKey === fixtureKey;
+  });
+  if (byFixture) return byFixture.id;
+  const needle = companySlug.replace(/-/g, " ").toLowerCase();
+  const byName = companies.find((c) => c.name.toLowerCase().includes(needle));
+  if (byName) return byName.id;
+  throw new Error(
+    `No client company for approver slug "${companySlug}". Seed the staging restaurant fixture first.`,
+  );
+}
+
 async function resolveStagingTenant() {
   return resolvePlatformAgencyTenant();
 }
@@ -111,7 +180,7 @@ async function resolveStagingTenant() {
  * When auth.users already exists (e.g. prior magic-link attempts) but app_users
  * does not, createUser fails — link the identity via admin generateLink (no email).
  */
-async function linkExistingAuthUser(email: string): Promise<User> {
+async function linkExistingAuthUser(email: string, appRole: User["role"]): Promise<User> {
   const svc = getServiceSupabase();
   if (!svc) throw new Error(`No account for ${email}`);
 
@@ -133,6 +202,7 @@ async function linkExistingAuthUser(email: string): Promise<User> {
       id: authUser.id,
       email: email.trim(),
       name: nameFromEmail(email),
+      role: appRole,
       active: true,
     })
     .select("*")
@@ -145,26 +215,27 @@ async function linkExistingAuthUser(email: string): Promise<User> {
     id: row.id as string,
     email: row.email as string,
     name: row.name as string,
-    role: "admin",
+    role: (row.role as User["role"]) ?? appRole,
     active: (row.active as boolean) ?? true,
     platformAdmin: (row.platform_admin as boolean) ?? false,
     createdAt: row.created_at as string,
   };
 }
 
-/** Ensure an active agency owner exists for staging Supabase quick login. */
+/** Ensure the allowlisted fixture email has the correct staging seat (not always owner). */
 async function ensureStagingUser(email: string): Promise<User> {
+  const seat = stagingQuickSeat(email);
   let user = await getUserByEmail(email);
   if (!user) {
     try {
       user = await createUser({
         email,
         name: nameFromEmail(email),
-        role: "admin",
+        role: seat.appRole,
       });
     } catch (createErr) {
       try {
-        user = await linkExistingAuthUser(email);
+        user = await linkExistingAuthUser(email, seat.appRole);
       } catch (linkErr) {
         const a = createErr instanceof Error ? createErr.message : String(createErr);
         const b = linkErr instanceof Error ? linkErr.message : String(linkErr);
@@ -176,15 +247,27 @@ async function ensureStagingUser(email: string): Promise<User> {
 
   const tenant = await resolveStagingTenant();
   const existing = await getMembership(tenant.id, user.id);
+  const membershipPatch = {
+    role: seat.tenantRole,
+    roleTitle: seat.roleTitle,
+    portalOnly: seat.kind === "client_approver" ? true : false,
+  } as const;
+
   if (!existing) {
     await addMembership({
       tenantId: tenant.id,
       userId: user.id,
-      role: "owner",
+      ...membershipPatch,
     });
-  } else if (existing.role !== "owner") {
-    await updateMembership(tenant.id, user.id, { role: "owner" });
+  } else {
+    await updateMembership(tenant.id, user.id, membershipPatch);
   }
+
+  if (seat.kind === "client_approver") {
+    const companyId = await resolveApproverCompanyId(tenant.id, seat.companySlug);
+    await grantAccess(user.id, companyId);
+  }
+
   return user;
 }
 
