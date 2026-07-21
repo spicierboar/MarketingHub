@@ -12,6 +12,7 @@ import {
 } from "@/lib/content-create-scope";
 import { promoIndustryOptions } from "@/lib/promo-catalog";
 import { formatDate, titleCase } from "@/lib/utils";
+import { devToolsOpen } from "@/lib/env";
 
 export default async function ContentPage({
   searchParams,
@@ -95,6 +96,7 @@ export default async function ContentPage({
             defaultCompanyId={companyId}
             lockCompany={Boolean(companyId)}
             isAdmin={isAdmin(user)}
+            allowDemoFill={devToolsOpen()}
           />
         </section>
         ) : (

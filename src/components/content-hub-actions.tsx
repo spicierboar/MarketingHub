@@ -21,6 +21,12 @@ import {
   hubGenerateImageAction,
   hubGenerateVideoAction,
 } from "@/app/(app)/content/actions";
+import {
+  randomContentDemoFill,
+  randomImageDemoFill,
+  randomVideoDemoFill,
+  randomVoiceDemoFill,
+} from "@/lib/demo-fill";
 import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +86,20 @@ function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLab
       <ActionSubmitButton type="submit" pendingLabel="Generating…">
         {submitLabel}
       </ActionSubmitButton>
+    </div>
+  );
+}
+
+/** Staging / local only — never pass true from production. */
+function DemoFillBar({ onFill }: { onFill: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+      <span>
+        Staging / local only — fills sample marketing copy so you can demo without typing.
+      </span>
+      <Button type="button" variant="secondary" size="sm" onClick={onFill}>
+        Fill random demo values
+      </Button>
     </div>
   );
 }
@@ -179,6 +199,7 @@ export function ContentHubActions({
   defaultCompanyId,
   lockCompany = false,
   isAdmin = false,
+  allowDemoFill = false,
 }: {
   companies: CompanyOpt[];
   industries: IndustryOpt[];
@@ -187,6 +208,11 @@ export function ContentHubActions({
   lockCompany?: boolean;
   /** Industry / general require agency admin. */
   isAdmin?: boolean;
+  /**
+   * Staging / local only. Must be `devToolsOpen()` from a Server Component —
+   * never true in production.
+   */
+  allowDemoFill?: boolean;
 }) {
   const [open, setOpen] = useState<HubModal>(null);
   const [scope, setScope] = useState<CreateScope>(
@@ -299,77 +325,16 @@ export function ContentHubActions({
           onClose={close}
           wide
         >
-          <form action={hubGenerateContentAction} className="space-y-4">
-            <CreateScopeFields
-              scope={effectiveScope}
-              onScopeChange={setScope}
-              companies={usable}
-              industries={industries}
-              defaultCompanyId={defaultCompanyId}
-              lockCompany={lockCompany}
-              fieldId="hub-content-company"
-            />
-            <Field label="Content type" htmlFor="hub-content-type">
-              <Select
-                id="hub-content-type"
-                name="contentType"
-                required
-                defaultValue="social_post"
-              >
-                {CONTENT_TYPES.map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Topic / brief" htmlFor="hub-content-topic">
-              <Input
-                id="hub-content-topic"
-                name="topic"
-                required
-                placeholder="e.g. Winter lunch special for locals"
-              />
-            </Field>
-            <Field
-              label="Objective"
-              htmlFor="hub-content-objective"
-              hint="What should this piece achieve?"
-            >
-              <Textarea
-                id="hub-content-objective"
-                name="objective"
-                required
-                placeholder="e.g. Fill weekday lunch tables"
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Platform (optional)"
-                htmlFor="hub-content-channel"
-                hint="Where this draft should run"
-              >
-                <Select id="hub-content-channel" name="channel" defaultValue="">
-                  <option value="">Not specified</option>
-                  {CONTENT_PLATFORM_OPTIONS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Tone (optional)" htmlFor="hub-content-tone">
-                <Select id="hub-content-tone" name="tone" defaultValue="brand_default">
-                  {TONES.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <ModalActions onClose={close} submitLabel="Generate draft" />
-          </form>
+          <ContentDemoForm
+            allowDemoFill={allowDemoFill}
+            scope={effectiveScope}
+            onScopeChange={setScope}
+            companies={usable}
+            industries={industries}
+            defaultCompanyId={defaultCompanyId}
+            lockCompany={lockCompany}
+            onClose={close}
+          />
         </FormModal>
       )}
 
@@ -380,50 +345,16 @@ export function ContentHubActions({
           onClose={close}
           wide
         >
-          <form action={hubGenerateImageAction} className="space-y-4">
-            <CreateScopeFields
-              scope={effectiveScope}
-              onScopeChange={setScope}
-              companies={usable}
-              industries={industries}
-              defaultCompanyId={defaultCompanyId}
-              lockCompany={lockCompany}
-              fieldId="hub-image-company"
-            />
-            <Field label="Topic / title" htmlFor="hub-image-topic">
-              <Input id="hub-image-topic" name="topic" required placeholder="Hero — winter special" />
-            </Field>
-            <Field label="Prompt" htmlFor="hub-image-prompt">
-              <Textarea
-                id="hub-image-prompt"
-                name="objective"
-                required
-                placeholder="Describe the image: scene, mood, product, text overlays to avoid…"
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Aspect" htmlFor="hub-image-format">
-                <Select id="hub-image-format" name="format" defaultValue="square">
-                  {IMAGE_FORMATS.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Channel (optional)" htmlFor="hub-image-channel">
-                <Select id="hub-image-channel" name="channel" defaultValue="">
-                  <option value="">Not specified</option>
-                  {CONTENT_PLATFORM_OPTIONS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <ModalActions onClose={close} submitLabel="Generate image" />
-          </form>
+          <ImageDemoForm
+            allowDemoFill={allowDemoFill}
+            scope={effectiveScope}
+            onScopeChange={setScope}
+            companies={usable}
+            industries={industries}
+            defaultCompanyId={defaultCompanyId}
+            lockCompany={lockCompany}
+            onClose={close}
+          />
         </FormModal>
       )}
 
@@ -434,40 +365,17 @@ export function ContentHubActions({
           onClose={close}
           wide
         >
-          <form action={hubGenerateVideoAction} className="space-y-4">
-            <input type="hidden" name="kind" value="video" />
-            <CreateScopeFields
-              scope={effectiveScope}
-              onScopeChange={setScope}
-              companies={usable}
-              industries={industries}
-              defaultCompanyId={defaultCompanyId}
-              lockCompany={lockCompany}
-              fieldId="hub-video-company"
-            />
-            <Field label="Topic / title" htmlFor="hub-video-topic">
-              <Input id="hub-video-topic" name="topic" required placeholder="15s — winter special" />
-            </Field>
-            <Field label="Script / prompt" htmlFor="hub-video-script">
-              <Textarea
-                id="hub-video-script"
-                name="script"
-                required
-                placeholder="Hook → body → CTA. Include on-screen text if needed."
-              />
-            </Field>
-            <Field label="Channel (optional)" htmlFor="hub-video-channel">
-              <Select id="hub-video-channel" name="channel" defaultValue="">
-                <option value="">Not specified</option>
-                {CONTENT_PLATFORM_OPTIONS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <ModalActions onClose={close} submitLabel="Generate video" />
-          </form>
+          <VideoDemoForm
+            kind="video"
+            allowDemoFill={allowDemoFill}
+            scope={effectiveScope}
+            onScopeChange={setScope}
+            companies={usable}
+            industries={industries}
+            defaultCompanyId={defaultCompanyId}
+            lockCompany={lockCompany}
+            onClose={close}
+          />
         </FormModal>
       )}
 
@@ -478,43 +386,17 @@ export function ContentHubActions({
           onClose={close}
           wide
         >
-          <form action={hubGenerateVideoAction} className="space-y-4">
-            <input type="hidden" name="kind" value="reel" />
-            <CreateScopeFields
-              scope={effectiveScope}
-              onScopeChange={setScope}
-              companies={usable}
-              industries={industries}
-              defaultCompanyId={defaultCompanyId}
-              lockCompany={lockCompany}
-              fieldId="hub-reel-company"
-            />
-            <Field label="Topic / title" htmlFor="hub-reel-topic">
-              <Input
-                id="hub-reel-topic"
-                name="topic"
-                required
-                placeholder="15s Reel — winter special"
-              />
-            </Field>
-            <Field label="Script / prompt" htmlFor="hub-reel-script">
-              <Textarea
-                id="hub-reel-script"
-                name="script"
-                required
-                placeholder="Hook (0–3s) → body → CTA. Keep vertical 9:16."
-              />
-            </Field>
-            <Field label="Channel (optional)" htmlFor="hub-reel-channel">
-              <Select id="hub-reel-channel" name="channel" defaultValue="instagram">
-                <option value="instagram">Instagram</option>
-                <option value="tiktok">TikTok</option>
-                <option value="facebook">Facebook</option>
-                <option value="">Not specified</option>
-              </Select>
-            </Field>
-            <ModalActions onClose={close} submitLabel="Generate reel" />
-          </form>
+          <VideoDemoForm
+            kind="reel"
+            allowDemoFill={allowDemoFill}
+            scope={effectiveScope}
+            onScopeChange={setScope}
+            companies={usable}
+            industries={industries}
+            defaultCompanyId={defaultCompanyId}
+            lockCompany={lockCompany}
+            onClose={close}
+          />
         </FormModal>
       )}
 
@@ -525,51 +407,437 @@ export function ContentHubActions({
           onClose={close}
           wide
         >
-          <form action={generateAiVoiceAction} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <CreateScopeFields
-                scope={effectiveScope}
-                onScopeChange={setScope}
-                companies={usable}
-                industries={industries}
-                defaultCompanyId={defaultCompanyId}
-                lockCompany={lockCompany}
-                fieldId="hub-voice-company"
-              />
-              <Field label="Voice style" htmlFor="hub-voice-style">
-                <Select id="hub-voice-style" name="voiceStyle" defaultValue="warm">
-                  {VOICE_STYLES.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <Field
-              label="Topic (optional)"
-              htmlFor="hub-voice-topic"
-              hint="Short label for the draft in Library"
-            >
-              <Input id="hub-voice-topic" name="topic" placeholder="e.g. Winter lunch VO" />
-            </Field>
-            <Field
-              label="Script"
-              htmlFor="hub-voice-script"
-              hint="Spoken lines only — keep under ~60 seconds unless needed"
-            >
-              <Textarea
-                id="hub-voice-script"
-                name="script"
-                required
-                className="min-h-28"
-                placeholder="e.g. Looking for a cosy lunch this week? Our winter specials are on now — book a table or order takeaway."
-              />
-            </Field>
-            <ModalActions onClose={close} submitLabel="Generate voice draft" />
-          </form>
+          <VoiceDemoForm
+            allowDemoFill={allowDemoFill}
+            scope={effectiveScope}
+            onScopeChange={setScope}
+            companies={usable}
+            industries={industries}
+            defaultCompanyId={defaultCompanyId}
+            lockCompany={lockCompany}
+            onClose={close}
+          />
         </FormModal>
       )}
     </>
   );
+}
+
+type DemoFormShared = {
+  allowDemoFill: boolean;
+  scope: CreateScope;
+  onScopeChange: (s: CreateScope) => void;
+  companies: CompanyOpt[];
+  industries: IndustryOpt[];
+  defaultCompanyId?: string;
+  lockCompany?: boolean;
+  onClose: () => void;
+};
+
+function ContentDemoForm({
+  allowDemoFill,
+  scope,
+  onScopeChange,
+  companies,
+  industries,
+  defaultCompanyId,
+  lockCompany,
+  onClose,
+}: DemoFormShared) {
+  const [topic, setTopic] = useState("");
+  const [objective, setObjective] = useState("");
+  const [contentType, setContentType] = useState("social_post");
+  const [channel, setChannel] = useState("");
+  const [tone, setTone] = useState("brand_default");
+
+  return (
+    <form action={hubGenerateContentAction} className="space-y-4">
+      {allowDemoFill ? (
+        <DemoFillBar
+          onFill={() => {
+            const fill = randomContentDemoFill();
+            setTopic(fill.topic);
+            setObjective(fill.objective);
+            setContentType(fill.contentType);
+            setChannel(fill.channel);
+            setTone(fill.tone);
+          }}
+        />
+      ) : null}
+      <CreateScopeFields
+        scope={scope}
+        onScopeChange={onScopeChange}
+        companies={companies}
+        industries={industries}
+        defaultCompanyId={defaultCompanyId}
+        lockCompany={lockCompany}
+        fieldId="hub-content-company"
+      />
+      <Field label="Content type" htmlFor="hub-content-type">
+        <Select
+          id="hub-content-type"
+          name="contentType"
+          required
+          value={contentType}
+          onChange={(e) => setContentType(e.target.value)}
+        >
+          {CONTENT_TYPES.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Topic / brief" htmlFor="hub-content-topic">
+        <Input
+          id="hub-content-topic"
+          name="topic"
+          required
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="e.g. Winter lunch special for locals"
+        />
+      </Field>
+      <Field
+        label="Objective"
+        htmlFor="hub-content-objective"
+        hint="What should this piece achieve?"
+      >
+        <Textarea
+          id="hub-content-objective"
+          name="objective"
+          required
+          value={objective}
+          onChange={(e) => setObjective(e.target.value)}
+          placeholder="e.g. Fill weekday lunch tables"
+        />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          label="Platform (optional)"
+          htmlFor="hub-content-channel"
+          hint="Where this draft should run"
+        >
+          <Select
+            id="hub-content-channel"
+            name="channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+          >
+            <option value="">Not specified</option>
+            {CONTENT_PLATFORM_OPTIONS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Tone (optional)" htmlFor="hub-content-tone">
+          <Select
+            id="hub-content-tone"
+            name="tone"
+            value={tone}
+            onChange={(e) => setTone(e.target.value)}
+          >
+            {TONES.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <ModalActions onClose={onClose} submitLabel="Generate draft" />
+    </form>
+  );
+}
+
+function ImageDemoForm({
+  allowDemoFill,
+  scope,
+  onScopeChange,
+  companies,
+  industries,
+  defaultCompanyId,
+  lockCompany,
+  onClose,
+}: DemoFormShared) {
+  const [topic, setTopic] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [format, setFormat] = useState("square");
+  const [channel, setChannel] = useState("");
+
+  return (
+    <form action={hubGenerateImageAction} className="space-y-4">
+      {allowDemoFill ? (
+        <DemoFillBar
+          onFill={() => {
+            const fill = randomImageDemoFill();
+            setTopic(fill.topic);
+            setPrompt(fill.prompt);
+            setChannel(fill.channel);
+            setFormat(fill.format ?? "square");
+          }}
+        />
+      ) : null}
+      <CreateScopeFields
+        scope={scope}
+        onScopeChange={onScopeChange}
+        companies={companies}
+        industries={industries}
+        defaultCompanyId={defaultCompanyId}
+        lockCompany={lockCompany}
+        fieldId="hub-image-company"
+      />
+      <Field label="Topic / title" htmlFor="hub-image-topic">
+        <Input
+          id="hub-image-topic"
+          name="topic"
+          required
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="Hero — winter special"
+        />
+      </Field>
+      <Field label="Prompt" htmlFor="hub-image-prompt">
+        <Textarea
+          id="hub-image-prompt"
+          name="objective"
+          required
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Describe the image: scene, mood, product, text overlays to avoid…"
+        />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Aspect" htmlFor="hub-image-format">
+          <Select
+            id="hub-image-format"
+            name="format"
+            value={format}
+            onChange={(e) => setFormat(e.target.value)}
+          >
+            {IMAGE_FORMATS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Channel (optional)" htmlFor="hub-image-channel">
+          <Select
+            id="hub-image-channel"
+            name="channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+          >
+            <option value="">Not specified</option>
+            {CONTENT_PLATFORM_OPTIONS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <ModalActions onClose={onClose} submitLabel="Generate image" />
+    </form>
+  );
+}
+
+function VideoDemoForm({
+  kind,
+  allowDemoFill,
+  scope,
+  onScopeChange,
+  companies,
+  industries,
+  defaultCompanyId,
+  lockCompany,
+  onClose,
+}: DemoFormShared & { kind: "video" | "reel" }) {
+  const [topic, setTopic] = useState("");
+  const [script, setScript] = useState("");
+  const [channel, setChannel] = useState(kind === "reel" ? "instagram" : "");
+
+  return (
+    <form action={hubGenerateVideoAction} className="space-y-4">
+      <input type="hidden" name="kind" value={kind} />
+      {allowDemoFill ? (
+        <DemoFillBar
+          onFill={() => {
+            const fill = randomVideoDemoFill(kind);
+            setTopic(fill.topic);
+            setScript(fill.script);
+            setChannel(fill.channel || (kind === "reel" ? "instagram" : ""));
+          }}
+        />
+      ) : null}
+      <CreateScopeFields
+        scope={scope}
+        onScopeChange={onScopeChange}
+        companies={companies}
+        industries={industries}
+        defaultCompanyId={defaultCompanyId}
+        lockCompany={lockCompany}
+        fieldId={kind === "reel" ? "hub-reel-company" : "hub-video-company"}
+      />
+      <Field
+        label="Topic / title"
+        htmlFor={kind === "reel" ? "hub-reel-topic" : "hub-video-topic"}
+      >
+        <Input
+          id={kind === "reel" ? "hub-reel-topic" : "hub-video-topic"}
+          name="topic"
+          required
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder={
+            kind === "reel" ? "15s Reel — winter special" : "15s — winter special"
+          }
+        />
+      </Field>
+      <Field
+        label="Script / prompt"
+        htmlFor={kind === "reel" ? "hub-reel-script" : "hub-video-script"}
+      >
+        <Textarea
+          id={kind === "reel" ? "hub-reel-script" : "hub-video-script"}
+          name="script"
+          required
+          value={script}
+          onChange={(e) => setScript(e.target.value)}
+          placeholder={
+            kind === "reel"
+              ? "Hook (0–3s) → body → CTA. Keep vertical 9:16."
+              : "Hook → body → CTA. Include on-screen text if needed."
+          }
+        />
+      </Field>
+      <Field
+        label="Channel (optional)"
+        htmlFor={kind === "reel" ? "hub-reel-channel" : "hub-video-channel"}
+      >
+        {kind === "reel" ? (
+          <Select
+            id="hub-reel-channel"
+            name="channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+          >
+            <option value="instagram">Instagram</option>
+            <option value="tiktok">TikTok</option>
+            <option value="facebook">Facebook</option>
+            <option value="">Not specified</option>
+          </Select>
+        ) : (
+          <Select
+            id="hub-video-channel"
+            name="channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+          >
+            <option value="">Not specified</option>
+            {CONTENT_PLATFORM_OPTIONS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <ModalActions
+        onClose={onClose}
+        submitLabel={kind === "reel" ? "Generate reel" : "Generate video"}
+      />
+    </form>
+  );
+}
+
+function VoiceDemoForm({
+  allowDemoFill,
+  scope,
+  onScopeChange,
+  companies,
+  industries,
+  defaultCompanyId,
+  lockCompany,
+  onClose,
+}: DemoFormShared) {
+  const [topic, setTopic] = useState("");
+  const [script, setScript] = useState("");
+  const [voiceStyle, setVoiceStyle] = useState("warm");
+
+  return (
+    <form action={generateAiVoiceAction} className="space-y-4">
+      {allowDemoFill ? (
+        <DemoFillBar
+          onFill={() => {
+            const fill = randomVoiceDemoFill();
+            setTopic(fill.topic);
+            setScript(fill.script);
+            setVoiceStyle(pickVoiceStyle());
+          }}
+        />
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <CreateScopeFields
+          scope={scope}
+          onScopeChange={onScopeChange}
+          companies={companies}
+          industries={industries}
+          defaultCompanyId={defaultCompanyId}
+          lockCompany={lockCompany}
+          fieldId="hub-voice-company"
+        />
+        <Field label="Voice style" htmlFor="hub-voice-style">
+          <Select
+            id="hub-voice-style"
+            name="voiceStyle"
+            value={voiceStyle}
+            onChange={(e) => setVoiceStyle(e.target.value)}
+          >
+            {VOICE_STYLES.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <Field
+        label="Topic (optional)"
+        htmlFor="hub-voice-topic"
+        hint="Short label for the draft in Library"
+      >
+        <Input
+          id="hub-voice-topic"
+          name="topic"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="e.g. Winter lunch VO"
+        />
+      </Field>
+      <Field
+        label="Script"
+        htmlFor="hub-voice-script"
+        hint="Spoken lines only — keep under ~60 seconds unless needed"
+      >
+        <Textarea
+          id="hub-voice-script"
+          name="script"
+          required
+          className="min-h-28"
+          value={script}
+          onChange={(e) => setScript(e.target.value)}
+          placeholder="e.g. Looking for a cosy lunch this week? Our winter specials are on now — book a table or order takeaway."
+        />
+      </Field>
+      <ModalActions onClose={onClose} submitLabel="Generate voice draft" />
+    </form>
+  );
+}
+
+function pickVoiceStyle(): string {
+  return VOICE_STYLES[Math.floor(Math.random() * VOICE_STYLES.length)]![0];
 }
