@@ -168,12 +168,6 @@ export function clientPortalActivityHubs(): ActivityHub[] {
       href: "/client/account",
     },
     {
-      id: "value_add",
-      label: "Value-add",
-      blurb: "Extra services and upgrades (coming soon)",
-      href: "/client/value-add",
-    },
-    {
       id: "asks",
       label: "Ask us",
       blurb: "Messages and requests to the agency",

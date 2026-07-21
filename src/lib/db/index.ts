@@ -430,6 +430,17 @@ export async function setUserActive(userId: string, active: boolean): Promise<vo
   const u = await getUser(userId);
   if (u) u.active = active;
 }
+
+/** Update display name on a global identity (fixture heal / profile). */
+export async function updateUserName(userId: string, name: string): Promise<User | undefined> {
+  const trimmed = name.trim();
+  if (!trimmed) return getUser(userId);
+  if (isSupabaseConfigured()) return supabaseRepo.updateUserName(userId, trimmed);
+  const u = await getUser(userId);
+  if (!u) return undefined;
+  u.name = trimmed;
+  return u;
+}
 // Assign a granular role title (§9) on the user's TENANT MEMBERSHIP and sync
 // the membership tier to match. Owner stays owner regardless of title.
 export async function setMemberRoleTitle(

@@ -245,6 +245,7 @@ export function blockedLiveFlagNames(): string[] {
 export function envRibbonLabel(): string | null {
   const e = appEnv();
   if (e === "production") return null;
-  if (localDemoEnabled()) return `${e.toUpperCase()} · LOCAL DEMO`;
-  return e.toUpperCase();
+  if (localDemoEnabled()) return "Local demo · not production";
+  if (e === "staging") return "Staging · demo data · not production";
+  return `${e} · not production`;
 }

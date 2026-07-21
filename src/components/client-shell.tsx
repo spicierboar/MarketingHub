@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/login/actions";
+import { CLIENT_ROLE_LABEL } from "@/lib/managed-service/client-ux";
 
 type NavItem = {
   href: string;
@@ -122,12 +123,14 @@ export function ClientShell({
   companyName,
   tenantName,
   branding = null,
+  envLabel = null,
   children,
 }: {
   user: { name: string; email: string };
   companyName: string;
   tenantName: string;
   branding?: { accentColor?: string; logoUrl?: string } | null;
+  envLabel?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -170,7 +173,7 @@ export function ClientShell({
             <p className="truncate text-[10px] text-muted-foreground">
               {user.email}
             </p>
-            <p className="text-[10px] font-medium text-primary">Client Approver</p>
+            <p className="text-[10px] font-medium text-primary">{CLIENT_ROLE_LABEL}</p>
           </div>
           <form action={signOut}>
             <button
@@ -185,6 +188,11 @@ export function ClientShell({
       </aside>
 
       <div className="flex flex-1 flex-col">
+        {envLabel && (
+          <div className="bg-slate-800 px-3 py-0.5 text-center text-[10px] font-medium tracking-wide text-slate-100">
+            {envLabel}
+          </div>
+        )}
         <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-card px-3 md:hidden">
           <button
             type="button"
@@ -197,7 +205,7 @@ export function ClientShell({
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">
             {companyName}
           </span>
-          <span className="text-[10px] font-medium text-primary">Client Approver</span>
+          <span className="text-[10px] font-medium text-primary">{CLIENT_ROLE_LABEL}</span>
           <form action={signOut}>
             <button type="submit" className="text-xs text-muted-foreground">
               Sign out

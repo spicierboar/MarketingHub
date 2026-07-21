@@ -21,15 +21,15 @@ export const dynamic = "force-dynamic";
 const DEMO_LOGINS = [
   {
     email: "admin@staging-fixture.invalid",
-    label: "Admin — ten-restaurant agency fixture",
+    label: "Alex Morgan — agency admin",
   },
   {
     email: "staff-1@staging-fixture.invalid",
-    label: "Staff — content operations fixture",
+    label: "Jordan Chen — content staff",
   },
   {
     email: "approver-saffron-laneway@staging-fixture.invalid",
-    label: "Client Approver — Saffron Laneway Kitchen only",
+    label: "Priya Mehta — Saffron Laneway Kitchen",
   },
 ] as const;
 

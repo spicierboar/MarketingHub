@@ -242,7 +242,7 @@ function LegalDocPanel({
             <p className="mt-1 text-muted-foreground">
               Platform Terms &amp; Privacy are published from the <strong>agency</strong> ops seat
               (agency owner/admin) or by a <strong>platform admin</strong>. If the header shows a
-              client / holding workspace, switch to the agency seat (e.g. Staging Agency) via the
+              client / holding workspace, switch to the agency seat (e.g. Southern Cross Hospitality) via the
               workspace switcher, or sign in again with staging <code className="text-xs">/dev</code>{" "}
               quick-login. Client workspace owners can view versions but cannot publish.
             </p>

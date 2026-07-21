@@ -22,7 +22,8 @@ import type { ActingUser, Tenant, TenantRole } from "@/lib/types";
 export function platformAgencyCanonicalName(): string {
   const fromEnv = (process.env.CC_PLATFORM_AGENCY_NAME || "").trim();
   if (fromEnv) return fromEnv;
-  if (appEnv() === "staging") return "Staging Agency";
+  // Staging fixture agency — professional name (test-only stays in metadata/notes).
+  if (appEnv() === "staging") return "Southern Cross Hospitality";
   if (localDemoEnabled()) return "BrightSpark Marketing";
   return "Marketing Command Centre";
 }
@@ -39,6 +40,7 @@ function looksLikePlatformAgencyName(name: string): boolean {
   if (!n) return false;
   const canonical = platformAgencyCanonicalName().trim().toLowerCase();
   if (n === canonical) return true;
+  if (n.includes("southern cross hospitality")) return true;
   return (
     n === "staging agency" ||
     n === "brightspark marketing" ||

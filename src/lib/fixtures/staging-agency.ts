@@ -112,6 +112,40 @@ type RestaurantDefinition = {
   searchVisibility?: true;
 };
 
+/** Human display names for fixture seats (never "Client Approver — …"). */
+const APPROVER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  "saffron-laneway": "Priya Mehta",
+  "copper-tiffin": "Arjun Shah",
+  "monsoon-courtyard": "Neha Kapoor",
+  "pepperleaf-thali": "Rohan Desai",
+  "clove-and-coal": "Ananya Iyer",
+  "tamarind-terrace": "Vikram Nair",
+  "valley-masala": "Meera Joshi",
+  "deccan-social": "Kabir Reddy",
+  "marigold-coast": "Sana Pillai",
+  "riverstone-dhaba": "Dev Patel",
+};
+
+const STAFF_DISPLAY_NAMES = ["Jordan Chen", "Sam Okonkwo"] as const;
+
+/** Resolve a professional display name for a staging fixture email. */
+export function stagingFixtureDisplayName(email: string): string | null {
+  const normalized = email.trim().toLowerCase();
+  if (normalized === "admin@staging-fixture.invalid") return "Alex Morgan";
+  const staff = normalized.match(/^staff-(\d+)@staging-fixture\.invalid$/);
+  if (staff?.[1]) {
+    const idx = Math.max(0, Number(staff[1]) - 1);
+    return STAFF_DISPLAY_NAMES[idx] ?? `Staff ${staff[1]}`;
+  }
+  const approver = normalized.match(
+    /^approver-([a-z0-9-]+)@staging-fixture\.invalid$/,
+  );
+  if (approver?.[1]) {
+    return APPROVER_DISPLAY_NAMES[approver[1]] ?? null;
+  }
+  return null;
+}
+
 const RESTAURANTS: readonly RestaurantDefinition[] = [
   {
     slug: "saffron-laneway",
@@ -334,7 +368,7 @@ function buildFixture(): StagingAgencyFixture {
       fixtureKey: `${STAGING_FIXTURE_KEY}:admin`,
       fixtureRole: "Admin",
       email: "admin@staging-fixture.invalid",
-      name: "Staging Agency Admin",
+      name: "Alex Morgan",
       role: "super_admin",
       active: true,
       createdAt: STAGING_FIXTURE_TIMESTAMP,
@@ -344,7 +378,7 @@ function buildFixture(): StagingAgencyFixture {
       fixtureKey: `${STAGING_FIXTURE_KEY}:staff:${index + 1}`,
       fixtureRole: "Staff",
       email: `staff-${index + 1}@staging-fixture.invalid`,
-      name: `Staging Content Staff ${index + 1}`,
+      name: STAFF_DISPLAY_NAMES[index] ?? `Staff ${index + 1}`,
       role: "admin",
       active: true,
       createdAt: STAGING_FIXTURE_TIMESTAMP,
@@ -354,7 +388,9 @@ function buildFixture(): StagingAgencyFixture {
       fixtureKey: `${STAGING_FIXTURE_KEY}:approver:${restaurant.slug}`,
       fixtureRole: "Client Approver",
       email: `approver-${restaurant.slug}@staging-fixture.invalid`,
-      name: `Client Approver — ${restaurant.name}`,
+      name:
+        APPROVER_DISPLAY_NAMES[restaurant.slug] ??
+        `Approver ${restaurant.name}`,
       role: "user",
       active: true,
       createdAt: STAGING_FIXTURE_TIMESTAMP,
@@ -383,7 +419,7 @@ function buildFixture(): StagingAgencyFixture {
         industry: "Restaurant & Hospitality",
         businessType: "restaurant_cafe",
         website: `https://${restaurant.slug}.test`,
-        approvalContact: `Client Approver — ${restaurant.name} (test fixture)`,
+        approvalContact: `${APPROVER_DISPLAY_NAMES[restaurant.slug] ?? "Approver"} · ${restaurant.name}`,
         serviceAreas: [`${restaurant.suburb}, ${restaurant.city}`],
         natureOfBusiness: `${restaurant.cuisine} restaurant serving ${restaurant.suburb} and nearby ${restaurant.city} communities.`,
         services: restaurant.services,
@@ -570,13 +606,13 @@ function buildFixture(): StagingAgencyFixture {
     fixtureKey: STAGING_FIXTURE_KEY,
     tenant: {
       id: STAGING_FIXTURE_TENANT_ID,
-      name: "Southern Cross Hospitality Studio [TEST FIXTURE]",
+      name: "Southern Cross Hospitality",
       kind: "agency",
       plan: "scale",
       status: "active",
       timezone: "Australia/Sydney",
       onboarding: {
-        companyName: "Southern Cross Hospitality Studio [TEST FIXTURE]",
+        companyName: "Southern Cross Hospitality",
         industry: "Marketing Services",
         notes: `${STAGING_FIXTURE_KEY}; TEST ONLY; no billing or outbound communication.`,
       },

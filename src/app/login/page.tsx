@@ -5,15 +5,15 @@ import { LoginAuthError } from "./login-auth-error";
 // Managed service: two personas only — Agency (delivers) and Client (reviews).
 const DEMO_TENANTS: { tenant: string; accounts: { email: string; role: string }[] }[] = [
   {
-    tenant: "Southern Cross Hospitality Studio [TEST FIXTURE]",
+    tenant: "Southern Cross Hospitality",
     accounts: [
       {
         email: "admin@staging-fixture.invalid",
-        role: "Admin — run the ten-restaurant agency fixture",
+        role: "Alex Morgan — agency admin",
       },
       {
         email: "approver-saffron-laneway@staging-fixture.invalid",
-        role: "Client Approver — Saffron Laneway Kitchen only",
+        role: "Priya Mehta — Saffron Laneway Kitchen",
       },
     ],
   },

@@ -97,7 +97,7 @@ export default async function StudioPage({
   return (
     <div>
       <PageHeader
-        title={scopedCompany ? `Studio · ${scopedCompany.name}` : "Studio / repurpose"}
+        title={scopedCompany ? `Studio · ${scopedCompany.name}` : "Studio"}
         explainerId="studio"
         explainer="Templates, multi-variant drafts, and repurpose tools. For day-to-day AI create, prefer Content."
       >

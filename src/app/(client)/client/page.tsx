@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { displayGivenName } from "@/lib/display-name";
 
 export default async function ClientDashboardPage() {
   const { user, companyId } = await requirePortalUser();
@@ -62,7 +63,7 @@ export default async function ClientDashboardPage() {
   return (
     <div>
       <PageHeader
-        title={`Welcome, ${user.name.split(" ")[0]}`}
+        title={`Welcome, ${displayGivenName(user.name)}`}
         explainerId="client-home"
         explainer="We handle delivery. You only step in when something needs your approval, an answer, or a top-up."
       >

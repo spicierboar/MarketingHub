@@ -17,6 +17,7 @@ import { buildLocalDashboard } from "@/lib/analytics";
 import { AgencyControlPlane } from "@/components/agency-control-plane";
 import { onboardingScore } from "@/lib/types";
 import type { Company } from "@/lib/types";
+import { displayGivenName } from "@/lib/display-name";
 
 function nextSpielStep(company: Company | undefined): {
   title: string;
@@ -40,7 +41,7 @@ export default async function DashboardPage() {
     return (
       <AgencyControlPlane
         tenantId={user.tenantId}
-        firstName={user.name.split(" ")[0]}
+        firstName={displayGivenName(user.name)}
       />
     );
   }
@@ -61,7 +62,7 @@ export default async function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title={`Welcome back, ${user.name.split(" ")[0]}`}
+        title={`Welcome back, ${displayGivenName(user.name)}`}
         explainerId="dashboard"
         explainer="Exceptions and status for your assigned clients — clear blockers, then delivery continues."
       >

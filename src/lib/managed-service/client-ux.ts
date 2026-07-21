@@ -67,6 +67,6 @@ export function containsClientForbiddenWording(value: string): boolean {
   return CLIENT_FORBIDDEN_WORDS.test(value);
 }
 
-export const CLIENT_ROLE_LABEL = "Client Approver";
+export const CLIENT_ROLE_LABEL = "Approver";
 export const STAFF_ROLE_LABEL = "Staff";
 export const ADMIN_ROLE_LABEL = "Admin";

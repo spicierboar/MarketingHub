@@ -126,7 +126,7 @@ function buildTools(
   ];
   // Studio is secondary to Content — only when the user can create.
   if (access.canCreate) {
-    produceItems.unshift({ href: `/studio?${q}`, label: "Studio / repurpose" });
+    produceItems.unshift({ href: `/studio?${q}`, label: "Studio" });
   }
   groups.push({
     id: "produce",

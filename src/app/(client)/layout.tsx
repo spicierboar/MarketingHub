@@ -1,6 +1,7 @@
 import { ClientShell } from "@/components/client-shell";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { getCompany, getTenant } from "@/lib/db";
+import { envRibbonLabel } from "@/lib/env";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, companyId } = await requirePortalUser();
@@ -11,6 +12,7 @@ export default async function ClientLayout({ children }: { children: React.React
       tenantName={tenant?.name ?? "Workspace"}
       companyName={company?.name ?? "Your business"}
       branding={tenant?.branding ?? null}
+      envLabel={envRibbonLabel()}
     >
       {children}
     </ClientShell>

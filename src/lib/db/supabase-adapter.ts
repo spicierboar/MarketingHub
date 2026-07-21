@@ -447,6 +447,17 @@ export const supabaseRepo = {
     const sb = svc(); if (!sb) return;
     await sb.from("app_users").update({ active }).eq("id", userId);
   },
+  async updateUserName(userId: string, name: string): Promise<User | undefined> {
+    const sb = svc(); if (!sb) return undefined;
+    const { data, error } = await sb
+      .from("app_users")
+      .update({ name })
+      .eq("id", userId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error("updateUserName: " + error.message);
+    return data ? toDomain<User>(data) : undefined;
+  },
   async setMemberRoleTitle(tenantId: string, userId: string, roleTitle: RoleTitle): Promise<void> {
     const sb = svc(); if (!sb) return;
     const m = await this.getMembership(tenantId, userId);

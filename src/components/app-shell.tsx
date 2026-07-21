@@ -57,6 +57,8 @@ interface NavGroup {
   label: string;
   pinned?: boolean;
   adminOnly?: boolean;
+  /** Omit from primary rail on preview/staging demos. */
+  demoHide?: boolean;
   items: NavItem[];
 }
 
@@ -80,7 +82,8 @@ const SETTINGS_PATHS = [
  * Client workspace tools (CompanyToolsNav) also appear via CompanyContextBar
  * when a module is opened with ?company=.
  *
- * Home · Queues · Clients · Catalogs · Content & Delivery · AI Ops · Results · Settings
+ * On preview/staging (investor-demo posture) Catalogs / Opportunities /
+ * Analytics stay out of the primary rail — deep links still work.
  */
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -95,7 +98,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     id: "queues",
-    label: "Queues",
+    label: "Review",
     pinned: true,
     items: [
       { href: "/approvals", label: "Approvals", icon: CheckSquare, approveAccess: true },
@@ -123,6 +126,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Catalogs",
     pinned: true,
     adminOnly: true,
+    /** Hide empty catalog shells on preview/staging demos. */
+    demoHide: true,
     items: [
       { href: "/promo-catalog", label: "Promo catalog", icon: Tag, adminOnly: true },
       { href: "/marketing-packages", label: "Marketing packages", icon: Package, adminOnly: true },
@@ -138,7 +143,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/content", label: "Content", icon: FileText },
       {
         href: "/studio",
-        label: "Studio / repurpose",
+        label: "Studio",
         icon: Sparkles,
         createAccess: true,
       },
@@ -151,6 +156,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Service quality",
     pinned: true,
     adminOnly: true,
+    demoHide: true,
     items: [
       { href: "/recommendations", label: "Opportunities", icon: Lightbulb },
     ],
@@ -160,6 +166,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Results",
     pinned: true,
     adminOnly: true,
+    demoHide: true,
     items: [
       { href: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
     ],
@@ -177,16 +184,17 @@ const NAV_GROUPS: NavGroup[] = [
         adminOnly: true,
         alsoActiveFor: SETTINGS_PATHS,
       },
-      {
-        href: "/settings/legal",
-        label: "Terms & Privacy Policy",
-        icon: FileText,
-        adminOnly: true,
-      },
     ],
   },
 ];
 
+/** Preview / staging: trim unfinished destinations from the primary rail. */
+function demoNavTrimmed(): boolean {
+  const vercel = (process.env.NEXT_PUBLIC_VERCEL_ENV || "").toLowerCase();
+  if (vercel === "preview") return true;
+  const cc = (process.env.NEXT_PUBLIC_CC_ENV || "").toLowerCase();
+  return cc === "staging" || cc === "stage";
+}
 /** Module hubs that keep ?company= — treat as client workspace, not top-level agency nav. */
 const COMPANY_WORKSPACE_PREFIXES = [
   "/content",
@@ -414,6 +422,7 @@ export function AppShell({
     ...g,
     items: g.items.filter((n) => itemVisible(n, visibility)),
   })).filter((g) => {
+    if (g.demoHide && demoNavTrimmed()) return false;
     if (g.items.length === 0) return false;
     if (isSalesRepFocused) return true;
     if (g.adminOnly) {
@@ -509,8 +518,8 @@ export function AppShell({
 
       <div className="flex flex-1 flex-col">
         {envLabel && (
-          <div className="bg-fuchsia-700 px-3 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wider text-white">
-            {envLabel} — test, not live
+          <div className="bg-slate-800 px-3 py-0.5 text-center text-[10px] font-medium tracking-wide text-slate-100">
+            {envLabel}
           </div>
         )}
         <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-card px-3 md:hidden">

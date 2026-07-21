@@ -45,9 +45,9 @@ export async function AgencyControlPlane({
   return (
     <div>
       <PageHeader
-        title={`Operations control plane · ${firstName}`}
+        title={`Welcome back, ${firstName}`}
         explainerId="dashboard"
-        explainer="Normal managed-service work advances on schedule without staff action. This view shows portfolio coverage and only the exceptions that need intervention."
+        explainer="Managed work advances on schedule. This home shows portfolio coverage and only the exceptions that need a staff decision."
       >
         <Link href="/companies" className={buttonClasses("outline", "sm")}>
           Client directory

@@ -13,6 +13,7 @@ import {
   listCompanies,
   membershipsForUser,
   updateMembership,
+  updateUserName,
 } from "@/lib/db";
 import { startSession, endSession, setActiveTenant } from "@/lib/auth/session";
 import { postLoginRedirectPath } from "@/lib/auth/rbac";
@@ -25,9 +26,13 @@ import {
 } from "@/lib/dev-access";
 import { localDemoEnabled, devToolsOpen, appEnv } from "@/lib/env";
 import { getServiceSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
+import { runInServiceContext } from "@/lib/db/service-context";
 import { logAction } from "@/lib/audit";
 import { resolvePlatformAgencyTenant } from "@/lib/platform-agency";
-import { STAGING_FIXTURE_KEY } from "@/lib/fixtures/staging-agency";
+import {
+  STAGING_FIXTURE_KEY,
+  stagingFixtureDisplayName,
+} from "@/lib/fixtures/staging-agency";
 import type { ActingUser, TenantMember, TenantRole, User } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 
@@ -99,6 +104,8 @@ export async function clearAndReseedAction(_formData?: FormData): Promise<void> 
 }
 
 function nameFromEmail(email: string): string {
+  const fixture = stagingFixtureDisplayName(email);
+  if (fixture) return fixture;
   const local = email.split("@")[0] || email;
   const named = local
     .replace(/[._+-]+/g, " ")
@@ -156,7 +163,11 @@ async function resolveApproverCompanyId(
   tenantId: string,
   companySlug: string,
 ): Promise<string> {
-  const companies = await listCompanies(tenantId);
+  // Quick-login has no cookie session yet — listCompanies uses the RLS client,
+  // and anon cannot EXECUTE has_company_access. Resolve under service context.
+  const companies = await runInServiceContext(tenantId, () =>
+    listCompanies(tenantId),
+  );
   const fixtureKey = `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
   const byFixture = companies.find((c) => {
     const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
@@ -244,6 +255,11 @@ async function ensureStagingUser(email: string): Promise<User> {
     }
   }
   if (!user.active) throw new Error("Account deactivated.");
+
+  const desiredName = stagingFixtureDisplayName(email) ?? nameFromEmail(email);
+  if (user.name !== desiredName) {
+    user = (await updateUserName(user.id, desiredName)) ?? { ...user, name: desiredName };
+  }
 
   const tenant = await resolveStagingTenant();
   const existing = await getMembership(tenant.id, user.id);
