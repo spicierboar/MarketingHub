@@ -84,6 +84,7 @@ export default async function ClientStrategyPage({
         title="Strategy"
         explainerId="client-strategy"
         explainer="Your full marketing strategy — objectives, audiences, channels, and roadmap. Unlocks 6–12 hours after signup; nothing publishes without approval."
+        parent={{ href: "/client/account", label: "Account" }}
       />
       <ClientAccountLinks />
 

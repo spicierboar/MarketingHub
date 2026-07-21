@@ -30,6 +30,7 @@ export default async function ClientProfilePage() {
         title="Contact & hours"
         explainerId="client-profile"
         explainer="Rare corrections only. Brand voice, audience, and social strategy stay with your agency — Ask us if those need updating."
+        parent={{ href: "/client/account", label: "Account" }}
       />
       <ClientAccountLinks />
 

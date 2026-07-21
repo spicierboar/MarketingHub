@@ -60,6 +60,7 @@ export default async function NewRequestPage({
       <PageHeader
         title="Log a request for a client"
         description="You're filing this for the client — not asking the platform. Capture what they need; AI can draft from it, then an approver reviews."
+        parent={{ href: cancelHref, label: "Client asks" }}
       />
       <div className="mx-auto max-w-3xl p-6">
         {formCompanies.length === 0 ? (

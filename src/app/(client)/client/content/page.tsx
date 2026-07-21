@@ -60,6 +60,7 @@ export default async function ClientContentStatusPage() {
         title="Content status"
         explainerId="client-content-status"
         explainer="Where your content sits — awaiting you, in progress with us, or already live. Agency-only drafts stay private until they are ready for review."
+        parent={{ href: "/client/account", label: "Account" }}
       />
       <ClientAccountLinks />
 

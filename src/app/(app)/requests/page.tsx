@@ -43,6 +43,11 @@ export default async function RequestsPage({
         title={scopedCompany ? `Client asks · ${scopedCompany.name}` : "Client asks"}
         description="Messages from clients and asks your team logs on their behalf."
         hideExplainer
+        parent={
+          scopedCompany
+            ? { href: `/companies/${scopedCompany.id}`, label: scopedCompany.name }
+            : { href: "/companies", label: "Clients" }
+        }
       >
         <NewRequestModalTrigger
           companies={companyOptions}

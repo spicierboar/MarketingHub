@@ -43,6 +43,7 @@ export default async function ClientHelpPage() {
         title="Help"
         explainerId="client-help"
         explainer="How your managed marketing service works — approvals, asks, billing, and what we handle for you."
+        parent={{ href: "/client/account", label: "Account" }}
       />
       <ClientAccountLinks />
 

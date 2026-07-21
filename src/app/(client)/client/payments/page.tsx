@@ -68,6 +68,7 @@ export default async function ClientPaymentsPage() {
         title="Billing"
         explainerId="client-billing"
         explainer="Account credit, plan overview, and advertising budget. Top up credit or manage your saved card here."
+        parent={{ href: "/client/account", label: "Account" }}
       />
       <ClientAccountLinks />
 

@@ -17,9 +17,10 @@ export default async function ClientNewRequestPage() {
   return (
     <div>
       <PageHeader
-        title="Ask us"
+        title="New message"
         explainerId="client-request-new"
         explainer="Tell us what you need in plain language. We'll already have your company details."
+        parent={{ href: "/client/requests", label: "Ask us" }}
       />
       <ClientAccountLinks />
       <div className="mx-auto max-w-xl p-6">

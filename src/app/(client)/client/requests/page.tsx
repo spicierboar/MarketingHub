@@ -20,6 +20,7 @@ export default async function ClientRequestsPage() {
         title="Ask us"
         explainerId="client-requests"
         explainer="Your messages to the agency. Track status here, or send a new one."
+        parent={{ href: "/client/account", label: "Account" }}
       >
         <Link href="/client/requests/new" className={buttonClasses()}>New message</Link>
       </PageHeader>

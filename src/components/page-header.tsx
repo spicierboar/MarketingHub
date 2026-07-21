@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { PageExplainer } from "@/components/page-explainer";
 
 function explainerKey(title: string, explainerId?: string) {
@@ -11,6 +13,7 @@ export function PageHeader({
   explainer,
   explainerId,
   hideExplainer,
+  parent,
   children,
 }: {
   title: string;
@@ -22,6 +25,8 @@ export function PageHeader({
   explainerId?: string;
   /** Skip the tip box (detail pages, etc.). */
   hideExplainer?: boolean;
+  /** One level up — list / hub — so deep screens don’t force sidebar re-entry. */
+  parent?: { href: string; label: string };
   children?: React.ReactNode;
 }) {
   // When the tip is hidden, `description` is the permanent subtitle — don't
@@ -34,6 +39,15 @@ export function PageHeader({
     <div>
       <div className="flex flex-col gap-2 border-b border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
+          {parent && (
+            <Link
+              href={parent.href}
+              className="mb-1 inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {parent.label}
+            </Link>
+          )}
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
           {showDescription && (
             <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{description}</p>

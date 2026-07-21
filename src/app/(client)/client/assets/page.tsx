@@ -48,6 +48,7 @@ export default async function ClientAssetsPage() {
         title="Your photos & files"
         explainerId="client-files"
         explainer="Share a photo or logo for us to review. We handle how it gets used in your marketing."
+        parent={{ href: "/client/account", label: "Account" }}
       />
       <ClientAccountLinks />
 

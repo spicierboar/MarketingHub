@@ -62,7 +62,12 @@ export default async function RequestDetailPage({
 
   return (
     <div>
-      <PageHeader title={req.topic} description={`${company.name} · Request ${req.id}`} hideExplainer>
+      <PageHeader title={req.topic} description={`${company.name} · Request ${req.id}`} hideExplainer
+        parent={{
+          href: `/requests?company=${req.companyId}`,
+          label: "Client asks",
+        }}
+      >
         <StatusBadge status={req.status} />
       </PageHeader>
 

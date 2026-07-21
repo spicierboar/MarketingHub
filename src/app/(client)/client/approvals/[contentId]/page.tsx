@@ -51,6 +51,7 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
         title={content.title}
         description="Does this look right? Approve and we’ll schedule it after our usual checks — it won’t go live without them."
         hideExplainer
+        parent={{ href: "/client/approvals", label: "Approvals" }}
       />
       <div className="mx-auto max-w-3xl p-4 sm:p-6">
         <Card>
