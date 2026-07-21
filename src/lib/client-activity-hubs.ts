@@ -126,8 +126,8 @@ export function clientPortalActivityHubs(): ActivityHub[] {
     },
     {
       id: "strategy",
-      label: "Strategy",
-      blurb: "Your package-based marketing plan",
+      label: "Subscription and Strategy",
+      blurb: "Package plan and delivery cadence",
       href: "/client/strategy",
     },
     {

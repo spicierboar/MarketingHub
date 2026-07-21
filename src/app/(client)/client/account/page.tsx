@@ -82,7 +82,7 @@ export default async function ClientAccountPage() {
       <PageHeader
         title="Account"
         explainerId="client-account"
-        explainer="Billing, strategy, content status, messages to us, and optional file drops — everything for your account in one place."
+        explainer="Billing, subscription and strategy, content status, messages to us, and optional file drops — everything for your account in one place."
       />
       <ClientAccountLinks />
 
@@ -90,7 +90,7 @@ export default async function ClientAccountPage() {
         <ActivityHubsGrid
           hubs={clientPortalActivityHubs()}
           title="Your account"
-          subtitle="Strategy, content, schedule, asks, and billing for your business — the same client account your agency works in."
+          subtitle="Subscription and strategy, content, schedule, asks, and billing — the same client account your agency works in."
         />
 
         {marketingPkg ? (

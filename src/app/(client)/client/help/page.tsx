@@ -8,8 +8,8 @@ import { buttonClasses } from "@/components/ui/button";
 const LINKS = [
   {
     href: "/client/strategy",
-    label: "Strategy",
-    blurb: "Your package-based marketing plan — unlocks 6–12 hours after signup.",
+    label: "Subscription and Strategy",
+    blurb: "Your package plan and delivery roadmap — unlocks 6–12 hours after signup.",
   },
   {
     href: "/client/content",

@@ -8,7 +8,7 @@ const LINKS = [
   { href: "/client/account", label: "Overview", exact: true },
   { href: "/client/connect", label: "Social accounts" },
   { href: "/client/profile", label: "Profile" },
-  { href: "/client/strategy", label: "Strategy" },
+  { href: "/client/strategy", label: "Subscription and Strategy" },
   { href: "/client/content", label: "Content" },
   { href: "/client/calendar", label: "Schedule" },
   { href: "/client/payments", label: "Billing" },

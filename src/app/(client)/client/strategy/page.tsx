@@ -81,9 +81,9 @@ export default async function ClientStrategyPage({
   return (
     <div>
       <PageHeader
-        title="Strategy"
+        title="Subscription and Strategy"
         explainerId="client-strategy"
-        explainer="Your full marketing strategy — objectives, audiences, channels, and roadmap. Unlocks 6–12 hours after signup; nothing publishes without approval."
+        explainer="Your marketing package plan and delivery roadmap — what is included, when work runs, and the strategy we execute against. Nothing publishes without your approval."
         parent={{ href: "/client/account", label: "Account" }}
       />
       <ClientAccountLinks />
