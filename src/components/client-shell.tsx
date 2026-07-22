@@ -9,7 +9,7 @@ import {
   LogOut,
   CalendarDays,
   CreditCard,
-  MessageSquare,
+  UtensilsCrossed,
   Menu,
   X,
 } from "lucide-react";
@@ -21,15 +21,13 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  /** Short label for mobile quick strip */
   short?: string;
-  /** Extra path prefixes that keep this item active */
   matchPrefixes?: string[];
 };
 
 /**
- * Client rail: Needs you · Approvals · Schedule · Ask us · Account.
- * Ask us = menu specials + free-form messages (one place).
+ * Client rail: Needs you · Approvals · Schedule · Order menu · Account.
+ * Ask us (messaging) stays under Account; Order menu is à la carte only.
  */
 const NAV_ITEMS: NavItem[] = [
   { href: "/client", label: "Needs you", icon: Home, short: "Home" },
@@ -47,11 +45,11 @@ const NAV_ITEMS: NavItem[] = [
     matchPrefixes: ["/client/calendar", "/client/reports", "/client/schedule"],
   },
   {
-    href: "/client/requests",
-    label: "Ask us",
-    icon: MessageSquare,
-    short: "Ask",
-    matchPrefixes: ["/client/requests", "/client/order"],
+    href: "/client/order",
+    label: "Order menu",
+    icon: UtensilsCrossed,
+    short: "Order",
+    matchPrefixes: ["/client/order"],
   },
   {
     href: "/client/account",
@@ -63,6 +61,7 @@ const NAV_ITEMS: NavItem[] = [
       "/client/connect",
       "/client/payments",
       "/client/billing",
+      "/client/requests",
       "/client/assets",
       "/client/help",
       "/client/profile",
@@ -74,11 +73,10 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-/** Mobile quick strip */
 const MOBILE_QUICK: { href: string; label: string }[] = [
   { href: "/client/approvals", label: "Approvals" },
   { href: "/client/calendar", label: "Schedule" },
-  { href: "/client/requests", label: "Ask us" },
+  { href: "/client/order", label: "Order" },
   { href: "/client/account", label: "Account" },
 ];
 

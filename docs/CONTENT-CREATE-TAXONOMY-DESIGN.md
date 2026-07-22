@@ -494,10 +494,10 @@ Product rule preserved: material actions `await logAction(...)`; all list/create
 
 | Aspect | Decision |
 | --- | --- |
-| **Route** | `/client/requests` (**Ask us** — one rail item). `/client/order` redirects here. Dish forms stay at `/client/order/[skuId]`. |
-| **Not** | A second top-level “Order menu” nav competing with Ask us |
-| **Shows** | Curated dishes + “Something else?” message + request history |
-| **Hides** | Full taxonomy / kitchen UI |
+| **Order menu** | `/client/order` — own rail item; **all** à la carte items outside the subscription |
+| **Ask us** | `/client/requests` — free-form messaging only (under Account) |
+| **Shows on Order menu** | Curated priced dishes mapped to recipe types |
+| **Hides** | Full kitchen taxonomy; package-included cadence (that stays on Schedule) |
 
 ### Commercial model
 

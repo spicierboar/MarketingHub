@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/client/content", label: "Content" },
   { href: "/client/calendar", label: "Schedule" },
   { href: "/client/payments", label: "Billing" },
+  { href: "/client/requests", label: "Ask us" },
   { href: "/client/assets", label: "Files" },
 ] as const;
 

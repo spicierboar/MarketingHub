@@ -26,7 +26,7 @@ export default async function ClientOrderSkuPage({
       <PageHeader
         title={sku.title}
         explainer={sku.blurb}
-        parent={{ href: "/client/requests", label: "Ask us" }}
+        parent={{ href: "/client/order", label: "Order menu" }}
       />
       <div className="mx-auto max-w-xl space-y-6 px-4 py-6 sm:px-6">
         <p className="text-sm text-muted-foreground">
@@ -34,8 +34,8 @@ export default async function ClientOrderSkuPage({
             {formatMenuPriceFrom(sku.priceFromAud)}
           </span>
           {" "}
-          · Outside your subscription package. Your agency will confirm and deliver;
-          checkout for payment will be added next.
+          · Outside your subscription. Stripe checkout is next — for now this
+          places the special job with your agency.
         </p>
 
         <form action={placeClientMenuOrderAction} className="space-y-5">
@@ -63,11 +63,11 @@ export default async function ClientOrderSkuPage({
             <Input id="preferredDate" name="preferredDate" type="date" />
           </Field>
           <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
-            <Link href="/client/requests" className={buttonClasses("ghost", "md")}>
-              Back to Ask us
+            <Link href="/client/order" className={buttonClasses("ghost", "md")}>
+              Back to Order menu
             </Link>
-            <ActionSubmitButton type="submit" pendingLabel="Sending…">
-              Place order
+            <ActionSubmitButton type="submit" pendingLabel="Submitting…">
+              Pay and place order
             </ActionSubmitButton>
           </div>
         </form>
