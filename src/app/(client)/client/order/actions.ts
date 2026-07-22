@@ -6,6 +6,7 @@ import { getClientMenuSku } from "@/lib/client-order-menu";
 import { fulfilClientMenuOrder } from "@/lib/fulfil-menu-order";
 import {
   assertOrderBriefComplete,
+  formatOrderBriefForCook,
   formatOrderBriefNotes,
   parseOrderBriefFromFormData,
   resolveFulfilmentTopic,
@@ -25,7 +26,15 @@ export async function placeClientMenuOrderAction(formData: FormData) {
   const brief = parseOrderBriefFromFormData(formData);
   assertOrderBriefComplete(brief, sku);
 
+  const briefConfirmed = String(formData.get("briefConfirmed") || "").trim();
+  if (briefConfirmed !== "1") {
+    throw new Error(
+      "Please check the brief summary and tick the confirmation box before submitting.",
+    );
+  }
+
   const clientNotes = formatOrderBriefNotes(brief, sku);
+  const cookBrief = formatOrderBriefForCook(brief, sku);
   const topic = resolveFulfilmentTopic(brief, sku.title, workingTitle);
 
   const preferredDate =
@@ -41,6 +50,7 @@ export async function placeClientMenuOrderAction(formData: FormData) {
     sku,
     topic,
     clientNotes,
+    cookBrief,
     preferredDate,
   });
 

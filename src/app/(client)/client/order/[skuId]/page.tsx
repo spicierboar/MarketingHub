@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePortalUser } from "@/lib/auth/rbac";
+import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { buttonClasses } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
@@ -8,9 +9,11 @@ import {
   formatMenuPriceFrom,
   getClientMenuSku,
 } from "@/lib/client-order-menu";
+import { buildOrderBriefPrefill } from "@/lib/client-order-brief-prefill";
 import { placeClientMenuOrderAction } from "../actions";
 import { ActionSubmitButton } from "@/components/action-submit-button";
 import { ClientOrderBriefFields } from "@/components/client-order-brief-fields";
+import { ClientOrderBriefConfirm } from "@/components/client-order-brief-confirm";
 import { ClientOrderSkuExplainer } from "@/components/client-order-sku-explainer";
 
 export default async function ClientOrderSkuPage({
@@ -18,10 +21,13 @@ export default async function ClientOrderSkuPage({
 }: {
   params: Promise<{ skuId: string }>;
 }) {
-  await requirePortalUser();
+  const { companyId } = await requirePortalUser();
   const { skuId } = await params;
   const sku = getClientMenuSku(skuId);
   if (!sku) notFound();
+
+  const company = await getCompany(companyId);
+  const prefill = buildOrderBriefPrefill(company);
 
   return (
     <div>
@@ -49,6 +55,7 @@ export default async function ClientOrderSkuPage({
             skuId={sku.id}
             categoryId={sku.categoryId}
             dishTitle={sku.title}
+            prefill={prefill}
           />
 
           <Field
@@ -70,6 +77,13 @@ export default async function ClientOrderSkuPage({
           >
             <Input id="preferredDate" name="preferredDate" type="date" />
           </Field>
+
+          <ClientOrderBriefConfirm
+            skuId={sku.id}
+            categoryId={sku.categoryId}
+            dishTitle={sku.title}
+          />
+
           <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
             <Link href="/client/order" className={buttonClasses("ghost", "md")}>
               Back to Extras
