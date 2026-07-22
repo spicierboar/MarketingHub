@@ -34,8 +34,8 @@ export default async function ClientOrderSkuPage({
             {formatMenuPriceFrom(sku.priceFromAud)}
           </span>
           {" "}
-          · Outside your subscription. Stripe checkout is next — for now this
-          places the special job with your agency.
+          · Outside your subscription. Your order goes to the agency for
+          fulfilment.
         </p>
 
         <form action={placeClientMenuOrderAction} className="space-y-5">

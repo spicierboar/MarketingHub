@@ -79,7 +79,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     id: "order",
-    label: "Ad Ons",
+    label: "Add-ons",
     items: [
       {
         href: "/client/order",

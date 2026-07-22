@@ -80,7 +80,7 @@ export default async function ClientStrategyPage({
   return (
     <div>
       <PageHeader
-        title="Subscription and Strategy"
+        title="Strategy"
         explainerId="client-strategy"
         explainer="Your marketing package plan and delivery roadmap — what is included, when work runs, and the strategy we execute against. Nothing publishes without your approval."
         parent={{ href: "/client/account", label: "Overview" }}

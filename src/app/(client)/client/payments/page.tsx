@@ -11,7 +11,7 @@ import {
   getOrCreateCreditWallet,
 } from "@/lib/credit-wallet";
 import { stripeConfigured } from "@/lib/billing";
-import { planFor } from "@/lib/plans";
+import { resolveCompanyPackage } from "@/lib/marketing-packages";
 import { AD_PLATFORMS } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,7 +47,9 @@ export default async function ClientPaymentsPage() {
     listTaxInvoices(user.tenantId, { companyId }),
   ]);
 
-  const plan = planFor(tenant?.plan);
+  const marketingPackage = company
+    ? resolveCompanyPackage(company, tenant)
+    : null;
   const activeCampaigns = campaigns.filter((c) => c.status === "active");
   const allocationEntries = budget
     ? Object.entries(budget.allocation).filter(([, frac]) => typeof frac === "number" && frac > 0)
@@ -98,12 +100,12 @@ export default async function ClientPaymentsPage() {
 
               <div className="rounded-md border border-border p-4">
                 <p className="mb-3 text-sm font-medium">
-                  {liveCard ? "Add credit (card)" : "Add credit (simulated)"}
+                  {liveCard ? "Add credit (card)" : "Add credit"}
                 </p>
                 <p className="mb-3 text-xs text-muted-foreground">
                   {liveCard
                     ? "You will be redirected to Stripe Checkout to pay by card. Credit is applied after payment, and a tax invoice is issued."
-                    : "Demo top-up only — no card is captured here. A tax invoice is still issued for the ledger credit."}
+                    : "Top-up requests credit your account ledger. A tax invoice is issued for the credit."}
                 </p>
                 <form action={topUpClientCreditAction} className="flex flex-wrap items-end gap-3">
                   <input type="hidden" name="companyId" value={companyId} />
@@ -130,25 +132,23 @@ export default async function ClientPaymentsPage() {
                 </form>
               </div>
 
-              {/* PLACEHOLDER: always expose Stripe Customer Portal entry once product confirms. */}
+              {/* Card portal only when Stripe is configured. */}
+              {liveCard ? (
               <div id="payment-method" className="rounded-md border border-border p-4">
                 <p className="mb-2 text-sm font-medium">Payment methods</p>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  {liveCard
-                    ? wallet.stripePaymentMethodId
-                      ? "A card is saved for auto top-up. Manage it in the Stripe portal."
-                      : "After your first card top-up, you can manage payment methods here."
-                    : "PLACEHOLDER — Stripe Customer Portal for card on file (gated until billing live)."}
+                  {wallet.stripePaymentMethodId
+                    ? "A card is saved for auto top-up. Manage it in the Stripe portal."
+                    : "After your first card top-up, you can manage payment methods here."}
                 </p>
-                {liveCard ? (
-                  <form action={openClientBillingPortalAction}>
-                    <input type="hidden" name="companyId" value={companyId} />
-                    <Button type="submit" size="sm" variant="outline">
-                      Open card portal
-                    </Button>
-                  </form>
-                ) : null}
+                <form action={openClientBillingPortalAction}>
+                  <input type="hidden" name="companyId" value={companyId} />
+                  <Button type="submit" size="sm" variant="outline">
+                    Open card portal
+                  </Button>
+                </form>
               </div>
+              ) : null}
 
               <div className="rounded-md border border-border p-4">
                 <p className="mb-3 text-sm font-medium">Auto top-up</p>
@@ -184,8 +184,8 @@ export default async function ClientPaymentsPage() {
                     {liveCard
                       ? wallet.stripePaymentMethodId
                         ? "When balance hits the trigger, we charge your saved card off-session and credit the wallet."
-                        : "Complete a card top-up first so a payment method is saved; until then demo mode simulates the credit."
-                      : "Demo mode simulates ledger credit only — no card is charged."}
+                        : "Complete a card top-up first so a payment method is saved for auto top-up."
+                      : "When enabled, your agency can top up the ledger automatically when balance is low."}
                   </p>
                   <Field
                     label="Top-up amount (AUD)"
@@ -218,20 +218,22 @@ export default async function ClientPaymentsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">Subscription tier</p>
-                <p className="mt-1 text-2xl font-semibold">{plan.name}</p>
-                {plan.priceAudMonthly > 0 ? (
+                <p className="text-sm text-muted-foreground">Marketing package</p>
+                <p className="mt-1 text-2xl font-semibold">
+                  {marketingPackage?.name ?? "Not set"}
+                </p>
+                {marketingPackage && marketingPackage.priceAudMonthly > 0 ? (
                   <p className="mt-1 text-lg font-medium">
-                    {money(plan.priceAudMonthly)}
+                    {money(marketingPackage.priceAudMonthly)}
                     <span className="text-sm font-normal text-muted-foreground"> / month</span>
                   </p>
                 ) : null}
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Your agency manages SaaS billing on the {plan.name} plan
-                  {plan.priceAudMonthly > 0
-                    ? ` (from ${money(plan.priceAudMonthly)}/mo).`
-                    : "."}{" "}
-                  Plan changes stay agency-managed.
+                  Your managed marketing package
+                  {marketingPackage?.postsPerMonth
+                    ? ` (${marketingPackage.postsPerMonth} posts / month)`
+                    : ""}
+                  . Package changes stay agency-managed.
                 </p>
                 <p className="mt-3 text-sm text-muted-foreground">
                   {supportMailto ? (
@@ -440,9 +442,9 @@ export default async function ClientPaymentsPage() {
                   <span className="text-sm font-medium">Subscription</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Your {plan.name} subscription is billed via your agency
-                  {plan.priceAudMonthly > 0
-                    ? ` (from ${money(plan.priceAudMonthly)}/mo)`
+                  Your {marketingPackage?.name ?? "marketing"} package is billed via your agency
+                  {marketingPackage && marketingPackage.priceAudMonthly > 0
+                    ? ` (from ${money(marketingPackage.priceAudMonthly)}/mo)`
                     : ""}
                   . Exact charge dates come from them.
                 </p>

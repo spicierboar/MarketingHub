@@ -521,7 +521,7 @@ export function BusinessInfoDetailsForm({
           </Field>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-[6.5rem_minmax(0,1fr)_10rem]">
           <Field label="Street number" htmlFor="streetNumber">
             <Input
               id="streetNumber"
@@ -532,7 +532,7 @@ export function BusinessInfoDetailsForm({
               placeholder="12"
             />
           </Field>
-          <Field label="Street name" htmlFor="streetName" className="sm:col-span-2">
+          <Field label="Street name" htmlFor="streetName">
             <Input
               id="streetName"
               value={address.streetName}
@@ -542,9 +542,6 @@ export function BusinessInfoDetailsForm({
               placeholder="Example"
             />
           </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Street type" htmlFor="streetType">
             <Select
               id="streetType"
@@ -560,21 +557,22 @@ export function BusinessInfoDetailsForm({
               ))}
             </Select>
           </Field>
-          <Field
-            label="Unit / building"
-            htmlFor="unit"
-            hint="Optional — unit, suite, or building name"
-          >
-            <Input
-              id="unit"
-              value={address.unit ?? ""}
-              onChange={(e) =>
-                setAddress((a) => ({ ...a, unit: e.target.value }))
-              }
-              placeholder="Unit 3 / Level 2"
-            />
-          </Field>
         </div>
+
+        <Field
+          label="Unit / building"
+          htmlFor="unit"
+          hint="Optional — unit, suite, or building name"
+        >
+          <Input
+            id="unit"
+            value={address.unit ?? ""}
+            onChange={(e) =>
+              setAddress((a) => ({ ...a, unit: e.target.value }))
+            }
+            placeholder="Unit 3 / Level 2"
+          />
+        </Field>
 
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           Listing line:{" "}

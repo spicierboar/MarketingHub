@@ -9,6 +9,7 @@ import {
   stagingFixtureAuthMetadata,
   type StagingAgencyFixture,
 } from "@/lib/fixtures/staging-agency";
+import { upsertSaffronWalkthroughPack } from "@/lib/fixtures/saffron-walkthrough";
 import { validateStagingAgencyFixture } from "@/lib/selftest/staging-agency-fixture";
 
 export type StagingFixtureApplySummary = {
@@ -286,6 +287,9 @@ export async function applyStagingAgencyFixture(
       { onConflict: "company_id" },
     ),
   );
+
+  // Investor golden path: Saffron Laneway only (strategy, approvals, schedule, results, billing).
+  await upsertSaffronWalkthroughPack(sb, fixture, actualIds);
 
   const companyRows = (await expectOk(
     "verify fixture companies",

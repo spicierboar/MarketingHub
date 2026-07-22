@@ -226,7 +226,7 @@ export default async function ClientProfilePage() {
                 </ul>
               )}
               <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
-                <p className="font-medium">If someone leaves (e.g. Priya)</p>
+                <p className="font-medium">If someone leaves</p>
                 <ol className="mt-2 list-decimal space-y-1 pl-4 text-muted-foreground">
                   <li>Update Primary contact above and save.</li>
                   <li>

@@ -7,7 +7,7 @@ import { buttonClasses } from "@/components/ui/button";
 const LINKS = [
   {
     href: "/client/strategy",
-    label: "Subscription and Strategy",
+    label: "Strategy",
     blurb: "Your package plan and delivery roadmap — unlocks 6–12 hours after signup.",
   },
   {

@@ -118,7 +118,9 @@ export function CompanyStrategyPanel({
                     : view.visibility === "blocked"
                       ? "Needs info"
                       : view.visibility === "failed"
-                        ? "Failed"
+                        ? audience === "client"
+                          ? "Following up"
+                          : "Failed"
                         : "Not started"}
           </Badge>
         </div>
@@ -190,7 +192,7 @@ export function CompanyStrategyPanel({
                 ? ` (about ${view.hoursUntilEligible.toFixed(1)}h left)`
                 : ""}
               . Target ready by {view.dueAt ? formatDate(view.dueAt) : `${view.dueHours}h after signup`}.
-              {view.demoImmediate
+              {view.demoImmediate && audience === "agency"
                 ? " Local demo skips the wait on new signups; use Unlock if an older run is still held."
                 : null}
             </p>
@@ -201,11 +203,15 @@ export function CompanyStrategyPanel({
         {view.visibility === "preparing" && (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              {view.runId
-                ? `Generation is eligible and in progress${view.runPhase ? ` (phase: ${view.runPhase})` : ""}. Refresh shortly, or wait for the scheduler tick.`
-                : "Package is assigned but delivery has not started yet — use Generate below (demo auto-kicks on this page)."}
+              {audience === "client"
+                ? view.runId
+                  ? "Your strategy is being prepared. Refresh shortly — your agency will follow up if anything is needed."
+                  : "Your marketing package is assigned and strategy delivery is starting. Check back shortly."
+                : view.runId
+                  ? `Generation is eligible and in progress${view.runPhase ? ` (phase: ${view.runPhase})` : ""}. Refresh shortly, or wait for the scheduler tick.`
+                  : "Package is assigned but delivery has not started yet — use Generate below."}
             </p>
-            {unlockAction}
+            {audience === "agency" ? unlockAction : null}
           </div>
         )}
 
