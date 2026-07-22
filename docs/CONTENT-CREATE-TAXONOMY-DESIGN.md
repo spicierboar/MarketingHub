@@ -494,10 +494,10 @@ Product rule preserved: material actions `await logAction(...)`; all list/create
 
 | Aspect | Decision |
 | --- | --- |
-| **Route (proposed)** | `/client/order` or `/client/menu` — own nav item |
-| **Not** | `/client/requests` (Ask us), Approvals, Subscription and Strategy, or widgets on those screens |
-| **Shows** | Curated, plain-language **dishes** (e.g. “Press release”, “Launch landing page”, “Reel script pack”) mapped under the hood to recipe category/type/family |
-| **Hides** | Full taxonomy, cook families, Optimise-for panels, illegal combos, Engine jargon |
+| **Route** | `/client/requests` (**Ask us** — one rail item). `/client/order` redirects here. Dish forms stay at `/client/order/[skuId]`. |
+| **Not** | A second top-level “Order menu” nav competing with Ask us |
+| **Shows** | Curated dishes + “Something else?” message + request history |
+| **Hides** | Full taxonomy / kitchen UI |
 
 ### Commercial model
 

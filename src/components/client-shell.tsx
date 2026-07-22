@@ -9,8 +9,8 @@ import {
   LogOut,
   CalendarDays,
   CreditCard,
+  MessageSquare,
   Menu,
-  UtensilsCrossed,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,8 +28,8 @@ type NavItem = {
 };
 
 /**
- * Client rail: Needs you · Approvals · Schedule · Order menu · Account.
- * Ask us / Files / Profile stay under Account (or deep links).
+ * Client rail: Needs you · Approvals · Schedule · Ask us · Account.
+ * Ask us = menu specials + free-form messages (one place).
  */
 const NAV_ITEMS: NavItem[] = [
   { href: "/client", label: "Needs you", icon: Home, short: "Home" },
@@ -47,11 +47,11 @@ const NAV_ITEMS: NavItem[] = [
     matchPrefixes: ["/client/calendar", "/client/reports", "/client/schedule"],
   },
   {
-    href: "/client/order",
-    label: "Order menu",
-    icon: UtensilsCrossed,
-    short: "Order",
-    matchPrefixes: ["/client/order"],
+    href: "/client/requests",
+    label: "Ask us",
+    icon: MessageSquare,
+    short: "Ask",
+    matchPrefixes: ["/client/requests", "/client/order"],
   },
   {
     href: "/client/account",
@@ -63,7 +63,6 @@ const NAV_ITEMS: NavItem[] = [
       "/client/connect",
       "/client/payments",
       "/client/billing",
-      "/client/requests",
       "/client/assets",
       "/client/help",
       "/client/profile",
@@ -79,7 +78,7 @@ const NAV_ITEMS: NavItem[] = [
 const MOBILE_QUICK: { href: string; label: string }[] = [
   { href: "/client/approvals", label: "Approvals" },
   { href: "/client/calendar", label: "Schedule" },
-  { href: "/client/order", label: "Order" },
+  { href: "/client/requests", label: "Ask us" },
   { href: "/client/account", label: "Account" },
 ];
 
