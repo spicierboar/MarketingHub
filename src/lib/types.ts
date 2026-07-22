@@ -404,10 +404,11 @@ export interface CompanyProfile {
   /** Per-day open/close like Google Business hours; `tradingHours` is the listing string. */
   structuredHours?: import("@/lib/business-info/types").StructuredTradingHours;
   /**
-   * AU business number (ABR). With `Company.name` (business/trading name), forms
-   * the business identity key for onboarding duplicate checks — see
-   * `company-identity.ts`. ABN alone is NOT unique: one legal entity may run
-   * multiple trading names as separate MCC accounts. Technical PK is `Company.id`.
+   * AU business number (ABR). With `Company.name` (business/trading name) and
+   * postcode (`structuredAddress.postcode`), forms the business identity key for
+   * onboarding duplicate checks — see `company-identity.ts`. ABN alone is NOT
+   * unique: one legal entity may run multiple trading names or locations as
+   * separate MCC accounts. Technical PK is `Company.id`.
    */
   abn?: string;
   /** Read-only Google Places match for onboarding enrichment. */

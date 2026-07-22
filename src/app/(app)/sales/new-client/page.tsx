@@ -170,6 +170,7 @@ export default async function NewClientPage({
                   companyId={company?.id}
                   initialName={company?.name}
                   initialAbn={company?.profile.abn}
+                  initialPostcode={company?.profile.structuredAddress?.postcode}
                   initialWebsite={company?.profile.website}
                   consentDefault={!!company?.profile.autoOnboarding?.consentRecordedAt}
                 />

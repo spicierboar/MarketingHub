@@ -41,6 +41,8 @@ import {
   duplicateNameAbnMessage,
   findDuplicateByNameAndAbn,
   parseAbnInput,
+  parsePostcodeInput,
+  resolveCompanyPostcode,
 } from "@/lib/company-identity";
 import {
   isMarketingPackageId,
@@ -181,13 +183,20 @@ async function assertNoNameAbnDuplicate(
   tenantId: string,
   businessName: string,
   abn: string | undefined,
+  postcode: string | undefined,
   excludeCompanyId?: string,
 ) {
   if (!abn) return;
+  if (!postcode) {
+    throw new Error(
+      "Postcode is required — business name + ABN + postcode identify a client account.",
+    );
+  }
   const dup = findDuplicateByNameAndAbn(
     await listCompanies(tenantId),
     businessName,
     abn,
+    postcode,
     { excludeCompanyId },
   );
   if (dup) throw new Error(duplicateNameAbnMessage(dup.company));
@@ -198,12 +207,19 @@ async function assertAbrIdentityAndNoDuplicate(
   tenantId: string,
   businessName: string,
   abn: string | undefined,
+  postcode: string | undefined,
   excludeCompanyId?: string,
 ): Promise<{ legalName?: string; abrDetail: string }> {
   if (!abn) return { abrDetail: "abr=n/a" };
   const abrGate = await verifyBusinessNameAgainstAbr(businessName, abn);
   if (!abrGate.ok) throw new Error(abrGate.error);
-  await assertNoNameAbnDuplicate(tenantId, businessName, abn, excludeCompanyId);
+  await assertNoNameAbnDuplicate(
+    tenantId,
+    businessName,
+    abn,
+    postcode,
+    excludeCompanyId,
+  );
   return {
     legalName: abrGate.mode === "live" ? abrGate.legalName : undefined,
     abrDetail:
@@ -216,7 +232,7 @@ async function assertAbrIdentityAndNoDuplicate(
 /**
  * Step 1 — website (+ consent) → scrape/enrich → Profile (prefilled).
  * Creates the company on first submit; re-scrapes when editing an existing draft.
- * Identity: business name + ABN (ABN required for new accounts).
+ * Identity: business name + ABN + postcode (ABN + postcode required for new accounts).
  */
 export async function saveWebsiteStepAction(formData: FormData) {
   const existingId = String(formData.get("companyId") || "").trim();
@@ -245,7 +261,20 @@ export async function saveWebsiteStepAction(formData: FormData) {
 
     if (!existingId && !effectiveAbn) {
       throw new Error(
-        "ABN is required — business name + ABN identify a client account.",
+        "ABN is required — business name + ABN + postcode identify a client account.",
+      );
+    }
+
+    const postcodeParsed = parsePostcodeInput(String(formData.get("postcode") || ""));
+    if (!postcodeParsed.ok) throw new Error(postcodeParsed.error);
+    const effectivePostcode =
+      postcodeParsed.postcode ||
+      (existingCompany
+        ? resolveCompanyPostcode(existingCompany.profile) || undefined
+        : undefined);
+    if (!existingId && !effectivePostcode) {
+      throw new Error(
+        "Postcode is required — business name + ABN + postcode identify a client account.",
       );
     }
 
@@ -260,11 +289,12 @@ export async function saveWebsiteStepAction(formData: FormData) {
       websiteChecked = await assertWebsiteReachable(websiteRaw);
     }
 
-    // Always re-run ABR + (name+ABN) duplicate when an ABN is present.
+    // Always re-run ABR + (name+ABN+postcode) duplicate when an ABN is present.
     const identity = await assertAbrIdentityAndNoDuplicate(
       user.tenantId,
       name,
       effectiveAbn,
+      effectivePostcode,
       existingId || undefined,
     );
 
@@ -273,6 +303,18 @@ export async function saveWebsiteStepAction(formData: FormData) {
       company = existingCompany;
       const nextProfile: CompanyProfile = { ...company.profile };
       if (effectiveAbn) nextProfile.abn = effectiveAbn;
+      if (effectivePostcode) {
+        nextProfile.structuredAddress = {
+          countryCode: nextProfile.structuredAddress?.countryCode ?? "AU",
+          postcode: effectivePostcode,
+          suburb: nextProfile.structuredAddress?.suburb ?? "",
+          stateRegion: nextProfile.structuredAddress?.stateRegion,
+          unit: nextProfile.structuredAddress?.unit,
+          streetNumber: nextProfile.structuredAddress?.streetNumber ?? "",
+          streetName: nextProfile.structuredAddress?.streetName ?? "",
+          streetType: nextProfile.structuredAddress?.streetType ?? "",
+        };
+      }
       if (identity.legalName && !nextProfile.legalName?.trim()) {
         nextProfile.legalName = identity.legalName;
       }
@@ -285,15 +327,21 @@ export async function saveWebsiteStepAction(formData: FormData) {
         name,
         createdBy: user.id,
       });
-      if (effectiveAbn) {
-        const nextProfile: CompanyProfile = {
-          ...company.profile,
-          abn: effectiveAbn,
+      const nextProfile: CompanyProfile = { ...company.profile };
+      if (effectiveAbn) nextProfile.abn = effectiveAbn;
+      if (effectivePostcode) {
+        nextProfile.structuredAddress = {
+          countryCode: "AU",
+          postcode: effectivePostcode,
+          suburb: "",
+          streetNumber: "",
+          streetName: "",
+          streetType: "",
         };
-        if (identity.legalName) nextProfile.legalName = identity.legalName;
-        await updateCompany(company.id, { profile: nextProfile });
-        company = { ...company, profile: nextProfile };
       }
+      if (identity.legalName) nextProfile.legalName = identity.legalName;
+      await updateCompany(company.id, { profile: nextProfile });
+      company = { ...company, profile: nextProfile };
       await logAction(user, "company.created", {
         targetType: "company",
         targetId: company.id,
@@ -356,7 +404,7 @@ export async function saveBusinessStepAction(formData: FormData) {
     if (!abnParsed.ok) throw new Error(abnParsed.error);
     if (!abnParsed.abn && !company.profile.abn?.trim()) {
       throw new Error(
-        "ABN is required — business name + ABN identify a client account.",
+        "ABN is required — business name + ABN + postcode identify a client account.",
       );
     }
     const raw = String(formData.get("businessType") || "other");
@@ -366,23 +414,33 @@ export async function saveBusinessStepAction(formData: FormData) {
     const profile = profileFromForm(formData, businessType, company.profile);
     if (abnParsed.abn) profile.abn = abnParsed.abn;
     const identityAbn = profile.abn;
+    const identityPostcode = resolveCompanyPostcode(profile);
+    const prevPostcode = resolveCompanyPostcode(company.profile);
     const identityChanged =
       name !== company.name ||
       (identityAbn &&
         identityAbn.replace(/\D/g, "") !==
-          String(company.profile.abn ?? "").replace(/\D/g, ""));
+          String(company.profile.abn ?? "").replace(/\D/g, "")) ||
+      (identityPostcode && identityPostcode !== prevPostcode);
     if (identityAbn && identityChanged) {
       const identity = await assertAbrIdentityAndNoDuplicate(
         user.tenantId,
         name,
         identityAbn,
+        identityPostcode || undefined,
         company.id,
       );
       if (identity.legalName && !profile.legalName?.trim()) {
         profile.legalName = identity.legalName;
       }
     } else {
-      await assertNoNameAbnDuplicate(user.tenantId, name, identityAbn, company.id);
+      await assertNoNameAbnDuplicate(
+        user.tenantId,
+        name,
+        identityAbn,
+        identityPostcode || undefined,
+        company.id,
+      );
     }
     await updateCompany(company.id, { name, profile });
     await logAction(user, "company.updated", {

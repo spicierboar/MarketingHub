@@ -11,12 +11,14 @@ export function NewClientWebsiteStep({
   companyId,
   initialName,
   initialAbn,
+  initialPostcode,
   initialWebsite,
   consentDefault,
 }: {
   companyId?: string;
   initialName?: string;
   initialAbn?: string;
+  initialPostcode?: string;
   initialWebsite?: string;
   consentDefault?: boolean;
 }) {
@@ -28,9 +30,9 @@ export function NewClientWebsiteStep({
     <form id="new-client-website-form" action={saveWebsiteStepAction} className="space-y-4">
       {companyId ? <input type="hidden" name="companyId" value={companyId} /> : null}
       <p className="text-sm text-muted-foreground">
-        Business name + ABN identify the account — another trading name under the
-        same ABN needs its own client. With consent we scrape public website pages,
-        then AI/template-enrich the profile before you review it.
+        Business name + ABN + postcode identify the account — another trading name
+        or location under the same ABN needs its own client. With consent we scrape
+        public website pages, then AI/template-enrich the profile before you review it.
       </p>
       <FormSeedButton
         formId="new-client-website-form"
@@ -43,6 +45,7 @@ export function NewClientWebsiteStep({
         values={{
           name: "Harbourview Café",
           abn: "51 824 753 556",
+          postcode: "2000",
           website: "https://example.com",
           consent: true,
         }}
@@ -56,7 +59,7 @@ export function NewClientWebsiteStep({
       <Field
         label="Business name"
         htmlFor="name"
-        hint="Trading name customers recognise — identity key with ABN"
+        hint="Trading name customers recognise — identity key with ABN + postcode"
       >
         <Input
           id="name"
@@ -69,7 +72,7 @@ export function NewClientWebsiteStep({
       <Field
         label="ABN"
         htmlFor="abn"
-        hint="Required. Verified against the ABR when available. Same ABN + different business name = separate account."
+        hint="Required. Verified against the ABR when available. Same ABN + name + different postcode = separate location."
       >
         <Input
           id="abn"
@@ -79,6 +82,21 @@ export function NewClientWebsiteStep({
           inputMode="numeric"
           placeholder="e.g. 51 824 753 556"
           autoComplete="off"
+        />
+      </Field>
+      <Field
+        label="Postcode"
+        htmlFor="postcode"
+        hint="Required. With business name + ABN, identifies this client location."
+      >
+        <Input
+          id="postcode"
+          name="postcode"
+          required
+          defaultValue={initialPostcode ?? ""}
+          inputMode="numeric"
+          placeholder="e.g. 2000"
+          autoComplete="postal-code"
         />
       </Field>
       <Field

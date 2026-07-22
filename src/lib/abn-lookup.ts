@@ -4,7 +4,7 @@
 //
 // INVARIANT: ABN alone is never a unique company index. One legal entity may
 // operate multiple MCC accounts (one per trading/business name). Account
-// duplicate checks use (business name + ABN) — see company-identity.ts.
+// duplicate checks use (business name + ABN + postcode) — see company-identity.ts.
 // Lookups only pre-fill profile.abn + legalName on the *current* company.
 //
 // Create/update gate: verifyBusinessNameAgainstAbr — ABR register check when

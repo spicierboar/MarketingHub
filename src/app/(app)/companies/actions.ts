@@ -19,7 +19,10 @@ import {
   duplicateNameAbnMessage,
   findDuplicateByNameAndAbn,
   parseAbnInput,
+  parsePostcodeInput,
+  resolveCompanyPostcode,
 } from "@/lib/company-identity";
+import type { StructuredBusinessAddress } from "@/lib/business-info/types";
 import {
   validateOptionalWebsite,
   validateRequiredAbn,
@@ -123,7 +126,16 @@ export async function createCompanyAction(
   if (!abnParsed.ok) return { error: abnParsed.error };
   if (!abnParsed.abn) {
     return {
-      error: "ABN is required — business name + ABN identify a client account.",
+      error:
+        "ABN is required — business name + ABN + postcode identify a client account.",
+    };
+  }
+  const postcodeParsed = parsePostcodeInput(String(formData.get("postcode") || ""));
+  if (!postcodeParsed.ok) return { error: postcodeParsed.error };
+  if (!postcodeParsed.postcode) {
+    return {
+      error:
+        "Postcode is required — business name + ABN + postcode identify a client account.",
     };
   }
   const websiteRaw = String(formData.get("website") || "").trim();
@@ -165,11 +177,24 @@ export async function createCompanyAction(
     await listCompanies(user.tenantId),
     name,
     abnParsed.abn,
+    postcodeParsed.postcode,
   );
   if (dup) return { error: duplicateNameAbnMessage(dup.company) };
 
   const company = await createCompany({ tenantId: user.tenantId, name, createdBy: user.id });
-  const withAbn: CompanyProfile = { ...company.profile, abn: abnParsed.abn };
+  const identityAddress: StructuredBusinessAddress = {
+    countryCode: "AU",
+    postcode: postcodeParsed.postcode,
+    suburb: "",
+    streetNumber: "",
+    streetName: "",
+    streetType: "",
+  };
+  const withAbn: CompanyProfile = {
+    ...company.profile,
+    abn: abnParsed.abn,
+    structuredAddress: identityAddress,
+  };
   if (abrGate.mode === "live" && abrGate.legalName && !withAbn.legalName?.trim()) {
     withAbn.legalName = abrGate.legalName;
   }
@@ -293,12 +318,27 @@ export async function saveOnboardingAction(formData: FormData) {
     };
     if (abnParsed.abn) profilePatch.abn = abnParsed.abn;
 
+    // Prefer structured address from Business info form when present.
+    const structuredRaw = text(formData, "structuredAddressJson");
+    if (structuredRaw) {
+      try {
+        profilePatch.structuredAddress = JSON.parse(
+          structuredRaw,
+        ) as import("@/lib/business-info/types").StructuredBusinessAddress;
+      } catch {
+        /* keep existing */
+      }
+    }
+
     const identityAbn = profilePatch.abn;
+    const identityPostcode = resolveCompanyPostcode(profilePatch);
+    const prevPostcode = resolveCompanyPostcode(company.profile);
     const identityChanged =
       name !== company.name ||
       (identityAbn &&
         identityAbn.replace(/\D/g, "") !==
-          String(company.profile.abn ?? "").replace(/\D/g, ""));
+          String(company.profile.abn ?? "").replace(/\D/g, "")) ||
+      (identityPostcode && identityPostcode !== prevPostcode);
     if (identityAbn && identityChanged) {
       const abrGate = await verifyBusinessNameAgainstAbr(name, identityAbn);
       if (!abrGate.ok) throw new Error(abrGate.error);
@@ -307,10 +347,16 @@ export async function saveOnboardingAction(formData: FormData) {
       }
     }
     if (identityAbn) {
+      if (!identityPostcode) {
+        throw new Error(
+          "Postcode is required — business name + ABN + postcode identify a client account.",
+        );
+      }
       const dup = findDuplicateByNameAndAbn(
         await listCompanies(user.tenantId),
         name,
         identityAbn,
+        identityPostcode,
         { excludeCompanyId: companyId },
       );
       if (dup) throw new Error(duplicateNameAbnMessage(dup.company));

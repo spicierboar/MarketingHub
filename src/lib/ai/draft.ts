@@ -12,6 +12,7 @@ import {
   applyCitationsToBody,
   retrieveApprovedSnippets,
 } from "@/lib/brand-brain-rag";
+import { dishDeliveryPrompt } from "@/lib/ai/cook-family-prompts";
 import { getLocalProfile, listClaims, listServices, liveOffers } from "@/lib/db";
 import { titleCase } from "@/lib/utils";
 import type { Company, DraftTone, RequestType, SourceRef } from "@/lib/types";
@@ -31,6 +32,12 @@ export interface DraftInput {
   // Phase 5 — Content Studio:
   tone?: DraftTone; // draft-comparison variants (§24)
   briefMode?: boolean; // landing_page → structured local landing page brief (§47)
+  /** Exact Extras / recipe dish name for professional format matching */
+  dishLabel?: string;
+  /** Cook family for format guidance */
+  cookFamily?: string;
+  /** Optimise-for axes (seo, aeo, geo, llmo, …) */
+  optimiseFor?: string[];
 }
 
 export const TONE_INSTRUCTIONS: Record<DraftTone, string> = {
@@ -225,9 +232,14 @@ export async function draftContent(input: DraftInput): Promise<DraftResult> {
   };
   const label = input.briefMode
     ? "structured local landing page brief"
-    : TYPE_LABEL[requestType];
-  const title = `${input.briefMode ? "Landing Page Brief" : titleCase(requestType)} — ${topic}`.slice(0, 120);
+    : input.dishLabel || TYPE_LABEL[requestType];
+  const title = `${input.briefMode ? "Landing Page Brief" : input.dishLabel || titleCase(requestType)} — ${topic}`.slice(0, 120);
   const { contextBlocks, sources, sourceRefs } = await gatherGrounding(groundedInput);
+  const dishPrompt = dishDeliveryPrompt({
+    dishLabel: input.dishLabel,
+    cookFamily: input.cookFamily,
+    optimiseFor: input.optimiseFor,
+  });
 
   const system = [
     "You are the senior in-house marketing copywriter for a group of companies.",
@@ -235,6 +247,8 @@ export async function draftContent(input: DraftInput): Promise<DraftResult> {
     "Rules: match the brand voice; use only approved CTAs; NEVER use any prohibited claim;",
     "only make claims listed in the approved claims; do not invent statistics, prices, guarantees or testimonials;",
     "include any required disclaimer; keep it ready for human review. Return only the content itself, no preamble.",
+    "Deliver the exact dish professionally and competently — agency-quality, publish-ready after human review.",
+    dishPrompt,
     input.tone && input.tone !== "brand_default"
       ? `Tone for this variant: ${TONE_INSTRUCTIONS[input.tone]}`
       : "",
@@ -268,7 +282,7 @@ export async function draftContent(input: DraftInput): Promise<DraftResult> {
     companyName: company.name,
     system,
     user,
-    maxTokens: 1200,
+    maxTokens: input.cookFamily === "long_editorial" || input.cookFamily === "sales_doc" ? 2400 : 1600,
   });
   if (ai) {
     return {

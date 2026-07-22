@@ -36,6 +36,7 @@ export default async function NewCompanyPage({
                 values={{
                   name: "Harbourview Café",
                   abn: "51 824 753 556",
+                  postcode: "2000",
                   website: "https://example.com",
                   consent: true,
                 }}
@@ -43,7 +44,7 @@ export default async function NewCompanyPage({
               <Field
                 label="Business name"
                 htmlFor="name"
-                hint="Trading name customers recognise — identity key with ABN"
+                hint="Trading name customers recognise — identity key with ABN + postcode"
               >
                 <Input
                   id="name"
@@ -55,7 +56,7 @@ export default async function NewCompanyPage({
               <Field
                 label="ABN"
                 htmlFor="abn"
-                hint="Required. Verified against the ABR when available. Same ABN + different business name = separate account."
+                hint="Required. Verified against the ABR when available. Same ABN + name + different postcode = separate location."
               >
                 <Input
                   id="abn"
@@ -64,6 +65,20 @@ export default async function NewCompanyPage({
                   inputMode="numeric"
                   placeholder="e.g. 51 824 753 556"
                   autoComplete="off"
+                />
+              </Field>
+              <Field
+                label="Postcode"
+                htmlFor="postcode"
+                hint="Required. With business name + ABN, identifies this client location."
+              >
+                <Input
+                  id="postcode"
+                  name="postcode"
+                  required
+                  inputMode="numeric"
+                  placeholder="e.g. 2000"
+                  autoComplete="postal-code"
                 />
               </Field>
               <Field

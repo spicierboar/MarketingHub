@@ -11,6 +11,7 @@ import {
 import {
   duplicateNameAbnMessage,
   findDuplicateByNameAndAbn,
+  resolveCompanyPostcode,
 } from "@/lib/company-identity";
 import {
   matchPlace,
@@ -141,10 +142,17 @@ export async function applyEnrichmentProfileAction(
     if (patch.serviceAreas?.length) profile.serviceAreas = patch.serviceAreas;
 
     if (profile.abn?.trim()) {
+      const postcode = resolveCompanyPostcode(profile);
+      if (!postcode) {
+        throw new Error(
+          "Postcode is required — business name + ABN + postcode identify a client account.",
+        );
+      }
       const dup = findDuplicateByNameAndAbn(
         await listCompanies(user.tenantId),
         company.name,
         profile.abn,
+        postcode,
         { excludeCompanyId: companyId },
       );
       if (dup) throw new Error(duplicateNameAbnMessage(dup.company));

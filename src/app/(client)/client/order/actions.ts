@@ -1,17 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createRequest } from "@/lib/db";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { logAction } from "@/lib/audit";
-import {
-  buildMenuOrderNotes,
-  getClientMenuSku,
-} from "@/lib/client-order-menu";
+import { getClientMenuSku } from "@/lib/client-order-menu";
+import { fulfilClientMenuOrder } from "@/lib/fulfil-menu-order";
 
 /**
- * Place an Extras catalogue order → MarketingRequest in Client asks.
- * Payment capture is stubbed (no LIVE flags); agency fulfils as special job.
+ * Place an Extras catalogue order → MarketingRequest + professional AI draft.
+ * Payment capture is stubbed (no LIVE flags); agency reviews before publish.
  */
 export async function placeClientMenuOrderAction(formData: FormData) {
   const { user, companyId } = await requirePortalUser();
@@ -29,37 +25,17 @@ export async function placeClientMenuOrderAction(formData: FormData) {
     topicRaw ||
     `${sku.title}${clientNotes ? ` — ${clientNotes.slice(0, 60)}` : ""}`;
 
-  const preferredDate = String(formData.get("preferredDate") || "").trim() || undefined;
+  const preferredDate =
+    String(formData.get("preferredDate") || "").trim() || undefined;
 
-  const req = await createRequest({
+  const result = await fulfilClientMenuOrder({
+    user,
     companyId,
-    requesterId: user.id,
-    requestType: sku.requestType,
-    objective: `Extras: ${sku.title}`,
-    platform: sku.primaryChannel,
+    sku,
     topic,
-    offer: `Extras · ${sku.title} · From $${sku.priceFromAud}`,
+    clientNotes,
     preferredDate,
-    urgency: "normal",
-    notes: buildMenuOrderNotes({ sku, clientNotes }),
-    consent: {
-      customerNamed: false,
-      customerInPhotos: false,
-      consentObtained: false,
-      mentionsPricing: false,
-      mentionsOffer: false,
-      performanceClaims: false,
-    },
-    uploads: [],
-    assignedReviewerId: null,
   });
 
-  await logAction(user, "menu_order.placed", {
-    targetType: "request",
-    targetId: req.id,
-    companyId,
-    detail: `${sku.id} · From $${sku.priceFromAud} · ${topic}`.slice(0, 200),
-  });
-
-  redirect(`/client/requests/${req.id}`);
+  redirect(`/client/requests/${result.requestId}`);
 }

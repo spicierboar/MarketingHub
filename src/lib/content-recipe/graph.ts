@@ -84,9 +84,9 @@ export const FAMILY_TO_CHANNELS: Record<
     "linkedin",
     "google_business_profile",
   ],
-  long_editorial: ["website_blog_cms", "linkedin", "email"],
-  web_page: ["website_blog_cms"],
-  landing_conversion: ["website_blog_cms", "paid_media"],
+  long_editorial: ["website_blog_cms", "linkedin", "email", "aeo_geo"],
+  web_page: ["website_blog_cms", "aeo_geo", "google_business_profile"],
+  landing_conversion: ["website_blog_cms", "paid_media", "aeo_geo"],
   email: ["email"],
   ad: [
     "paid_media",

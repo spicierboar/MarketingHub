@@ -61,7 +61,7 @@ export function ClientOrderCataloguePicker({
         htmlFor="extras-item"
         hint={
           categoryMeta
-            ? categoryMeta.blurb
+            ? `${categoryMeta.blurb} · ${items.length} item${items.length === 1 ? "" : "s"}`
             : "Choose a category first to see available items"
         }
       >
