@@ -73,7 +73,7 @@ export default async function ClientAccountPage() {
           <Card>
             <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
               <p className="text-sm text-muted-foreground">
-                Promos, content dishes, and custom paid orders live on one page.
+                Promos, content add-ons, and custom paid orders live on one page.
               </p>
               <Link href="/client/order" className={buttonClasses("default", "sm")}>
                 Open Extras
@@ -160,7 +160,7 @@ export default async function ClientAccountPage() {
                     id="acct-name"
                     name="name"
                     required
-                    placeholder="e.g. Shopfront photo"
+                    placeholder="e.g. Storefront or product photo"
                   />
                 </Field>
                 <Field

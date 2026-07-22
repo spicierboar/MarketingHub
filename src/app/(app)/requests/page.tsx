@@ -42,7 +42,7 @@ export default async function RequestsPage({
     <div>
       <PageHeader
         title={scopedCompany ? `Client asks · ${scopedCompany.name}` : "Client asks"}
-        description="Messages from clients, à la carte menu orders, and asks your team logs on their behalf."
+        description="Messages from clients, Extras orders, and asks your team logs on their behalf."
         hideExplainer
         parent={
           scopedCompany
@@ -97,7 +97,7 @@ export default async function RequestsPage({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span>{titleCase(r.requestType)}</span>
                         {isMenuOrderRequest(r.notes, r.offer) && (
-                          <Badge tone="warning">Menu order</Badge>
+                          <Badge tone="warning">Extras order</Badge>
                         )}
                       </div>
                     </td>

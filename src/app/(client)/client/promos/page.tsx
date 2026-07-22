@@ -53,7 +53,7 @@ export default async function ClientPromosPage() {
           <Link href="/client/order" className="text-primary hover:underline">
             Extras
           </Link>
-          — dishes, ready-made promos, and custom paid orders in one place. For a free message use{" "}
+          — content add-ons, ready-made campaigns, and custom paid orders in one place. For a free message use{" "}
           <Link href="/client/requests/new" className="text-primary hover:underline">
             Ask us
           </Link>

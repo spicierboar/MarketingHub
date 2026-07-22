@@ -1,5 +1,5 @@
 /**
- * Client à la carte Extras — curated dishes outside subscription packages.
+ * Client Extras catalogue — curated add-ons outside subscription packages.
  * Maps to recipe content types for agency + AI fulfilment.
  * @see docs/CONTENT-CREATE-TAXONOMY-DESIGN.md §15
  */
@@ -16,7 +16,7 @@ export type ClientMenuSkuId =
 
 export type ClientMenuSku = {
   id: ClientMenuSkuId;
-  /** Plain-language dish name on the menu */
+  /** Plain-language name on Extras */
   title: string;
   /** One-line description */
   blurb: string;
@@ -30,7 +30,7 @@ export type ClientMenuSku = {
   marker: string;
 };
 
-/** Menu as shown on /client/order — investor mockup set. */
+/** Catalogue as shown on /client/order. */
 export const CLIENT_ORDER_MENU: readonly ClientMenuSku[] = [
   {
     id: "press_release",
@@ -95,7 +95,7 @@ export function formatMenuPriceFrom(aud: number): string {
 /** Detect menu orders in Client asks / portal request lists. */
 export function isMenuOrderRequest(notes?: string | null, offer?: string | null): boolean {
   const hay = `${notes ?? ""}\n${offer ?? ""}`;
-  return /menu_order:[a-z0-9_]+/i.test(hay) || /à la carte/i.test(hay);
+  return /menu_order:[a-z0-9_]+/i.test(hay) || /extras order/i.test(hay) || /à la carte/i.test(hay);
 }
 
 export function parseMenuOrderSkuId(notes?: string | null): ClientMenuSkuId | undefined {
@@ -112,7 +112,7 @@ export function buildMenuOrderNotes(input: {
     input.clientNotes?.trim(),
     "",
     "---",
-    `À la carte menu order (${formatMenuPriceFrom(input.sku.priceFromAud)} AUD).`,
+    `Extras order (${formatMenuPriceFrom(input.sku.priceFromAud)} AUD).`,
     `Charge outside subscription package — Stripe checkout TBD; treat as special job.`,
     input.sku.marker,
     `recipe_hint: type=${input.sku.contentType} channel=${input.sku.primaryChannel}`,

@@ -40,7 +40,7 @@ export default async function ClientNewRequestPage() {
                   name="notes"
                   required
                   rows={6}
-                  placeholder="e.g. We need a post about our new Saturday brunch hours starting 19 July — 8am–2pm."
+                  placeholder="e.g. We need a post about our new Saturday opening hours starting 19 July — 8am–2pm."
                 />
               </Field>
               <Field

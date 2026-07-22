@@ -22,7 +22,7 @@ import { computePromoPricing, templatesForCompany } from "@/lib/promo-catalog";
 import { formatDate } from "@/lib/utils";
 
 /**
- * Extras — single ordering page: dishes, promos, and custom paid orders.
+ * Extras — single ordering page: content add-ons, promos, and custom paid orders.
  * Ask us stays free-form messaging only (not for buying work).
  */
 export default async function ClientOrderMenuPage() {
@@ -67,7 +67,7 @@ export default async function ClientOrderMenuPage() {
     <div>
       <PageHeader
         title="Extras"
-        explainer="Everything orderable outside your subscription — content dishes, ready-made promos, or a custom order."
+        explainer="Everything orderable outside your subscription — content add-ons, ready-made campaigns, or a custom order."
       >
         {allowance.limit > 0 ? (
           <Badge tone={allowance.remaining > 0 ? "success" : "warning"}>
@@ -79,11 +79,11 @@ export default async function ClientOrderMenuPage() {
       </PageHeader>
 
       <div className="mx-auto max-w-3xl space-y-10 px-4 py-6 sm:px-6">
-        <section id="dishes" className="scroll-mt-4 space-y-3">
+        <section id="add-ons" className="scroll-mt-4 space-y-3">
           <div>
-            <h2 className="text-sm font-semibold">Content dishes</h2>
+            <h2 className="text-sm font-semibold">Content add-ons</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              À la carte pieces — pay and we deliver as a special job.
+              One-off pieces outside your package — pay and we deliver as a special job.
             </p>
           </div>
           <ul className="divide-y divide-border border-y border-border">
@@ -132,7 +132,7 @@ export default async function ClientOrderMenuPage() {
 
         {recent.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground">Recent dish orders</h2>
+            <h2 className="text-sm font-semibold text-foreground">Recent add-on orders</h2>
             <ul className="space-y-2 text-sm">
               {recent.map((r) => (
                 <li key={r.id}>

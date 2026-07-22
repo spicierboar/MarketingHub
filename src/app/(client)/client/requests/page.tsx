@@ -17,7 +17,7 @@ const URGENCY_TONE = {
 
 /**
  * Ask us — free-form messages only.
- * À la carte specials live on /client/order.
+ * Extras catalogue items live on /client/order.
  */
 export default async function ClientRequestsPage() {
   const { user, companyId } = await requirePortalUser();

@@ -110,7 +110,7 @@ export default async function ClientApprovalDetailPage({ params }: { params: Pro
                     <Textarea
                       id="change-note"
                       name="note"
-                      placeholder="e.g. Soften the discount line and swap the hero photo for the shopfront shot"
+                      placeholder="e.g. Soften the discount line and swap the hero photo for the storefront shot"
                       className="min-h-20"
                       required
                     />

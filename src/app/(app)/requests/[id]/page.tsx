@@ -72,7 +72,7 @@ export default async function RequestDetailPage({
         }}
       >
         <div className="flex flex-wrap items-center gap-2">
-          {menuOrder && <Badge tone="warning">Menu order · à la carte</Badge>}
+          {menuOrder && <Badge tone="warning">Extras order</Badge>}
           <StatusBadge status={req.status} />
         </div>
       </PageHeader>

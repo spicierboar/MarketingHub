@@ -10,7 +10,7 @@ import {
   CalendarDays,
   BarChart3,
   CreditCard,
-  UtensilsCrossed,
+  Package,
   MessageSquare,
   User,
   Share2,
@@ -84,7 +84,7 @@ const NAV_SECTIONS: NavSection[] = [
       {
         href: "/client/order",
         label: "Extras",
-        icon: UtensilsCrossed,
+        icon: Package,
         matchPrefixes: ["/client/order"],
       },
       {

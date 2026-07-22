@@ -117,7 +117,7 @@ export default async function ClientAssetsPage() {
                     id="name"
                     name="name"
                     required
-                    placeholder="e.g. Shopfront photo"
+                    placeholder="e.g. Storefront or product photo"
                   />
                 </Field>
                 <Field

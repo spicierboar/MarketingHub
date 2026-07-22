@@ -7,7 +7,6 @@ import { Field, Input, Textarea } from "@/components/ui/form";
 import { FormModal } from "@/components/form-modal";
 import {
   durationLabel,
-  industryLabel,
   type PromoTemplate,
 } from "@/lib/promo-catalog";
 import {
@@ -32,8 +31,8 @@ export type ExtraWorkPromoCard = {
 };
 
 /**
- * Extras page — ready-made promos + custom paid ask.
- * Stacked on one page (no tabs that hide half the catalogue).
+ * Extras page — ready-made campaigns + custom paid ask.
+ * Copy stays industry-agnostic; catalog items may still match the client’s vertical.
  */
 export function ClientExtraWorkPanel({
   promos,
@@ -57,18 +56,12 @@ export function ClientExtraWorkPanel({
     [promos, confirmId],
   );
 
-  const industries = useMemo(
-    () => new Set(promos.map((p) => p.template.industry)),
-    [promos],
-  );
-  const showIndustryPerCard = industries.size > 1;
-
   return (
     <div className="space-y-8">
       <section id="promos" className="scroll-mt-4 space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="text-sm font-semibold">Ready-made promos</h2>
+            <h2 className="text-sm font-semibold">Ready-made campaigns</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Dates and channels set for you. We draft; you approve — nothing goes live on its own.
             </p>
@@ -86,7 +79,7 @@ export function ClientExtraWorkPanel({
 
         {promos.length === 0 ? (
           <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-            No ready-made promos for your industry yet — use a custom order below.
+            No ready-made campaigns for your business yet — use a custom order below.
           </p>
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
@@ -98,14 +91,7 @@ export function ClientExtraWorkPanel({
                   key={t.id}
                   className="flex flex-col rounded-md border border-border bg-card p-3"
                 >
-                  {showIndustryPerCard ? (
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {industryLabel(t.industry)}
-                    </p>
-                  ) : null}
-                  <p className={`text-sm font-semibold ${showIndustryPerCard ? "mt-0.5" : ""}`}>
-                    {t.name}
-                  </p>
+                  <p className="text-sm font-semibold">{t.name}</p>
                   <p className="mt-1 flex-1 text-xs text-muted-foreground">{t.promotion}</p>
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="text-xs">
@@ -213,7 +199,7 @@ export function ClientExtraWorkPanel({
               <Input
                 id="extra-promo-notes"
                 name="notes"
-                placeholder="e.g. Focus on weekend brunch for locals"
+                placeholder="e.g. Focus on weekday offers for local customers"
               />
             </Field>
             <div className="flex justify-end gap-2">
@@ -241,7 +227,7 @@ export function ClientExtraWorkPanel({
               <Input
                 id="custom-topic"
                 name="topic"
-                placeholder="e.g. New seasonal menu push"
+                placeholder="e.g. New product or service launch"
               />
             </Field>
             <Field
@@ -254,7 +240,7 @@ export function ClientExtraWorkPanel({
                 name="notes"
                 required
                 rows={5}
-                placeholder="e.g. Promote our new winter soup special from next Monday — $12.90 takeaway, aim at locals within 10 minutes."
+                placeholder="e.g. Promote our new offer from next Monday — include price, who it’s for, and any deadline."
               />
             </Field>
             <p className="text-xs text-muted-foreground">

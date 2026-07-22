@@ -10,14 +10,14 @@ import {
 } from "@/lib/client-order-menu";
 
 /**
- * Place an à la carte menu order → MarketingRequest in Client asks.
+ * Place an Extras catalogue order → MarketingRequest in Client asks.
  * Payment capture is stubbed (no LIVE flags); agency fulfils as special job.
  */
 export async function placeClientMenuOrderAction(formData: FormData) {
   const { user, companyId } = await requirePortalUser();
   const skuId = String(formData.get("skuId") || "").trim();
   const sku = getClientMenuSku(skuId);
-  if (!sku) throw new Error("That menu item is not available.");
+  if (!sku) throw new Error("That item is not available.");
 
   const topicRaw = String(formData.get("topic") || "").trim();
   const clientNotes = String(formData.get("notes") || "").trim();
@@ -35,10 +35,10 @@ export async function placeClientMenuOrderAction(formData: FormData) {
     companyId,
     requesterId: user.id,
     requestType: sku.requestType,
-    objective: `À la carte: ${sku.title}`,
+    objective: `Extras: ${sku.title}`,
     platform: sku.primaryChannel,
     topic,
-    offer: `à la carte · ${sku.title} · From $${sku.priceFromAud}`,
+    offer: `Extras · ${sku.title} · From $${sku.priceFromAud}`,
     preferredDate,
     urgency: "normal",
     notes: buildMenuOrderNotes({ sku, clientNotes }),

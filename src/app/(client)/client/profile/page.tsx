@@ -87,7 +87,7 @@ export default async function ClientProfilePage() {
                     name="displayName"
                     defaultValue={company.name}
                     required
-                    placeholder="e.g. Harbourview Café"
+                    placeholder="e.g. Acme Studio"
                   />
                 </Field>
 
@@ -98,7 +98,7 @@ export default async function ClientProfilePage() {
                       name="website"
                       type="url"
                       defaultValue={p.website ?? ""}
-                      placeholder="https://www.harbourviewcafe.com.au"
+                      placeholder="https://www.example.com.au"
                     />
                   </Field>
                   <Field
@@ -110,7 +110,7 @@ export default async function ClientProfilePage() {
                       id="approvalContact"
                       name="approvalContact"
                       defaultValue={p.approvalContact ?? ""}
-                      placeholder="owner@harbourviewcafe.com.au"
+                      placeholder="owner@example.com.au"
                     />
                   </Field>
                 </div>
