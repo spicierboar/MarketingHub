@@ -8,6 +8,7 @@ import {
   assertOrderBriefComplete,
   formatOrderBriefNotes,
   parseOrderBriefFromFormData,
+  resolveFulfilmentTopic,
 } from "@/lib/client-order-brief";
 
 /**
@@ -20,12 +21,12 @@ export async function placeClientMenuOrderAction(formData: FormData) {
   const sku = getClientMenuSku(skuId);
   if (!sku) throw new Error("That item is not available.");
 
-  const topicRaw = String(formData.get("topic") || "").trim();
+  const workingTitle = String(formData.get("topic") || "").trim();
   const brief = parseOrderBriefFromFormData(formData);
-  assertOrderBriefComplete(brief, sku.categoryId);
+  assertOrderBriefComplete(brief, sku);
 
-  const clientNotes = formatOrderBriefNotes(brief, sku.categoryId);
-  const topic = topicRaw || `${sku.title} — ${brief.audience}`;
+  const clientNotes = formatOrderBriefNotes(brief, sku);
+  const topic = resolveFulfilmentTopic(brief, sku.title, workingTitle);
 
   const preferredDate =
     String(formData.get("preferredDate") || "").trim() || undefined;

@@ -41,24 +41,24 @@ export default async function ClientOrderSkuPage({
 
         <form action={placeClientMenuOrderAction} className="space-y-5">
           <input type="hidden" name="skuId" value={sku.id} />
+
+          <ClientOrderBriefFields
+            skuId={sku.id}
+            categoryId={sku.categoryId}
+            dishTitle={sku.title}
+          />
+
           <Field
-            label="Subject"
+            label="Working title (optional)"
             htmlFor="topic"
-            hint="Pre-filled from your Extra — edit if you want a more specific angle"
+            hint="Only if you want a specific headline — otherwise we draft from the topic above"
           >
             <Input
               id="topic"
               name="topic"
-              required
-              defaultValue={sku.title}
-              placeholder={`e.g. ${sku.title} for…`}
+              placeholder={`e.g. a headline for this ${sku.title.toLowerCase()}`}
             />
           </Field>
-
-          <ClientOrderBriefFields
-            categoryId={sku.categoryId}
-            dishTitle={sku.title}
-          />
 
           <Field
             label="Preferred date (optional)"

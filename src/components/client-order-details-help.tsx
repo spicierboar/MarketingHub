@@ -40,8 +40,8 @@ export function ClientOrderDetailsHelp({
         </button>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Questions match this Extra’s type (e.g. brochures ask format, not a hard
-        CTA). Tap ? for examples.
+        Fields change with this Extra (e.g. course outline asks for topic and
+        outcomes). Tap ? for examples.
       </p>
       {open ? (
         <div

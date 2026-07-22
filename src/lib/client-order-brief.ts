@@ -4,6 +4,12 @@
  */
 
 import type { ClientMenuCategoryId } from "@/lib/client-order-catalogue-data";
+import {
+  contentTopicField,
+  itemSpecificExtraFields,
+  mustIncludeFactsOverride,
+  type SkuBriefRef,
+} from "@/lib/client-order-brief-item";
 
 export type BriefOption = { value: string; label: string };
 
@@ -144,6 +150,7 @@ export const ORDER_VIDEO_RUNTIME: BriefOption[] = [
 ];
 
 export type OrderBriefFieldId =
+  | "contentTopic"
   | "audience"
   | "audienceNotes"
   | "tone"
@@ -156,6 +163,18 @@ export type OrderBriefFieldId =
   | "printFormat"
   | "printDistribution"
   | "videoRuntime"
+  | "learningLevel"
+  | "durationScope"
+  | "keyOutcomes"
+  | "partCount"
+  | "keywords"
+  | "guestOrFocus"
+  | "roleLocation"
+  | "offerName"
+  | "periodOrScope"
+  | "eventDetails"
+  | "announcementDetails"
+  | "productOrService"
   | "otherNotes";
 
 export type OrderBriefFieldConfig = {
@@ -164,6 +183,7 @@ export type OrderBriefFieldConfig = {
   /** Override default label */
   label: string;
   hint?: string;
+  placeholder?: string;
   options?: BriefOption[];
 };
 
@@ -408,7 +428,49 @@ export function schemaShows(
   return schema.fields.some((f) => f.id === id);
 }
 
+function asBriefField(raw: {
+  id: string;
+  required: boolean;
+  label: string;
+  hint?: string;
+  placeholder?: string;
+  options?: BriefOption[];
+}): OrderBriefFieldConfig {
+  return raw as OrderBriefFieldConfig;
+}
+
+/**
+ * Full brief schema for a catalogue SKU: category controls + item-specific fields.
+ * Every Extra gets a required topic/focus so fulfilment knows what to create.
+ */
+export function resolveOrderBriefSchema(sku: SkuBriefRef): OrderBriefSchema {
+  const base = getOrderBriefSchema(sku.categoryId);
+  const topic = asBriefField(contentTopicField(sku));
+  const itemExtras = itemSpecificExtraFields(sku)
+    .map(asBriefField)
+    .filter((extra) => !base.fields.some((b) => b.id === extra.id));
+
+  const factsOverride = mustIncludeFactsOverride(sku);
+  const baseFields = base.fields.map((f) => {
+    if (f.id === "mustIncludeFacts" && factsOverride) {
+      return {
+        ...f,
+        hint: factsOverride.hint ?? f.hint,
+        placeholder: factsOverride.placeholder ?? f.placeholder,
+      };
+    }
+    return f;
+  });
+
+  // Topic + item extras first (fulfilment essentials), then category framing
+  return {
+    categoryId: sku.categoryId,
+    fields: [topic, ...itemExtras, ...baseFields],
+  };
+}
+
 export type OrderBriefParsed = {
+  contentTopic: string;
   audience: string;
   audienceNotes: string;
   tone: string;
@@ -421,6 +483,18 @@ export type OrderBriefParsed = {
   printFormat: string;
   printDistribution: string;
   videoRuntime: string;
+  learningLevel: string;
+  durationScope: string;
+  keyOutcomes: string;
+  partCount: string;
+  keywords: string;
+  guestOrFocus: string;
+  roleLocation: string;
+  offerName: string;
+  periodOrScope: string;
+  eventDetails: string;
+  announcementDetails: string;
+  productOrService: string;
   otherNotes: string;
 };
 
@@ -438,6 +512,7 @@ function multi(formData: FormData, name: string): string[] {
 
 export function parseOrderBriefFromFormData(formData: FormData): OrderBriefParsed {
   return {
+    contentTopic: String(formData.get("contentTopic") || "").trim(),
     audience: String(formData.get("audience") || "").trim(),
     audienceNotes: String(formData.get("audienceNotes") || "").trim(),
     tone: String(formData.get("tone") || "").trim(),
@@ -450,20 +525,35 @@ export function parseOrderBriefFromFormData(formData: FormData): OrderBriefParse
     printFormat: String(formData.get("printFormat") || "").trim(),
     printDistribution: String(formData.get("printDistribution") || "").trim(),
     videoRuntime: String(formData.get("videoRuntime") || "").trim(),
+    learningLevel: String(formData.get("learningLevel") || "").trim(),
+    durationScope: String(formData.get("durationScope") || "").trim(),
+    keyOutcomes: String(formData.get("keyOutcomes") || "").trim(),
+    partCount: String(formData.get("partCount") || "").trim(),
+    keywords: String(formData.get("keywords") || "").trim(),
+    guestOrFocus: String(formData.get("guestOrFocus") || "").trim(),
+    roleLocation: String(formData.get("roleLocation") || "").trim(),
+    offerName: String(formData.get("offerName") || "").trim(),
+    periodOrScope: String(formData.get("periodOrScope") || "").trim(),
+    eventDetails: String(formData.get("eventDetails") || "").trim(),
+    announcementDetails: String(formData.get("announcementDetails") || "").trim(),
+    productOrService: String(formData.get("productOrService") || "").trim(),
     otherNotes: String(formData.get("otherNotes") || "").trim(),
   };
 }
 
 export function assertOrderBriefComplete(
   brief: OrderBriefParsed,
-  categoryId: ClientMenuCategoryId,
+  sku: SkuBriefRef,
 ): void {
-  const schema = getOrderBriefSchema(categoryId);
+  const schema = resolveOrderBriefSchema(sku);
   for (const f of schema.fields) {
     if (!f.required) continue;
     const value = briefValue(brief, f.id);
     if (Array.isArray(value) ? value.length === 0 : !value) {
       throw new Error(`Please complete: ${f.label}.`);
+    }
+    if (f.id === "contentTopic" && String(value).trim().length < 4) {
+      throw new Error(`${f.label} is too short — say what this Extra is about.`);
     }
     if (f.id === "mustIncludeFacts" && String(value).length < 12) {
       throw new Error(
@@ -484,6 +574,8 @@ function briefValue(
   id: OrderBriefFieldId,
 ): string | string[] {
   switch (id) {
+    case "contentTopic":
+      return brief.contentTopic;
     case "audience":
       return brief.audience;
     case "audienceNotes":
@@ -508,6 +600,30 @@ function briefValue(
       return brief.printDistribution;
     case "videoRuntime":
       return brief.videoRuntime;
+    case "learningLevel":
+      return brief.learningLevel;
+    case "durationScope":
+      return brief.durationScope;
+    case "keyOutcomes":
+      return brief.keyOutcomes;
+    case "partCount":
+      return brief.partCount;
+    case "keywords":
+      return brief.keywords;
+    case "guestOrFocus":
+      return brief.guestOrFocus;
+    case "roleLocation":
+      return brief.roleLocation;
+    case "offerName":
+      return brief.offerName;
+    case "periodOrScope":
+      return brief.periodOrScope;
+    case "eventDetails":
+      return brief.eventDetails;
+    case "announcementDetails":
+      return brief.announcementDetails;
+    case "productOrService":
+      return brief.productOrService;
     case "otherNotes":
       return brief.otherNotes;
     default: {
@@ -520,10 +636,12 @@ function briefValue(
 /** Human-readable brief block stored on the request / recipe notes. */
 export function formatOrderBriefNotes(
   brief: OrderBriefParsed,
-  categoryId: ClientMenuCategoryId,
+  sku: SkuBriefRef,
 ): string {
-  const schema = getOrderBriefSchema(categoryId);
-  const lines: string[] = [`Structured brief (${categoryId}):`];
+  const schema = resolveOrderBriefSchema(sku);
+  const lines: string[] = [
+    `Structured brief (${sku.categoryId} · ${sku.title}):`,
+  ];
 
   for (const f of schema.fields) {
     const raw = briefValue(brief, f.id);
@@ -543,4 +661,18 @@ export function formatOrderBriefNotes(
   }
 
   return lines.join("\n");
+}
+
+/** Drafting topic = content topic (not the Extra catalogue title). */
+export function resolveFulfilmentTopic(
+  brief: OrderBriefParsed,
+  skuTitle: string,
+  workingTitle?: string,
+): string {
+  const topic = brief.contentTopic.trim();
+  const working = workingTitle?.trim();
+  if (topic && working && working !== skuTitle) {
+    return `${topic} (${working})`;
+  }
+  return topic || working || skuTitle;
 }
