@@ -1,0 +1,669 @@
+[
+  {
+    "id": "illegal_social_on_email_channel",
+    "expectCodes": ["CHANNEL_MISMATCH"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["email"],
+      "primaryChannel": "email",
+      "objective": "encourage_bookings",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Reel caption on email — illegal"
+    }
+  },
+  {
+    "id": "illegal_general_proposal",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "general",
+      "subject": { "kind": "general" },
+      "category": "sales",
+      "contentType": "proposal",
+      "family": "sales_doc",
+      "channels": ["email"],
+      "primaryChannel": "email",
+      "objective": "drive_sales",
+      "audience": { "type": "marketers" },
+      "funnelStage": "purchase",
+      "optimiseFor": ["conversion"],
+      "tone": "professional",
+      "length": "words_600_1000",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": true,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Client proposal under general createFor"
+    }
+  },
+  {
+    "id": "illegal_wrong_family",
+    "expectCodes": ["FAMILY_UNSUPPORTED"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "email",
+      "channels": ["instagram"],
+      "primaryChannel": "instagram",
+      "objective": "encourage_bookings",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Wrong family for social_post"
+    }
+  },
+  {
+    "id": "illegal_seo_on_short_social",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram"],
+      "primaryChannel": "instagram",
+      "objective": "build_awareness",
+      "audience": { "type": "local_public" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["seo"],
+      "discoveryTargets": ["organic_search"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "SEO on Instagram caption"
+    }
+  },
+  {
+    "id": "illegal_employees_audience_client",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram"],
+      "primaryChannel": "instagram",
+      "objective": "build_awareness",
+      "audience": { "type": "employees" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Internal audience on client Instagram"
+    }
+  },
+  {
+    "id": "illegal_primary_not_in_channels",
+    "expectCodes": ["CHANNEL_MISMATCH"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram"],
+      "primaryChannel": "facebook",
+      "objective": "encourage_bookings",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Primary channel missing from channels"
+    }
+  },
+  {
+    "id": "illegal_meta_seo_tiktok_only",
+    "expectCodes": ["CHANNEL_MISMATCH"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "meta",
+      "contentType": "seo_meta",
+      "family": "meta_seo",
+      "channels": ["tiktok"],
+      "primaryChannel": "tiktok",
+      "objective": "build_awareness",
+      "audience": { "type": "prospective_customers" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["seo"],
+      "discoveryTargets": ["organic_search"],
+      "tone": "professional",
+      "length": "under_50",
+      "requiredComponents": ["meta_title", "meta_description"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "meta_seo on tiktok only"
+    }
+  },
+  {
+    "id": "illegal_funnel_purchase_recruit",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "website",
+      "contentType": "website_copy",
+      "family": "web_page",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "recruit_employees",
+      "audience": { "type": "prospective_customers" },
+      "funnelStage": "purchase",
+      "optimiseFor": ["seo"],
+      "discoveryTargets": ["organic_search"],
+      "tone": "professional",
+      "length": "words_600_1000",
+      "requiredComponents": ["headline", "body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Purchase funnel with recruit objective"
+    }
+  },
+  {
+    "id": "illegal_advocacy_generate_leads",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "landing",
+      "contentType": "landing_page",
+      "family": "landing_conversion",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "generate_leads",
+      "audience": { "type": "prospective_customers" },
+      "funnelStage": "advocacy",
+      "optimiseFor": ["conversion"],
+      "tone": "professional",
+      "length": "words_300_600",
+      "requiredComponents": ["headline", "body", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Advocacy funnel with generate_leads"
+    }
+  },
+  {
+    "id": "illegal_length_outside_band",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram"],
+      "primaryChannel": "instagram",
+      "objective": "encourage_bookings",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "words_1000_1500",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Blog-length Instagram caption"
+    }
+  },
+  {
+    "id": "illegal_ai_discovery_no_sources",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "industry",
+      "subject": { "kind": "industry", "industryId": "restaurant_cafe" },
+      "category": "editorial",
+      "contentType": "blog_article",
+      "family": "long_editorial",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "educate",
+      "audience": { "type": "industry_professionals" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["ai_discovery"],
+      "discoveryTargets": ["ai_answers"],
+      "tone": "professional",
+      "length": "words_1000_1500",
+      "requiredComponents": ["headline", "body"],
+      "evidence": "no_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "AI discovery with no_sources evidence"
+    }
+  },
+  {
+    "id": "illegal_subject_mismatch",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "general" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram"],
+      "primaryChannel": "instagram",
+      "objective": "encourage_bookings",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "client createFor with general subject"
+    }
+  },
+  {
+    "id": "illegal_engagement_on_reportish_blog_ok_wait_email_engagement",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "email",
+      "contentType": "email_newsletter",
+      "family": "email",
+      "channels": ["email"],
+      "primaryChannel": "email",
+      "objective": "nurture",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "friendly",
+      "length": "words_100_300",
+      "requiredComponents": ["subject_line", "body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Engagement optimise on email family"
+    }
+  },
+  {
+    "id": "illegal_industry_proposal",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "industry",
+      "subject": { "kind": "industry", "industryId": "restaurant_cafe" },
+      "category": "sales",
+      "contentType": "proposal",
+      "family": "sales_doc",
+      "channels": ["email"],
+      "primaryChannel": "email",
+      "objective": "drive_sales",
+      "audience": { "type": "industry_professionals" },
+      "funnelStage": "purchase",
+      "optimiseFor": ["conversion"],
+      "tone": "professional",
+      "length": "words_600_1000",
+      "requiredComponents": ["body"],
+      "evidence": "industry_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": true,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Client proposal under industry createFor"
+    }
+  },
+  {
+    "id": "illegal_ad_performance_without_review",
+    "expectCodes": ["COMPLIANCE_BLOCK"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "advertising",
+      "contentType": "ad_copy",
+      "family": "ad",
+      "channels": ["paid_media"],
+      "primaryChannel": "paid_media",
+      "objective": "drive_sales",
+      "audience": { "type": "local_public" },
+      "funnelStage": "purchase",
+      "optimiseFor": ["conversion"],
+      "tone": "urgent",
+      "length": "under_50",
+      "requiredComponents": ["headline", "body", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": true,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Performance claims without human review"
+    }
+  },
+  {
+    "id": "illegal_seo_missing_discovery",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "editorial",
+      "contentType": "blog_article",
+      "family": "long_editorial",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "educate",
+      "audience": { "type": "prospective_customers" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["seo"],
+      "tone": "professional",
+      "length": "words_1000_1500",
+      "requiredComponents": ["headline", "body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "SEO without discoveryTargets"
+    }
+  },
+  {
+    "id": "illegal_wrong_category",
+    "expectCodes": ["RECIPE_INCOMPATIBLE"],
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "email",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram"],
+      "primaryChannel": "instagram",
+      "objective": "encourage_bookings",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "requiredComponents": ["body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Category mismatch for social_post"
+    }
+  }
+]

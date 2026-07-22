@@ -17,6 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form";
 import { formatDate, titleCase } from "@/lib/utils";
+import { isMenuOrderRequest } from "@/lib/client-order-menu";
 import {
   answerGapAction,
   cancelRequestAction,
@@ -60,6 +61,8 @@ export default async function RequestDetailPage({
   const convert = convertRequestToCampaignAction.bind(null, req.id);
   const cancel = cancelRequestAction.bind(null, req.id);
 
+  const menuOrder = isMenuOrderRequest(req.notes, req.offer);
+
   return (
     <div>
       <PageHeader title={req.topic} description={`${company.name} · Request ${req.id}`} hideExplainer
@@ -68,7 +71,10 @@ export default async function RequestDetailPage({
           label: "Client asks",
         }}
       >
-        <StatusBadge status={req.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          {menuOrder && <Badge tone="warning">Menu order · à la carte</Badge>}
+          <StatusBadge status={req.status} />
+        </div>
       </PageHeader>
 
       <div className="grid gap-6 p-6 lg:grid-cols-3">

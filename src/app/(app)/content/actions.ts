@@ -60,6 +60,24 @@ import { generateVideo } from "@/lib/ai/videogen";
 import { persistGeneratedAsset } from "@/lib/visuals";
 import { assertVisualsGeneration } from "@/lib/visuals-allowance";
 import { resolveContentCreateTarget } from "@/lib/content-create-scope";
+import {
+  AUDIENCE_TYPE_IDS,
+  isKnownChannel,
+  isKnownContentType,
+  isKnownFunnel,
+  isKnownObjective,
+  isKnownOptimise,
+  serialiseBrief,
+  validateContentRecipe,
+  type AudienceTypeId,
+  type ContentTypeId,
+  type CreateForId,
+  type ObjectiveId,
+  type OptimiseForId,
+  type RecipeChannelId,
+  type RecipeSubject,
+  type ToneId,
+} from "@/lib/content-recipe";
 import { now } from "@/lib/utils";
 import type { DraftTone, GroundingLabel, RequestType } from "@/lib/types";
 
@@ -859,6 +877,41 @@ function textFd(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 
+function textFdAll(fd: FormData, key: string): string[] {
+  return fd
+    .getAll(key)
+    .flatMap((v) => String(v).split(","))
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Map hub platform labels / ids → RecipeChannelId. */
+function toRecipeChannel(raw: string): RecipeChannelId | undefined {
+  const t = raw.trim();
+  if (!t) return undefined;
+  if (isKnownChannel(t)) return t;
+  const key = t.toLowerCase().replace(/\s+/g, "_");
+  const aliases: Record<string, RecipeChannelId> = {
+    facebook: "facebook",
+    instagram: "instagram",
+    tiktok: "tiktok",
+    email: "email",
+    linkedin: "linkedin",
+    youtube_shorts: "youtube_shorts",
+    website_blog_cms: "website_blog_cms",
+    aeo_geo: "aeo_geo",
+    paid_ads: "paid_media",
+    paid_media: "paid_media",
+    google_business: "google_business_profile",
+    google_business_profile: "google_business_profile",
+  };
+  return aliases[key];
+}
+
+function isAudienceType(v: string): v is AudienceTypeId {
+  return (AUDIENCE_TYPE_IDS as readonly string[]).includes(v);
+}
+
 async function resolveHubTarget(formData: FormData) {
   const user = await requireUser();
   if (!canCreateContent(user)) {
@@ -876,27 +929,95 @@ async function resolveHubTarget(formData: FormData) {
 /**
  * /content Create — AI copy (any type). Lands in Library as ai_draft.
  * Supports client · industry · general (industry/general need zero clients).
+ * Builds + validates ContentRecipe, serialises brief for draftContent, persists recipe.
  */
 export async function hubGenerateContentAction(formData: FormData) {
   const { user, target } = await resolveHubTarget(formData);
-  const { company, generationCompany, scopeTag, displayLabel } = target;
+  const { company, generationCompany, scopeTag, displayLabel, scope, industryId } =
+    target;
   await assertAiBudget(user.tenantId);
   await assertAiRateLimit(user.tenantId);
 
-  const contentType = (textFd(formData, "contentType") || "social_post") as RequestType;
+  const createFor = scope as CreateForId;
+  const contentTypeRaw = textFd(formData, "contentType") || "social_post";
+  if (!isKnownContentType(contentTypeRaw)) {
+    throw new Error(`Unsupported content type for recipe: ${contentTypeRaw}`);
+  }
+  const contentType = contentTypeRaw as ContentTypeId;
   const topic = textFd(formData, "topic");
-  const objective = textFd(formData, "objective");
-  if (!topic || !objective) throw new Error("Topic and objective are required");
-  const channel = textFd(formData, "channel") || undefined;
-  const tone = (textFd(formData, "tone") || "brand_default") as DraftTone;
+  const objectiveRaw = textFd(formData, "objective");
+  if (!topic || !objectiveRaw) throw new Error("Topic and objective are required");
+
+  const channelRaw = textFd(formData, "channel");
+  const primaryChannel = channelRaw ? toRecipeChannel(channelRaw) : undefined;
+  if (channelRaw && !primaryChannel) {
+    throw new Error(`Unsupported channel for recipe: ${channelRaw}`);
+  }
+
+  const toneRaw = textFd(formData, "tone") || "brand_default";
+  const tone = toneRaw as ToneId;
+
+  const funnelRaw = textFd(formData, "funnel") || textFd(formData, "funnelStage");
+  const funnelStage = funnelRaw && isKnownFunnel(funnelRaw) ? funnelRaw : undefined;
+
+  const audienceRaw = textFd(formData, "audience") || textFd(formData, "audienceType");
+  const audienceType =
+    audienceRaw && isAudienceType(audienceRaw) ? audienceRaw : undefined;
+
+  const optimiseRaw = textFdAll(formData, "optimiseFor");
+  const optimiseFor = optimiseRaw.filter(isKnownOptimise) as OptimiseForId[];
+
+  // Objective may be an ObjectiveId (composer) or free-text intent (legacy hub).
+  const objectiveIsId = isKnownObjective(objectiveRaw);
+  const objective = objectiveIsId ? (objectiveRaw as ObjectiveId) : undefined;
+  const notesParts = [
+    objectiveIsId ? undefined : objectiveRaw,
+    textFd(formData, "notes") || undefined,
+  ].filter(Boolean) as string[];
+  const notes = notesParts.length ? notesParts.join("\n\n") : undefined;
+
+  let subject: RecipeSubject;
+  if (createFor === "client") {
+    subject = { kind: "client", companyId: company.id };
+  } else if (createFor === "industry") {
+    if (!industryId) throw new Error("Select an industry.");
+    subject = { kind: "industry", industryId };
+  } else {
+    subject = { kind: "general" };
+  }
+
+  const validated = validateContentRecipe({
+    createFor,
+    contentType,
+    topic,
+    subject,
+    channels: primaryChannel ? [primaryChannel] : undefined,
+    primaryChannel,
+    tone,
+    funnelStage,
+    objective,
+    audience: audienceType ? { type: audienceType } : undefined,
+    optimiseFor: optimiseFor.length ? optimiseFor : undefined,
+    notes,
+  });
+  if (!validated.ok || !validated.recipe) {
+    const msg =
+      validated.issues.map((i) => i.message).join("; ") ||
+      "Recipe validation failed";
+    throw new Error(msg);
+  }
+  const recipe = validated.recipe;
+  const brief = serialiseBrief(recipe);
+  const requestType = recipe.contentType as RequestType;
 
   const draft = await draftContent({
     company: generationCompany,
-    requestType: contentType,
-    topic,
-    objective,
-    platform: channel,
-    tone,
+    requestType,
+    topic: recipe.topic,
+    objective: brief,
+    platform: channelRaw || recipe.primaryChannel,
+    tone: recipe.tone as DraftTone,
+    notes: recipe.notes,
   });
   const compliance = await checkCompliance(draft.body, generationCompany);
   const claimAudit = await auditClaims(draft.body, generationCompany);
@@ -905,12 +1026,13 @@ export async function hubGenerateContentAction(formData: FormData) {
     : draft.sourceRefs.length > 0
       ? "grounded"
       : "suggested_by_ai";
-  const routedTo = routeContent({ type: contentType, compliance, claimAudit });
+  const routedTo = routeContent({ type: requestType, compliance, claimAudit });
 
   const sourcesUsed = [
     ...draft.sources,
     scopeTag,
     `Content hub: AI Content · ${displayLabel}`,
+    `recipe:${recipe.family}/${recipe.contentType}`,
   ];
   const aiRun = await recordAiUsage({
     tenantId: user.tenantId,
@@ -918,16 +1040,16 @@ export async function hubGenerateContentAction(formData: FormData) {
     userId: user.id,
     kind: "content_draft",
     model: draft.model,
-    promptSummary: `${topic} [${displayLabel}]`.slice(0, 120),
+    promptSummary: `${recipe.topic} [${displayLabel}]`.slice(0, 120),
     outputChars: draft.body.length,
     sourcesUsed,
-    contextChars: draft.body.length + objective.length,
+    contextChars: draft.body.length + brief.length,
   });
 
   const content = await createContent({
     companyId: company.id,
     requestId: null,
-    type: contentType,
+    type: requestType,
     title: draft.title,
     body: draft.body,
     status: "ai_draft",
@@ -939,17 +1061,18 @@ export async function hubGenerateContentAction(formData: FormData) {
     sourceRefs: draft.sourceRefs,
     brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
     aiModel: draft.model,
-    aiPrompt: `${objective} — ${topic}`,
+    aiPrompt: brief.slice(0, 2000),
     sourcesUsed,
     aiRunId: aiRun.id,
     estCostUsd: aiRun.estCostUsd,
+    recipe,
   });
 
   await logAction(user, "content.ai_drafted", {
     targetType: "content",
     targetId: content.id,
     companyId: company.id,
-    detail: `Hub · ${contentType} · ${displayLabel} · risk ${compliance.riskLevel}`,
+    detail: `Hub · ${recipe.family}/${recipe.contentType} · ${displayLabel} · risk ${compliance.riskLevel}`,
   });
 
   revalidatePath("/content");

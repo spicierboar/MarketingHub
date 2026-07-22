@@ -3,8 +3,9 @@
 // The schema (supabase/migrations) is snake_case; the domain (src/lib/types.ts)
 // is camelCase. Mapping is a SHALLOW top-level key conversion: jsonb VALUES
 // (profile, versions, compliance, usageRights, branding, clientReview,
-// statusHistory, action, outcomes, …) already hold camelCase domain objects, so
-// we store/read them verbatim and NEVER recurse into them.
+// statusHistory, action, outcomes, qualityRouting, recipe, …) already hold
+// camelCase domain objects, so we store/read them verbatim and NEVER recurse
+// into them.
 
 // Person-reference FK columns are named *_by in the schema (created_by,
 // approved_by, added_by, …), not *_by_id, so these aliases bridge the domain's

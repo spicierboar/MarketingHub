@@ -637,6 +637,7 @@ export async function getContent(contentId: string): Promise<ContentItem | undef
   if (isSupabaseConfigured()) return supabaseRepo.getContent(contentId);
   return db().content.find((c) => c.id === contentId);
 }
+/** Persists ContentItem including optional `recipe` jsonb when present. */
 export async function createContent(
   input: Omit<ContentItem, "id" | "createdAt" | "updatedAt" | "versions">,
 ): Promise<ContentItem> {
@@ -652,6 +653,7 @@ export async function createContent(
   db().content.push(item);
   return item;
 }
+/** Patch ContentItem fields (including `recipe` jsonb) via shallow assign / toRow. */
 export async function updateContent(
   contentId: string,
   patch: Partial<ContentItem>,

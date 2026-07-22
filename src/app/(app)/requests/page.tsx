@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { NewRequestModalTrigger } from "@/components/new-request-modal";
 import { formatDate, titleCase } from "@/lib/utils";
+import { isMenuOrderRequest } from "@/lib/client-order-menu";
 
 const URGENCY_TONE = {
   low: "neutral",
@@ -41,7 +42,7 @@ export default async function RequestsPage({
     <div>
       <PageHeader
         title={scopedCompany ? `Client asks · ${scopedCompany.name}` : "Client asks"}
-        description="Messages from clients and asks your team logs on their behalf."
+        description="Messages from clients, à la carte menu orders, and asks your team logs on their behalf."
         hideExplainer
         parent={
           scopedCompany
@@ -93,7 +94,12 @@ export default async function RequestsPage({
                       {companyById.get(r.companyId)?.name}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {titleCase(r.requestType)}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{titleCase(r.requestType)}</span>
+                        {isMenuOrderRequest(r.notes, r.offer) && (
+                          <Badge tone="warning">Menu order</Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {userById.get(r.requesterId)?.name ?? "—"}

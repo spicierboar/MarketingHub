@@ -10,6 +10,7 @@
     "start:supabase": "node --use-system-ca ./node_modules/next/dist/bin/next start",
     "lint": "eslint",
     "test:local-demo-seed": "node --experimental-transform-types --experimental-loader ./scripts/local-ts-loader.mjs scripts/local-demo-seed.selftest.ts",
+    "test:content-recipe": "npx --yes tsx src/lib/content-recipe/run-goldens.ts",
     "test:managed-content": "npx --yes tsx scripts/managed-content-jobs.selftest.ts",
     "test:managed-content-status": "npx --yes tsx scripts/managed-content-status.selftest.ts",
     "test:scheduler": "npx --yes tsx scripts/scheduler-saturation.selftest.ts",

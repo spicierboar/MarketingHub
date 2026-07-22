@@ -1,0 +1,633 @@
+[
+  {
+    "id": "legal_client_instagram_social",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_saffron" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram"],
+      "primaryChannel": "instagram",
+      "objective": "encourage_bookings",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "brand_default",
+      "length": "under_50",
+      "structure": "caption",
+      "requiredComponents": ["body", "cta", "hashtags"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Tuesday lunch special Instagram caption"
+    }
+  },
+  {
+    "id": "legal_industry_seo_guide",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "industry",
+      "subject": { "kind": "industry", "industryId": "restaurant_cafe" },
+      "category": "editorial",
+      "contentType": "blog_article",
+      "family": "long_editorial",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "educate",
+      "audience": { "type": "industry_professionals" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["seo", "ai_discovery"],
+      "discoveryTargets": ["organic_search", "ai_answers"],
+      "tone": "professional",
+      "length": "words_1000_1500",
+      "structure": "sections_hn",
+      "requiredComponents": ["headline", "body", "cta"],
+      "evidence": "industry_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "How Indian restaurants win local SEO in Australia"
+    }
+  },
+  {
+    "id": "legal_general_meta_seo",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "general",
+      "subject": { "kind": "general" },
+      "category": "meta",
+      "contentType": "seo_meta",
+      "family": "meta_seo",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "build_awareness",
+      "audience": { "type": "practitioners" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["seo"],
+      "discoveryTargets": ["organic_search"],
+      "tone": "professional",
+      "length": "under_50",
+      "structure": "meta_fields",
+      "requiredComponents": ["meta_title", "meta_description"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Template meta title/description for service pages"
+    }
+  },
+  {
+    "id": "legal_client_email_nurture",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "email",
+      "contentType": "email_newsletter",
+      "family": "email",
+      "channels": ["email"],
+      "primaryChannel": "email",
+      "objective": "nurture",
+      "audience": { "type": "prospective_customers", "awareness": "solution_aware" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["conversion"],
+      "tone": "friendly",
+      "length": "words_100_300",
+      "structure": "subject_preview_body",
+      "requiredComponents": ["subject_line", "preview_text", "body", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Monthly menu newsletter"
+    }
+  },
+  {
+    "id": "legal_client_landing_conversion",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "landing",
+      "contentType": "landing_page",
+      "family": "landing_conversion",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "generate_leads",
+      "audience": { "type": "prospective_customers" },
+      "funnelStage": "purchase",
+      "optimiseFor": ["conversion", "seo"],
+      "discoveryTargets": ["organic_search"],
+      "tone": "professional",
+      "length": "words_300_600",
+      "structure": "hero_proof_cta",
+      "requiredComponents": ["headline", "body", "proof_block", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Book a table — weekend brunch LP"
+    }
+  },
+  {
+    "id": "legal_client_ad_facebook",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "advertising",
+      "contentType": "ad_copy",
+      "family": "ad",
+      "channels": ["facebook", "paid_media"],
+      "primaryChannel": "facebook",
+      "objective": "drive_sales",
+      "audience": { "type": "local_public" },
+      "funnelStage": "purchase",
+      "optimiseFor": ["conversion"],
+      "tone": "urgent",
+      "length": "under_50",
+      "structure": "headline_desc_cta",
+      "requiredComponents": ["headline", "body", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": true,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "variants", "variantCount": 3 },
+      "topic": "Flash sale Facebook ad variants"
+    }
+  },
+  {
+    "id": "legal_client_video_script_tiktok",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "video_audio",
+      "contentType": "video_script",
+      "family": "script_av",
+      "channels": ["tiktok"],
+      "primaryChannel": "tiktok",
+      "objective": "build_awareness",
+      "audience": { "type": "local_public" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["engagement"],
+      "tone": "short_punchy",
+      "length": "words_100_300",
+      "structure": "script_beats",
+      "requiredComponents": ["body", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "15s kitchen reel script"
+    }
+  },
+  {
+    "id": "legal_client_website_copy",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "website",
+      "contentType": "website_copy",
+      "family": "web_page",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "educate",
+      "audience": { "type": "prospective_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["seo", "trust"],
+      "discoveryTargets": ["organic_search"],
+      "tone": "professional",
+      "length": "words_600_1000",
+      "structure": "sections_hn",
+      "requiredComponents": ["headline", "body", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "About us page rewrite"
+    }
+  },
+  {
+    "id": "legal_client_faq_support",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "support",
+      "contentType": "faq",
+      "family": "support",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "retain",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "retention",
+      "optimiseFor": ["seo", "ai_discovery", "trust"],
+      "discoveryTargets": ["ai_answers", "organic_search"],
+      "tone": "friendly",
+      "length": "words_100_300",
+      "structure": "qa_pairs",
+      "requiredComponents": ["headline", "body"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Delivery and parking FAQ"
+    }
+  },
+  {
+    "id": "legal_client_proposal",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "sales",
+      "contentType": "proposal",
+      "family": "sales_doc",
+      "channels": ["email"],
+      "primaryChannel": "email",
+      "objective": "drive_sales",
+      "audience": { "type": "partners", "decisionRole": "buyer" },
+      "funnelStage": "purchase",
+      "optimiseFor": ["conversion", "trust"],
+      "tone": "professional",
+      "length": "words_600_1000",
+      "structure": "doc_sections",
+      "requiredComponents": ["headline", "body", "proof_block", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": true,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Catering proposal for corporate lunch"
+    }
+  },
+  {
+    "id": "legal_client_brochure",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "sales",
+      "contentType": "brochure_copy",
+      "family": "sales_doc",
+      "channels": ["linkedin"],
+      "primaryChannel": "linkedin",
+      "objective": "generate_leads",
+      "audience": { "type": "prospective_customers" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["trust", "conversion"],
+      "tone": "professional",
+      "length": "words_300_600",
+      "structure": "doc_sections",
+      "requiredComponents": ["headline", "body", "proof_block", "cta"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": true,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "One-pager leave-behind for trade show"
+    }
+  },
+  {
+    "id": "legal_industry_social_linkedin",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "industry",
+      "subject": { "kind": "industry", "industryId": "trades" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["linkedin"],
+      "primaryChannel": "linkedin",
+      "objective": "build_awareness",
+      "audience": { "type": "peers" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["engagement"],
+      "tone": "professional",
+      "length": "words_100_300",
+      "structure": "caption",
+      "requiredComponents": ["body", "cta", "hashtags"],
+      "evidence": "industry_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Industry trend LinkedIn post"
+    }
+  },
+  {
+    "id": "legal_general_blog_guide",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "general",
+      "subject": { "kind": "general" },
+      "category": "editorial",
+      "contentType": "blog_article",
+      "family": "long_editorial",
+      "channels": ["website_blog_cms"],
+      "primaryChannel": "website_blog_cms",
+      "objective": "educate",
+      "audience": { "type": "marketers" },
+      "funnelStage": "awareness",
+      "optimiseFor": ["seo", "trust"],
+      "discoveryTargets": ["organic_search"],
+      "tone": "professional",
+      "length": "words_1500_plus",
+      "structure": "sections_hn",
+      "requiredComponents": ["headline", "body", "cta"],
+      "evidence": "citations_required",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Agency guide: content recipe model for marketers",
+      "notes": "Shelf routing — no client portal"
+    }
+  },
+  {
+    "id": "legal_client_gbp_social",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["google_business_profile", "facebook"],
+      "primaryChannel": "google_business_profile",
+      "objective": "encourage_bookings",
+      "audience": { "type": "local_public" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["engagement"],
+      "tone": "friendly",
+      "length": "words_50_100",
+      "structure": "caption",
+      "requiredComponents": ["body", "cta", "hashtags"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "GBP update — weekend hours"
+    }
+  },
+  {
+    "id": "legal_industry_email",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "industry",
+      "subject": { "kind": "industry", "industryId": "restaurant_cafe" },
+      "category": "email",
+      "contentType": "email_newsletter",
+      "family": "email",
+      "channels": ["email"],
+      "primaryChannel": "email",
+      "objective": "nurture",
+      "audience": { "type": "industry_professionals" },
+      "funnelStage": "consideration",
+      "optimiseFor": ["conversion"],
+      "tone": "professional",
+      "length": "words_300_600",
+      "structure": "subject_preview_body",
+      "requiredComponents": ["subject_line", "preview_text", "body", "cta"],
+      "evidence": "industry_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Industry newsletter — supplier tips"
+    }
+  },
+  {
+    "id": "legal_client_advocacy_referrals",
+    "recipe": {
+      "schemaVersion": "1.1",
+      "createFor": "client",
+      "subject": { "kind": "client", "companyId": "co_1" },
+      "category": "social",
+      "contentType": "social_post",
+      "family": "short_social",
+      "channels": ["instagram", "facebook"],
+      "primaryChannel": "instagram",
+      "objective": "referrals",
+      "audience": { "type": "existing_customers" },
+      "funnelStage": "advocacy",
+      "optimiseFor": ["engagement"],
+      "tone": "friendly",
+      "length": "under_50",
+      "structure": "caption",
+      "requiredComponents": ["body", "cta", "hashtags"],
+      "evidence": "brand_sources",
+      "brandControls": {
+        "useBrandVoice": true,
+        "useApprovedClaimsOnly": true,
+        "useApprovedOffersOnly": true
+      },
+      "compliance": {
+        "humanReviewRequired": false,
+        "performanceClaimsAllowed": false,
+        "customerNamedRequiresConsent": true
+      },
+      "restricted": {
+        "noInventedStats": true,
+        "noMedicalAdvice": true,
+        "noGuaranteedResults": true
+      },
+      "output": { "mode": "single_draft" },
+      "topic": "Ask customers to tag a friend"
+    }
+  }
+]

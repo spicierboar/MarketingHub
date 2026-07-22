@@ -29,27 +29,13 @@ import {
 } from "@/lib/demo-fill";
 import { CONTENT_PLATFORM_OPTIONS } from "@/lib/promo-catalog";
 import { cn } from "@/lib/utils";
-
-const CONTENT_TYPES: [string, string][] = [
-  ["social_post", "Social media post"],
-  ["blog_article", "Blog article"],
-  ["email_newsletter", "Email newsletter"],
-  ["website_copy", "Website page copy"],
-  ["landing_page", "Landing page copy"],
-  ["ad_copy", "Ad copy"],
-  ["video_script", "Video script"],
-  ["brochure_copy", "Brochure copy"],
-  ["faq", "FAQ section"],
-  ["seo_meta", "SEO meta"],
-];
-
-const TONES: [string, string][] = [
-  ["brand_default", "Brand voice"],
-  ["friendly", "Friendly"],
-  ["professional", "Professional"],
-  ["urgent", "Urgent"],
-  ["short_punchy", "Short & punchy"],
-];
+import {
+  ContentRecipeComposer,
+  EMPTY_RECIPE_VALUES,
+  recipeComposerReady,
+  type RecipeComposerValues,
+} from "@/components/content-recipe-composer";
+import type { CreateForId } from "@/lib/content-recipe";
 
 const IMAGE_FORMATS: [string, string][] = [
   ["square", "Square (1:1)"],
@@ -79,11 +65,23 @@ function ModalCancelButton({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLabel: string }) {
+function ModalActions({
+  onClose,
+  submitLabel,
+  submitDisabled = false,
+}: {
+  onClose: () => void;
+  submitLabel: string;
+  submitDisabled?: boolean;
+}) {
   return (
     <div className="flex justify-end gap-2 border-t border-border pt-4">
       <ModalCancelButton onClose={onClose} />
-      <ActionSubmitButton type="submit" pendingLabel="Generating…">
+      <ActionSubmitButton
+        type="submit"
+        pendingLabel="Generating…"
+        disabled={submitDisabled}
+      >
         {submitLabel}
       </ActionSubmitButton>
     </div>
@@ -444,110 +442,54 @@ function ContentDemoForm({
   lockCompany,
   onClose,
 }: DemoFormShared) {
-  const [topic, setTopic] = useState("");
-  const [objective, setObjective] = useState("");
-  const [contentType, setContentType] = useState("social_post");
-  const [channel, setChannel] = useState("");
-  const [tone, setTone] = useState("brand_default");
+  const createFor = scope as CreateForId;
+  const [recipe, setRecipe] = useState<RecipeComposerValues>(EMPTY_RECIPE_VALUES);
+
+  function handleScopeChange(next: CreateScope) {
+    setRecipe(EMPTY_RECIPE_VALUES);
+    onScopeChange(next);
+  }
 
   return (
     <form action={hubGenerateContentAction} className="space-y-4">
       {allowDemoFill ? (
         <DemoFillBar
           onFill={() => {
-            const fill = randomContentDemoFill();
-            setTopic(fill.topic);
-            setObjective(fill.objective);
-            setContentType(fill.contentType);
-            setChannel(fill.channel);
-            setTone(fill.tone);
+            const fill = randomContentDemoFill(createFor);
+            setRecipe({
+              contentType: fill.contentType as RecipeComposerValues["contentType"],
+              channel: fill.channel as RecipeComposerValues["channel"],
+              funnel: fill.funnel as RecipeComposerValues["funnel"],
+              objective: fill.objective as RecipeComposerValues["objective"],
+              audience: (fill.audience || "") as RecipeComposerValues["audience"],
+              optimiseFor: (fill.optimiseFor ||
+                "") as RecipeComposerValues["optimiseFor"],
+              tone: fill.tone as RecipeComposerValues["tone"],
+              topic: fill.topic,
+              notes: fill.notes ?? "",
+            });
           }}
         />
       ) : null}
       <CreateScopeFields
         scope={scope}
-        onScopeChange={onScopeChange}
+        onScopeChange={handleScopeChange}
         companies={companies}
         industries={industries}
         defaultCompanyId={defaultCompanyId}
         lockCompany={lockCompany}
         fieldId="hub-content-company"
       />
-      <Field label="Content type" htmlFor="hub-content-type">
-        <Select
-          id="hub-content-type"
-          name="contentType"
-          required
-          value={contentType}
-          onChange={(e) => setContentType(e.target.value)}
-        >
-          {CONTENT_TYPES.map(([v, l]) => (
-            <option key={v} value={v}>
-              {l}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Topic / brief" htmlFor="hub-content-topic">
-        <Input
-          id="hub-content-topic"
-          name="topic"
-          required
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="e.g. Winter lunch special for locals"
-        />
-      </Field>
-      <Field
-        label="Objective"
-        htmlFor="hub-content-objective"
-        hint="What should this piece achieve?"
-      >
-        <Textarea
-          id="hub-content-objective"
-          name="objective"
-          required
-          value={objective}
-          onChange={(e) => setObjective(e.target.value)}
-          placeholder="e.g. Fill weekday lunch tables"
-        />
-      </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="Platform (optional)"
-          htmlFor="hub-content-channel"
-          hint="Where this draft should run"
-        >
-          <Select
-            id="hub-content-channel"
-            name="channel"
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-          >
-            <option value="">Not specified</option>
-            {CONTENT_PLATFORM_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Tone (optional)" htmlFor="hub-content-tone">
-          <Select
-            id="hub-content-tone"
-            name="tone"
-            value={tone}
-            onChange={(e) => setTone(e.target.value)}
-          >
-            {TONES.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-      <ModalActions onClose={onClose} submitLabel="Generate draft" />
+      <ContentRecipeComposer
+        createFor={createFor}
+        values={recipe}
+        onChange={setRecipe}
+      />
+      <ModalActions
+        onClose={onClose}
+        submitLabel="Generate draft"
+        submitDisabled={!recipeComposerReady(recipe)}
+      />
     </form>
   );
 }

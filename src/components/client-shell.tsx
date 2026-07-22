@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CreditCard,
   Menu,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,8 +28,8 @@ type NavItem = {
 };
 
 /**
- * Wave A — four review surfaces only.
- * Promos / Files / Profile / Help stay reachable via deep links or Account.
+ * Client rail: Needs you · Approvals · Schedule · Order menu · Account.
+ * Ask us / Files / Profile stay under Account (or deep links).
  */
 const NAV_ITEMS: NavItem[] = [
   { href: "/client", label: "Needs you", icon: Home, short: "Home" },
@@ -44,6 +45,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: CalendarDays,
     short: "Schedule",
     matchPrefixes: ["/client/calendar", "/client/reports", "/client/schedule"],
+  },
+  {
+    href: "/client/order",
+    label: "Order menu",
+    icon: UtensilsCrossed,
+    short: "Order",
+    matchPrefixes: ["/client/order"],
   },
   {
     href: "/client/account",
@@ -67,11 +75,11 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-/** Mobile quick strip: Approvals · Schedule · Results · Account */
+/** Mobile quick strip */
 const MOBILE_QUICK: { href: string; label: string }[] = [
   { href: "/client/approvals", label: "Approvals" },
   { href: "/client/calendar", label: "Schedule" },
-  { href: "/client/reports", label: "Results" },
+  { href: "/client/order", label: "Order" },
   { href: "/client/account", label: "Account" },
 ];
 

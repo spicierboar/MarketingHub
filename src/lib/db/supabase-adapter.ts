@@ -591,6 +591,7 @@ export const supabaseRepo = {
     const { data } = await sb.from("content_items").select("*").eq("id", contentId).maybeSingle();
     return data ? toDomain<ContentItem>(data) : undefined;
   },
+  // `recipe` jsonb passes through via toRow/toDomain (camelCase domain object).
   async createContent(input: Omit<ContentItem, "id" | "createdAt" | "updatedAt" | "versions">): Promise<ContentItem> {
     const sb = await usr(); if (!sb) throw new Error("Supabase not configured");
     const { data, error } = await sb.from("content_items").insert(toRow(input)).select("*").single();

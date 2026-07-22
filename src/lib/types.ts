@@ -672,6 +672,8 @@ export interface ContentItem {
   aiCritique?: AiCritique; // last pre-publish critique (set at schedule time)
   /** Managed-service quality gate → client vs agency queue. */
   qualityRouting?: QualityRoutingRecord;
+  /** Validated ContentRecipe jsonb (compose → cook). See @/lib/content-recipe. */
+  recipe?: import("@/lib/content-recipe").ContentRecipe;
   // Phase 5 — Content Reuse Library (§45):
   reusePermitted?: boolean;
   reuseChannels?: string[]; // empty = all channels
