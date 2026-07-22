@@ -2,17 +2,13 @@ import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { getCompany, getTenant, listRequests } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
-import { buttonClasses } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ClientExtraWorkPanel,
   type ExtraWorkPromoCard,
 } from "@/components/client-extra-work-panel";
-import {
-  CLIENT_ORDER_MENU,
-  formatMenuPriceFrom,
-  isMenuOrderRequest,
-} from "@/lib/client-order-menu";
+import { ClientOrderCataloguePicker } from "@/components/client-order-catalogue-picker";
+import { isMenuOrderRequest } from "@/lib/client-order-menu";
 import {
   promoAllowanceSummary,
   resolveCustomWorkFeeAud,
@@ -83,33 +79,11 @@ export default async function ClientOrderMenuPage() {
           <div>
             <h2 className="text-sm font-semibold">Content add-ons</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              One-off pieces outside your package — pay and we deliver as a special job.
+              Browse by category, pick an item, then place your order. One-off work
+              outside your package.
             </p>
           </div>
-          <ul className="divide-y divide-border border-y border-border">
-            {CLIENT_ORDER_MENU.map((sku) => (
-              <li
-                key={sku.id}
-                className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-base font-semibold text-foreground">{sku.title}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">{sku.blurb}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-4">
-                  <p className="text-sm font-medium tabular-nums text-foreground">
-                    {formatMenuPriceFrom(sku.priceFromAud)}
-                  </p>
-                  <Link
-                    href={`/client/order/${sku.id}`}
-                    className={buttonClasses("default", "sm")}
-                  >
-                    Order
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <ClientOrderCataloguePicker />
         </section>
 
         {company ? (
