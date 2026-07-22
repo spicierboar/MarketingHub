@@ -1,7 +1,7 @@
 // Client portal: which company profile fields clients may edit vs view-only.
-// Wave A — contact / hours only. Brand Brain strategy stays agency-only.
-// ABN is locked in the portal; agency identity rule is (business name + ABN)
-// — see company-identity.ts (ABN alone may appear on multiple companies).
+// Business info mirrors Google Business Profile contact/location fields.
+// ABN / legal name / Brand Brain strategy stay agency-only.
+// ABN alone may appear on multiple companies — see company-identity.ts.
 
 import type { CompanyProfile } from "@/lib/types";
 
@@ -9,7 +9,6 @@ import type { CompanyProfile } from "@/lib/types";
 export const CLIENT_PROFILE_LOCKED_KEYS = [
   "abn",
   "legalName",
-  "googlePlaceId",
   "businessType",
   "prohibitedClaims",
   "approvedClaims",
@@ -19,13 +18,21 @@ export const CLIENT_PROFILE_LOCKED_KEYS = [
 export type ClientProfileLockedKey = (typeof CLIENT_PROFILE_LOCKED_KEYS)[number];
 
 /**
- * Whitelist of profile keys the portal may update (Wave A — contact/hours only).
+ * Whitelist of profile keys the portal may update (GBP-shaped business info).
  * Brand Brain strategy fields stay agency-only.
  */
 export const CLIENT_PROFILE_EDITABLE_KEYS = [
   "website",
   "approvalContact",
   "tradingHours",
+  "phone",
+  "email",
+  "businessAddress",
+  "serviceAreas",
+  "googlePlaceId",
+  "latitude",
+  "longitude",
+  "placeCategory",
 ] as const;
 
 export type ClientProfileEditableKey = (typeof CLIENT_PROFILE_EDITABLE_KEYS)[number];
@@ -36,6 +43,20 @@ export type ClientProfileEditablePatch = Partial<
   /** Display name on the company record (not inside profile). */
   displayName?: string;
 };
+
+function parseServiceAreas(raw: string): string[] {
+  return raw
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function optionalNumber(raw: string): number | undefined {
+  const t = raw.trim();
+  if (!t) return undefined;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 /**
  * Build an editable patch from form data. Ignores ABN, legalName, and any
@@ -62,6 +83,37 @@ export function clientProfilePatchFromForm(
     patch.tradingHours = tradingHours || undefined;
   }
 
+  const phone = get("phone");
+  if (phone !== undefined) patch.phone = phone || undefined;
+
+  const email = get("email");
+  if (email !== undefined) patch.email = email || undefined;
+
+  const businessAddress = get("businessAddress");
+  if (businessAddress !== undefined) {
+    patch.businessAddress = businessAddress || undefined;
+  }
+
+  const serviceAreas = get("serviceAreas");
+  if (serviceAreas !== undefined) {
+    patch.serviceAreas = parseServiceAreas(serviceAreas);
+  }
+
+  const googlePlaceId = get("googlePlaceId");
+  if (googlePlaceId !== undefined) {
+    patch.googlePlaceId = googlePlaceId || undefined;
+  }
+
+  const placeCategory = get("placeCategory");
+  if (placeCategory !== undefined) {
+    patch.placeCategory = placeCategory || undefined;
+  }
+
+  const latitude = optionalNumber(get("latitude") ?? "");
+  const longitude = optionalNumber(get("longitude") ?? "");
+  if (get("latitude") !== undefined) patch.latitude = latitude;
+  if (get("longitude") !== undefined) patch.longitude = longitude;
+
   return patch;
 }
 
@@ -75,11 +127,20 @@ export function applyClientProfilePatch(
   if ("website" in patch) next.website = patch.website;
   if ("approvalContact" in patch) next.approvalContact = patch.approvalContact;
   if ("tradingHours" in patch) next.tradingHours = patch.tradingHours;
+  if ("phone" in patch) next.phone = patch.phone;
+  if ("email" in patch) next.email = patch.email;
+  if ("businessAddress" in patch) next.businessAddress = patch.businessAddress;
+  if ("serviceAreas" in patch && patch.serviceAreas) {
+    next.serviceAreas = patch.serviceAreas;
+  }
+  if ("googlePlaceId" in patch) next.googlePlaceId = patch.googlePlaceId;
+  if ("latitude" in patch) next.latitude = patch.latitude;
+  if ("longitude" in patch) next.longitude = patch.longitude;
+  if ("placeCategory" in patch) next.placeCategory = patch.placeCategory;
 
   // Locked identity — reaffirm from original (defence in depth).
   next.abn = profile.abn;
   next.legalName = profile.legalName;
-  next.googlePlaceId = profile.googlePlaceId;
   next.businessType = profile.businessType;
   next.prohibitedClaims = profile.prohibitedClaims;
   next.approvedClaims = profile.approvedClaims;
@@ -88,7 +149,6 @@ export function applyClientProfilePatch(
   // Strategy fields never change via portal patch (defence in depth).
   next.tradingNames = profile.tradingNames;
   next.industry = profile.industry;
-  next.serviceAreas = profile.serviceAreas;
   next.natureOfBusiness = profile.natureOfBusiness;
   next.services = profile.services;
   next.targetCustomers = profile.targetCustomers;

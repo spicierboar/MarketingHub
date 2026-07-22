@@ -90,6 +90,11 @@ export function checkClientProfileFormIgnoresAbn(): {
     website: "https://demo.example",
     approvalContact: "hi@demo.example",
     tradingHours: "Daily 9–5",
+    phone: "02 9000 1111",
+    businessAddress: "1 Demo St, Sydney NSW 2000",
+    googlePlaceId: "place_from_picker",
+    latitude: "-33.86",
+    longitude: "151.21",
     tradingNames: "Should Ignore",
     abn: "99 999 999 999",
     legalName: "Should Not Apply Pty Ltd",
@@ -108,10 +113,16 @@ export function checkClientProfileFormIgnoresAbn(): {
     !hasVoice &&
     patch.displayName === "Demo Cafe" &&
     patch.website === "https://demo.example" &&
-    patch.approvalContact === "hi@demo.example";
+    patch.approvalContact === "hi@demo.example" &&
+    patch.phone === "02 9000 1111" &&
+    patch.businessAddress === "1 Demo St, Sydney NSW 2000" &&
+    patch.googlePlaceId === "place_from_picker" &&
+    patch.latitude === -33.86 &&
+    patch.longitude === 151.21 &&
+    patch.serviceAreas?.[0] === "Sydney";
   return {
     ok,
-    detail: `hasAbn=${hasAbn} hasLegal=${hasLegal} website=${patch.website}`,
+    detail: `hasAbn=${hasAbn} hasLegal=${hasLegal} website=${patch.website} place=${patch.googlePlaceId}`,
   };
 }
 

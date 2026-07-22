@@ -25,6 +25,7 @@ import {
   type OptimalPostWindow,
 } from "@/lib/calendar-intelligence";
 import { addDaysIso } from "@/lib/calendar-utils";
+import { campaignLocationBrief } from "@/lib/campaign-location";
 import type {
   ActingUser,
   AdCampaign,
@@ -521,7 +522,8 @@ export async function autoDraftOpenCalendarAssistSuggestions(
             packageId,
             goals: [suggestion.brief || suggestion.title],
             seasonalInputs: [
-              company.profile.localMarketNotes ||
+              campaignLocationBrief(company.profile) ||
+                company.profile.localMarketNotes ||
                 "No seasonal constraints confirmed for this quarter",
             ],
             profileConfirmedAt: company.updatedAt,

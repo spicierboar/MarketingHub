@@ -34,8 +34,19 @@ export interface PlaceMatch {
   mode: "live" | "simulated";
 }
 
+/** Lightweight row for address / business autocomplete dropdowns. */
+export interface PlaceSuggestion {
+  placeId: string;
+  primaryText: string;
+  secondaryText: string;
+  mode: "live" | "simulated";
+}
+
 export type PlaceExtractedHints = Partial<AutoOnboardingExtractedFields> &
-  Pick<Partial<CompanyProfile>, "googlePlaceId" | "tradingHours">;
+  Pick<
+    Partial<CompanyProfile>,
+    "googlePlaceId" | "tradingHours" | "businessAddress" | "latitude" | "longitude" | "placeCategory"
+  >;
 
 // ---- env gate ----------------------------------------------------------------
 
@@ -262,6 +273,123 @@ export async function matchPlace(query: PlaceMatchQuery): Promise<PlaceMatch | n
   return simulatePlaceMatch({ ...query, name });
 }
 
+function simulatePlaceSuggestions(query: string): PlaceSuggestion[] {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const h = simpleHash(q.toLowerCase());
+  const suburbs = ["Surry Hills", "Fitzroy", "West End", "Newtown", "Paddington"];
+  return [0, 1, 2].map((i) => {
+    const suburb = suburbs[(h + i) % suburbs.length];
+    const streetNo = 10 + ((h + i * 17) % 180);
+    const placeId = `sim_place_${(h + i).toString(16)}`;
+    return {
+      placeId,
+      primaryText: i === 0 ? q : `${q} (${suburb})`,
+      secondaryText: `${streetNo} Example St, ${suburb} NSW ${2000 + (i % 80)}, Australia`,
+      mode: "simulated" as const,
+    };
+  });
+}
+
+async function searchPlacesLive(query: string): Promise<PlaceSuggestion[]> {
+  const search = await googlePlacesFetch<PlacesTextSearchResponse>("textsearch/json", {
+    query,
+  });
+  if (search?.status !== "OK" || !search.results?.length) return [];
+  return search.results.slice(0, 6).flatMap((r) => {
+    if (!r.place_id || !r.name) return [];
+    return [
+      {
+        placeId: r.place_id,
+        primaryText: r.name,
+        secondaryText: r.formatted_address ?? "",
+        mode: "live" as const,
+      },
+    ];
+  });
+}
+
+/**
+ * Autocomplete-style place search for Business info.
+ * Live Places only when enrichment is production-gated; otherwise simulated.
+ */
+export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  if (placesEnrichmentLive()) {
+    try {
+      const live = await searchPlacesLive(q);
+      if (live.length) return live;
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return simulatePlaceSuggestions(q);
+}
+
+async function getPlaceDetailsLive(placeId: string): Promise<PlaceMatch | null> {
+  const details = await googlePlacesFetch<PlacesDetailsResponse>("details/json", {
+    place_id: placeId,
+    fields:
+      "place_id,name,formatted_address,formatted_phone_number,website,opening_hours,types,geometry",
+  });
+  if (details?.status === "OK" && details.result) {
+    return mapDetailsToMatch(details.result);
+  }
+  return null;
+}
+
+function simulatePlaceFromId(placeId: string, hintName?: string): PlaceMatch {
+  const h = simpleHash(placeId.toLowerCase());
+  const suburbs = ["Surry Hills", "Fitzroy", "West End", "Newtown", "Paddington"];
+  const suburb = suburbs[h % suburbs.length];
+  const streetNo = 10 + (h % 180);
+  const name = hintName?.trim() || "Local business";
+  return {
+    placeId,
+    name,
+    formattedAddress: `${streetNo} Example St, ${suburb} NSW ${2000 + (h % 80)}, Australia`,
+    phone: `+61 2 ${9000 + (h % 999)} ${1000 + (h % 8999)}`,
+    website: `https://${name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24) || "business"}.example`,
+    types: ["restaurant", "establishment", "point_of_interest"],
+    category: "Restaurant",
+    latitude: -33.86 + (h % 100) / 1000,
+    longitude: 151.2 + (h % 100) / 1000,
+    openingHoursText: [
+      "Monday: 5:00 – 10:00 PM",
+      "Tuesday: 5:00 – 10:00 PM",
+      "Wednesday: 5:00 – 10:00 PM",
+      "Thursday: 5:00 – 10:00 PM",
+      "Friday: 5:00 – 11:00 PM",
+      "Saturday: 5:00 – 11:00 PM",
+      "Sunday: 5:00 – 9:30 PM",
+    ],
+    mode: "simulated",
+  };
+}
+
+/** Resolve a place id to full details (live or simulated). */
+export async function getPlaceDetails(
+  placeId: string,
+  hintName?: string,
+): Promise<PlaceMatch | null> {
+  const id = placeId.trim();
+  if (!id) return null;
+
+  if (placesEnrichmentLive() && !id.startsWith("sim_place_")) {
+    try {
+      const live = await getPlaceDetailsLive(id);
+      if (live) return live;
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return simulatePlaceFromId(id, hintName);
+}
+
 /** Map a Places match into onboarding extract / profile hint fields. */
 export function placeMatchToExtractedHints(match: PlaceMatch): PlaceExtractedHints {
   const suburb =
@@ -275,6 +403,7 @@ export function placeMatchToExtractedHints(match: PlaceMatch): PlaceExtractedHin
     industry: match.category,
     serviceAreas: suburb ? [suburb] : undefined,
     googlePlaceId: match.placeId,
+    businessAddress: match.formattedAddress,
   };
 
   if (match.openingHoursText?.length) {
@@ -282,4 +411,39 @@ export function placeMatchToExtractedHints(match: PlaceMatch): PlaceExtractedHin
   }
 
   return hints;
+}
+
+/** Profile fields filled when a client picks a Places suggestion. */
+export function placeMatchToProfilePatch(
+  match: PlaceMatch,
+): Partial<
+  Pick<
+    CompanyProfile,
+    | "businessAddress"
+    | "phone"
+    | "website"
+    | "tradingHours"
+    | "googlePlaceId"
+    | "latitude"
+    | "longitude"
+    | "placeCategory"
+    | "serviceAreas"
+  >
+> {
+  const suburb =
+    match.formattedAddress.split(",")[1]?.trim().replace(/\s+[A-Z]{2,3}\s+\d{4}.*$/, "").trim() ||
+    undefined;
+  return {
+    businessAddress: match.formattedAddress,
+    phone: match.phone,
+    website: match.website,
+    tradingHours: match.openingHoursText?.length
+      ? match.openingHoursText.join("; ")
+      : undefined,
+    googlePlaceId: match.placeId,
+    latitude: match.latitude,
+    longitude: match.longitude,
+    placeCategory: match.category,
+    ...(suburb ? { serviceAreas: [suburb] } : {}),
+  };
 }

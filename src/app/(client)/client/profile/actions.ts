@@ -5,21 +5,41 @@ import { getCompany, isUnderLegalHold, updateCompany } from "@/lib/db";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { logAction } from "@/lib/audit";
 import { validateOptionalPhone, validateOptionalWebsite } from "@/lib/form-validation";
+import {
+  applyClientProfilePatch,
+  clientProfilePatchFromForm,
+} from "@/lib/client-profile-edit";
+import {
+  getPlaceDetails,
+  searchPlaces,
+  type PlaceMatch,
+  type PlaceSuggestion,
+} from "@/lib/places-enrichment";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 
-function parseServiceAreas(raw: string): string[] {
-  return raw
-    .split(/[,;\n]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+/** Portal Places autocomplete — simulated on staging; live only when Places flag is on. */
+export async function searchBusinessPlacesAction(
+  query: string,
+): Promise<PlaceSuggestion[]> {
+  await requirePortalUser();
+  return searchPlaces(query);
+}
+
+/** Resolve a suggestion into full place details for form fill. */
+export async function resolvePlaceDetailsAction(
+  placeId: string,
+  hintName?: string,
+): Promise<PlaceMatch | null> {
+  await requirePortalUser();
+  return getPlaceDetails(placeId, hintName);
 }
 
 /**
- * Clients may correct Google-profile-shaped contact / hours / location fields
- * plus the primary approval contact. Strategy Brand Brain fields stay agency-only.
+ * Clients may correct Google-profile-shaped contact / location / hours fields
+ * plus Places pin. Strategy Brand Brain fields stay agency-only.
  * Portal login seats are not changed here — Ask us to transfer access.
  */
 export async function saveClientProfileAction(formData: FormData) {
@@ -35,35 +55,23 @@ export async function saveClientProfileAction(formData: FormData) {
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
 
-  const displayName = text(formData, "displayName");
-  if (!displayName) throw new Error("Business display name is required.");
+  const patch = clientProfilePatchFromForm((key) => text(formData, key));
+  if (!patch.displayName) throw new Error("Business display name is required.");
 
-  const phone = text(formData, "phone");
-  const phoneErr = validateOptionalPhone(phone || undefined);
+  const phoneErr = validateOptionalPhone(patch.phone);
   if (phoneErr) throw new Error(phoneErr);
 
-  const website = text(formData, "website");
-  const websiteErr = validateOptionalWebsite(website || undefined);
+  const websiteErr = validateOptionalWebsite(patch.website);
   if (websiteErr) throw new Error(websiteErr);
 
-  const email = text(formData, "email");
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (patch.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patch.email)) {
     throw new Error("Enter a valid public email, or leave it blank.");
   }
 
-  const profile = {
-    ...company.profile,
-    website: website || undefined,
-    phone: phone || undefined,
-    email: email || undefined,
-    businessAddress: text(formData, "businessAddress") || undefined,
-    serviceAreas: parseServiceAreas(text(formData, "serviceAreas")),
-    tradingHours: text(formData, "tradingHours") || undefined,
-    approvalContact: text(formData, "approvalContact") || undefined,
-  };
+  const profile = applyClientProfilePatch(company.profile, patch);
 
   await updateCompany(companyId, {
-    name: displayName,
+    name: patch.displayName,
     profile,
   });
 
@@ -71,7 +79,9 @@ export async function saveClientProfileAction(formData: FormData) {
     companyId,
     targetType: "company",
     targetId: companyId,
-    detail: "Client updated business info / contact / hours",
+    detail: profile.googlePlaceId
+      ? `Client updated business info (place ${profile.googlePlaceId})`
+      : "Client updated business info / contact / hours",
   });
 
   revalidatePath("/client/profile");

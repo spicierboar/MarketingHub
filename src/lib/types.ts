@@ -374,6 +374,11 @@ export interface CompanyProfile {
   localMarketNotes?: string;
   /** Street / full business address from scrape or Places (display + local SEO). */
   businessAddress?: string;
+  /** WGS84 from Places — radius ads, local insights, Maps consistency. */
+  latitude?: number;
+  longitude?: number;
+  /** Primary Places category label (e.g. restaurant) for targeting copy. */
+  placeCategory?: string;
   phone?: string;
   email?: string;
   /**

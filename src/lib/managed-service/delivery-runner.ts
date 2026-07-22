@@ -14,6 +14,7 @@
 
 import { logAction } from "@/lib/audit";
 import { executeCampaignBuilder, unpackKeyMessage } from "@/lib/campaign-builder";
+import { campaignLocationBrief } from "@/lib/campaign-location";
 import {
   createCalendarAssistSuggestion,
   getCompany,
@@ -852,7 +853,9 @@ export async function processManagedDeliveryRun(
       const currentPackageId =
         company.profile.managedService?.serviceBilling?.activePackageId ??
         pkg.id;
+      const locationBrief = campaignLocationBrief(company.profile);
       const seasonalInputs = [
+        locationBrief,
         company.profile.localMarketNotes,
         company.profile.currentOffers,
         company.profile.tradingHours,

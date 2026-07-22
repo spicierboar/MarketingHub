@@ -371,10 +371,20 @@ export function companyRelevanceContext(company: Company): CompanyRelevanceConte
     .map((s) => String(s).toLowerCase().trim())
     .join(" ");
 
+  const fromAddress = p.businessAddress
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const serviceAreas = [
+    ...(p.serviceAreas ?? []),
+    ...(fromAddress ?? []),
+    p.placeCategory,
+  ].filter((s): s is string => Boolean(s?.trim()));
+
   return {
     industries: [...new Set(industries.filter(Boolean))],
     demographics,
-    serviceAreas: [...(p.serviceAreas ?? [])],
+    serviceAreas: [...new Set(serviceAreas)],
     businessType: bt,
   };
 }
