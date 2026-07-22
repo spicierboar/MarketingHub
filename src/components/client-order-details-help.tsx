@@ -40,8 +40,8 @@ export function ClientOrderDetailsHelp({
         </button>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Structured answers draft more accurately than a free-text dump. Tap ?
-        for examples.
+        Questions match this Extra’s type (e.g. brochures ask format, not a hard
+        CTA). Tap ? for examples.
       </p>
       {open ? (
         <div

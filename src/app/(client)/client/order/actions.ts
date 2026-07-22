@@ -22,9 +22,9 @@ export async function placeClientMenuOrderAction(formData: FormData) {
 
   const topicRaw = String(formData.get("topic") || "").trim();
   const brief = parseOrderBriefFromFormData(formData);
-  assertOrderBriefComplete(brief);
+  assertOrderBriefComplete(brief, sku.categoryId);
 
-  const clientNotes = formatOrderBriefNotes(brief);
+  const clientNotes = formatOrderBriefNotes(brief, sku.categoryId);
   const topic = topicRaw || `${sku.title} — ${brief.audience}`;
 
   const preferredDate =
