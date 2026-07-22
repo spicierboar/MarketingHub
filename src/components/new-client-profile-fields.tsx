@@ -5,6 +5,10 @@ import { Field, Input, Textarea } from "@/components/ui/form";
 import { BusinessTypeSection } from "@/app/(app)/companies/business-profile-fields";
 import { ProfileSuggestButton } from "@/components/profile-suggest-button";
 import {
+  BusinessInfoDetailsForm,
+  businessInfoInitialFromProfile,
+} from "@/components/business-info-details-form";
+import {
   PROFILE_FIELD_HELP,
   PROFILE_FIELD_PLACEHOLDERS,
 } from "@/lib/profile-suggestions";
@@ -73,6 +77,34 @@ export function NewClientProfileFields({
       />
 
       <ProfileSuggestButton formId={formId} companyName={initialName} compact />
+
+      <div className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+        <h3 className="text-sm font-semibold">Location, phone &amp; hours</h3>
+        <p className="text-xs text-muted-foreground">
+          Prefer website scrape on the previous step (and Find on Google below). Review
+          structured fields — don&apos;t retype what we already filled from public sources.
+        </p>
+        <BusinessInfoDetailsForm
+          showWebsite={false}
+          showPlaceSearch
+          showServiceAreas={false}
+          initial={businessInfoInitialFromProfile({
+            businessName: initialName,
+            website: profile.website,
+            serviceAreas: profile.serviceAreas,
+            googlePlaceId: profile.googlePlaceId,
+            latitude: profile.latitude,
+            longitude: profile.longitude,
+            placeCategory: profile.placeCategory,
+            structuredAddress: profile.structuredAddress,
+            structuredPhone: profile.structuredPhone,
+            structuredHours: profile.structuredHours,
+            businessAddress: profile.businessAddress,
+            phone: profile.phone,
+            tradingHours: profile.tradingHours,
+          })}
+        />
+      </div>
 
       <Field
         label="Nature of business"

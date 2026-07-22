@@ -237,8 +237,8 @@ export default async function OnboardingPage({
               serverError={params.err?.trim() || null}
               intro={
                 <p className="text-sm text-muted-foreground">
-                  Start with your business name, website and contact. We’ll prepare a
-                  staging preview for you to edit before anything is activated.
+                  Start with your website when you can — Prefill pulls public listing
+                  address, phone, and hours so you mostly review instead of typing.
                 </p>
               }
               defaults={{
@@ -252,6 +252,17 @@ export default async function OnboardingPage({
                 notes: tenant.onboarding?.notes,
                 website: tenant.onboarding?.website,
                 scrapeConsent: !!tenant.onboarding?.scrapeConsentAt,
+                businessAddress: tenant.onboarding?.businessAddress,
+                businessPhone: tenant.onboarding?.businessPhone,
+                tradingHours: tenant.onboarding?.tradingHours,
+                serviceAreas: tenant.onboarding?.serviceAreas,
+                googlePlaceId: tenant.onboarding?.googlePlaceId,
+                latitude: tenant.onboarding?.latitude,
+                longitude: tenant.onboarding?.longitude,
+                placeCategory: tenant.onboarding?.placeCategory,
+                structuredAddress: tenant.onboarding?.structuredAddress,
+                structuredPhone: tenant.onboarding?.structuredPhone,
+                structuredHours: tenant.onboarding?.structuredHours,
               }}
             />
           )}

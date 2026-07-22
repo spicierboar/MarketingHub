@@ -33,6 +33,16 @@ import { now } from "@/lib/utils";
 import { parseAbnInput } from "@/lib/company-identity";
 import { verifyAbnStatusAgainstAbr } from "@/lib/abn-lookup";
 import {
+  applyOnboardingBusinessDraftToProfile,
+  businessInfoDraftFromForm,
+} from "@/lib/client-profile-edit";
+import {
+  parseAddressText,
+  parsePhoneText,
+  parseTradingHoursText,
+} from "@/lib/business-info/format";
+import { placeMatchToProfilePatch } from "@/lib/places-enrichment";
+import {
   validateDemoCardFields,
   validateOnboardingDetailsFields,
   validateOptionalPhone,
@@ -263,7 +273,9 @@ async function applyPrimaryCompanyProfile(args: {
         website: draft.website,
         actorId: actor.id,
       });
-      await updateCompany(company.id, { profile: result.profile });
+      // User-confirmed Business info from the details step wins over scrape blanks.
+      const merged = applyOnboardingBusinessDraftToProfile(result.profile, draft);
+      await updateCompany(company.id, { profile: merged });
       if (result.mode !== "failed") {
         await logAction(actor, "auto_onboarding.scraped", {
           targetType: "company",
@@ -281,6 +293,14 @@ async function applyPrimaryCompanyProfile(args: {
         });
       }
     }
+  } else {
+    const withListing = applyOnboardingBusinessDraftToProfile(
+      (
+        await getCompany(company.id)
+      )?.profile ?? company.profile,
+      draft,
+    );
+    await updateCompany(company.id, { profile: withListing });
   }
 
   if (packageId) {
@@ -404,6 +424,18 @@ export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
           : undefined,
     ].filter(Boolean);
 
+    const placePatch = place ? placeMatchToProfilePatch(place) : null;
+    const listingAddress =
+      placePatch?.businessAddress ||
+      profile.businessAddress ||
+      prev.businessAddress;
+    const listingPhone =
+      placePatch?.phone || profile.phone || prev.businessPhone;
+    const listingHours =
+      placePatch?.tradingHours ||
+      profile.tradingHours ||
+      prev.tradingHours;
+
     const onboarding: TenantOnboarding = {
       ...prev,
       website,
@@ -434,6 +466,30 @@ export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
       notes:
         prev.notes ||
         (noteBits.length ? noteBits.join(" · ") : undefined),
+      businessAddress: listingAddress,
+      businessPhone: listingPhone,
+      tradingHours: listingHours,
+      googlePlaceId: placePatch?.googlePlaceId || prev.googlePlaceId,
+      latitude: placePatch?.latitude ?? prev.latitude,
+      longitude: placePatch?.longitude ?? prev.longitude,
+      placeCategory: placePatch?.placeCategory || prev.placeCategory,
+      serviceAreas:
+        placePatch?.serviceAreas ||
+        profile.serviceAreas ||
+        prev.serviceAreas,
+      structuredAddress:
+        placePatch?.structuredAddress ||
+        (listingAddress
+          ? parseAddressText(listingAddress, "AU")
+          : prev.structuredAddress),
+      structuredPhone:
+        placePatch?.structuredPhone ||
+        (listingPhone ? parsePhoneText(listingPhone) : prev.structuredPhone),
+      structuredHours:
+        placePatch?.structuredHours ||
+        (listingHours
+          ? parseTradingHoursText(listingHours)
+          : prev.structuredHours),
     };
 
     await saveOnboardingDraft(tenant, onboarding);
@@ -555,6 +611,7 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
   }
 
   const prev = tenant?.onboarding ?? {};
+  const listing = businessInfoDraftFromForm((key) => text(formData, key));
   const onboarding: TenantOnboarding = {
     ...prev,
     companyName,
@@ -571,6 +628,7 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
         ? prev.scrapeConsentAt
         : now()
       : undefined,
+    ...listing,
   };
 
   // Force client workspace draft — we are the agency; signup = client.

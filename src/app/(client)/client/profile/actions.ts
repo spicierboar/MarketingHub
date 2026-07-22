@@ -10,32 +10,15 @@ import {
   clientProfilePatchFromForm,
 } from "@/lib/client-profile-edit";
 import {
-  getPlaceDetails,
-  searchPlaces,
-  type PlaceMatch,
-  type PlaceSuggestion,
-} from "@/lib/places-enrichment";
+  resolvePlaceDetailsAction,
+  searchBusinessPlacesAction,
+} from "@/app/actions/business-places";
 
 function text(fd: FormData, key: string): string {
   return String(fd.get(key) || "").trim();
 }
 
-/** Portal Places autocomplete — simulated on staging; live only when Places flag is on. */
-export async function searchBusinessPlacesAction(
-  query: string,
-): Promise<PlaceSuggestion[]> {
-  await requirePortalUser();
-  return searchPlaces(query);
-}
-
-/** Resolve a suggestion into full place details for form fill. */
-export async function resolvePlaceDetailsAction(
-  placeId: string,
-  hintName?: string,
-): Promise<PlaceMatch | null> {
-  await requirePortalUser();
-  return getPlaceDetails(placeId, hintName);
-}
+export { resolvePlaceDetailsAction, searchBusinessPlacesAction };
 
 /**
  * Clients may correct Google-profile-shaped contact / location / hours fields

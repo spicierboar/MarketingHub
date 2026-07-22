@@ -82,6 +82,19 @@ export interface TenantOnboarding {
    * onboardingCompletedAt; card details are never persisted.
    */
   paymentMockAt?: string;
+  /** Public listing address (from Places / scrape / structured form). */
+  businessAddress?: string;
+  /** Public business phone (listings) — distinct from contactPhone. */
+  businessPhone?: string;
+  tradingHours?: string;
+  serviceAreas?: string[];
+  googlePlaceId?: string;
+  latitude?: number;
+  longitude?: number;
+  placeCategory?: string;
+  structuredAddress?: import("@/lib/business-info/types").StructuredBusinessAddress;
+  structuredPhone?: import("@/lib/business-info/types").StructuredPhone;
+  structuredHours?: import("@/lib/business-info/types").StructuredTradingHours;
 }
 
 export interface Tenant {

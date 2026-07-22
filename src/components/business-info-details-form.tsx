@@ -48,7 +48,13 @@ export type BusinessInfoFormInitial = {
   tradingHoursText?: string;
 };
 
-type Props = { initial: BusinessInfoFormInitial };
+type Props = {
+  initial: BusinessInfoFormInitial;
+  /** Hide website when the parent form already collects it (onboarding / sales). */
+  showWebsite?: boolean;
+  showPlaceSearch?: boolean;
+  showServiceAreas?: boolean;
+};
 
 function FilterableCountry({
   value,
@@ -177,7 +183,12 @@ function TimeSelects({
  * Precise Business info capture: country → postcode → suburb, street parts,
  * dial-code phone, and Google-style per-day hours with AM/PM.
  */
-export function BusinessInfoDetailsForm({ initial }: Props) {
+export function BusinessInfoDetailsForm({
+  initial,
+  showWebsite = true,
+  showPlaceSearch = true,
+  showServiceAreas = true,
+}: Props) {
   const listId = useId();
   const [address, setAddress] = useState(initial.address);
   const [phone, setPhone] = useState(initial.phone);
@@ -311,17 +322,23 @@ export function BusinessInfoDetailsForm({ initial }: Props) {
         name="structuredHoursJson"
         value={JSON.stringify(hours)}
       />
-      <input type="hidden" name="website" value={website} />
-      <input type="hidden" name="serviceAreas" value={serviceAreas} />
+      {showWebsite ? <input type="hidden" name="website" value={website} /> : null}
+      {showServiceAreas ? (
+        <input type="hidden" name="serviceAreas" value={serviceAreas} />
+      ) : null}
       <input type="hidden" name="googlePlaceId" value={placeMeta.googlePlaceId} />
       <input type="hidden" name="latitude" value={placeMeta.latitude} />
       <input type="hidden" name="longitude" value={placeMeta.longitude} />
       <input type="hidden" name="placeCategory" value={placeMeta.placeCategory} />
 
+      {showPlaceSearch ? (
       <div className="space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Find on Google (optional)
         </h3>
+        <p className="text-xs text-muted-foreground">
+          Prefer this or website prefill — then review the fields below instead of typing from scratch.
+        </p>
         <div className="relative">
           <Field
             label="Search"
@@ -381,6 +398,7 @@ export function BusinessInfoDetailsForm({ initial }: Props) {
           ) : null}
         </div>
       </div>
+      ) : null}
 
       <div className="space-y-4 border-t border-border pt-6">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -579,6 +597,7 @@ export function BusinessInfoDetailsForm({ initial }: Props) {
           </span>
         </p>
 
+        {showServiceAreas ? (
         <Field
           label="Service area"
           htmlFor="serviceAreasVisible"
@@ -591,11 +610,12 @@ export function BusinessInfoDetailsForm({ initial }: Props) {
             placeholder="e.g. Surry Hills, CBD"
           />
         </Field>
+        ) : null}
       </div>
 
       <div className="space-y-4 border-t border-border pt-6">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Phone &amp; website
+          {showWebsite ? "Phone & website" : "Public phone"}
         </h3>
         <div className="grid gap-4 sm:grid-cols-[8rem_1fr]">
           <Field label="Country code" htmlFor="dial">
@@ -644,6 +664,7 @@ export function BusinessInfoDetailsForm({ initial }: Props) {
             {serializedPhone || "—"}
           </span>
         </p>
+        {showWebsite ? (
         <Field label="Website" htmlFor="websiteVisible" hint="Full URL including https://">
           <Input
             id="websiteVisible"
@@ -653,6 +674,7 @@ export function BusinessInfoDetailsForm({ initial }: Props) {
             placeholder="https://www.example.com.au"
           />
         </Field>
+        ) : null}
       </div>
 
       <div className="space-y-4 border-t border-border pt-6">

@@ -34,6 +34,7 @@ import { isAddonId } from "@/lib/addons";
 import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
+import { applyBusinessInfoFormToProfile } from "@/lib/client-profile-edit";
 import { verifyBusinessNameAgainstAbr } from "@/lib/abn-lookup";
 import {
   duplicateNameAbnMessage,
@@ -101,6 +102,7 @@ async function assertSalesCompanyInTenant(companyId: string) {
 }
 
 function profileFromForm(fd: FormData, businessType: BusinessType, base?: CompanyProfile): CompanyProfile {
+  const get = (key: string) => String(fd.get(key) || "").trim();
   const profile: CompanyProfile = {
     ...(base ?? {
       callsToAction: [],
@@ -143,7 +145,6 @@ function profileFromForm(fd: FormData, businessType: BusinessType, base?: Compan
       seasons: baseRetail?.seasons ?? [],
       pricePositioning: baseRetail?.pricePositioning,
     };
-    // Drop empty retail slice so we don't invent blank vertical data
     if (
       !profile.retail.productCategories.length &&
       !profile.retail.heroProducts.length &&
@@ -171,7 +172,8 @@ function profileFromForm(fd: FormData, businessType: BusinessType, base?: Compan
       ),
     };
   }
-  return profile;
+  // Structured Business info (address / phone / hours) — prefer form over scrape blanks.
+  return applyBusinessInfoFormToProfile(profile, get);
 }
 
 async function assertNoNameAbnDuplicate(

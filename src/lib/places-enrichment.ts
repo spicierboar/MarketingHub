@@ -10,6 +10,11 @@ import {
   type AppEnv,
 } from "@/lib/env";
 import type { AutoOnboardingExtractedFields } from "@/lib/auto-onboarding";
+import {
+  parseAddressText,
+  parsePhoneText,
+  parseTradingHoursText,
+} from "@/lib/business-info/format";
 import type { CompanyProfile } from "@/lib/types";
 
 // ---- types -------------------------------------------------------------------
@@ -428,22 +433,31 @@ export function placeMatchToProfilePatch(
     | "longitude"
     | "placeCategory"
     | "serviceAreas"
+    | "structuredAddress"
+    | "structuredPhone"
+    | "structuredHours"
   >
 > {
   const suburb =
     match.formattedAddress.split(",")[1]?.trim().replace(/\s+[A-Z]{2,3}\s+\d{4}.*$/, "").trim() ||
     undefined;
+  const tradingHours = match.openingHoursText?.length
+    ? match.openingHoursText.join("; ")
+    : undefined;
   return {
     businessAddress: match.formattedAddress,
     phone: match.phone,
     website: match.website,
-    tradingHours: match.openingHoursText?.length
-      ? match.openingHoursText.join("; ")
-      : undefined,
+    tradingHours,
     googlePlaceId: match.placeId,
     latitude: match.latitude,
     longitude: match.longitude,
     placeCategory: match.category,
+    structuredAddress: parseAddressText(match.formattedAddress, "AU"),
+    structuredPhone: match.phone ? parsePhoneText(match.phone) : undefined,
+    structuredHours: tradingHours
+      ? parseTradingHoursText(tradingHours)
+      : undefined,
     ...(suburb ? { serviceAreas: [suburb] } : {}),
   };
 }

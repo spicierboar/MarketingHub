@@ -2149,6 +2149,10 @@ export async function scrapeAndApplyInitialProfile(input: {
       input.actorId,
       keys.length > 0,
     );
+    const { enrichProfileWithStructuredBusinessInfo } = await import(
+      "@/lib/business-info/enrich-profile"
+    );
+    profile = enrichProfileWithStructuredBusinessInfo(profile);
     return {
       profile,
       fieldCount: keys.length,

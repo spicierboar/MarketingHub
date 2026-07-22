@@ -187,3 +187,95 @@ export function applyClientProfilePatch(
 
   return next;
 }
+
+/** Apply Business info form fields onto a company profile (onboarding / sales / portal). */
+export function applyBusinessInfoFormToProfile(
+  profile: CompanyProfile,
+  get: (key: string) => string,
+): CompanyProfile {
+  const patch = clientProfilePatchFromForm(get);
+  // Don't force displayName from business-info-only embeds.
+  const { displayName: _ignored, ...rest } = patch;
+  void _ignored;
+  return applyClientProfilePatch(profile, rest);
+}
+
+/** Slice of TenantOnboarding / draft fields from the Business info form. */
+export function businessInfoDraftFromForm(get: (key: string) => string): {
+  businessAddress?: string;
+  businessPhone?: string;
+  tradingHours?: string;
+  serviceAreas?: string[];
+  googlePlaceId?: string;
+  latitude?: number;
+  longitude?: number;
+  placeCategory?: string;
+  structuredAddress?: StructuredBusinessAddress;
+  structuredPhone?: StructuredPhone;
+  structuredHours?: StructuredTradingHours;
+} {
+  const patch = clientProfilePatchFromForm(get);
+  return {
+    businessAddress: patch.businessAddress,
+    businessPhone: patch.phone,
+    tradingHours: patch.tradingHours,
+    serviceAreas: patch.serviceAreas,
+    googlePlaceId: patch.googlePlaceId,
+    latitude: patch.latitude,
+    longitude: patch.longitude,
+    placeCategory: patch.placeCategory,
+    structuredAddress: patch.structuredAddress,
+    structuredPhone: patch.structuredPhone,
+    structuredHours: patch.structuredHours,
+  };
+}
+
+/** Overlay draft business listing fields onto a company profile (user-confirmed wins). */
+export function applyOnboardingBusinessDraftToProfile(
+  profile: CompanyProfile,
+  draft: {
+    businessAddress?: string;
+    businessPhone?: string;
+    tradingHours?: string;
+    serviceAreas?: string[];
+    googlePlaceId?: string;
+    latitude?: number;
+    longitude?: number;
+    placeCategory?: string;
+    structuredAddress?: StructuredBusinessAddress;
+    structuredPhone?: StructuredPhone;
+    structuredHours?: StructuredTradingHours;
+    website?: string;
+  },
+): CompanyProfile {
+  const patch: ClientProfileEditablePatch = {};
+  if (draft.businessAddress !== undefined) {
+    patch.businessAddress = draft.businessAddress || undefined;
+  }
+  if (draft.businessPhone !== undefined) {
+    patch.phone = draft.businessPhone || undefined;
+  }
+  if (draft.tradingHours !== undefined) {
+    patch.tradingHours = draft.tradingHours || undefined;
+  }
+  if (draft.serviceAreas !== undefined) patch.serviceAreas = draft.serviceAreas;
+  if (draft.googlePlaceId !== undefined) {
+    patch.googlePlaceId = draft.googlePlaceId || undefined;
+  }
+  if (draft.latitude !== undefined) patch.latitude = draft.latitude;
+  if (draft.longitude !== undefined) patch.longitude = draft.longitude;
+  if (draft.placeCategory !== undefined) {
+    patch.placeCategory = draft.placeCategory || undefined;
+  }
+  if (draft.structuredAddress !== undefined) {
+    patch.structuredAddress = draft.structuredAddress;
+  }
+  if (draft.structuredPhone !== undefined) {
+    patch.structuredPhone = draft.structuredPhone;
+  }
+  if (draft.structuredHours !== undefined) {
+    patch.structuredHours = draft.structuredHours;
+  }
+  if (draft.website !== undefined) patch.website = draft.website || undefined;
+  return applyClientProfilePatch(profile, patch);
+}

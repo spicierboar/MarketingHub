@@ -11,6 +11,10 @@ import {
 import { Field, Input, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import {
+  BusinessInfoDetailsForm,
+  businessInfoInitialFromProfile,
+} from "@/components/business-info-details-form";
+import {
   ONBOARDING_INDUSTRIES,
   naturesForIndustry,
 } from "@/lib/onboarding-industries";
@@ -20,6 +24,11 @@ import {
   validateOnboardingDetailsFields,
 } from "@/lib/form-validation";
 import { cn } from "@/lib/utils";
+import type {
+  StructuredBusinessAddress,
+  StructuredPhone,
+  StructuredTradingHours,
+} from "@/lib/business-info/types";
 
 type Props = {
   /** Server action for Continue (details save). */
@@ -35,6 +44,17 @@ type Props = {
     notes?: string;
     website?: string;
     scrapeConsent?: boolean;
+    businessAddress?: string;
+    businessPhone?: string;
+    tradingHours?: string;
+    serviceAreas?: string[];
+    googlePlaceId?: string;
+    latitude?: number;
+    longitude?: number;
+    placeCategory?: string;
+    structuredAddress?: StructuredBusinessAddress;
+    structuredPhone?: StructuredPhone;
+    structuredHours?: StructuredTradingHours;
   };
   showWebsiteScrape?: boolean;
   /** Shown after a successful / partial website prefill. */
@@ -351,6 +371,7 @@ export function OnboardingDetailsFields({
         <Field
           label="Contact phone (optional)"
           htmlFor="contactPhone"
+          hint="Your personal number for onboarding — public listing phone is below"
           error={errors.contactPhone}
         >
           <Input
@@ -364,6 +385,36 @@ export function OnboardingDetailsFields({
           />
         </Field>
       </div>
+
+      <div className="mt-6 space-y-3 border-t border-border pt-5">
+        <h3 className="text-sm font-semibold">Location, phone &amp; hours</h3>
+        <p className="text-xs text-muted-foreground">
+          Prefer <span className="font-medium text-foreground">Prefill from website</span>{" "}
+          above — we pull Google listing address, phone, and hours when available. Then
+          review the structured fields (faster and more accurate than typing from scratch).
+        </p>
+        <BusinessInfoDetailsForm
+          showWebsite={false}
+          showPlaceSearch
+          showServiceAreas
+          initial={businessInfoInitialFromProfile({
+            businessName: defaults?.businessName ?? "",
+            website: defaults?.website,
+            serviceAreas: defaults?.serviceAreas,
+            googlePlaceId: defaults?.googlePlaceId,
+            latitude: defaults?.latitude,
+            longitude: defaults?.longitude,
+            placeCategory: defaults?.placeCategory,
+            structuredAddress: defaults?.structuredAddress,
+            structuredPhone: defaults?.structuredPhone,
+            structuredHours: defaults?.structuredHours,
+            businessAddress: defaults?.businessAddress,
+            phone: defaults?.businessPhone ?? defaults?.contactPhone,
+            tradingHours: defaults?.tradingHours,
+          })}
+        />
+      </div>
+
       <Field
         label="Anything we should know? (optional)"
         htmlFor="notes"
