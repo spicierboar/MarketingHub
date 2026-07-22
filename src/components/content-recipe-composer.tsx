@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
-import { nextOptions } from "@/lib/content-recipe";
+import { nextOptions } from "@/lib/content-recipe/options";
 import type {
   AudienceTypeId,
   ContentTypeId,
@@ -12,7 +12,7 @@ import type {
   OptimiseForId,
   RecipeChannelId,
   ToneId,
-} from "@/lib/content-recipe";
+} from "@/lib/content-recipe/types";
 
 /** Investor-facing labels (local until content-recipe exports labels). */
 export const CONTENT_TYPE_LABELS: Record<ContentTypeId, string> = {

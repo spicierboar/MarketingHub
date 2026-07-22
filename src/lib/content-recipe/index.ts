@@ -48,5 +48,4 @@ export {
 export { serialiseBrief } from "./serialise-brief";
 export { nextOptions } from "./options";
 export type { RecipeNextOptions } from "./options";
-export { runGoldens } from "./run-goldens";
-export type { GoldenRunResult } from "./run-goldens";
+// runGoldens stays in ./run-goldens.ts only — do not re-export (uses node:assert; breaks client bundles).
