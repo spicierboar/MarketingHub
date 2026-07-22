@@ -4,10 +4,8 @@ import { useState } from "react";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { BusinessTypeSection } from "@/app/(app)/companies/business-profile-fields";
 import { ProfileSuggestButton } from "@/components/profile-suggest-button";
-import {
-  BusinessInfoDetailsForm,
-  businessInfoInitialFromProfile,
-} from "@/components/business-info-details-form";
+import { BusinessInfoDetailsForm } from "@/components/business-info-details-form";
+import { businessInfoInitialFromProfile } from "@/lib/business-info/form-initial";
 import {
   PROFILE_FIELD_HELP,
   PROFILE_FIELD_PLACEHOLDERS,

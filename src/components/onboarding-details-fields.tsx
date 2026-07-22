@@ -10,10 +10,8 @@ import {
 } from "react";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
-import {
-  BusinessInfoDetailsForm,
-  businessInfoInitialFromProfile,
-} from "@/components/business-info-details-form";
+import { BusinessInfoDetailsForm } from "@/components/business-info-details-form";
+import { businessInfoInitialFromProfile } from "@/lib/business-info/form-initial";
 import {
   ONBOARDING_INDUSTRIES,
   naturesForIndustry,

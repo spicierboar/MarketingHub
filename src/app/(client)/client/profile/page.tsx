@@ -7,10 +7,8 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { titleCase } from "@/lib/utils";
-import {
-  BusinessInfoDetailsForm,
-  businessInfoInitialFromProfile,
-} from "@/components/business-info-details-form";
+import { BusinessInfoDetailsForm } from "@/components/business-info-details-form";
+import { businessInfoInitialFromProfile } from "@/lib/business-info/form-initial";
 import { saveClientProfileAction } from "./actions";
 
 /**
