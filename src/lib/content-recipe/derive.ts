@@ -201,7 +201,12 @@ export function applyDefaults(
       : (d.suggested.primaryChannel ?? channels[0]);
 
   const discoveryNeeded = (partial.optimiseFor ?? d.suggested.optimiseFor).some(
-    (o) => o === "seo" || o === "ai_discovery",
+    (o) =>
+      o === "seo" ||
+      o === "ai_discovery" ||
+      o === "aeo" ||
+      o === "geo" ||
+      o === "llmo",
   );
 
   return {

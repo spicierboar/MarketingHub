@@ -35,6 +35,10 @@ import {
 import { localDemoEnabled } from "@/lib/env";
 import { notifyClientException } from "@/lib/managed-service/exception-notify";
 import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
+import {
+  assertSocialLinksReachable,
+  assertWebsiteReachable,
+} from "@/lib/url-reachability";
 import { onboardingScore } from "@/lib/types";
 import { id, now } from "@/lib/utils";
 import {
@@ -93,22 +97,15 @@ function businessTypeFromForm(fd: FormData): BusinessType | undefined {
     : undefined;
 }
 
-// Read one URL per platform (reference links only — publishing access is a
+// Read one URL/handle per platform (reference links only — publishing access is a
 // separate OAuth connect storing an encrypted, revocable token, never creds).
-// Keeps only valid http(s) links.
+// Reachability is checked via assertSocialLinksReachable before save.
 function readSocialLinks(fd: FormData): SocialLink[] {
   const out: SocialLink[] = [];
   for (const { key } of SOCIAL_PLATFORMS) {
     const raw = String(fd.get(`social_${key}`) || "").trim();
     if (!raw) continue;
-    try {
-      const u = new URL(raw);
-      if (u.protocol === "http:" || u.protocol === "https:") {
-        out.push({ platform: key, url: u.toString() });
-      }
-    } catch {
-      /* skip invalid URLs silently */
-    }
+    out.push({ platform: key, url: raw });
   }
   return out;
 }
@@ -150,6 +147,17 @@ export async function createCompanyAction(
     };
   }
 
+  let websiteChecked: string | undefined;
+  if (websiteRaw) {
+    try {
+      websiteChecked = await assertWebsiteReachable(websiteRaw);
+    } catch (e) {
+      return {
+        error: e instanceof Error ? e.message : "Website could not be verified.",
+      };
+    }
+  }
+
   const abrGate = await verifyBusinessNameAgainstAbr(name, abnParsed.abn);
   if (!abrGate.ok) return { error: abrGate.error };
 
@@ -177,10 +185,10 @@ export async function createCompanyAction(
   });
 
   let scrapedParam = "";
-  if (websiteRaw && consent) {
+  if (websiteChecked && consent) {
     const result = await scrapeAndApplyInitialProfile({
       company: { ...company, profile: withAbn },
-      website: websiteRaw,
+      website: websiteChecked,
       actorId: user.id,
     });
     await updateCompany(company.id, { profile: result.profile });
@@ -245,13 +253,24 @@ export async function saveOnboardingAction(formData: FormData) {
     const abnParsed = parseAbnInput(String(formData.get("abn") || ""));
     if (!abnParsed.ok) throw new Error(abnParsed.error);
 
+    const websiteRaw = text(formData, "website");
+    if (websiteRaw) {
+      const websiteErr = validateOptionalWebsite(websiteRaw);
+      if (websiteErr) throw new Error(websiteErr);
+    }
+    const website =
+      websiteRaw ? await assertWebsiteReachable(websiteRaw) : "";
+    const socialLinks = await assertSocialLinksReachable(
+      readSocialLinks(formData),
+    );
+
     const profilePatch: CompanyProfile = {
       ...company.profile,
       legalName: text(formData, "legalName"),
       tradingNames: text(formData, "tradingNames"),
       industry: text(formData, "industry"),
       businessType,
-      website: text(formData, "website"),
+      website,
       approvalContact: text(formData, "approvalContact"),
       natureOfBusiness: text(formData, "natureOfBusiness"),
       targetCustomers: text(formData, "targetCustomers"),
@@ -267,7 +286,7 @@ export async function saveOnboardingAction(formData: FormData) {
       prohibitedClaims: lines(formData, "prohibitedClaims"),
       approvedClaims: lines(formData, "approvedClaims"),
       requiredDisclaimers: lines(formData, "requiredDisclaimers"),
-      socialLinks: readSocialLinks(formData),
+      socialLinks,
       retail: company.profile.retail,
       hotel: company.profile.hotel,
       restaurant: company.profile.restaurant,

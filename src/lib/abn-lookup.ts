@@ -7,8 +7,9 @@
 // duplicate checks use (business name + ABN) — see company-identity.ts.
 // Lookups only pre-fill profile.abn + legalName on the *current* company.
 //
-// Create/update gate: verifyBusinessNameAgainstAbr — live ABR only for hard
-// blocks; simulated / unconfigured / network fail soft-skips (demos keep working).
+// Create/update gate: verifyBusinessNameAgainstAbr — ABR register check when
+// ABN_LOOKUP_GUID is set (no LIVE flag required for read-only verify). Soft-skip
+// only when GUID missing or ABR unreachable (demos keep working).
 
 import {
   liveIntegrationsAllowed,
@@ -53,6 +54,14 @@ function abnLookupGuid(): string | undefined {
 /** True when an ABR authentication GUID is configured. */
 export function abnLookupConfigured(): boolean {
   return !!abnLookupGuid();
+}
+
+/**
+ * Read-only ABR register queries — GUID only.
+ * Does not require ABN_LOOKUP_LIVE (that flag gates enrichment write-paths).
+ */
+export function abnRegisterCheckEnabled(): boolean {
+  return abnLookupConfigured();
 }
 
 /** True when live ABR calls are enabled (GUID + env gate). */
@@ -399,10 +408,9 @@ export async function lookupAbn(abnOrName: string): Promise<AbnLookupResult | nu
 
 /**
  * Soft/hard ABN status gate (no trading-name match).
- * Soft-skip when ABR is not live / GUID missing / network fails.
- * Hard-block invalid or cancelled ABN when live ABR responds.
- * Returns `legalName` when live lookup succeeds — useful for signup without a
- * separate legal-name field.
+ * Queries ABR when ABN_LOOKUP_GUID is set (read-only — no LIVE flag).
+ * Soft-skip only when GUID missing or ABR unreachable.
+ * Hard-block invalid or cancelled ABN when the register responds.
  */
 export async function verifyAbnStatusAgainstAbr(
   abn: string,
@@ -416,12 +424,12 @@ export async function verifyAbnStatusAgainstAbr(
     };
   }
 
-  if (!abnLookupLive()) {
+  if (!abnRegisterCheckEnabled()) {
     return {
       ok: true,
       mode: "skipped",
       warning:
-        "ABR verification skipped (not live / no GUID) — create allowed; set ABN_LOOKUP_GUID to verify.",
+        "ABN register check skipped — set ABN_LOOKUP_GUID to verify against the ABR.",
     };
   }
 
@@ -432,7 +440,7 @@ export async function verifyAbnStatusAgainstAbr(
     return {
       ok: true,
       mode: "skipped",
-      warning: "ABR verification skipped (lookup failed) — create allowed.",
+      warning: "ABN register temporarily unavailable — create allowed; re-check later.",
     };
   }
 
@@ -448,7 +456,7 @@ export async function verifyAbnStatusAgainstAbr(
     return {
       ok: true,
       mode: "skipped",
-      warning: "ABR verification skipped (lookup unavailable) — create allowed.",
+      warning: "ABN register returned no data — create allowed; re-check later.",
     };
   }
 
@@ -469,11 +477,11 @@ export async function verifyAbnStatusAgainstAbr(
 }
 
 /**
- * Gate for create / identity update: verify business name + ABN against live ABR.
+ * Gate for create / identity update: verify business name + ABN against the ABR.
  *
- * Soft-skip (ok + warning) when ABR is not live, GUID missing, or network fails —
- * demos without GUID keep working; internal (name+ABN) duplicate check still applies.
- * Hard-block when live ABR returns invalid/cancelled ABN, or a clear name mismatch.
+ * Queries the register when ABN_LOOKUP_GUID is set (no LIVE flag required).
+ * Soft-skip only when GUID missing or ABR unreachable.
+ * Hard-block invalid/cancelled ABN or clear name mismatch when ABR responds.
  */
 export async function verifyBusinessNameAgainstAbr(
   businessName: string,
@@ -489,12 +497,12 @@ export async function verifyBusinessNameAgainstAbr(
     };
   }
 
-  if (!abnLookupLive()) {
+  if (!abnRegisterCheckEnabled()) {
     return {
       ok: true,
       mode: "skipped",
       warning:
-        "ABR verification skipped (not live / no GUID) — create allowed; set ABN_LOOKUP_GUID to verify.",
+        "ABN register check skipped — set ABN_LOOKUP_GUID to verify against the ABR.",
     };
   }
 
@@ -505,7 +513,7 @@ export async function verifyBusinessNameAgainstAbr(
     return {
       ok: true,
       mode: "skipped",
-      warning: "ABR verification skipped (lookup failed) — create allowed.",
+      warning: "ABN register temporarily unavailable — create allowed; re-check later.",
     };
   }
 
@@ -521,7 +529,7 @@ export async function verifyBusinessNameAgainstAbr(
     return {
       ok: true,
       mode: "skipped",
-      warning: "ABR verification skipped (lookup unavailable) — create allowed.",
+      warning: "ABN register returned no data — create allowed; re-check later.",
     };
   }
 

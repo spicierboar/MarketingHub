@@ -140,7 +140,12 @@ export function nextOptions(partial: ContentRecipePartial): RecipeNextOptions {
     : [];
 
   const needsDiscovery = (partial.optimiseFor ?? []).some(
-    (o) => o === "seo" || o === "ai_discovery",
+    (o) =>
+      o === "seo" ||
+      o === "ai_discovery" ||
+      o === "aeo" ||
+      o === "geo" ||
+      o === "llmo",
   );
   const discoveryTargets = needsDiscovery ? [...DISCOVERY_TARGET_IDS] : [];
 

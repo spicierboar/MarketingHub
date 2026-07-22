@@ -74,13 +74,16 @@ export const RECIPE_CHANNEL_IDS = [
 ] as const;
 export type RecipeChannelId = (typeof RECIPE_CHANNEL_IDS)[number];
 
-/** V1 optimise-for (§10); ai_discovery bundles AEO+GEO. */
+/** V1 optimise-for (§10); aeo/geo/llmo are explicit; ai_discovery remains a bundle alias. */
 export const OPTIMISE_FOR_IDS = [
   "engagement",
   "conversion",
   "seo",
   "trust",
   "ai_discovery",
+  "aeo",
+  "geo",
+  "llmo",
 ] as const;
 export type OptimiseForId = (typeof OPTIMISE_FOR_IDS)[number];
 

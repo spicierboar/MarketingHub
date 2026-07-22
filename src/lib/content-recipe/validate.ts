@@ -219,14 +219,19 @@ export const ContentRecipeSchema = z
       }
     }
 
-    // discovery targets required when seo | ai_discovery
+    // discovery targets required when seo | ai_discovery | aeo | geo | llmo
     const needsDiscovery = recipe.optimiseFor.some(
-      (o) => o === "seo" || o === "ai_discovery",
+      (o) =>
+        o === "seo" ||
+        o === "ai_discovery" ||
+        o === "aeo" ||
+        o === "geo" ||
+        o === "llmo",
     );
     if (needsDiscovery && (!recipe.discoveryTargets || recipe.discoveryTargets.length === 0)) {
       add(
         "RECIPE_INCOMPATIBLE",
-        "discoveryTargets required when optimiseFor includes seo or ai_discovery",
+        "discoveryTargets required when optimiseFor includes seo, ai_discovery, aeo, geo, or llmo",
         ["discoveryTargets"],
       );
     }
@@ -237,7 +242,7 @@ export const ContentRecipeSchema = z
     ) {
       add(
         "RECIPE_INCOMPATIBLE",
-        "discoveryTargets only allowed with seo or ai_discovery",
+        "discoveryTargets only allowed with seo, ai_discovery, aeo, geo, or llmo",
         ["discoveryTargets"],
       );
     }

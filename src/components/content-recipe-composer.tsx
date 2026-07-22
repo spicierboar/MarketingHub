@@ -81,6 +81,9 @@ export const OPTIMISE_LABELS: Record<OptimiseForId, string> = {
   seo: "SEO",
   trust: "Trust / authority",
   ai_discovery: "AI discovery",
+  aeo: "AEO (answer engines)",
+  geo: "GEO (generative engines)",
+  llmo: "LLMO (LLM optimisation)",
 };
 
 export const TONE_LABELS: Record<ToneId, string> = {

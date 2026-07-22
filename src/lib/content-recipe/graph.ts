@@ -98,7 +98,7 @@ export const FAMILY_TO_CHANNELS: Record<
   ],
   script_av: ["tiktok", "instagram", "youtube_shorts"],
   sales_doc: ["website_blog_cms", "email", "linkedin"],
-  support: ["website_blog_cms", "email"],
+  support: ["website_blog_cms", "email", "aeo_geo"],
   meta_seo: ["website_blog_cms", "aeo_geo"],
 };
 
@@ -169,11 +169,15 @@ export function optimiseForForType(
     channels.some((c) => SEO_CHANNELS.has(c));
   if (SEO_FAMILIES.has(family) && channelOk) out.push("seo");
 
-  if (AI_DISCOVERY_FAMILIES.has(family) && channelOk) out.push("ai_discovery");
+  if (AI_DISCOVERY_FAMILIES.has(family) && channelOk) {
+    out.push("ai_discovery", "aeo", "geo", "llmo");
+  }
 
-  // FAQ / answer-shaped: prefer ai_discovery even without web channel listed yet
-  if (type === "faq" && !out.includes("ai_discovery")) {
-    out.push("ai_discovery");
+  // FAQ / answer-shaped: prefer discovery optimisers even without web channel listed yet
+  if (type === "faq") {
+    for (const o of ["ai_discovery", "aeo", "geo", "llmo"] as const) {
+      if (!out.includes(o)) out.push(o);
+    }
   }
 
   return [...new Set(out)];

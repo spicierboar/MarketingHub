@@ -61,6 +61,7 @@ import {
   normaliseHttpUrl,
   scrapeAndApplyInitialProfile,
 } from "@/lib/auto-onboarding";
+import { assertWebsiteReachable } from "@/lib/url-reachability";
 import { lookupAbn } from "@/lib/abn-lookup";
 import { matchPlace, placeMatchToExtractedHints } from "@/lib/places-enrichment";
 import {
@@ -333,6 +334,13 @@ export async function prefillOnboardingFromWebsiteAction(formData: FormData) {
   const website = normaliseHttpUrl(websiteRaw);
   if (!website) {
     prefillErrorRedirect("Enter a valid website URL (e.g. example.com).");
+  }
+  try {
+    await assertWebsiteReachable(website);
+  } catch (e) {
+    prefillErrorRedirect(
+      e instanceof Error ? e.message : "Website could not be verified.",
+    );
   }
 
   const prev = tenant.onboarding ?? {};
@@ -607,7 +615,13 @@ export async function saveOnboardingDetailsAction(formData: FormData) {
     if (!normalised) {
       detailsErrorRedirect("Enter a valid website URL (e.g. example.com).");
     }
-    website = normalised;
+    try {
+      website = await assertWebsiteReachable(normalised);
+    } catch (e) {
+      detailsErrorRedirect(
+        e instanceof Error ? e.message : "Website could not be verified.",
+      );
+    }
   }
 
   const prev = tenant?.onboarding ?? {};

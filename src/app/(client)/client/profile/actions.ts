@@ -9,6 +9,7 @@ import {
   applyClientProfilePatch,
   clientProfilePatchFromForm,
 } from "@/lib/client-profile-edit";
+import { assertWebsiteReachable } from "@/lib/url-reachability";
 import {
   resolvePlaceDetailsAction,
   searchBusinessPlacesAction,
@@ -46,6 +47,9 @@ export async function saveClientProfileAction(formData: FormData) {
 
   const websiteErr = validateOptionalWebsite(patch.website);
   if (websiteErr) throw new Error(websiteErr);
+  if (patch.website?.trim()) {
+    patch.website = await assertWebsiteReachable(patch.website);
+  }
 
   if (patch.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patch.email)) {
     throw new Error("Enter a valid public email, or leave it blank.");

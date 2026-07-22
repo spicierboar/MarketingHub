@@ -15,6 +15,10 @@ import {
   type AutoOnboardingFieldKey,
   type AutoOnboardingScrapeResult,
 } from "@/lib/auto-onboarding";
+import {
+  assertSocialLinksReachable,
+  assertWebsiteReachable,
+} from "@/lib/url-reachability";
 import { SOCIAL_PLATFORMS } from "@/lib/types";
 
 // TODO(Agent C): optional enrichment apply — merge enrichment patches into preview
@@ -34,10 +38,10 @@ function readUrlsFromForm(fd: FormData) {
     return url ? { platform: key, url } : null;
   }).filter((l): l is { platform: string; url: string } => l !== null);
 
-  return parseAutoOnboardingUrls({
-    website: text(fd, "website"),
+  return {
+    websiteRaw: text(fd, "website"),
     socialLinks,
-  });
+  };
 }
 
 function selectedKeysFromForm(fd: FormData): AutoOnboardingFieldKey[] {
@@ -62,7 +66,15 @@ export async function previewAutoOnboardingAction(
 
     const consent = consentFromForm(formData);
     assertScrapeConsent(consent);
-    const urls = readUrlsFromForm(formData);
+    const raw = readUrlsFromForm(formData);
+    let website: string | undefined;
+    if (raw.websiteRaw) {
+      website = await assertWebsiteReachable(raw.websiteRaw);
+    }
+    const socialLinks = raw.socialLinks.length
+      ? await assertSocialLinksReachable(raw.socialLinks)
+      : [];
+    const urls = parseAutoOnboardingUrls({ website, socialLinks });
     assertScrapeUrls(urls);
 
     let preview = await scrapeForOnboardingPreview({

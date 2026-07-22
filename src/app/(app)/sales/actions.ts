@@ -32,6 +32,7 @@ import {
 } from "@/lib/billing";
 import { isAddonId } from "@/lib/addons";
 import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
+import { assertWebsiteReachable } from "@/lib/url-reachability";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
 import { applyBusinessInfoFormToProfile } from "@/lib/client-profile-edit";
@@ -254,6 +255,11 @@ export async function saveWebsiteStepAction(formData: FormData) {
       );
     }
 
+    let websiteChecked: string | undefined;
+    if (websiteRaw) {
+      websiteChecked = await assertWebsiteReachable(websiteRaw);
+    }
+
     // Always re-run ABR + (name+ABN) duplicate when an ABN is present.
     const identity = await assertAbrIdentityAndNoDuplicate(
       user.tenantId,
@@ -297,10 +303,10 @@ export async function saveWebsiteStepAction(formData: FormData) {
     }
 
     let scraped = "0";
-    if (websiteRaw && consent) {
+    if (websiteChecked && consent) {
       const result = await scrapeAndApplyInitialProfile({
         company,
-        website: websiteRaw,
+        website: websiteChecked,
         actorId: user.id,
       });
       await updateCompany(company.id, { profile: result.profile });

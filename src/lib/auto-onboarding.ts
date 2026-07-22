@@ -222,6 +222,11 @@ async function assertPublicEnrichmentDestination(url: URL): Promise<void> {
   }
 }
 
+/** DNS + private-IP guard used by enrichment and public URL probes. */
+export async function assertPublicHttpDestination(url: URL): Promise<void> {
+  await assertPublicEnrichmentDestination(url);
+}
+
 export function normaliseHttpUrl(raw: string | undefined): string | undefined {
   const trimmed = (raw ?? "").trim();
   if (!trimmed) return undefined;
