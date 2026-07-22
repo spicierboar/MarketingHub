@@ -26,7 +26,7 @@ export default async function ClientOrderSkuPage({
       <PageHeader
         title={sku.title}
         explainer={sku.blurb}
-        parent={{ href: "/client/order", label: "Order menu" }}
+        parent={{ href: "/client/order", label: "Extras" }}
       />
       <div className="mx-auto max-w-xl space-y-6 px-4 py-6 sm:px-6">
         <p className="text-sm text-muted-foreground">
@@ -64,7 +64,7 @@ export default async function ClientOrderSkuPage({
           </Field>
           <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
             <Link href="/client/order" className={buttonClasses("ghost", "md")}>
-              Back to Order menu
+              Back to Extras
             </Link>
             <ActionSubmitButton type="submit" pendingLabel="Submitting…">
               Pay and place order

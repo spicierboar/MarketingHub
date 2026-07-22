@@ -26,11 +26,11 @@ type NavItem = {
 };
 
 /**
- * Client rail: Needs you · Approvals · Schedule · Order menu · Account.
- * Ask us (messaging) stays under Account; Order menu is à la carte only.
+ * Client rail: Your turn · Approvals · Schedule · Extras · Account.
+ * Ask us (messaging) stays under Account; Extras is à la carte only.
  */
 const NAV_ITEMS: NavItem[] = [
-  { href: "/client", label: "Needs you", icon: Home, short: "Home" },
+  { href: "/client", label: "Your turn", icon: Home, short: "Home" },
   {
     href: "/client/approvals",
     label: "Approvals",
@@ -46,9 +46,9 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/client/order",
-    label: "Order menu",
+    label: "Extras",
     icon: UtensilsCrossed,
-    short: "Order",
+    short: "Extras",
     matchPrefixes: ["/client/order"],
   },
   {
@@ -76,7 +76,7 @@ const NAV_ITEMS: NavItem[] = [
 const MOBILE_QUICK: { href: string; label: string }[] = [
   { href: "/client/approvals", label: "Approvals" },
   { href: "/client/calendar", label: "Schedule" },
-  { href: "/client/order", label: "Order" },
+  { href: "/client/order", label: "Extras" },
   { href: "/client/account", label: "Account" },
 ];
 

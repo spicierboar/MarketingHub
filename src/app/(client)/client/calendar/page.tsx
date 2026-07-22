@@ -186,7 +186,7 @@ export default async function ClientCalendarPage({
         <p className="text-xs text-muted-foreground">
           Want another promo or custom work?{" "}
           <Link href="/client/order" className="text-primary hover:underline">
-            Order menu
+            Extras
           </Link>
           {" · "}
           <Link href="/client/requests/new" className="text-primary hover:underline">

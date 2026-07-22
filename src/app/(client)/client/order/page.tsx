@@ -11,7 +11,7 @@ import {
 import { formatDate } from "@/lib/utils";
 
 /**
- * Order menu — everything orderable outside the subscription (à la carte).
+ * Extras — everything orderable outside the subscription (à la carte).
  * Ask us (/client/requests) stays free-form messaging only.
  */
 export default async function ClientOrderMenuPage() {
@@ -23,7 +23,7 @@ export default async function ClientOrderMenuPage() {
   return (
     <div>
       <PageHeader
-        title="Order menu"
+        title="Extras"
         explainer="Specials outside your subscription — pick a dish, pay, and we’ll deliver."
       />
 

@@ -43,7 +43,7 @@ export default async function ClientPromosPage() {
         explainer="Ready-made packages your agency may propose. Not part of day-to-day review — prefer Approvals and Ask us."
       >
         <Link href="/client" className={buttonClasses("outline", "sm")}>
-          Needs you
+          Your turn
         </Link>
       </PageHeader>
 

@@ -1,5 +1,5 @@
 /**
- * Client à la carte Order menu — curated dishes outside subscription packages.
+ * Client à la carte Extras — curated dishes outside subscription packages.
  * Maps to recipe content types for agency + AI fulfilment.
  * @see docs/CONTENT-CREATE-TAXONOMY-DESIGN.md §15
  */

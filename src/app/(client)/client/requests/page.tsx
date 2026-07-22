@@ -43,7 +43,7 @@ export default async function ClientRequestsPage() {
         <p className="text-sm text-muted-foreground">
           Looking for a priced special outside your subscription?{" "}
           <Link href="/client/order" className="text-primary hover:underline">
-            Open the Order menu
+            Open Extras
           </Link>
           .
         </p>
