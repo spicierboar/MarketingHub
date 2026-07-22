@@ -1,8 +1,12 @@
 // Client portal: which company profile fields clients may edit vs view-only.
 // Business info mirrors Google Business Profile contact/location fields.
 // ABN / legal name / Brand Brain strategy stay agency-only.
-// ABN alone may appear on multiple companies — see company-identity.ts.
 
+import type {
+  StructuredBusinessAddress,
+  StructuredPhone,
+  StructuredTradingHours,
+} from "@/lib/business-info/types";
 import type { CompanyProfile } from "@/lib/types";
 
 /** Shown to the client but never written from the portal. */
@@ -17,10 +21,6 @@ export const CLIENT_PROFILE_LOCKED_KEYS = [
 
 export type ClientProfileLockedKey = (typeof CLIENT_PROFILE_LOCKED_KEYS)[number];
 
-/**
- * Whitelist of profile keys the portal may update (GBP-shaped business info).
- * Brand Brain strategy fields stay agency-only.
- */
 export const CLIENT_PROFILE_EDITABLE_KEYS = [
   "website",
   "approvalContact",
@@ -33,6 +33,9 @@ export const CLIENT_PROFILE_EDITABLE_KEYS = [
   "latitude",
   "longitude",
   "placeCategory",
+  "structuredAddress",
+  "structuredPhone",
+  "structuredHours",
 ] as const;
 
 export type ClientProfileEditableKey = (typeof CLIENT_PROFILE_EDITABLE_KEYS)[number];
@@ -40,7 +43,6 @@ export type ClientProfileEditableKey = (typeof CLIENT_PROFILE_EDITABLE_KEYS)[num
 export type ClientProfileEditablePatch = Partial<
   Pick<CompanyProfile, ClientProfileEditableKey>
 > & {
-  /** Display name on the company record (not inside profile). */
   displayName?: string;
 };
 
@@ -58,10 +60,16 @@ function optionalNumber(raw: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/**
- * Build an editable patch from form data. Ignores ABN, legalName, and any
- * strategy / Brand Brain fields even if present in the form.
- */
+function parseJson<T>(raw: string): T | undefined {
+  const t = raw.trim();
+  if (!t) return undefined;
+  try {
+    return JSON.parse(t) as T;
+  } catch {
+    return undefined;
+  }
+}
+
 export function clientProfilePatchFromForm(
   get: (key: string) => string,
 ): ClientProfileEditablePatch {
@@ -109,15 +117,31 @@ export function clientProfilePatchFromForm(
     patch.placeCategory = placeCategory || undefined;
   }
 
-  const latitude = optionalNumber(get("latitude") ?? "");
-  const longitude = optionalNumber(get("longitude") ?? "");
-  if (get("latitude") !== undefined) patch.latitude = latitude;
-  if (get("longitude") !== undefined) patch.longitude = longitude;
+  if (get("latitude") !== undefined) {
+    patch.latitude = optionalNumber(get("latitude") ?? "");
+  }
+  if (get("longitude") !== undefined) {
+    patch.longitude = optionalNumber(get("longitude") ?? "");
+  }
+
+  const structuredAddress = parseJson<StructuredBusinessAddress>(
+    get("structuredAddressJson") ?? "",
+  );
+  if (structuredAddress) patch.structuredAddress = structuredAddress;
+
+  const structuredPhone = parseJson<StructuredPhone>(
+    get("structuredPhoneJson") ?? "",
+  );
+  if (structuredPhone) patch.structuredPhone = structuredPhone;
+
+  const structuredHours = parseJson<StructuredTradingHours>(
+    get("structuredHoursJson") ?? "",
+  );
+  if (structuredHours) patch.structuredHours = structuredHours;
 
   return patch;
 }
 
-/** Merge editable patch into profile; never copies locked or strategy keys from patch. */
 export function applyClientProfilePatch(
   profile: CompanyProfile,
   patch: ClientProfileEditablePatch,
@@ -137,8 +161,12 @@ export function applyClientProfilePatch(
   if ("latitude" in patch) next.latitude = patch.latitude;
   if ("longitude" in patch) next.longitude = patch.longitude;
   if ("placeCategory" in patch) next.placeCategory = patch.placeCategory;
+  if ("structuredAddress" in patch) {
+    next.structuredAddress = patch.structuredAddress;
+  }
+  if ("structuredPhone" in patch) next.structuredPhone = patch.structuredPhone;
+  if ("structuredHours" in patch) next.structuredHours = patch.structuredHours;
 
-  // Locked identity — reaffirm from original (defence in depth).
   next.abn = profile.abn;
   next.legalName = profile.legalName;
   next.businessType = profile.businessType;
@@ -146,7 +174,6 @@ export function applyClientProfilePatch(
   next.approvedClaims = profile.approvedClaims;
   next.requiredDisclaimers = profile.requiredDisclaimers;
 
-  // Strategy fields never change via portal patch (defence in depth).
   next.tradingNames = profile.tradingNames;
   next.industry = profile.industry;
   next.natureOfBusiness = profile.natureOfBusiness;

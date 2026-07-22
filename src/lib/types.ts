@@ -382,6 +382,15 @@ export interface CompanyProfile {
   phone?: string;
   email?: string;
   /**
+   * Precise address parts (country → postcode → suburb → street).
+   * `businessAddress` stays the single-line listing form.
+   */
+  structuredAddress?: import("@/lib/business-info/types").StructuredBusinessAddress;
+  /** Country calling code + national number; `phone` is the display/E.164 line. */
+  structuredPhone?: import("@/lib/business-info/types").StructuredPhone;
+  /** Per-day open/close like Google Business hours; `tradingHours` is the listing string. */
+  structuredHours?: import("@/lib/business-info/types").StructuredTradingHours;
+  /**
    * AU business number (ABR). With `Company.name` (business/trading name), forms
    * the business identity key for onboarding duplicate checks — see
    * `company-identity.ts`. ABN alone is NOT unique: one legal entity may run

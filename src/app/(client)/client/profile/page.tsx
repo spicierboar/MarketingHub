@@ -4,14 +4,18 @@ import { getCompany, listMembers, usersForCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonClasses } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { titleCase } from "@/lib/utils";
+import {
+  BusinessInfoDetailsForm,
+  businessInfoInitialFromProfile,
+} from "@/components/business-info-details-form";
 import { saveClientProfileAction } from "./actions";
 
 /**
- * Client business info — Google Business Profile–shaped fields (name, location,
- * contact, hours) plus People & access for when an approver leaves.
+ * Precise Business info — country/postcode/suburb address, dial-code phone,
+ * Google-style hours, optional Places match, plus People & access.
  */
 export default async function ClientProfilePage() {
   const { user, companyId } = await requirePortalUser();
@@ -30,7 +34,6 @@ export default async function ClientProfilePage() {
   const roleByUserId = new Map(
     members.map((m) => [m.userId, m.roleTitle ?? m.role] as const),
   );
-  // Prefer membership titles; fall back to user.roleTitle when present.
   const people = portalUsers.map((u) => ({
     ...u,
     displayRole: roleByUserId.get(u.id) ?? u.roleTitle ?? "approver",
@@ -50,7 +53,7 @@ export default async function ClientProfilePage() {
       <PageHeader
         title="Business info"
         explainerId="client-profile"
-        explainer="Same core details customers see on Google — name, address, phone, website, and hours. Brand voice and strategy stay with your agency."
+        explainer="Fill address, phone, and hours like Google Business Profile — structured fields reduce mistakes and help AI target the right local campaigns."
         parent={{ href: "/client/account", label: "Overview" }}
       />
 
@@ -118,74 +121,32 @@ export default async function ClientProfilePage() {
                   </Field>
                 </div>
 
-                <div className="space-y-4 border-t border-border pt-6">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Location
-                  </h3>
-                  <Field
-                    label="Business address"
-                    htmlFor="businessAddress"
-                    hint="Full street address — used in posts and local listings"
-                  >
-                    <Textarea
-                      id="businessAddress"
-                      name="businessAddress"
-                      rows={2}
-                      defaultValue={p.businessAddress ?? ""}
-                      placeholder="e.g. 12 Example St, Suburb NSW 2000"
-                    />
-                  </Field>
-                  <Field
-                    label="Service area"
-                    htmlFor="serviceAreas"
-                    hint="If you serve customers away from a storefront — suburbs or regions, comma-separated"
-                  >
-                    <Input
-                      id="serviceAreas"
-                      name="serviceAreas"
-                      defaultValue={(p.serviceAreas ?? []).join(", ")}
-                      placeholder="e.g. Inner West, CBD, Eastern Suburbs"
-                    />
-                  </Field>
-                </div>
+                <BusinessInfoDetailsForm
+                  initial={businessInfoInitialFromProfile({
+                    businessName: company.name,
+                    website: p.website,
+                    serviceAreas: p.serviceAreas,
+                    googlePlaceId: p.googlePlaceId,
+                    latitude: p.latitude,
+                    longitude: p.longitude,
+                    placeCategory: p.placeCategory,
+                    structuredAddress: p.structuredAddress,
+                    structuredPhone: p.structuredPhone,
+                    structuredHours: p.structuredHours,
+                    businessAddress: p.businessAddress,
+                    phone: p.phone,
+                    tradingHours: p.tradingHours,
+                  })}
+                />
 
                 <div className="space-y-4 border-t border-border pt-6">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Contact
+                    Public email
                   </h3>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field
-                      label="Phone"
-                      htmlFor="phone"
-                      hint="Primary public number customers can call"
-                    >
-                      <Input
-                        id="phone"
-                        name="phone"
-                        type="tel"
-                        autoComplete="tel"
-                        defaultValue={p.phone ?? ""}
-                        placeholder="e.g. 02 9000 0000"
-                      />
-                    </Field>
-                    <Field
-                      label="Website"
-                      htmlFor="website"
-                      hint="Full URL including https://"
-                    >
-                      <Input
-                        id="website"
-                        name="website"
-                        type="url"
-                        defaultValue={p.website ?? ""}
-                        placeholder="https://www.example.com.au"
-                      />
-                    </Field>
-                  </div>
                   <Field
                     label="Public email"
                     htmlFor="email"
-                    hint="Optional — shown for customer enquiries, not portal login"
+                    hint="Optional — customer enquiries, not portal login"
                   >
                     <Input
                       id="email"
@@ -200,31 +161,12 @@ export default async function ClientProfilePage() {
 
                 <div className="space-y-4 border-t border-border pt-6">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Hours
-                  </h3>
-                  <Field
-                    label="Regular hours"
-                    htmlFor="tradingHours"
-                    hint="Plain text is fine — used in posts and local listings"
-                  >
-                    <Textarea
-                      id="tradingHours"
-                      name="tradingHours"
-                      rows={3}
-                      defaultValue={p.tradingHours ?? ""}
-                      placeholder="Mon–Fri 7am–3pm, Sat 8am–2pm, closed Sun"
-                    />
-                  </Field>
-                </div>
-
-                <div className="space-y-4 border-t border-border pt-6">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Approvals &amp; billing contact
                   </h3>
                   <Field
                     label="Primary contact"
                     htmlFor="approvalContact"
-                    hint="Who we email for content approvals and billing — update this when someone leaves"
+                    hint="Who we email for content approvals and billing — update when someone leaves"
                   >
                     <Input
                       id="approvalContact"
@@ -251,9 +193,7 @@ export default async function ClientProfilePage() {
                 stays secure when someone leaves.
               </p>
               {people.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No portal users on file yet.
-                </p>
+                <p className="text-sm text-muted-foreground">No portal users on file yet.</p>
               ) : (
                 <ul className="divide-y divide-border rounded-md border border-border">
                   {people.map((person) => {
@@ -296,7 +236,10 @@ export default async function ClientProfilePage() {
                     we handle the seat change.
                   </li>
                 </ol>
-                <Link href={leaveHref} className={`${buttonClasses("outline", "sm")} mt-3 inline-flex`}>
+                <Link
+                  href={leaveHref}
+                  className={`${buttonClasses("outline", "sm")} mt-3 inline-flex`}
+                >
                   Ask us to transfer access
                 </Link>
               </div>

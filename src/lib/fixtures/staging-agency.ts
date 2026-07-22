@@ -430,13 +430,81 @@ function buildFixture(): StagingAgencyFixture {
         approvedClaims: [`Fixture menu includes ${restaurant.menu[0]}`, `Located in ${restaurant.suburb}`],
         requiredDisclaimers: ["TEST FIXTURE — no booking, order or payment will be processed."],
         tradingHours: restaurant.hours,
-        businessAddress: `TEST ONLY — ${12 + (index % 80)} Fiction St, ${restaurant.suburb} ${restaurant.city}`,
+        businessAddress: `TEST ONLY — ${12 + (index % 80)} Fiction Street, ${restaurant.suburb} ${
+          restaurant.city === "Sydney"
+            ? "NSW 2010"
+            : restaurant.city === "Melbourne"
+              ? "VIC 3065"
+              : restaurant.city === "Brisbane"
+                ? "QLD 4101"
+                : restaurant.city === "Perth"
+                  ? "WA 6003"
+                  : restaurant.city === "Adelaide"
+                    ? "SA 5067"
+                    : restaurant.city === "Darwin"
+                      ? "NT 0820"
+                      : restaurant.city === "Hobart"
+                        ? "TAS 7000"
+                        : restaurant.city === "Canberra"
+                          ? "ACT 2612"
+                          : restaurant.city === "Gold Coast"
+                            ? "QLD 4220"
+                            : "NSW 2300"
+        }, Australia`,
         phone: `+61 2 9${String(100 + index).padStart(3, "0")} ${String(2000 + index * 11).padStart(4, "0")}`,
         email: `hello@${restaurant.slug}.test`,
         latitude: -33.86 + index * 0.01,
         longitude: 151.2 + index * 0.008,
         placeCategory: "Restaurant",
         googlePlaceId: `sim_place_fixture_${restaurant.slug}`,
+        structuredAddress: {
+          countryCode: "AU",
+          postcode:
+            restaurant.suburb === "Surry Hills"
+              ? "2010"
+              : restaurant.suburb === "Fitzroy"
+                ? "3065"
+                : restaurant.suburb === "West End"
+                  ? "4101"
+                  : restaurant.suburb === "Northbridge"
+                    ? "6003"
+                    : restaurant.suburb === "Norwood"
+                      ? "5067"
+                      : restaurant.suburb === "Parap"
+                        ? "0820"
+                        : restaurant.suburb === "North Hobart"
+                          ? "7000"
+                          : restaurant.suburb === "Braddon"
+                            ? "2612"
+                            : restaurant.suburb === "Burleigh Heads"
+                              ? "4220"
+                              : "2300",
+          suburb: restaurant.suburb,
+          stateRegion:
+            restaurant.city === "Sydney" || restaurant.city === "Newcastle"
+              ? "NSW"
+              : restaurant.city === "Melbourne"
+                ? "VIC"
+                : restaurant.city === "Brisbane" || restaurant.city === "Gold Coast"
+                  ? "QLD"
+                  : restaurant.city === "Perth"
+                    ? "WA"
+                    : restaurant.city === "Adelaide"
+                      ? "SA"
+                      : restaurant.city === "Darwin"
+                        ? "NT"
+                        : restaurant.city === "Hobart"
+                          ? "TAS"
+                          : "ACT",
+          unit: "",
+          streetNumber: String(12 + (index % 80)),
+          streetName: "Fiction",
+          streetType: "St",
+        },
+        structuredPhone: {
+          countryCallingCode: "61",
+          nationalNumber: `2 9${String(100 + index).padStart(3, "0")} ${String(2000 + index * 11).padStart(4, "0")}`,
+        },
         currentOffers: "TEST ONLY — sample seasonal shared-menu promotion; not redeemable.",
         localMarketNotes: `Fictional staging profile for ${restaurant.suburb}, ${restaurant.city}. No real venue is represented. Use suburb + map pin for local targeting tests.`,
         restaurant: {
