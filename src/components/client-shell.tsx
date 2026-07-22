@@ -50,7 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
     id: "action",
     label: "Action",
     items: [
-      { href: "/client", label: "Your turn", icon: Home, exact: true },
+      { href: "/client", label: "Attention", icon: Home, exact: true },
       {
         href: "/client/approvals",
         label: "Approvals",
@@ -79,7 +79,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     id: "order",
-    label: "More work",
+    label: "Ad Ons",
     items: [
       {
         href: "/client/order",
@@ -107,7 +107,7 @@ const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/client/profile",
-        label: "Profile",
+        label: "Business info",
         icon: User,
         matchPrefixes: ["/client/profile"],
       },

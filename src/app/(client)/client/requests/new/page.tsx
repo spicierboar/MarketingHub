@@ -9,9 +9,17 @@ import { createClientRequestAction } from "../../../actions";
 /**
  * Wave A — plain-language message + optional files.
  * Heavy brief / offer / CTA / consent stay as hidden defaults for backend compatibility.
+ * Optional `?topic=` / `?notes=` prefills (e.g. People & access transfer).
  */
-export default async function ClientNewRequestPage() {
+export default async function ClientNewRequestPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ topic?: string; notes?: string }>;
+}) {
   await requirePortalUser();
+  const sp = (await searchParams) ?? {};
+  const topicPrefill = typeof sp.topic === "string" ? sp.topic : "";
+  const notesPrefill = typeof sp.notes === "string" ? sp.notes : "";
 
   return (
     <div>
@@ -40,6 +48,7 @@ export default async function ClientNewRequestPage() {
                   name="notes"
                   required
                   rows={6}
+                  defaultValue={notesPrefill}
                   placeholder="e.g. We need a post about our new Saturday opening hours starting 19 July — 8am–2pm."
                 />
               </Field>
@@ -48,7 +57,12 @@ export default async function ClientNewRequestPage() {
                 htmlFor="topic"
                 hint="Leave blank and we’ll use the start of your message"
               >
-                <Input id="topic" name="topic" placeholder="e.g. New opening hours" />
+                <Input
+                  id="topic"
+                  name="topic"
+                  defaultValue={topicPrefill}
+                  placeholder="e.g. New opening hours"
+                />
               </Field>
               <Field label="Attach files (optional)" htmlFor="files">
                 <Input id="files" name="files" type="file" multiple />

@@ -37,6 +37,9 @@ export default async function ClientAccountPage() {
   const canStore = storageConfigured();
   const hours = company?.profile.tradingHours?.trim();
   const contact = company?.profile.approvalContact?.trim();
+  const phone = company?.profile.phone?.trim();
+  const address = company?.profile.businessAddress?.trim();
+  const website = company?.profile.website?.trim();
 
   return (
     <div>
@@ -197,15 +200,27 @@ export default async function ClientAccountPage() {
           </Card>
         </section>
 
-        {(contact || hours) ? (
+        {(contact || hours || phone || address || website) ? (
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold">Contact &amp; hours</h2>
+            <h2 className="text-sm font-semibold">Business info</h2>
             <Card>
               <CardContent className="space-y-2 p-4 text-sm">
-                {contact ? (
+                {address ? (
                   <p>
-                    <span className="text-muted-foreground">Approval contact · </span>
-                    {contact}
+                    <span className="text-muted-foreground">Address · </span>
+                    {address}
+                  </p>
+                ) : null}
+                {phone ? (
+                  <p>
+                    <span className="text-muted-foreground">Phone · </span>
+                    {phone}
+                  </p>
+                ) : null}
+                {website ? (
+                  <p>
+                    <span className="text-muted-foreground">Website · </span>
+                    {website}
                   </p>
                 ) : null}
                 {hours ? (
@@ -214,14 +229,19 @@ export default async function ClientAccountPage() {
                     {hours}
                   </p>
                 ) : null}
+                {contact ? (
+                  <p>
+                    <span className="text-muted-foreground">Approvals contact · </span>
+                    {contact}
+                  </p>
+                ) : null}
                 <p className="text-xs text-muted-foreground">
-                  Need a correction?{" "}
-                  <Link href="/client/requests/new" className="text-primary hover:underline">
-                    Ask us
+                  <Link href="/client/profile" className="text-primary hover:underline">
+                    Edit business info
                   </Link>
                   {" · "}
-                  <Link href="/client/profile" className="text-primary hover:underline">
-                    Edit contact details
+                  <Link href="/client/requests/new" className="text-primary hover:underline">
+                    Ask us
                   </Link>
                 </p>
               </CardContent>
@@ -229,12 +249,12 @@ export default async function ClientAccountPage() {
           </section>
         ) : (
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold">Contact &amp; hours</h2>
+            <h2 className="text-sm font-semibold">Business info</h2>
             <Card>
               <CardContent className="p-4 text-sm text-muted-foreground">
-                No contact details on file yet.{" "}
+                No address, phone, or hours on file yet.{" "}
                 <Link href="/client/profile" className="text-primary hover:underline">
-                  Add contact &amp; hours
+                  Add business info
                 </Link>
                 {" · "}
                 <Link href="/client/requests/new" className="text-primary hover:underline">
