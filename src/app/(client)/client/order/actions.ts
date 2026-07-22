@@ -4,6 +4,11 @@ import { redirect } from "next/navigation";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { getClientMenuSku } from "@/lib/client-order-menu";
 import { fulfilClientMenuOrder } from "@/lib/fulfil-menu-order";
+import {
+  assertOrderBriefComplete,
+  formatOrderBriefNotes,
+  parseOrderBriefFromFormData,
+} from "@/lib/client-order-brief";
 
 /**
  * Place an Extras catalogue order → MarketingRequest + professional AI draft.
@@ -16,17 +21,18 @@ export async function placeClientMenuOrderAction(formData: FormData) {
   if (!sku) throw new Error("That item is not available.");
 
   const topicRaw = String(formData.get("topic") || "").trim();
-  const clientNotes = String(formData.get("notes") || "").trim();
-  if (!clientNotes && !topicRaw) {
-    throw new Error("Add a short subject or notes so we know what to deliver.");
-  }
+  const brief = parseOrderBriefFromFormData(formData);
+  assertOrderBriefComplete(brief);
 
-  const topic =
-    topicRaw ||
-    `${sku.title}${clientNotes ? ` — ${clientNotes.slice(0, 60)}` : ""}`;
+  const clientNotes = formatOrderBriefNotes(brief);
+  const topic = topicRaw || `${sku.title} — ${brief.audience}`;
 
   const preferredDate =
     String(formData.get("preferredDate") || "").trim() || undefined;
+
+  if (brief.timing === "specific" && !preferredDate) {
+    throw new Error("Pick a preferred date when timing is “Specific date”.");
+  }
 
   const result = await fulfilClientMenuOrder({
     user,

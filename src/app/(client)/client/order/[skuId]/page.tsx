@@ -3,14 +3,14 @@ import { notFound } from "next/navigation";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/page-header";
 import { buttonClasses } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input } from "@/components/ui/form";
 import {
   formatMenuPriceFrom,
   getClientMenuSku,
 } from "@/lib/client-order-menu";
 import { placeClientMenuOrderAction } from "../actions";
 import { ActionSubmitButton } from "@/components/action-submit-button";
-import { ClientOrderDetailsHelp } from "@/components/client-order-details-help";
+import { ClientOrderBriefFields } from "@/components/client-order-brief-fields";
 
 export default async function ClientOrderSkuPage({
   params,
@@ -54,19 +54,17 @@ export default async function ClientOrderSkuPage({
               placeholder={`e.g. ${sku.title} for…`}
             />
           </Field>
-          <ClientOrderDetailsHelp
+
+          <ClientOrderBriefFields
             categoryId={sku.categoryId}
             dishTitle={sku.title}
+          />
+
+          <Field
+            label="Preferred date (optional)"
+            htmlFor="preferredDate"
+            hint="Use when timing is “Specific date”"
           >
-            <Textarea
-              id="notes"
-              name="notes"
-              required
-              rows={5}
-              placeholder="Audience, must-include facts, tone, CTA…"
-            />
-          </ClientOrderDetailsHelp>
-          <Field label="Preferred date (optional)" htmlFor="preferredDate">
             <Input id="preferredDate" name="preferredDate" type="date" />
           </Field>
           <div className="flex items-center justify-end gap-2 border-t border-border pt-4">

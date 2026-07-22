@@ -4,17 +4,15 @@ import { useId, useState } from "react";
 import { HelpCircle } from "lucide-react";
 import { getOrderDetailsHelp } from "@/lib/client-order-details-examples";
 import type { ClientMenuCategoryId } from "@/lib/client-order-catalogue-data";
-import { Label } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
 
+/** Section heading + ? examples for the structured Extras brief. */
 export function ClientOrderDetailsHelp({
   categoryId,
   dishTitle,
-  children,
 }: {
   categoryId: ClientMenuCategoryId;
   dishTitle: string;
-  children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -22,10 +20,8 @@ export function ClientOrderDetailsHelp({
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <Label htmlFor="notes" className="mb-0">
-          Details
-        </Label>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-sm font-semibold text-foreground">Brief</h2>
         <button
           type="button"
           className={cn(
@@ -36,22 +32,26 @@ export function ClientOrderDetailsHelp({
           aria-expanded={open}
           aria-controls={panelId}
           aria-label={
-            open ? "Hide details examples" : "Show examples of useful details"
+            open ? "Hide brief examples" : "Show examples of a useful brief"
           }
           onClick={() => setOpen((v) => !v)}
         >
           <HelpCircle className="size-4" aria-hidden />
         </button>
       </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Structured answers draft more accurately than a free-text dump. Tap ?
+        for examples.
+      </p>
       {open ? (
         <div
           id={panelId}
           role="region"
-          aria-label="Examples of useful order details"
-          className="mb-3 rounded-lg border border-border bg-card p-3 shadow-sm"
+          aria-label="Examples of a useful order brief"
+          className="mt-3 rounded-lg border border-border bg-card p-3 shadow-sm"
         >
           <p className="text-xs font-semibold text-foreground">
-            What makes a useful brief
+            What good answers look like
           </p>
           <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
             {help.include.map((item) => (
@@ -80,10 +80,6 @@ export function ClientOrderDetailsHelp({
           </button>
         </div>
       ) : null}
-      {children}
-      <p className="mt-1 text-xs text-muted-foreground">
-        Key facts, timing, tone — plain language is fine. Tap ? for examples.
-      </p>
     </div>
   );
 }
