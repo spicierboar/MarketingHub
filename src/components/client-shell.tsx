@@ -8,8 +8,17 @@ import {
   CheckSquare,
   LogOut,
   CalendarDays,
+  BarChart3,
   CreditCard,
   UtensilsCrossed,
+  MessageSquare,
+  User,
+  Share2,
+  Map,
+  FileText,
+  FolderOpen,
+  HelpCircle,
+  LayoutDashboard,
   Menu,
   X,
 } from "lucide-react";
@@ -21,59 +30,129 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  short?: string;
   matchPrefixes?: string[];
+  /** Only exact path matches (e.g. /client account overview). */
+  exact?: boolean;
+};
+
+type NavSection = {
+  id: string;
+  label: string;
+  items: NavItem[];
 };
 
 /**
- * Client rail: Your turn · Approvals · Schedule · Extras · Account.
- * Ask us (messaging) stays under Account; Extras is à la carte only.
+ * Client rail — sectioned so Account destinations live in the menu,
+ * not as a second hub grid on /client/account.
  */
-const NAV_ITEMS: NavItem[] = [
-  { href: "/client", label: "Your turn", icon: Home, short: "Home" },
+const NAV_SECTIONS: NavSection[] = [
   {
-    href: "/client/approvals",
-    label: "Approvals",
-    icon: CheckSquare,
-    short: "Approve",
+    id: "action",
+    label: "Action",
+    items: [
+      { href: "/client", label: "Your turn", icon: Home, exact: true },
+      {
+        href: "/client/approvals",
+        label: "Approvals",
+        icon: CheckSquare,
+        matchPrefixes: ["/client/approvals"],
+      },
+    ],
   },
   {
-    href: "/client/calendar",
-    label: "Schedule & results",
-    icon: CalendarDays,
-    short: "Schedule",
-    matchPrefixes: ["/client/calendar", "/client/reports", "/client/schedule"],
+    id: "delivery",
+    label: "Delivery",
+    items: [
+      {
+        href: "/client/calendar",
+        label: "Schedule",
+        icon: CalendarDays,
+        matchPrefixes: ["/client/calendar", "/client/schedule"],
+      },
+      {
+        href: "/client/reports",
+        label: "Results",
+        icon: BarChart3,
+        matchPrefixes: ["/client/reports"],
+      },
+    ],
   },
   {
-    href: "/client/order",
-    label: "Extras",
-    icon: UtensilsCrossed,
-    short: "Extras",
-    matchPrefixes: ["/client/order"],
+    id: "order",
+    label: "More work",
+    items: [
+      {
+        href: "/client/order",
+        label: "Extras",
+        icon: UtensilsCrossed,
+        matchPrefixes: ["/client/order"],
+      },
+      {
+        href: "/client/requests",
+        label: "Ask us",
+        icon: MessageSquare,
+        matchPrefixes: ["/client/requests"],
+      },
+    ],
   },
   {
-    href: "/client/account",
-    label: "Account",
-    icon: CreditCard,
-    short: "Account",
-    matchPrefixes: [
-      "/client/account",
-      "/client/connect",
-      "/client/payments",
-      "/client/billing",
-      "/client/requests",
-      "/client/assets",
-      "/client/help",
-      "/client/profile",
-      "/client/strategy",
-      "/client/content",
-      "/client/promos",
-      "/client/value-add",
+    id: "business",
+    label: "Your business",
+    items: [
+      {
+        href: "/client/account",
+        label: "Overview",
+        icon: LayoutDashboard,
+        exact: true,
+      },
+      {
+        href: "/client/profile",
+        label: "Profile",
+        icon: User,
+        matchPrefixes: ["/client/profile"],
+      },
+      {
+        href: "/client/connect",
+        label: "Social accounts",
+        icon: Share2,
+        matchPrefixes: ["/client/connect"],
+      },
+      {
+        href: "/client/strategy",
+        label: "Subscription",
+        icon: Map,
+        matchPrefixes: ["/client/strategy"],
+      },
+      {
+        href: "/client/content",
+        label: "Content status",
+        icon: FileText,
+        matchPrefixes: ["/client/content"],
+      },
+      {
+        href: "/client/payments",
+        label: "Billing",
+        icon: CreditCard,
+        matchPrefixes: ["/client/payments", "/client/billing"],
+      },
+      {
+        href: "/client/assets",
+        label: "Files",
+        icon: FolderOpen,
+        matchPrefixes: ["/client/assets"],
+      },
+      {
+        href: "/client/help",
+        label: "Help",
+        icon: HelpCircle,
+        matchPrefixes: ["/client/help"],
+      },
     ],
   },
 ];
 
 const MOBILE_QUICK: { href: string; label: string }[] = [
+  { href: "/client", label: "Home" },
   { href: "/client/approvals", label: "Approvals" },
   { href: "/client/calendar", label: "Schedule" },
   { href: "/client/order", label: "Extras" },
@@ -81,8 +160,8 @@ const MOBILE_QUICK: { href: string; label: string }[] = [
 ];
 
 function isActive(pathname: string, item: NavItem) {
+  if (item.exact) return pathname === item.href;
   if (pathname === item.href) return true;
-  if (item.href === "/client") return false;
   const prefixes = item.matchPrefixes ?? [item.href];
   return prefixes.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
@@ -97,28 +176,37 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   return (
-    <div className="space-y-0.5">
-      {NAV_ITEMS.map((item) => {
-        const active = isActive(pathname, item);
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              active
-                ? "bg-accent text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-            {item.label}
-          </Link>
-        );
-      })}
+    <div className="space-y-4">
+      {NAV_SECTIONS.map((section) => (
+        <div key={section.id}>
+          <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+            {section.label}
+          </p>
+          <div className="space-y-0.5">
+            {section.items.map((item) => {
+              const active = isActive(pathname, item);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-accent text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -146,7 +234,7 @@ export function ClientShell({
 
   return (
     <div className="flex min-h-screen flex-1" style={brandStyle}>
-      <aside className="hidden w-52 shrink-0 flex-col border-r border-border bg-card md:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
         <div className="flex h-12 items-center gap-2 border-b border-border px-3">
           {branding?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -219,7 +307,7 @@ export function ClientShell({
         </header>
 
         {mobileOpen && (
-          <nav className="border-b border-border bg-card p-2 md:hidden">
+          <nav className="max-h-[70vh] overflow-y-auto border-b border-border bg-card p-2 md:hidden">
             <NavLinks
               pathname={pathname}
               onNavigate={() => setMobileOpen(false)}
@@ -234,13 +322,15 @@ export function ClientShell({
                 key={item.href}
                 href={item.href}
                 aria-current={
-                  pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  pathname === item.href ||
+                  (item.href !== "/client" && pathname.startsWith(`${item.href}/`))
                     ? "page"
                     : undefined
                 }
                 className={cn(
                   "shrink-0 rounded-md px-2.5 py-1 text-center text-[11px] font-medium",
-                  pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  pathname === item.href ||
+                    (item.href !== "/client" && pathname.startsWith(`${item.href}/`))
                     ? "bg-accent text-primary"
                     : "bg-muted text-muted-foreground",
                 )}

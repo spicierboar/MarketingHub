@@ -2,7 +2,6 @@ import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { visibleRequests } from "@/lib/scope";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -32,13 +31,11 @@ export default async function ClientRequestsPage() {
         title="Ask us"
         explainerId="client-requests"
         explainer="Send the agency a message in plain language — timing, corrections, ideas."
-        parent={{ href: "/client/account", label: "Account" }}
       >
         <Link href="/client/requests/new" className={buttonClasses()}>
           New message
         </Link>
       </PageHeader>
-      <ClientAccountLinks />
       <div className="space-y-4 p-6">
         <p className="text-sm text-muted-foreground">
           Looking for a priced special outside your subscription?{" "}

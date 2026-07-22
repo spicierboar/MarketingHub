@@ -14,7 +14,6 @@ import {
   StrategyActionButton,
 } from "@/components/detailed-strategy-document";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Button } from "@/components/ui/button";
 
 export default async function ClientStrategyPage({
@@ -84,9 +83,8 @@ export default async function ClientStrategyPage({
         title="Subscription and Strategy"
         explainerId="client-strategy"
         explainer="Your marketing package plan and delivery roadmap — what is included, when work runs, and the strategy we execute against. Nothing publishes without your approval."
-        parent={{ href: "/client/account", label: "Account" }}
+        parent={{ href: "/client/account", label: "Overview" }}
       />
-      <ClientAccountLinks />
 
       <div className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">
         <CompanyStrategyPanel

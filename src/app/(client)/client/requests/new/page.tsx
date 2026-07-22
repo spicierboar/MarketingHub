@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/form";
@@ -22,7 +21,6 @@ export default async function ClientNewRequestPage() {
         explainer="Tell us what you need in plain language. We'll already have your company details."
         parent={{ href: "/client/requests", label: "Ask us" }}
       />
-      <ClientAccountLinks />
       <div className="mx-auto max-w-xl p-6">
         <form action={createClientRequestAction}>
           <Card>

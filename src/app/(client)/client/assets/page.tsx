@@ -2,7 +2,6 @@ import { requirePortalUser } from "@/lib/auth/rbac";
 import { listAssetsForCompany } from "@/lib/db";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,9 +47,8 @@ export default async function ClientAssetsPage() {
         title="Your photos & files"
         explainerId="client-files"
         explainer="Share a photo or logo for us to review. We handle how it gets used in your marketing."
-        parent={{ href: "/client/account", label: "Account" }}
+        parent={{ href: "/client/account", label: "Overview" }}
       />
-      <ClientAccountLinks />
 
       <div className="space-y-8 p-6">
         <section className="space-y-4">

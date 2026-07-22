@@ -1,6 +1,5 @@
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 
 /**
@@ -17,7 +16,6 @@ export default async function ClientValueAddPage() {
         explainerId="client-value-add"
         explainer="Optional upgrades and extras for your marketing package — coming soon."
       />
-      <ClientAccountLinks />
       <div className="space-y-4 p-4 sm:p-5">
         <Card>
           <CardContent className="space-y-2 p-4">

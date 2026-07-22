@@ -2,7 +2,6 @@ import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { getCompany } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/form";
@@ -30,9 +29,8 @@ export default async function ClientProfilePage() {
         title="Contact & hours"
         explainerId="client-profile"
         explainer="Rare corrections only. Brand voice, audience, and social strategy stay with your agency — Ask us if those need updating."
-        parent={{ href: "/client/account", label: "Account" }}
+        parent={{ href: "/client/account", label: "Overview" }}
       />
-      <ClientAccountLinks />
 
       <div className="space-y-6 p-6">
         <section className="space-y-3">

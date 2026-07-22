@@ -2,7 +2,6 @@ import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { visibleContent } from "@/lib/scope";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate, titleCase } from "@/lib/utils";
@@ -60,9 +59,8 @@ export default async function ClientContentStatusPage() {
         title="Content status"
         explainerId="client-content-status"
         explainer="Where your content sits — awaiting you, in progress with us, or already live. Agency-only drafts stay private until they are ready for review."
-        parent={{ href: "/client/account", label: "Account" }}
+        parent={{ href: "/client/account", label: "Overview" }}
       />
-      <ClientAccountLinks />
 
       <div className="space-y-6 p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2 sm:gap-3">

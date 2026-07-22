@@ -14,7 +14,6 @@ import { stripeConfigured } from "@/lib/billing";
 import { planFor } from "@/lib/plans";
 import { AD_PLATFORMS } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -68,9 +67,8 @@ export default async function ClientPaymentsPage() {
         title="Billing"
         explainerId="client-billing"
         explainer="Account credit, plan overview, and advertising budget. Top up credit or manage your saved card here."
-        parent={{ href: "/client/account", label: "Account" }}
+        parent={{ href: "/client/account", label: "Overview" }}
       />
-      <ClientAccountLinks />
 
       <div className="space-y-5 p-4 sm:p-5">
         <section className="space-y-3">

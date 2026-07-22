@@ -15,13 +15,10 @@ import {
 import { computePromoPricing, templatesForCompany } from "@/lib/promo-catalog";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import {
   ClientExtraWorkPanel,
   type ExtraWorkPromoCard,
 } from "@/components/client-extra-work-panel";
-import { ActivityHubsGrid } from "@/components/activity-hubs-grid";
-import { clientPortalActivityHubs } from "@/lib/client-activity-hubs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -80,19 +77,12 @@ export default async function ClientAccountPage() {
   return (
     <div>
       <PageHeader
-        title="Account"
+        title="Overview"
         explainerId="client-account"
-        explainer="Billing, subscription and strategy, content status, messages to us, and optional file drops — everything for your account in one place."
+        explainer="Your package, credit, and quick actions. Everything else is in the left menu."
       />
-      <ClientAccountLinks />
 
       <div className="space-y-5 p-4 sm:p-5">
-        <ActivityHubsGrid
-          hubs={clientPortalActivityHubs()}
-          title="Your account"
-          subtitle="Subscription and strategy, content, schedule, asks, and billing — the same client account your agency works in."
-        />
-
         {marketingPkg ? (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold">Marketing package</h2>

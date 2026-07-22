@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { getCompany, getRequest, listContent, listGaps } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,7 +39,6 @@ export default async function ClientRequestDetailPage({ params }: { params: Prom
       >
         <StatusBadge status={req.status} />
       </PageHeader>
-      <ClientAccountLinks />
       <div className="grid gap-6 p-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {openGaps.length > 0 && (

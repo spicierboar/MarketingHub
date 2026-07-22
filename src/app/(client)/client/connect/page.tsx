@@ -14,7 +14,6 @@ import {
 } from "@/lib/onboarding-social-connect";
 import { resolveOrigin } from "@/lib/origin";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
@@ -68,9 +67,8 @@ export default async function ClientConnectSocialsPage({
         title="Connect your social accounts"
         explainerId="client-connect-socials"
         explainer="Authorize Facebook, Instagram, and other channels with a one-time secure link. We never ask for your password."
-        parent={{ href: "/client/account", label: "Account" }}
+        parent={{ href: "/client/account", label: "Overview" }}
       />
-      <ClientAccountLinks />
 
       <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
         {params.err ? (

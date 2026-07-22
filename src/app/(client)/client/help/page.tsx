@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/page-header";
-import { ClientAccountLinks } from "@/components/client-account-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 
@@ -33,7 +32,7 @@ const LINKS = [
   },
 ] as const;
 
-/** Folded into Account — kept for deep links, not primary nav. */
+/** Help — also linked from the client rail under Your business. */
 export default async function ClientHelpPage() {
   await requirePortalUser();
 
@@ -43,9 +42,8 @@ export default async function ClientHelpPage() {
         title="Help"
         explainerId="client-help"
         explainer="How your managed marketing service works — approvals, asks, billing, and what we handle for you."
-        parent={{ href: "/client/account", label: "Account" }}
+        parent={{ href: "/client/account", label: "Overview" }}
       />
-      <ClientAccountLinks />
 
       <div className="space-y-8 p-6">
         <section className="space-y-4">

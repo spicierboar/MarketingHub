@@ -45,11 +45,10 @@ export default async function ClientCalendarPage({
 }) {
   const { user, companyId } = await requirePortalUser();
   const params = await searchParams;
-  const month = /^\d{4}-\d{2}$/.test(params.month ?? "")
+  const currentMonth = now().slice(0, 7);
+  const requestedMonth = /^\d{4}-\d{2}$/.test(params.month ?? "")
     ? params.month!
-    : now().slice(0, 7);
-
-  const grid = monthGrid(month);
+    : null;
 
   const [allPosts, content, company, campaigns, assists] = await Promise.all([
     listScheduledPosts(user.tenantId),
@@ -63,37 +62,37 @@ export default async function ClientCalendarPage({
     content.filter((c) => c.companyId === companyId).map((c) => [c.id, c.title]),
   );
 
-  const livePosts = allPosts.filter(
-    (p) =>
-      p.companyId === companyId &&
-      p.status !== "cancelled" &&
-      p.scheduledDate.slice(0, 7) === month,
-  );
-
   const companyCampaigns = campaigns.filter((c) => c.companyId === companyId);
   const draftSchedules = (
     await Promise.all(companyCampaigns.map((c) => listCampaignDraftScheduleItems(c.id)))
   ).flat();
 
-  const liveContentIds = new Set(livePosts.map((p) => p.contentId));
-  const items: ClientCalendarItem[] = [
-    ...livePosts.map((p) => ({
+  const allItems: ClientCalendarItem[] = [];
+
+  for (const p of allPosts) {
+    if (p.companyId !== companyId || p.status === "cancelled") continue;
+    allItems.push({
       id: p.id,
       date: p.scheduledDate,
       time: p.scheduledTime,
       title: titleById.get(p.contentId) ?? "Untitled post",
       platform: p.platform,
-      kind: "live" as const,
+      kind: "live",
       statusLabel: titleCase(p.status),
       statusTone: statusTone(p.status),
       postId: p.id,
-    })),
-  ];
+    });
+  }
+
+  const liveContentIds = new Set(
+    allPosts
+      .filter((p) => p.companyId === companyId && p.status !== "cancelled")
+      .map((p) => p.contentId),
+  );
 
   for (const d of draftSchedules) {
-    if (d.scheduledDate.slice(0, 7) !== month) continue;
     if (d.contentId && liveContentIds.has(d.contentId)) continue;
-    items.push({
+    allItems.push({
       id: `cds-${d.id}`,
       date: d.scheduledDate,
       time: d.scheduledTime,
@@ -108,15 +107,8 @@ export default async function ClientCalendarPage({
 
   for (const s of assists) {
     if (s.companyId !== companyId) continue;
-    if (s.proposedDate.slice(0, 7) !== month) continue;
     if (s.kind !== "implementation_plan" && s.kind !== "seasonal_prompt") continue;
-    const dup = items.some(
-      (r) =>
-        r.date === s.proposedDate &&
-        r.title.toLowerCase() === s.title.toLowerCase(),
-    );
-    if (dup) continue;
-    items.push({
+    allItems.push({
       id: `assist-${s.id}`,
       date: s.proposedDate,
       time: s.proposedTime,
@@ -129,10 +121,23 @@ export default async function ClientCalendarPage({
     });
   }
 
+  // Prefer an explicit month; otherwise current month; if empty, nearest month with items.
+  const monthsWithItems = [
+    ...new Set(allItems.map((i) => i.date.slice(0, 7)).filter(Boolean)),
+  ].sort();
+  let month = requestedMonth ?? currentMonth;
+  if (!requestedMonth && !monthsWithItems.includes(month) && monthsWithItems.length > 0) {
+    const upcoming = monthsWithItems.find((m) => m >= currentMonth);
+    month = upcoming ?? monthsWithItems[monthsWithItems.length - 1]!;
+  }
+
+  const grid = monthGrid(month);
+  const items = allItems.filter((i) => i.date.slice(0, 7) === month);
+
   return (
     <div>
       <PageHeader
-        title="Schedule & results"
+        title="Schedule"
         explainerId="client-calendar"
         explainer="Month view of what’s planned. Tap an item for details. Timing changes go to your team as an Ask."
       >
@@ -195,15 +200,16 @@ export default async function ClientCalendarPage({
         </p>
 
         {items.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center text-sm text-muted-foreground">
-              Nothing planned this month yet — we&apos;ll add posts here as they&apos;re
-              ready.
-            </CardContent>
-          </Card>
-        ) : (
-          <ClientCalendarMonth weeks={grid.weeks} items={items} />
-        )}
+          <p className="text-sm text-muted-foreground">
+            Nothing on this month yet — use Previous / Next to look ahead, or{" "}
+            <Link href="/client/order" className="text-primary hover:underline">
+              Extras
+            </Link>{" "}
+            for special work.
+          </p>
+        ) : null}
+
+        <ClientCalendarMonth weeks={grid.weeks} items={items} />
       </div>
     </div>
   );
