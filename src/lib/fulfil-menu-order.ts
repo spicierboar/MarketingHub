@@ -37,7 +37,10 @@ export type FulfilMenuOrderInput = {
   companyId: string;
   sku: ClientMenuSku;
   topic: string;
+  /** Human-readable structured brief (client-facing display, request notes). */
   clientNotes?: string;
+  /** Tightly structured [EXTRAS BRIEF] block for the drafting model — takes priority over clientNotes. */
+  cookBrief?: string;
   preferredDate?: string;
 };
 
@@ -131,12 +134,15 @@ export async function fulfilClientMenuOrder(
         ? ["ai_answers", "organic_search"]
         : ["organic_search"]
       : undefined,
+    // cookBrief leads — it's the structured, machine-parseable brief the
+    // model should ground on; clientNotes/dish line are supporting context.
     notes: [
+      input.cookBrief?.trim(),
       `Extras dish: ${sku.dishLabel}`,
       input.clientNotes?.trim(),
     ]
       .filter(Boolean)
-      .join("\n"),
+      .join("\n\n"),
   });
 
   if (!validated.ok || !validated.recipe) {
@@ -159,11 +165,23 @@ export async function fulfilClientMenuOrder(
     await advanceRequest(req.id, "ai_drafting", user.id);
     const draft = await draftContent({
       company,
-      requestType: recipe.contentType as RequestType,
+      // Brand & motion creative jobs (logo/GIF/animation) draft as creative briefs;
+      // short ads / films stay video scripts. Recipe type remains video_script for legality.
+      requestType:
+        sku.categoryId === "brand_motion" && sku.requestType === "creative_request"
+          ? "creative_request"
+          : (recipe.contentType as RequestType),
       topic: recipe.topic,
       objective: brief,
       platform: recipe.primaryChannel,
-      notes: recipe.notes,
+      notes: [
+        sku.categoryId === "brand_motion"
+          ? "STUDIO FULFILMENT: Deliver creative brief/script now. Final rendered file (logo/GIF/MP4/animation) is produced after client approval — do not claim the finished visual is attached yet."
+          : null,
+        recipe.notes,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       dishLabel: sku.dishLabel,
       cookFamily: sku.cookFamily || recipe.family,
       optimiseFor: recipe.optimiseFor,

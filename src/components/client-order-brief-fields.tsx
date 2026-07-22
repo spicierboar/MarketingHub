@@ -3,6 +3,7 @@ import {
   resolveOrderBriefSchema,
   type OrderBriefFieldConfig,
 } from "@/lib/client-order-brief";
+import type { OrderBriefPrefill } from "@/lib/client-order-brief-prefill";
 import { ClientOrderDetailsHelp } from "@/components/client-order-details-help";
 import type { ClientMenuCategoryId } from "@/lib/client-order-catalogue-data";
 
@@ -29,9 +30,11 @@ function OptionGroup({
 function SelectField({
   config,
   name,
+  defaultValue,
 }: {
   config: OrderBriefFieldConfig;
   name: string;
+  defaultValue?: string;
 }) {
   const options = config.options ?? [];
   return (
@@ -40,7 +43,7 @@ function SelectField({
         id={name}
         name={name}
         required={config.required}
-        defaultValue=""
+        defaultValue={defaultValue ?? ""}
       >
         <option value="" disabled={config.required}>
           {config.required ? "Select…" : "Optional — skip if not needed"}
@@ -58,9 +61,11 @@ function SelectField({
 function RadioField({
   config,
   name,
+  defaultValue,
 }: {
   config: OrderBriefFieldConfig;
   name: string;
+  defaultValue?: string;
 }) {
   const options = config.options ?? [];
   return (
@@ -73,7 +78,11 @@ function RadioField({
               name={name}
               value={o.value}
               required={config.required}
-              defaultChecked={name === "timing" && o.value === "flexible"}
+              defaultChecked={
+                defaultValue
+                  ? o.value === defaultValue
+                  : name === "timing" && o.value === "flexible"
+              }
               className="h-4 w-4"
             />
             <span>{o.label}</span>
@@ -115,10 +124,12 @@ function TextField({
   config,
   name,
   multiline,
+  defaultValue,
 }: {
   config: OrderBriefFieldConfig;
   name: string;
   multiline?: boolean;
+  defaultValue?: string;
 }) {
   if (multiline) {
     return (
@@ -129,6 +140,7 @@ function TextField({
           required={config.required}
           rows={name === "mustIncludeFacts" ? 4 : 3}
           placeholder={config.placeholder}
+          defaultValue={defaultValue}
         />
       </Field>
     );
@@ -140,6 +152,7 @@ function TextField({
         name={name}
         required={config.required}
         placeholder={config.placeholder}
+        defaultValue={defaultValue}
       />
     </Field>
   );
@@ -164,16 +177,21 @@ const SELECT_IDS = new Set([
   "printDistribution",
   "videoRuntime",
   "partCount",
+  "visualStyle",
+  "aspectRatio",
 ]);
 
 export function ClientOrderBriefFields({
   skuId,
   categoryId,
   dishTitle,
+  prefill,
 }: {
   skuId: string;
   categoryId: ClientMenuCategoryId;
   dishTitle: string;
+  /** Seed values from company Business info — client can edit or clear any of it. */
+  prefill?: OrderBriefPrefill;
 }) {
   const schema = resolveOrderBriefSchema({
     id: skuId,
@@ -198,12 +216,22 @@ export function ClientOrderBriefFields({
         }
         if (RADIO_IDS.has(config.id) && config.options?.length) {
           return (
-            <RadioField key={config.id} config={config} name={config.id} />
+            <RadioField
+              key={config.id}
+              config={config}
+              name={config.id}
+              defaultValue={prefill?.[config.id]}
+            />
           );
         }
         if (SELECT_IDS.has(config.id) && config.options?.length) {
           return (
-            <SelectField key={config.id} config={config} name={config.id} />
+            <SelectField
+              key={config.id}
+              config={config}
+              name={config.id}
+              defaultValue={prefill?.[config.id]}
+            />
           );
         }
         return (
@@ -212,6 +240,7 @@ export function ClientOrderBriefFields({
             config={config}
             name={config.id}
             multiline={MULTI_TEXT.has(config.id)}
+            defaultValue={prefill?.[config.id]}
           />
         );
       })}

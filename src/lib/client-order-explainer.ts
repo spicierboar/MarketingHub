@@ -187,6 +187,14 @@ const BY_CATEGORY: Record<
     deployed:
       "Approved answer blocks and page copy are published to your site / profiles where we have access, or delivered for your team to paste. Discovery improves over time as engines re-crawl.",
   },
+  brand_motion: {
+    about:
+      "Brand and motion assets — logos, GIFs, short ads, short films, and animation. Phase 1 is a creative brief or AV script; the finished visual file is studio-produced after you approve.",
+    usedFor:
+      "When you need pixels or motion, not just words — social ads, brand marks, looping GIFs, explainers, and short brand films.",
+    deployed:
+      "1) We draft the brief/script for your approval. 2) After approval, studio/production renders the final file (PNG/SVG, GIF, MP4, etc.). 3) The asset is delivered in your portal / DAM — not auto-posted without approval. Live AI image/video providers are optional and gated separately.",
+  },
 };
 
 /** Item-level overrides for specialised or jargon-heavy Extras. */
@@ -256,6 +264,61 @@ function itemOverride(sku: ClientMenuSku): ExtraOrderExplainer | null {
         "Common customer questions where a direct answer can win more clicks from search.",
       deployed:
         "Approved Q&A blocks are published on relevant site pages. Snippet eligibility depends on Google — we structure for it; we cannot guarantee a featured slot.",
+    };
+  }
+
+  if (sku.id === "logo_design_pack" || h.includes("logo_design")) {
+    return {
+      about:
+        "A logo design pack starts with a creative brief (concept directions, usage, do/don’t). Designers then produce mark and wordmark files — this Extra is not an instant AI logo download.",
+      usedFor:
+        "New brands, rebrands, or a cleaner mark for web, print, and social avatars.",
+      deployed:
+        "Approve the brief → studio delivers logo files (typically SVG/PNG variants) into your asset library. You choose which mark goes live on site and profiles.",
+    };
+  }
+
+  if (sku.id === "animated_gif_pack" || h.includes("animated_gif")) {
+    return {
+      about:
+        "A short looping GIF brief: frames, on-screen text, timing, and brand rules. Studio renders the final GIF after approval.",
+      usedFor:
+        "Social posts, email headers, Stories, and lightweight motion where a full video is overkill.",
+      deployed:
+        "Approve storyboard/copy → studio delivers the GIF file to your portal. You (or we, with approval) upload to the channel.",
+    };
+  }
+
+  if (sku.id === "short_ad_video" || h.includes("short_ad_video")) {
+    return {
+      about:
+        "A 15–30s video ad script: hook, shots, voice-over, supers, and CTA — ready for edit. The finished MP4 is studio/production after approval.",
+      usedFor:
+        "Paid social and short-form video ads promoting an offer or action.",
+      deployed:
+        "Approve script → production edits the cut → asset lands in your library for ads upload. Media spend and go-live stay under your control.",
+    };
+  }
+
+  if (sku.id === "short_movie_video" || h.includes("short_movie")) {
+    return {
+      about:
+        "A short brand film / mini-movie script with scenes and narrative beats. Filming and edit are studio fulfilment after you approve the script.",
+      usedFor:
+        "Brand storytelling on social, website heroes, and campaign launches.",
+      deployed:
+        "Approve script → shoot/edit (as scoped) → deliver final video file. Publishing is approved separately.",
+    };
+  }
+
+  if (sku.id === "animation_pack" || (h.includes("animation") && sku.categoryId === "brand_motion")) {
+    return {
+      about:
+        "A motion-design brief and shot list for animated explainers or brand animation. Animators produce the finished file after approval.",
+      usedFor:
+        "Explaining a service, product feature, or process without a live-action shoot.",
+      deployed:
+        "Approve motion brief → animation studio renders → file delivered to your portal for approved publishing.",
     };
   }
 

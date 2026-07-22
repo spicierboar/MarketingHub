@@ -418,6 +418,83 @@ for (const d of discovery) {
   });
 }
 
+categories.push({
+  id: "brand_motion",
+  label: "Brand & motion",
+  blurb: "Logos, GIFs, short ads, short films, and animation — brief + studio render",
+});
+
+/**
+ * Visual / motion Extras. Text cook delivers the creative brief or AV script;
+ * finished pixels/video are studio fulfilment after approval (not auto-published).
+ */
+const brandMotion = [
+  {
+    id: "logo_design_pack",
+    title: "Logo design pack",
+    blurb:
+      "Creative brief and direction for a logo (mark + wordmark options). Studio designs the final files after approval.",
+    priceFromAud: 449,
+    contentType: "video_script",
+    requestType: "creative_request",
+    primaryChannel: "website_blog_cms",
+    cookFamily: "script_av",
+  },
+  {
+    id: "animated_gif_pack",
+    title: "Animated GIF pack",
+    blurb:
+      "Storyboard, on-screen copy, and motion notes for a short looping GIF. Studio renders the GIF after approval.",
+    priceFromAud: 279,
+    contentType: "video_script",
+    requestType: "creative_request",
+    primaryChannel: "instagram",
+    cookFamily: "script_av",
+  },
+  {
+    id: "short_ad_video",
+    title: "Short ad video",
+    blurb:
+      "15–30s paid-social / video-ad script with shots, VO, and CTA. Studio or production partner edits the final cut after approval.",
+    priceFromAud: 399,
+    contentType: "video_script",
+    requestType: "video_script",
+    primaryChannel: "paid_media",
+    cookFamily: "script_av",
+  },
+  {
+    id: "short_movie_video",
+    title: "Short movie / brand film",
+    blurb:
+      "Short brand film or mini-story script (scenes, VO, on-screen text). Filming/edit is studio fulfilment after approval.",
+    priceFromAud: 599,
+    contentType: "video_script",
+    requestType: "video_script",
+    primaryChannel: "instagram",
+    cookFamily: "script_av",
+  },
+  {
+    id: "animation_pack",
+    title: "Animation pack",
+    blurb:
+      "Motion-design brief and shot list for explainer or brand animation. Animators produce the final file after approval.",
+    priceFromAud: 549,
+    contentType: "video_script",
+    requestType: "creative_request",
+    primaryChannel: "youtube_shorts",
+    cookFamily: "script_av",
+  },
+];
+
+for (const b of brandMotion) {
+  skus.push({
+    ...b,
+    categoryId: "brand_motion",
+    marker: `menu_order:${b.id}`,
+    dishLabel: b.title,
+  });
+}
+
 function tsLiteral(value, indent = 0) {
   const pad = "  ".repeat(indent);
   if (Array.isArray(value)) {

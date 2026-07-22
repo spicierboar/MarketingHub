@@ -32,7 +32,8 @@ export type ClientMenuCategoryId =
   | "support"
   | "product"
   | "messaging"
-  | "discovery";
+  | "discovery"
+  | "brand_motion";
 
 export type ClientMenuSkuId = string;
 
@@ -161,6 +162,11 @@ export const CLIENT_ORDER_CATEGORIES: readonly {
     id: "discovery",
     label: "SEO, AEO, GEO & LLMO",
     blurb: "Search and AI-discovery optimisation packs",
+  },
+  {
+    id: "brand_motion",
+    label: "Brand & motion",
+    blurb: "Logos, GIFs, short ads, short films, and animation — brief + studio render",
   },
 ] as const;
 
@@ -9117,5 +9123,70 @@ export const CLIENT_ORDER_MENU: readonly ClientMenuSku[] = [
     categoryId: "discovery",
     marker: "menu_order:featured_snippet_pack",
     dishLabel: "Featured snippet pack",
+  },
+  {
+    id: "logo_design_pack",
+    title: "Logo design pack",
+    blurb: "Creative brief and direction for a logo (mark + wordmark options). Studio designs the final files after approval.",
+    priceFromAud: 449,
+    contentType: "video_script",
+    requestType: "creative_request",
+    primaryChannel: "website_blog_cms",
+    cookFamily: "script_av",
+    categoryId: "brand_motion",
+    marker: "menu_order:logo_design_pack",
+    dishLabel: "Logo design pack",
+  },
+  {
+    id: "animated_gif_pack",
+    title: "Animated GIF pack",
+    blurb: "Storyboard, on-screen copy, and motion notes for a short looping GIF. Studio renders the GIF after approval.",
+    priceFromAud: 279,
+    contentType: "video_script",
+    requestType: "creative_request",
+    primaryChannel: "instagram",
+    cookFamily: "script_av",
+    categoryId: "brand_motion",
+    marker: "menu_order:animated_gif_pack",
+    dishLabel: "Animated GIF pack",
+  },
+  {
+    id: "short_ad_video",
+    title: "Short ad video",
+    blurb: "15–30s paid-social / video-ad script with shots, VO, and CTA. Studio or production partner edits the final cut after approval.",
+    priceFromAud: 399,
+    contentType: "video_script",
+    requestType: "video_script",
+    primaryChannel: "paid_media",
+    cookFamily: "script_av",
+    categoryId: "brand_motion",
+    marker: "menu_order:short_ad_video",
+    dishLabel: "Short ad video",
+  },
+  {
+    id: "short_movie_video",
+    title: "Short movie / brand film",
+    blurb: "Short brand film or mini-story script (scenes, VO, on-screen text). Filming/edit is studio fulfilment after approval.",
+    priceFromAud: 599,
+    contentType: "video_script",
+    requestType: "video_script",
+    primaryChannel: "instagram",
+    cookFamily: "script_av",
+    categoryId: "brand_motion",
+    marker: "menu_order:short_movie_video",
+    dishLabel: "Short movie / brand film",
+  },
+  {
+    id: "animation_pack",
+    title: "Animation pack",
+    blurb: "Motion-design brief and shot list for explainer or brand animation. Animators produce the final file after approval.",
+    priceFromAud: 549,
+    contentType: "video_script",
+    requestType: "creative_request",
+    primaryChannel: "youtube_shorts",
+    cookFamily: "script_av",
+    categoryId: "brand_motion",
+    marker: "menu_order:animation_pack",
+    dishLabel: "Animation pack",
   },
 ] as const;

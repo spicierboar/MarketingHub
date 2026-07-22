@@ -175,6 +175,8 @@ export type OrderBriefFieldId =
   | "eventDetails"
   | "announcementDetails"
   | "productOrService"
+  | "visualStyle"
+  | "aspectRatio"
   | "otherNotes";
 
 export type OrderBriefFieldConfig = {
@@ -340,6 +342,25 @@ export function getOrderBriefSchema(
         ]),
       };
 
+    case "brand_motion":
+      return {
+        categoryId,
+        fields: CORE_ALWAYS(ORDER_AUDIENCE_CUSTOMER, [
+          field("videoRuntime", {
+            required: true,
+            label: "Length / scope",
+            hint: "For logos, pick “Other / flexible” if not timed",
+            options: ORDER_VIDEO_RUNTIME,
+          }),
+          field("cta", {
+            required: false,
+            label: "On-screen / end CTA (optional)",
+            hint: "Skip for pure logo work",
+            options: ORDER_CTA_CONVERSION,
+          }),
+        ]),
+      };
+
     case "internal":
       return {
         categoryId,
@@ -495,6 +516,8 @@ export type OrderBriefParsed = {
   eventDetails: string;
   announcementDetails: string;
   productOrService: string;
+  visualStyle: string;
+  aspectRatio: string;
   otherNotes: string;
 };
 
@@ -537,6 +560,8 @@ export function parseOrderBriefFromFormData(formData: FormData): OrderBriefParse
     eventDetails: String(formData.get("eventDetails") || "").trim(),
     announcementDetails: String(formData.get("announcementDetails") || "").trim(),
     productOrService: String(formData.get("productOrService") || "").trim(),
+    visualStyle: String(formData.get("visualStyle") || "").trim(),
+    aspectRatio: String(formData.get("aspectRatio") || "").trim(),
     otherNotes: String(formData.get("otherNotes") || "").trim(),
   };
 }
@@ -567,9 +592,37 @@ export function assertOrderBriefComplete(
       throw new Error("Add at least one clear target question or search phrase.");
     }
   }
+
+  assertOrderBriefAccurate(brief);
 }
 
-function briefValue(
+/**
+ * Cross-field accuracy checks beyond "is it filled in" — catches the common
+ * case where a client ticks a fact type but never actually writes the fact,
+ * which produces a confident-sounding but wrong draft.
+ */
+export function assertOrderBriefAccurate(brief: OrderBriefParsed): void {
+  if (brief.factTypes.includes("prices") && !/[0-9$]/.test(brief.mustIncludeFacts)) {
+    throw new Error(
+      'You ticked "Prices or fees" as a must-include fact — add the actual price or fee (a number or $) in Must-include facts so we don\'t guess.',
+    );
+  }
+
+  if (brief.factTypes.includes("location")) {
+    const factsLookLikeLocation = brief.mustIncludeFacts.trim().length >= 3;
+    const notesLookLikeLocation = brief.audienceNotes.trim().length >= 3;
+    const topicMentionsPlace = /\b(in|near|at|suburb|area|location|based)\b/i.test(
+      brief.contentTopic,
+    );
+    if (!factsLookLikeLocation && !notesLookLikeLocation && !topicMentionsPlace) {
+      throw new Error(
+        'You ticked "Location, suburbs, or service area" as a must-include fact — add the suburb or area in Must-include facts or Audience notes.',
+      );
+    }
+  }
+}
+
+export function briefValue(
   brief: OrderBriefParsed,
   id: OrderBriefFieldId,
 ): string | string[] {
@@ -624,6 +677,10 @@ function briefValue(
       return brief.announcementDetails;
     case "productOrService":
       return brief.productOrService;
+    case "visualStyle":
+      return brief.visualStyle;
+    case "aspectRatio":
+      return brief.aspectRatio;
     case "otherNotes":
       return brief.otherNotes;
     default: {
@@ -661,6 +718,114 @@ export function formatOrderBriefNotes(
   }
 
   return lines.join("\n");
+}
+
+const COOK_BRIEF_LEAD_FIELDS: OrderBriefFieldId[] = [
+  "contentTopic",
+  "audience",
+  "tone",
+  "cta",
+];
+const COOK_BRIEF_GUARDRAIL_FIELDS: OrderBriefFieldId[] = [
+  "factTypes",
+  "mustIncludeFacts",
+  "avoid",
+];
+const COOK_BRIEF_TRAILING_FIELDS: OrderBriefFieldId[] = ["timing", "otherNotes"];
+const COOK_BRIEF_MAX_CHARS = 2000;
+
+/**
+ * Tightly structured, machine-parseable brief for the drafting model —
+ * every non-empty field the client filled in, grouped so the fulfilment
+ * essentials (topic / audience / tone / CTA / must-include / avoid) land
+ * first, followed by item-specific extras, then timing and free-text notes.
+ * Truncates the lowest-priority free-text fields first if over budget.
+ */
+export function formatOrderBriefForCook(
+  brief: OrderBriefParsed,
+  sku: SkuBriefRef,
+): string {
+  const schema = resolveOrderBriefSchema(sku);
+  const byId = new Map(schema.fields.map((f) => [f.id, f]));
+  const covered = new Set<OrderBriefFieldId>([
+    ...COOK_BRIEF_LEAD_FIELDS,
+    ...COOK_BRIEF_GUARDRAIL_FIELDS,
+    ...COOK_BRIEF_TRAILING_FIELDS,
+    "audienceNotes",
+  ]);
+
+  const lines: string[] = ["[EXTRAS BRIEF]", `Deliverable: ${sku.title}`];
+  const push = (label: string, value: string) => {
+    if (value) lines.push(`${label}: ${value}`);
+  };
+
+  push("Topic", brief.contentTopic);
+  push(
+    "Audience",
+    [labelOf(byId.get("audience")?.options, brief.audience), brief.audienceNotes]
+      .filter(Boolean)
+      .join(" — "),
+  );
+  push("Tone", labelOf(byId.get("tone")?.options, brief.tone));
+  push("CTA", labelOf(byId.get("cta")?.options, brief.cta));
+
+  const factTypeLabels = brief.factTypes
+    .map((v) => labelOf(ORDER_FACT_TYPE_OPTIONS, v))
+    .join("; ");
+  push(
+    "Must include",
+    [factTypeLabels && `[${factTypeLabels}]`, brief.mustIncludeFacts]
+      .filter(Boolean)
+      .join(" "),
+  );
+  push(
+    "Avoid",
+    brief.avoid.map((v) => labelOf(byId.get("avoid")?.options, v)).join("; "),
+  );
+
+  // Item/category-specific extras, in schema order, using each field's own
+  // context-aware label (e.g. "keyOutcomes" reads as "Learning outcomes" for
+  // courses but "Results / metrics to include" for case studies).
+  for (const f of schema.fields) {
+    if (covered.has(f.id)) continue;
+    const raw = briefValue(brief, f.id);
+    if (Array.isArray(raw)) {
+      if (raw.length) push(f.label, raw.map((v) => labelOf(f.options, v)).join("; "));
+    } else if (raw) {
+      push(f.label, f.options ? labelOf(f.options, raw) : raw);
+    }
+  }
+
+  push("Timing", labelOf(byId.get("timing")?.options, brief.timing));
+  push("Other notes", brief.otherNotes);
+  lines.push("[/EXTRAS BRIEF]");
+
+  return capCookBrief(lines);
+}
+
+/** Trim the least-essential free-text fields first, then hard-truncate as a last resort. */
+function capCookBrief(lines: string[]): string {
+  const trimField = (label: string, minChars: number) => {
+    const idx = lines.findIndex((l) => l.startsWith(`${label}: `));
+    if (idx === -1) return;
+    const budget = Math.max(minChars, label.length + 42);
+    if (lines[idx].length > budget) {
+      lines[idx] = `${lines[idx].slice(0, budget - 1)}…`;
+    }
+  };
+
+  let text = lines.join("\n");
+  if (text.length <= COOK_BRIEF_MAX_CHARS) return text;
+
+  trimField("Other notes", 80);
+  text = lines.join("\n");
+  if (text.length <= COOK_BRIEF_MAX_CHARS) return text;
+
+  trimField("Must include", 120);
+  text = lines.join("\n");
+  if (text.length <= COOK_BRIEF_MAX_CHARS) return text;
+
+  return `${text.slice(0, COOK_BRIEF_MAX_CHARS - 1)}…`;
 }
 
 /** Drafting topic = content topic (not the Extra catalogue title). */

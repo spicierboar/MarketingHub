@@ -58,6 +58,10 @@ export function buildMenuOrderNotes(input: {
     input.sku.optimiseFor?.length
       ? `optimise=${input.sku.optimiseFor.join(",")}`
       : undefined;
+  const studio =
+    input.sku.categoryId === "brand_motion"
+      ? "studio_fulfilment: yes — text brief/script first; rendered visual file after client approval (not auto-publish)."
+      : undefined;
   const parts = [
     input.clientNotes?.trim(),
     "",
@@ -66,7 +70,8 @@ export function buildMenuOrderNotes(input: {
     `Dish: ${input.sku.dishLabel}`,
     `Charge outside subscription package — Stripe checkout TBD; treat as special job.`,
     input.sku.marker,
-    `recipe_hint: type=${input.sku.contentType} channel=${input.sku.primaryChannel} family=${input.sku.cookFamily}`,
+    `recipe_hint: type=${input.sku.contentType} channel=${input.sku.primaryChannel} family=${input.sku.cookFamily} request=${input.sku.requestType}`,
+    studio,
     opt,
   ].filter((p) => p !== undefined && p !== "");
   return parts.join("\n").trim();

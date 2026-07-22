@@ -373,7 +373,7 @@ async function templateBody(input: DraftInput, refs: SourceRef[]): Promise<strin
     case "campaign":
       return `Campaign concept: ${topic}\nObjective: ${objective}\nAudience: ${input.audience || p.targetCustomers}\nSuggested channels: Facebook, Instagram, Google Business Profile, Email\nKey message: ${topic}${grounding ? `\nSupporting detail: ${grounding.trim()}` : ""}\nCTA: ${cta}${disc}`;
     case "creative_request":
-      return `Creative brief: ${topic}\nObjective: ${objective}\nDeliverable: image/video post for ${input.platform || "social"}\nBrand voice: ${p.brandVoice || "on brand"}\nCTA: ${cta}${disc}`;
+      return `Creative brief: ${topic}\nObjective: ${objective}\nDeliverable: ${input.platform || "brand/motion asset"}\nBrand voice: ${p.brandVoice || "on brand"}\nMust include: concepts, usage contexts, do/don’t, file types expected from studio.\nNote: This is the brief — final rendered files are studio fulfilment after approval.\nCTA: ${cta}${disc}`;
     case "website_copy":
       return `# ${topic}\n\n${company.name} — ${p.natureOfBusiness || objective}${grounding}\n\n## Why choose us\n${p.approvedClaims.slice(0, 3).map((c) => `- ${c}`).join("\n") || `- Serving ${area} with pride`}\n\n## What we offer\n${p.services.slice(0, 4).map((s) => `- ${s}`).join("\n")}\n\n${cta}.${disc}`;
     case "faq":

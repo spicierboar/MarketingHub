@@ -40,6 +40,8 @@ const FAMILY_PROMPTS: Record<CookFamilyId, string> = {
     "Format: AV script with Hook, Beats/Scenes, On-screen text, Voice-over, CTA.",
     "Spoken-word friendly; timing notes in brackets (e.g. [0–3s]).",
     "Match short-form vs long-form expectations from the dish name.",
+    "If the dish is a logo, GIF, or animation pack: write a creative/motion brief (concept directions, style, usage, do/don’t, deliverable file types) — not a finished visual file.",
+    "Always note that final rendered assets are studio fulfilment after approval.",
   ].join(" "),
   sales_doc: [
     "Format: sales document — executive summary, offer/value, proof, next steps.",

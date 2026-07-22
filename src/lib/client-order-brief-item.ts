@@ -508,6 +508,44 @@ export function itemSpecificExtraFields(sku: SkuBriefRef): ItemBriefField[] {
     );
   }
 
+  if (sku.categoryId === "brand_motion") {
+    out.push(
+      f("visualStyle", {
+        required: true,
+        label: "Visual style",
+        hint: "Look and feel for the studio",
+        options: [
+          { value: "clean_minimal", label: "Clean / minimal" },
+          { value: "bold_graphic", label: "Bold / graphic" },
+          { value: "warm_lifestyle", label: "Warm / lifestyle" },
+          { value: "premium_dark", label: "Premium / dark" },
+          { value: "playful", label: "Playful / energetic" },
+          { value: "other_style", label: "Other (describe in facts)" },
+        ],
+      }),
+      f("aspectRatio", {
+        required: true,
+        label: "Format / aspect ratio",
+        options: [
+          { value: "square_1_1", label: "Square 1:1 (feed)" },
+          { value: "vertical_9_16", label: "Vertical 9:16 (Reels / Stories / Shorts)" },
+          { value: "landscape_16_9", label: "Landscape 16:9" },
+          { value: "logo_lockup", label: "Logo lockup (flexible)" },
+          { value: "other_format", label: "Other" },
+        ],
+      }),
+    );
+    if (match(h, "logo")) {
+      out.push(
+        f("keyOutcomes", {
+          required: true,
+          label: "Where the logo will be used",
+          placeholder: "e.g. website header · Google profile · packaging · uniforms",
+        }),
+      );
+    }
+  }
+
   // De-dupe by field id (first wins)
   const seen = new Set<string>();
   return out.filter((field) => {

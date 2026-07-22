@@ -130,6 +130,18 @@ const BY_CATEGORY: Partial<
       "Local SEO + GEO pack for our plumbing service area (postcodes 2xxx–2yyy). Priority pages: emergency, blocked drains, hot water. Include NAP consistency notes and 5 FAQ answers Google/AI might surface.",
     ],
   },
+  brand_motion: {
+    include: [
+      "What the visual must communicate (offer, brand feeling, story)",
+      "Style, colours, and anything that must appear on screen",
+      "Format / aspect ratio and length",
+      "Where it will run (ads, feed, site, packaging)",
+    ],
+    examples: [
+      "Logo for a neighbourhood bakery — warm, handmade feel, works small on Google profile. Prefer wordmark + simple mark. Must work in one colour. Avoid trendy gradients.",
+      "15s vertical short ad: winter tasting menu Fri–Sun. Hook with plated dish, end with book-online CTA. No stock footage look — use our brand colours.",
+    ],
+  },
 };
 
 export function getOrderDetailsHelp(
