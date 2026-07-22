@@ -10,6 +10,7 @@ import {
 } from "@/lib/client-order-menu";
 import { placeClientMenuOrderAction } from "../actions";
 import { ActionSubmitButton } from "@/components/action-submit-button";
+import { ClientOrderDetailsHelp } from "@/components/client-order-details-help";
 
 export default async function ClientOrderSkuPage({
   params,
@@ -53,13 +54,18 @@ export default async function ClientOrderSkuPage({
               placeholder={`e.g. ${sku.title} for…`}
             />
           </Field>
-          <Field
-            label="Details"
-            htmlFor="notes"
-            hint="Key facts, timing, tone — plain language is fine"
+          <ClientOrderDetailsHelp
+            categoryId={sku.categoryId}
+            dishTitle={sku.title}
           >
-            <Textarea id="notes" name="notes" required rows={5} />
-          </Field>
+            <Textarea
+              id="notes"
+              name="notes"
+              required
+              rows={5}
+              placeholder="Audience, must-include facts, tone, CTA…"
+            />
+          </ClientOrderDetailsHelp>
           <Field label="Preferred date (optional)" htmlFor="preferredDate">
             <Input id="preferredDate" name="preferredDate" type="date" />
           </Field>
