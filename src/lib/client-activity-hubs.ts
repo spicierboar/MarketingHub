@@ -175,9 +175,9 @@ export function clientPortalActivityHubs(): ActivityHub[] {
     },
     {
       id: "extra_work",
-      label: "Extra work",
-      blurb: "Promos and custom work requests",
-      href: "/client/account#extra-work",
+      label: "Extras",
+      blurb: "Dishes, promos, and custom paid orders",
+      href: "/client/order",
     },
     {
       id: "reports",

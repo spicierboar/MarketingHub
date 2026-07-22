@@ -31,11 +31,9 @@ export type ExtraWorkPromoCard = {
   feeUsd: number;
 };
 
-type Tab = "promo" | "custom";
-
 /**
- * Account → Request extra work.
- * Ready-made: one-tap (template defaults). Custom: topic + notes FormModal.
+ * Extras page — ready-made promos + custom paid ask.
+ * Stacked on one page (no tabs that hide half the catalogue).
  */
 export function ClientExtraWorkPanel({
   promos,
@@ -51,7 +49,6 @@ export function ClientExtraWorkPanel({
   };
   customWorkFeeAud: number | null;
 }) {
-  const [tab, setTab] = useState<Tab>("promo");
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
 
@@ -60,114 +57,102 @@ export function ClientExtraWorkPanel({
     [promos, confirmId],
   );
 
+  const industries = useMemo(
+    () => new Set(promos.map((p) => p.template.industry)),
+    [promos],
+  );
+  const showIndustryPerCard = industries.size > 1;
+
   return (
-    <section id="extra-work" className="scroll-mt-4 space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold">Request extra work</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Ready-made promo or a short custom ask. We draft; you approve — nothing goes live
-            on its own.
-          </p>
-        </div>
-        {allowance.limit > 0 ? (
-          <Badge tone={allowance.remaining > 0 ? "success" : "warning"}>
-            {allowance.remaining > 0
-              ? `${allowance.remaining} included left (${allowance.periodKey})`
-              : `Allowance used · extras billed (${allowance.periodKey})`}
-          </Badge>
-        ) : (
-          <Badge tone="warning">Extras billed</Badge>
-        )}
-      </div>
-
-      <div className="flex gap-1 rounded-md border border-border bg-muted/40 p-1">
-        <button
-          type="button"
-          onClick={() => setTab("promo")}
-          className={`flex-1 rounded px-2 py-1.5 text-xs font-medium sm:text-sm ${
-            tab === "promo"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Ready-made promo
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("custom")}
-          className={`flex-1 rounded px-2 py-1.5 text-xs font-medium sm:text-sm ${
-            tab === "custom"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Custom ask
-        </button>
-      </div>
-
-      {tab === "promo" ? (
-        <div className="space-y-3">
-          {promos.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-              No ready-made promos for your industry yet — use Custom ask.
+    <div className="space-y-8">
+      <section id="promos" className="scroll-mt-4 space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Ready-made promos</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Dates and channels set for you. We draft; you approve — nothing goes live on its own.
             </p>
+          </div>
+          {allowance.limit > 0 ? (
+            <Badge tone={allowance.remaining > 0 ? "success" : "warning"}>
+              {allowance.remaining > 0
+                ? `${allowance.remaining} included left (${allowance.periodKey})`
+                : `Allowance used · extras billed (${allowance.periodKey})`}
+            </Badge>
           ) : (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {promos.map((p) => {
-                const t = p.template;
-                const included = p.billingClass === "included";
-                return (
-                  <li
-                    key={t.id}
-                    className="flex flex-col rounded-md border border-border bg-card p-3"
-                  >
+            <Badge tone="warning">Extras billed</Badge>
+          )}
+        </div>
+
+        {promos.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+            No ready-made promos for your industry yet — use a custom order below.
+          </p>
+        ) : (
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {promos.map((p) => {
+              const t = p.template;
+              const included = p.billingClass === "included";
+              return (
+                <li
+                  key={t.id}
+                  className="flex flex-col rounded-md border border-border bg-card p-3"
+                >
+                  {showIndustryPerCard ? (
                     <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                       {industryLabel(t.industry)}
                     </p>
-                    <p className="mt-0.5 text-sm font-semibold">{t.name}</p>
-                    <p className="mt-1 flex-1 text-xs text-muted-foreground">
-                      {t.promotion}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs">
-                        {included ? (
-                          <span className="font-medium text-emerald-700">
-                            Included in package
+                  ) : null}
+                  <p className={`text-sm font-semibold ${showIndustryPerCard ? "mt-0.5" : ""}`}>
+                    {t.name}
+                  </p>
+                  <p className="mt-1 flex-1 text-xs text-muted-foreground">{t.promotion}</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs">
+                      {included ? (
+                        <span className="font-medium text-emerald-700">
+                          Included in package
+                        </span>
+                      ) : (
+                        <span className="font-medium">
+                          Extra · {money(p.expectedFeeUsd)}
+                          <span className="font-normal text-muted-foreground">
+                            {" "}
+                            (incl. {money(p.feeUsd)} fee)
                           </span>
-                        ) : (
-                          <span className="font-medium">
-                            Extra · {money(p.expectedFeeUsd)}
-                            <span className="font-normal text-muted-foreground">
-                              {" "}
-                              (incl. {money(p.feeUsd)} fee)
-                            </span>
-                          </span>
-                        )}
-                        <p className="text-[10px] text-muted-foreground">
-                          {durationLabel(t)} · dates &amp; channels set for you
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={included ? "outline" : "default"}
-                        onClick={() => setConfirmId(t.id)}
-                      >
-                        Request
-                      </Button>
+                        </span>
+                      )}
+                      <p className="text-[10px] text-muted-foreground">
+                        {durationLabel(t)} · dates &amp; channels set for you
+                      </p>
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={included ? "outline" : "default"}
+                      onClick={() => setConfirmId(t.id)}
+                    >
+                      Request
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section id="custom-order" className="scroll-mt-4 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold">Custom order</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Not on the list? Describe what you need — we quote and draft for Approvals.
+          </p>
         </div>
-      ) : (
         <div className="rounded-md border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">
-            Tell us what you need in plain language. We&apos;ll open a ticket and start a draft
-            for review.
+            Plain language is fine. This is a paid special outside your subscription, not a
+            free message.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {customWorkFeeAud != null && customWorkFeeAud > 0
@@ -180,10 +165,10 @@ export function ClientExtraWorkPanel({
             className="mt-3"
             onClick={() => setCustomOpen(true)}
           >
-            Write a custom ask
+            Place custom order
           </Button>
         </div>
-      )}
+      </section>
 
       {confirm && (
         <FormModal
@@ -243,7 +228,7 @@ export function ClientExtraWorkPanel({
 
       {customOpen && (
         <FormModal
-          title="Custom ask"
+          title="Custom order"
           description="Short plain-language request — not a full brief. We'll draft something for Approvals."
           onClose={() => setCustomOpen(false)}
         >
@@ -281,11 +266,11 @@ export function ClientExtraWorkPanel({
               <Button type="button" variant="outline" onClick={() => setCustomOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Send ask</Button>
+              <Button type="submit">Place order</Button>
             </div>
           </form>
         </FormModal>
       )}
-    </section>
+    </div>
   );
 }

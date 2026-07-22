@@ -10,7 +10,7 @@ import {
 import { resolveCustomWorkFeeAud } from "@/lib/promo-allowance";
 import { getCompany, getTenant } from "@/lib/db";
 
-/** One-tap ready-made promo from Account — template defaults, no DIY packaging. */
+/** One-tap ready-made promo from Extras — template defaults, no DIY packaging. */
 export async function requestExtraPromoAction(formData: FormData) {
   const { user, companyId } = await requirePortalUser();
   const templateId = String(formData.get("templateId") || "").trim();
@@ -26,6 +26,7 @@ export async function requestExtraPromoAction(formData: FormData) {
   });
 
   revalidatePath("/client");
+  revalidatePath("/client/order");
   revalidatePath("/client/account");
   revalidatePath("/client/requests");
   revalidatePath("/client/approvals");
@@ -38,7 +39,7 @@ export async function requestExtraPromoAction(formData: FormData) {
   redirect(`/client/requests/${result.requestId}`);
 }
 
-/** Plain-language custom work ask + optional AI draft kick. */
+/** Plain-language custom paid order + optional AI draft kick. */
 export async function requestCustomWorkAction(formData: FormData) {
   const { user, companyId } = await requirePortalUser();
   const topic = String(formData.get("topic") || "").trim();
@@ -62,6 +63,7 @@ export async function requestCustomWorkAction(formData: FormData) {
   });
 
   revalidatePath("/client");
+  revalidatePath("/client/order");
   revalidatePath("/client/account");
   revalidatePath("/client/requests");
   revalidatePath("/client/approvals");

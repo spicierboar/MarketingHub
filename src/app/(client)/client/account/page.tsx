@@ -7,18 +7,8 @@ import {
   getOrCreateCreditWallet,
 } from "@/lib/credit-wallet";
 import { resolveCompanyPackage } from "@/lib/marketing-packages";
-import {
-  promoAllowanceSummary,
-  resolveCustomWorkFeeAud,
-  resolvePromoBillingClass,
-} from "@/lib/promo-allowance";
-import { computePromoPricing, templatesForCompany } from "@/lib/promo-catalog";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
-import {
-  ClientExtraWorkPanel,
-  type ExtraWorkPromoCard,
-} from "@/components/client-extra-work-panel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -48,38 +38,12 @@ export default async function ClientAccountPage() {
   const hours = company?.profile.tradingHours?.trim();
   const contact = company?.profile.approvalContact?.trim();
 
-  const allowance = company
-    ? promoAllowanceSummary(company, tenant)
-    : { periodKey: "", used: 0, limit: 0, remaining: 0, promosIncludedPerMonth: 0 };
-  const billingClass = company
-    ? resolvePromoBillingClass(company, tenant)
-    : "extra";
-  const templates = company
-    ? templatesForCompany(company, tenant?.promoCatalog, tenant?.promoIndustries)
-    : [];
-  const promoCards: ExtraWorkPromoCard[] = templates.map((template) => {
-    const pricing = computePromoPricing(
-      template.suggestedClientPriceUsd,
-      template.markupPercent,
-    );
-    return {
-      template,
-      billingClass,
-      expectedFeeUsd: billingClass === "included" ? 0 : pricing.totalUsd,
-      totalUsd: pricing.totalUsd,
-      feeUsd: pricing.feeUsd,
-    };
-  });
-  const customWorkFeeAud = company
-    ? resolveCustomWorkFeeAud(company, tenant)
-    : null;
-
   return (
     <div>
       <PageHeader
         title="Overview"
         explainerId="client-account"
-        explainer="Your package, credit, and quick actions. Everything else is in the left menu."
+        explainer="Your package, credit, and quick actions. Order extras from Extras — messaging stays under Ask us."
       />
 
       <div className="space-y-5 p-4 sm:p-5">
@@ -104,13 +68,19 @@ export default async function ClientAccountPage() {
           </section>
         ) : null}
 
-        {company ? (
-          <ClientExtraWorkPanel
-            promos={promoCards}
-            allowance={allowance}
-            customWorkFeeAud={customWorkFeeAud}
-          />
-        ) : null}
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">Need extra work?</h2>
+          <Card>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <p className="text-sm text-muted-foreground">
+                Promos, content dishes, and custom paid orders live on one page.
+              </p>
+              <Link href="/client/order" className={buttonClasses("default", "sm")}>
+                Open Extras
+              </Link>
+            </CardContent>
+          </Card>
+        </section>
 
         <section className="space-y-3">
           <div className="flex flex-wrap items-end justify-between gap-2">

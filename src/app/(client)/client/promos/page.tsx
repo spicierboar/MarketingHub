@@ -40,21 +40,24 @@ export default async function ClientPromosPage() {
       <PageHeader
         title="Promotions"
         explainerId="client-promos"
-        explainer="Ready-made packages your agency may propose. Not part of day-to-day review — prefer Approvals and Ask us."
+        explainer="Legacy promotions page — order ready-made promos from Extras."
       >
-        <Link href="/client" className={buttonClasses("outline", "sm")}>
-          Your turn
+        <Link href="/client/order" className={buttonClasses("outline", "sm")}>
+          Open Extras
         </Link>
       </PageHeader>
 
       <div className="space-y-6 p-4 sm:p-6">
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          This page isn&apos;t in your main menu. Dates, price, and channels are normally set with
-          your agency — use{" "}
+          Ordering moved to{" "}
+          <Link href="/client/order" className="text-primary hover:underline">
+            Extras
+          </Link>
+          — dishes, ready-made promos, and custom paid orders in one place. For a free message use{" "}
           <Link href="/client/requests/new" className="text-primary hover:underline">
             Ask us
-          </Link>{" "}
-          if you want a promotion.
+          </Link>
+          .
         </p>
 
         {open.length > 0 && (
