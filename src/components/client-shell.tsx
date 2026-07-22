@@ -119,7 +119,7 @@ const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/client/strategy",
-        label: "Subscription",
+        label: "Strategy",
         icon: Map,
         matchPrefixes: ["/client/strategy"],
       },
