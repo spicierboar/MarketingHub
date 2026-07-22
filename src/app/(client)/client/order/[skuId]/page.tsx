@@ -11,6 +11,7 @@ import {
 import { placeClientMenuOrderAction } from "../actions";
 import { ActionSubmitButton } from "@/components/action-submit-button";
 import { ClientOrderBriefFields } from "@/components/client-order-brief-fields";
+import { ClientOrderSkuExplainer } from "@/components/client-order-sku-explainer";
 
 export default async function ClientOrderSkuPage({
   params,
@@ -26,10 +27,12 @@ export default async function ClientOrderSkuPage({
     <div>
       <PageHeader
         title={sku.title}
-        explainer={sku.blurb}
+        hideExplainer
         parent={{ href: "/client/order", label: "Extras" }}
       />
       <div className="mx-auto max-w-xl space-y-6 px-4 py-6 sm:px-6">
+        <ClientOrderSkuExplainer sku={sku} />
+
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">
             {formatMenuPriceFrom(sku.priceFromAud)}
