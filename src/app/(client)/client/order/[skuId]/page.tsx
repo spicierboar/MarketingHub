@@ -43,12 +43,13 @@ export default async function ClientOrderSkuPage({
           <Field
             label="Subject"
             htmlFor="topic"
-            hint="What should this be about?"
+            hint="Pre-filled from your Extra — edit if you want a more specific angle"
           >
             <Input
               id="topic"
               name="topic"
               required
+              defaultValue={sku.title}
               placeholder={`e.g. ${sku.title} for…`}
             />
           </Field>
