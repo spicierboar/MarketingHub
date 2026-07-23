@@ -51,6 +51,7 @@ import {
 } from "@/lib/fixtures/staging-retail";
 import {
   STAGING_SALES_APPROVER_SLUGS,
+  STAGING_SALES_CLIENTS,
   STAGING_SALES_EMAIL,
   STAGING_SALES_FIXTURE_KEY,
   createStagingSalesFixture,
@@ -343,10 +344,11 @@ async function ensureStagingSalesFixtureApplied() {
   return applyStagingSalesFixture(sb);
 }
 
-/** Ensure Casey's sales demo book exists on the restaurant fixture tenant. */
+/** Ensure Arjun's sales demo book exists on the restaurant fixture tenant. */
 async function ensureStagingSalesReady(): Promise<void> {
   await ensureStagingRestaurantsReady();
   const expected = createStagingSalesFixture().companies.length;
+  const expectedKey = stagingSalesClientFixtureKey(STAGING_SALES_CLIENTS[0]!.slug);
   const companies = await runInServiceContext(STAGING_FIXTURE_TENANT_ID, () =>
     listCompanies(STAGING_FIXTURE_TENANT_ID),
   );
@@ -355,7 +357,12 @@ async function ensureStagingSalesReady(): Promise<void> {
       .stagingFixture;
     return meta?.fixtureKey?.startsWith(`${STAGING_SALES_FIXTURE_KEY}:`);
   }).length;
-  if (salesCount < expected) {
+  const hasCurrentBook = companies.some((c) => {
+    const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
+      .stagingFixture;
+    return meta?.fixtureKey === expectedKey;
+  });
+  if (salesCount < expected || !hasCurrentBook) {
     await ensureStagingSalesFixtureApplied();
   }
 }

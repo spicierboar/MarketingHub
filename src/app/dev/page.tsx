@@ -144,7 +144,7 @@ export default async function DevToolsPage({
         : params.seeded === "general-retail"
           ? `Staging general retail ready (${params.companies ?? "4"} stores, ${params.approvers ?? "4"} approvers). Use Quick login below.`
           : params.seeded === "sales"
-            ? `Sales demo book ready (${params.companies ?? "2"} clients, ${params.approvers ?? "2"} approvers). Use Quick login as Casey Rivera.`
+            ? `Sales demo book ready (${params.companies ?? "2"} clients, ${params.approvers ?? "2"} approvers). Use Quick login as Arjun Mehta.`
             : "Demo data re-seeded.";
 
   return (
@@ -266,8 +266,8 @@ export default async function DevToolsPage({
               </div>
               <div className="space-y-2 border-t border-border pt-4">
                 <p className="text-sm text-muted-foreground">
-                  Upserts Casey Rivera (field sales) plus Harbour Roast Co and
-                  Northline Dental under the restaurant agency tenant. Client
+                  Upserts Arjun Mehta (field sales) plus Cardamom Roast and
+                  Aarohan Dental under the restaurant agency tenant. Client
                   profiles read as live accounts; internal fixture metadata only.
                 </p>
                 <form action={seedStagingSalesFixtureAction} className="space-y-2">

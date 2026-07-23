@@ -1,6 +1,6 @@
 /**
  * Idempotent staging field-sales demo apply (service-role only).
- * Attaches Casey Rivera + book of clients to the restaurant fixture tenant.
+ * Attaches Arjun Mehta + book of clients to the restaurant fixture tenant.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";

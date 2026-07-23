@@ -1,5 +1,5 @@
 /**
- * Staging field-sales demo seat — Casey Rivera + two live-feeling clients.
+ * Staging field-sales demo seat — Arjun Mehta + two live-feeling clients.
  * Client-visible copy avoids TEST ONLY / fixture jargon (same posture as Saffron pack).
  * Internal fixtureKey metadata remains for idempotent seed / quick-login.
  */
@@ -20,7 +20,7 @@ export const STAGING_SALES_FIXTURE_KEY = "staging-sales-book-v1" as const;
 export const STAGING_SALES_EMAIL = "sales-1@staging-fixture.invalid" as const;
 export const STAGING_SALES_USER_ID =
   "5f150000-0000-4000-8000-000000000010" as const;
-export const STAGING_SALES_DISPLAY_NAME = "Casey Rivera" as const;
+export const STAGING_SALES_DISPLAY_NAME = "Arjun Mehta" as const;
 
 export type StagingSalesClientDef = {
   slug: string;
@@ -39,11 +39,11 @@ export type StagingSalesClientDef = {
   packageId: "starter" | "growth" | "managed";
 };
 
-/** Demo book — reads like a real field-sales portfolio. */
+/** Demo book — Indian-Australian field-sales portfolio (matches restaurant fixture tone). */
 export const STAGING_SALES_CLIENTS: readonly StagingSalesClientDef[] = [
   {
-    slug: "harbour-roast",
-    name: "Harbour Roast Co",
+    slug: "cardamom-roast",
+    name: "Cardamom Roast",
     suburb: "Pyrmont",
     city: "Sydney",
     state: "NSW",
@@ -54,13 +54,13 @@ export const STAGING_SALES_CLIENTS: readonly StagingSalesClientDef[] = [
       "Neighbourhood specialty coffee roaster and cafe with weekday lunch trade and weekend brunch.",
     voice: "Warm, local, and product-led — clear offers without hype.",
     services: ["Espresso bar", "Brunch", "Retail beans", "Corporate catering"],
-    website: "https://harbourroast.example",
-    approverName: "Ava Nguyen",
+    website: "https://cardamomroast.example",
+    approverName: "Neha Kapoor",
     packageId: "growth",
   },
   {
-    slug: "northline-dental",
-    name: "Northline Dental",
+    slug: "aarohan-dental",
+    name: "Aarohan Dental",
     suburb: "Chatswood",
     city: "Sydney",
     state: "NSW",
@@ -71,8 +71,8 @@ export const STAGING_SALES_CLIENTS: readonly StagingSalesClientDef[] = [
       "Family dental practice offering general dentistry, preventative care, and clear treatment plans.",
     voice: "Calm, reassuring, and professional — never salesy about health.",
     services: ["Check-ups", "Hygiene", "Cosmetic consults", "Emergency slots"],
-    website: "https://northlinedental.example",
-    approverName: "Dr Sam Okonkwo",
+    website: "https://aarohandental.example",
+    approverName: "Dr Anika Reddy",
     packageId: "managed",
   },
 ];
