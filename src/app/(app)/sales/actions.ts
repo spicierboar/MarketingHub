@@ -72,6 +72,7 @@ import type {
   ActingUser,
   AddonId,
   BusinessType,
+  Company,
   CompanyProfile,
   ManagedServiceSettings,
   MarketingPackageId,
@@ -316,7 +317,7 @@ export async function saveWebsiteStepAction(formData: FormData) {
       existingId || undefined,
     );
 
-    let company;
+    let company: Company;
     if (existingCompany) {
       company = existingCompany;
       const nextProfile: CompanyProfile = { ...company.profile };
