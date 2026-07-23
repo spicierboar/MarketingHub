@@ -57,6 +57,12 @@ const NAV_SECTIONS: NavSection[] = [
         icon: CheckSquare,
         matchPrefixes: ["/client/approvals"],
       },
+      {
+        href: "/client/requests",
+        label: "Ask us",
+        icon: MessageSquare,
+        matchPrefixes: ["/client/requests"],
+      },
     ],
   },
   {
@@ -83,15 +89,9 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         href: "/client/order",
-        label: "Extras",
+        label: "Buy",
         icon: Package,
         matchPrefixes: ["/client/order"],
-      },
-      {
-        href: "/client/requests",
-        label: "Ask us",
-        icon: MessageSquare,
-        matchPrefixes: ["/client/requests"],
       },
     ],
   },
@@ -155,7 +155,7 @@ const MOBILE_QUICK: { href: string; label: string }[] = [
   { href: "/client", label: "Home" },
   { href: "/client/approvals", label: "Approvals" },
   { href: "/client/calendar", label: "Schedule" },
-  { href: "/client/order", label: "Extras" },
+  { href: "/client/order", label: "Buy" },
   { href: "/client/account", label: "Account" },
 ];
 
