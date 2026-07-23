@@ -147,10 +147,10 @@ export function ClientExtraWorkPanel({
           <Button
             type="button"
             size="sm"
-            className="mt-3"
+            className="mt-3 whitespace-nowrap"
             onClick={() => setCustomOpen(true)}
           >
-            Place custom order
+            Continue to order
           </Button>
         </div>
       </section>
@@ -206,7 +206,7 @@ export function ClientExtraWorkPanel({
                 Cancel
               </Button>
               <Button type="submit" className="whitespace-nowrap">
-                Continue to order
+                Pay and place order
               </Button>
             </div>
           </form>
@@ -253,7 +253,9 @@ export function ClientExtraWorkPanel({
               <Button type="button" variant="outline" onClick={() => setCustomOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Place order</Button>
+              <Button type="submit" className="whitespace-nowrap">
+                Pay and place order
+              </Button>
             </div>
           </form>
         </FormModal>

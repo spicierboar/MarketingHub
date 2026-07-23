@@ -88,7 +88,11 @@ export default async function ClientOrderSkuPage({
             <Link href="/client/order" className={buttonClasses("ghost", "md")}>
               Back to Extras
             </Link>
-            <ActionSubmitButton type="submit" pendingLabel="Submitting…">
+            <ActionSubmitButton
+              type="submit"
+              pendingLabel="Submitting…"
+              className="whitespace-nowrap"
+            >
               Pay and place order
             </ActionSubmitButton>
           </div>
