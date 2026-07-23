@@ -18,7 +18,12 @@ import {
   updateCompany,
   upsertCompanyEntitlement,
 } from "@/lib/db";
-import { requireSalesRepOrAdmin } from "@/lib/auth/rbac";
+import { runInServiceContext } from "@/lib/db/service-context";
+import {
+  isAdmin,
+  isSalesRep,
+  requireSalesRepOrAdmin,
+} from "@/lib/auth/rbac";
 import {
   assertCompanyQuota,
   createAddonCheckoutSession,
@@ -64,6 +69,7 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import { ensureAndKickManagedDeliveryForCompany } from "@/lib/managed-service/delivery-runner";
 import { localDemoEnabled } from "@/lib/env";
 import type {
+  ActingUser,
   AddonId,
   BusinessType,
   CompanyProfile,
@@ -102,6 +108,18 @@ async function assertSalesCompanyInTenant(companyId: string) {
     throw new Error("Forbidden: no access to this company");
   }
   return { user, company };
+}
+
+/**
+ * Field sales are tenant members — companies RLS is admin-write by default.
+ * Trusted server actions already gate via requireSalesRepOrAdmin; run writes
+ * under service context so create/update succeed (see sales_rep company RLS migration).
+ */
+function salesCompanyWrite<T>(user: ActingUser, fn: () => Promise<T>): Promise<T> {
+  if (isSalesRep(user) && !isAdmin(user)) {
+    return runInServiceContext(user.tenantId, fn);
+  }
+  return fn();
 }
 
 function profileFromForm(fd: FormData, businessType: BusinessType, base?: CompanyProfile): CompanyProfile {
@@ -318,17 +336,22 @@ export async function saveWebsiteStepAction(formData: FormData) {
       if (identity.legalName && !nextProfile.legalName?.trim()) {
         nextProfile.legalName = identity.legalName;
       }
-      await updateCompany(company.id, { name, profile: nextProfile });
+      await salesCompanyWrite(user, () =>
+        updateCompany(company.id, { name, profile: nextProfile }),
+      );
       company = { ...company, name, profile: nextProfile };
     } else {
       await assertCompanyQuota(user.tenantId);
-      company = await createCompany({
-        tenantId: user.tenantId,
-        name,
-        createdBy: user.id,
+      company = await salesCompanyWrite(user, async () => {
+        const created = await createCompany({
+          tenantId: user.tenantId,
+          name,
+          createdBy: user.id,
+        });
+        // Sales seats are tenant members — without access they cannot open /companies/[id].
+        await grantAccess(user.id, created.id);
+        return created;
       });
-      // Sales seats are tenant members — without access they cannot open /companies/[id].
-      await grantAccess(user.id, company.id);
       const nextProfile: CompanyProfile = { ...company.profile };
       if (effectiveAbn) nextProfile.abn = effectiveAbn;
       if (effectivePostcode) {
@@ -342,7 +365,9 @@ export async function saveWebsiteStepAction(formData: FormData) {
         };
       }
       if (identity.legalName) nextProfile.legalName = identity.legalName;
-      await updateCompany(company.id, { profile: nextProfile });
+      await salesCompanyWrite(user, () =>
+        updateCompany(company.id, { profile: nextProfile }),
+      );
       company = { ...company, profile: nextProfile };
       await logAction(user, "company.created", {
         targetType: "company",
@@ -359,7 +384,9 @@ export async function saveWebsiteStepAction(formData: FormData) {
         website: websiteChecked,
         actorId: user.id,
       });
-      await updateCompany(company.id, { profile: result.profile });
+      await salesCompanyWrite(user, () =>
+        updateCompany(company.id, { profile: result.profile }),
+      );
       if (result.mode !== "failed") {
         await logAction(user, "auto_onboarding.scraped", {
           targetType: "company",
@@ -381,7 +408,9 @@ export async function saveWebsiteStepAction(formData: FormData) {
       // Clearing website on back-edit — keep profile, drop URL if blank.
       const next = { ...company.profile };
       delete next.website;
-      await updateCompany(company.id, { profile: next });
+      await salesCompanyWrite(user, () =>
+        updateCompany(company.id, { profile: next }),
+      );
     }
 
     redirect(wizardPath("business", company.id, { scraped }));
@@ -444,7 +473,9 @@ export async function saveBusinessStepAction(formData: FormData) {
         company.id,
       );
     }
-    await updateCompany(company.id, { name, profile });
+    await salesCompanyWrite(user, () =>
+      updateCompany(company.id, { name, profile }),
+    );
     await logAction(user, "company.updated", {
       targetType: "company",
       targetId: company.id,
@@ -510,9 +541,11 @@ export async function savePackageStepAction(formData: FormData) {
       ? { packageChangePendingBilling: true }
       : {}),
   };
-  await updateCompany(companyId, {
-    profile: { ...company.profile, managedService: nextMs },
-  });
+  await salesCompanyWrite(user, () =>
+    updateCompany(companyId, {
+      profile: { ...company.profile, managedService: nextMs },
+    }),
+  );
   await logAction(user, "company.marketing_package_set", {
     targetType: "company",
     targetId: companyId,
@@ -555,9 +588,11 @@ async function settlePackageBilling(
     ),
   };
   delete nextMs.packageChangePendingBilling;
-  await updateCompany(companyId, {
-    profile: { ...company.profile, managedService: nextMs },
-  });
+  await salesCompanyWrite(user, () =>
+    updateCompany(companyId, {
+      profile: { ...company.profile, managedService: nextMs },
+    }),
+  );
   await logAction(user, "company.marketing_package_paid", {
     targetType: "company",
     targetId: companyId,
@@ -596,21 +631,23 @@ export async function startPackageCheckoutAction(formData: FormData) {
     if (!changed.ok) {
       throw new Error(`Could not modify the existing Stripe subscription (${changed.reason}).`);
     }
-    await updateCompany(companyId, {
-      profile: {
-        ...company.profile,
-        managedService: {
-          ...company.profile.managedService!,
-          serviceBilling: {
-            ...billing,
-            stripeSubscriptionItemId: changed.subscriptionItemId,
-            ...(changed.mode === "upgrade_invoiced"
-              ? { stripePriceId: changed.priceId }
-              : {}),
+    await salesCompanyWrite(user, () =>
+      updateCompany(companyId, {
+        profile: {
+          ...company.profile,
+          managedService: {
+            ...company.profile.managedService!,
+            serviceBilling: {
+              ...billing,
+              stripeSubscriptionItemId: changed.subscriptionItemId,
+              ...(changed.mode === "upgrade_invoiced"
+                ? { stripePriceId: changed.priceId }
+                : {}),
+            },
           },
         },
-      },
-    });
+      }),
+    );
     redirect(
       wizardPath("provision", companyId, {
         billing:
