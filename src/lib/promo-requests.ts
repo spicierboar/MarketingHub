@@ -76,6 +76,8 @@ export async function requestClientPromo(input: {
   notes?: string;
   /** When true (default), kick template posts into ai_draft + quality routing. */
   spawnDrafts?: boolean;
+  /** Absolute site origin for client approval deep links. */
+  origin?: string;
 }): Promise<{
   selection: ClientPromoSelection;
   campaignId: string;
@@ -280,6 +282,7 @@ export async function requestClientPromo(input: {
         requestId: req.id,
         user: input.user,
         channels,
+        origin: input.origin,
       });
     } catch (err) {
       // Ticket + draft campaign still stand; agency can generate later.
@@ -313,6 +316,7 @@ async function spawnPromoDraftContent(args: {
   requestId: string;
   user: ActingUser;
   channels: string[];
+  origin?: string;
 }): Promise<string[]> {
   const company = await getCompany(args.companyId);
   if (!company) return [];
@@ -352,7 +356,7 @@ async function spawnPromoDraftContent(args: {
       brandFitScore: Math.max(40, 100 - compliance.issues.length * 12),
       aiModel: "promo-catalog-template",
       aiPrompt: `Client promo · ${item.title}`,
-      sourcesUsed: ["promo_catalog"],
+      sourcesUsed: ["promo_catalog", "pipeline:extras_buy"],
       duplicateWarning: dupWarn,
     });
 
@@ -373,8 +377,9 @@ async function spawnPromoDraftContent(args: {
       await applyQualityRoutingAfterDraft({
         contentId: content.id,
         actor: args.user,
-        origin: "client_promo_request",
+        origin: args.origin?.trim() || "http://localhost:3000",
         platform,
+        clientEmail: args.user.email,
       });
     } catch (err) {
       console.error("quality routing after promo draft", err);
@@ -397,6 +402,8 @@ export async function requestClientCustomWork(input: {
   expectedFeeAud?: number | null;
   /** Attempt AI draft + quality routing when company is AI-ready. */
   kickAiDraft?: boolean;
+  /** Absolute site origin for client approval deep links. */
+  origin?: string;
 }): Promise<{ requestId: string; contentId?: string }> {
   const company = await getCompany(input.companyId);
   if (!company) throw new Error("Company not found");
@@ -445,7 +452,8 @@ export async function requestClientCustomWork(input: {
   try {
     const contentId = await draftFromRequestId(req.id, input.user, {
       qualityRoute: true,
-      origin: "client_custom_work",
+      origin: input.origin?.trim() || "client_custom_work",
+      clientEmail: input.user.email,
     });
     return { requestId: req.id, contentId };
   } catch (err) {
@@ -458,7 +466,7 @@ export async function requestClientCustomWork(input: {
 export async function draftFromRequestId(
   requestId: string,
   user: ActingUser,
-  opts?: { qualityRoute?: boolean; origin?: string },
+  opts?: { qualityRoute?: boolean; origin?: string; clientEmail?: string },
 ): Promise<string> {
   const { getRequest, listGaps, createGap, advanceRequest } = await import("@/lib/db");
   const { detectGaps } = await import("@/lib/ai/gaps");
@@ -596,6 +604,7 @@ export async function draftFromRequestId(
         actor: user,
         origin: opts.origin ?? "request_ai_draft",
         platform: req.platform || "facebook",
+        clientEmail: opts.clientEmail ?? user.email,
       });
     } catch (err) {
       console.error("quality routing after request draft", err);

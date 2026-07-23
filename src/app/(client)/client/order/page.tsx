@@ -8,6 +8,8 @@ import {
   type ExtraWorkPromoCard,
 } from "@/components/client-extra-work-panel";
 import { ClientOrderCataloguePicker } from "@/components/client-order-catalogue-picker";
+import { ClientOrderPlacedModal } from "@/components/client-order-placed-modal";
+import { buildOrderBriefPrefill } from "@/lib/client-order-brief-prefill";
 import { isMenuOrderRequest } from "@/lib/client-order-menu";
 import {
   promoAllowanceSummary,
@@ -20,9 +22,15 @@ import { formatDate } from "@/lib/utils";
 /**
  * Extras — single ordering page: content add-ons, promos, and custom paid orders.
  * Ask us stays free-form messaging only (not for buying work).
+ * Order brief + post-submit confirmation open as modals (no full-page hop).
  */
-export default async function ClientOrderMenuPage() {
+export default async function ClientOrderMenuPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ orderSku?: string; placed?: string }>;
+}) {
   const { user, companyId } = await requirePortalUser();
+  const params = (await searchParams) ?? {};
   const [company, tenant, allRequests] = await Promise.all([
     getCompany(companyId),
     getTenant(user.tenantId),
@@ -58,6 +66,11 @@ export default async function ClientOrderMenuPage() {
   const customWorkFeeAud = company
     ? resolveCustomWorkFeeAud(company, tenant)
     : null;
+  const prefill = buildOrderBriefPrefill(company);
+  const orderSku =
+    typeof params.orderSku === "string" ? params.orderSku.trim() : "";
+  const placedId =
+    typeof params.placed === "string" ? params.placed.trim() : "";
 
   return (
     <div>
@@ -83,7 +96,10 @@ export default async function ClientOrderMenuPage() {
               outside your package.
             </p>
           </div>
-          <ClientOrderCataloguePicker />
+          <ClientOrderCataloguePicker
+            openSkuId={orderSku || undefined}
+            prefill={prefill}
+          />
         </section>
 
         {company ? (
@@ -126,6 +142,8 @@ export default async function ClientOrderMenuPage() {
           </section>
         )}
       </div>
+
+      {placedId ? <ClientOrderPlacedModal requestId={placedId} /> : null}
     </div>
   );
 }

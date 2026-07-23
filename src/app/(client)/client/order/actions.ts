@@ -1,9 +1,11 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requirePortalUser } from "@/lib/auth/rbac";
 import { getClientMenuSku } from "@/lib/client-order-menu";
 import { fulfilClientMenuOrder } from "@/lib/fulfil-menu-order";
+import { resolveOrigin } from "@/lib/origin";
 import {
   assertOrderBriefComplete,
   formatOrderBriefForCook,
@@ -13,8 +15,8 @@ import {
 } from "@/lib/client-order-brief";
 
 /**
- * Place an Extras catalogue order → MarketingRequest + professional AI draft.
- * Payment capture is stubbed (no LIVE flags); agency reviews before publish.
+ * Place an Extras catalogue order → AI draft → client Approvals →
+ * schedule/post when applicable (never publishes without approval).
  */
 export async function placeClientMenuOrderAction(formData: FormData) {
   const { user, companyId } = await requirePortalUser();
@@ -44,6 +46,9 @@ export async function placeClientMenuOrderAction(formData: FormData) {
     throw new Error("Pick a preferred date when timing is “Specific date”.");
   }
 
+  const h = await headers();
+  const origin = resolveOrigin((name) => h.get(name));
+
   const result = await fulfilClientMenuOrder({
     user,
     companyId,
@@ -52,7 +57,8 @@ export async function placeClientMenuOrderAction(formData: FormData) {
     clientNotes,
     cookBrief,
     preferredDate,
+    origin,
   });
 
-  redirect(`/client/requests/${result.requestId}`);
+  redirect(`/client/order?placed=${encodeURIComponent(result.requestId)}`);
 }

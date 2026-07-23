@@ -1,103 +1,18 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { requirePortalUser } from "@/lib/auth/rbac";
-import { getCompany } from "@/lib/db";
-import { PageHeader } from "@/components/page-header";
-import { buttonClasses } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/form";
-import {
-  formatMenuPriceFrom,
-  getClientMenuSku,
-} from "@/lib/client-order-menu";
-import { buildOrderBriefPrefill } from "@/lib/client-order-brief-prefill";
-import { placeClientMenuOrderAction } from "../actions";
-import { ActionSubmitButton } from "@/components/action-submit-button";
-import { ClientOrderBriefFields } from "@/components/client-order-brief-fields";
-import { ClientOrderBriefConfirm } from "@/components/client-order-brief-confirm";
-import { ClientOrderSkuExplainer } from "@/components/client-order-sku-explainer";
+import { getClientMenuSku } from "@/lib/client-order-menu";
 
+/**
+ * Legacy deep link — order brief now opens as a modal on Extras.
+ * Keep this route so old bookmarks still work.
+ */
 export default async function ClientOrderSkuPage({
   params,
 }: {
   params: Promise<{ skuId: string }>;
 }) {
-  const { companyId } = await requirePortalUser();
+  await requirePortalUser();
   const { skuId } = await params;
-  const sku = getClientMenuSku(skuId);
-  if (!sku) notFound();
-
-  const company = await getCompany(companyId);
-  const prefill = buildOrderBriefPrefill(company);
-
-  return (
-    <div>
-      <PageHeader
-        title={sku.title}
-        hideExplainer
-        parent={{ href: "/client/order", label: "Extras" }}
-      />
-      <div className="mx-auto max-w-xl space-y-6 px-4 py-6 sm:px-6">
-        <ClientOrderSkuExplainer sku={sku} />
-
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {formatMenuPriceFrom(sku.priceFromAud)}
-          </span>
-          {" "}
-          · Outside your subscription. Your order goes to the agency for
-          fulfilment.
-        </p>
-
-        <form action={placeClientMenuOrderAction} className="space-y-5">
-          <input type="hidden" name="skuId" value={sku.id} />
-
-          <ClientOrderBriefFields
-            skuId={sku.id}
-            categoryId={sku.categoryId}
-            dishTitle={sku.title}
-            prefill={prefill}
-          />
-
-          <Field
-            label="Working title (optional)"
-            htmlFor="topic"
-            hint="Only if you want a specific headline — otherwise we draft from the topic above"
-          >
-            <Input
-              id="topic"
-              name="topic"
-              placeholder={`e.g. a headline for this ${sku.title.toLowerCase()}`}
-            />
-          </Field>
-
-          <Field
-            label="Preferred date (optional)"
-            htmlFor="preferredDate"
-            hint="Use when timing is “Specific date”"
-          >
-            <Input id="preferredDate" name="preferredDate" type="date" />
-          </Field>
-
-          <ClientOrderBriefConfirm
-            skuId={sku.id}
-            categoryId={sku.categoryId}
-            dishTitle={sku.title}
-          />
-
-          <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
-            <Link href="/client/order" className={buttonClasses("ghost", "md")}>
-              Back to Extras
-            </Link>
-            <ActionSubmitButton
-              type="submit"
-              pendingLabel="Submitting…"
-              className="whitespace-nowrap"
-            >
-              Pay and place order
-            </ActionSubmitButton>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+  if (!getClientMenuSku(skuId)) notFound();
+  redirect(`/client/order?orderSku=${encodeURIComponent(skuId)}`);
 }

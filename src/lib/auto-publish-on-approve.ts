@@ -121,6 +121,19 @@ export async function autoPublishOnApprove(args: {
     return "skipped";
   }
 
+  // Hand-off / studio / long-form leave-behinds are approved as documents —
+  // not scheduled to social. Social/email/GBP posts still schedule when a slot exists.
+  const family = content.recipe?.family;
+  if (family === "sales_doc" || family === "long_editorial") {
+    return "skipped";
+  }
+  if ((content.sourcesUsed ?? []).some((s) => /pipeline:studio_fulfilment/i.test(s))) {
+    return "skipped";
+  }
+  if (/\bSTUDIO FULFILMENT\b/i.test(content.aiPrompt ?? "")) {
+    return "skipped";
+  }
+
   const intent = await resolveScheduleIntent(content);
   if (!intent) {
     return "skipped";

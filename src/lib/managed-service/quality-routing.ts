@@ -218,6 +218,8 @@ export async function applyQualityRoutingAfterDraft(input: {
   actor: ActingUser;
   origin: string;
   platform?: string;
+  /** Prefer when the ordering client is known (Extras Buy / portal). */
+  clientEmail?: string;
 }): Promise<{
   gate: QualityGateStatus;
   decision: QualityRoutingDecision;
@@ -295,6 +297,7 @@ export async function applyQualityRoutingAfterDraft(input: {
         company,
         actor: input.actor,
         origin: input.origin,
+        email: input.clientEmail,
       });
       await logAction(input.actor, "content.quality_auto_submit_client", {
         targetType: "content",

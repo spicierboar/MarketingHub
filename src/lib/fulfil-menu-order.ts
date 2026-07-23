@@ -1,6 +1,7 @@
 /**
- * Fulfil an Extras catalogue order: MarketingRequest + ContentRecipe + AI draft.
- * Same path as Hub Create, attached to the client request for Approvals.
+ * Fulfil an Extras catalogue (Add-ons → Buy) order:
+ * MarketingRequest → AI draft → quality route → client Approvals →
+ * schedule/post after approve only when applicable (never live-publish here).
  */
 
 import { draftContent } from "@/lib/ai/draft";
@@ -9,6 +10,7 @@ import { checkCompliance, auditClaims } from "@/lib/ai/compliance";
 import { recordAiUsage } from "@/lib/ai/metering";
 import { logAction } from "@/lib/audit";
 import { routeContent } from "@/lib/routing";
+import { applyQualityRoutingAfterDraft } from "@/lib/managed-service/quality-routing";
 import {
   serialiseBrief,
   validateContentRecipe,
@@ -42,6 +44,8 @@ export type FulfilMenuOrderInput = {
   /** Tightly structured [EXTRAS BRIEF] block for the drafting model — takes priority over clientNotes. */
   cookBrief?: string;
   preferredDate?: string;
+  /** Absolute site origin for client approval links (APP_ORIGIN / request host). */
+  origin?: string;
 };
 
 export type FulfilMenuOrderResult = {
@@ -207,6 +211,9 @@ export async function fulfilClientMenuOrder(
       ...draft.sources,
       `Extras: ${sku.dishLabel}`,
       `recipe:${recipe.family}/${recipe.contentType}`,
+      sku.categoryId === "brand_motion"
+        ? "pipeline:studio_fulfilment"
+        : "pipeline:extras_buy",
     ];
     const aiRun = await recordAiUsage({
       tenantId: user.tenantId,
@@ -254,6 +261,20 @@ export async function fulfilClientMenuOrder(
       companyId,
       detail: `Extras · ${recipe.family}/${sku.dishLabel} · risk ${compliance.riskLevel}`,
     });
+
+    // Same gate as Hub / promo / custom: generate → quality route → client Approvals
+    // (auto-submit never publishes; schedule/post runs only after client approve when applicable).
+    try {
+      await applyQualityRoutingAfterDraft({
+        contentId: content.id,
+        actor: user,
+        origin: input.origin?.trim() || "http://localhost:3000",
+        platform: sku.primaryChannel,
+        clientEmail: user.email,
+      });
+    } catch (err) {
+      console.error("quality routing after extras menu order", err);
+    }
 
     return {
       requestId: req.id,
