@@ -148,7 +148,7 @@ export function ClientOrderCataloguePicker({
           </div>
           <Link
             href={`/client/order/${selected.id}`}
-            className={buttonClasses("default", "sm")}
+            className={`${buttonClasses("default", "sm")} shrink-0 whitespace-nowrap`}
           >
             Continue to order
           </Link>

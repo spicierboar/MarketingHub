@@ -70,11 +70,9 @@ export function ClientExtraWorkPanel({
             <Badge tone={allowance.remaining > 0 ? "success" : "warning"}>
               {allowance.remaining > 0
                 ? `${allowance.remaining} included left (${allowance.periodKey})`
-                : `Allowance used · extras billed (${allowance.periodKey})`}
+                : `Allowance used (${allowance.periodKey})`}
             </Badge>
-          ) : (
-            <Badge tone="warning">Extras billed</Badge>
-          )}
+          ) : null}
         </div>
 
         {promos.length === 0 ? (
