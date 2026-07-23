@@ -114,9 +114,10 @@ export function ClientExtraWorkPanel({
                       type="button"
                       size="sm"
                       variant={included ? "outline" : "default"}
+                      className="shrink-0 whitespace-nowrap"
                       onClick={() => setConfirmId(t.id)}
                     >
-                      Request
+                      Continue to order
                     </Button>
                   </div>
                 </li>
@@ -204,7 +205,9 @@ export function ClientExtraWorkPanel({
               <Button type="button" variant="outline" onClick={() => setConfirmId(null)}>
                 Cancel
               </Button>
-              <Button type="submit">Confirm request</Button>
+              <Button type="submit" className="whitespace-nowrap">
+                Continue to order
+              </Button>
             </div>
           </form>
         </FormModal>
