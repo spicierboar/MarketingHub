@@ -10,7 +10,7 @@ import {
   listCompanies,
   updateCompany,
 } from "@/lib/db";
-import { assertAdminCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
+import { assertSalesOrAdminCompanyAccess, requireAdmin } from "@/lib/auth/rbac";
 import { assertCompanyQuota } from "@/lib/billing";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
@@ -266,7 +266,7 @@ export async function createCompanyFormAction(formData: FormData): Promise<void>
 export async function saveOnboardingAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
   try {
-    const user = await assertAdminCompanyAccess(companyId);
+    const user = await assertSalesOrAdminCompanyAccess(companyId);
     const company = await getCompany(companyId);
     if (!company) throw new Error("Company not found");
 
@@ -413,7 +413,7 @@ export async function saveOnboardingAction(formData: FormData) {
 
 export async function setCompanyStatusAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesOrAdminCompanyAccess(companyId);
   const status = String(formData.get("status") || "") as CompanyStatus;
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
@@ -437,7 +437,7 @@ export async function setCompanyStatusAction(formData: FormData) {
 
 export async function addCompanyDocAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesOrAdminCompanyAccess(companyId);
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
 
@@ -470,7 +470,7 @@ export async function addCompanyDocAction(formData: FormData) {
 
 export async function saveManagedServiceLevelAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesOrAdminCompanyAccess(companyId);
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
 
@@ -521,7 +521,7 @@ export async function saveManagedServiceLevelAction(formData: FormData) {
 
 export async function saveMarketingPackageAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesOrAdminCompanyAccess(companyId);
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
 
@@ -697,7 +697,7 @@ export async function saveMarketingPackageAction(formData: FormData) {
 
 /** On-read catch-up when past strategyEligibleAt (demo / no cron). */
 export async function processEligibleStrategyAction(companyId: string) {
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesOrAdminCompanyAccess(companyId);
   await maybeProcessEligibleDeliveryForCompany(user.tenantId, companyId, user);
   revalidatePath(`/companies/${companyId}/strategy`);
   revalidatePath(`/companies/${companyId}`);
@@ -706,7 +706,7 @@ export async function processEligibleStrategyAction(companyId: string) {
 /** Agency unlock: clear the 6h floor and generate strategy drafts now. */
 export async function forceUnlockManagedStrategyAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesOrAdminCompanyAccess(companyId);
   // Ensure a run exists first (Assigned package with missing enqueue).
   await ensureManagedDeliveryBootstrap({
     actor: user,
@@ -724,7 +724,7 @@ export async function forceUnlockManagedStrategyAction(formData: FormData) {
 /** Agency: send draft / revised detailed strategy to client review. */
 export async function submitDetailedStrategyForClientReviewAction(formData: FormData) {
   const companyId = String(formData.get("companyId") || "");
-  const user = await assertAdminCompanyAccess(companyId);
+  const user = await assertSalesOrAdminCompanyAccess(companyId);
   const company = await getCompany(companyId);
   if (!company) throw new Error("Company not found");
   const current = company.profile.managedService?.detailedStrategy;

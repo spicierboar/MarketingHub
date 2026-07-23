@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { canAccessCompany, requireAdmin } from "@/lib/auth/rbac";
+import { canAccessCompany, requireSalesRepOrAdmin } from "@/lib/auth/rbac";
 import { getCompany } from "@/lib/db";
 import { resolveBusinessType } from "@/lib/business-profiles";
 import { activeAddonsForCompany } from "@/lib/entitlements";
@@ -12,7 +12,7 @@ export default async function CompanyWorkspaceLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireAdmin();
+  const user = await requireSalesRepOrAdmin();
   const { id } = await params;
   const company = await getCompany(id);
   if (!company || !(await canAccessCompany(user, company.id))) notFound();

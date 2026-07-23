@@ -87,11 +87,16 @@ export function selfTestSecretConfigured(): boolean {
 
 import { STAGING_RESTAURANT_APPROVER_SLUGS } from "@/lib/fixtures/staging-agency";
 import { STAGING_RETAIL_APPROVER_SLUGS } from "@/lib/fixtures/staging-retail";
+import {
+  STAGING_SALES_APPROVER_SLUGS,
+  STAGING_SALES_EMAIL,
+} from "@/lib/fixtures/staging-sales";
 
 /** Fixture emails allowed for staging /dev quick-login (no free-text provision). */
 export const STAGING_QUICK_LOGIN_ALLOWLIST = [
   "admin@staging-fixture.invalid",
   "staff-1@staging-fixture.invalid",
+  STAGING_SALES_EMAIL,
   "approver-saffron-laneway@staging-fixture.invalid",
   "approver-millbrook-iga@staging-fixture.invalid",
   "approver-cedar-homeware@staging-fixture.invalid",
@@ -102,7 +107,8 @@ export function stagingQuickLoginEmailAllowed(email: string): boolean {
   if (
     normalized === "admin@staging-fixture.invalid" ||
     normalized === "staff-1@staging-fixture.invalid" ||
-    normalized === "staff-2@staging-fixture.invalid"
+    normalized === "staff-2@staging-fixture.invalid" ||
+    normalized === STAGING_SALES_EMAIL
   ) {
     return true;
   }
@@ -113,7 +119,8 @@ export function stagingQuickLoginEmailAllowed(email: string): boolean {
   const slug = approver[1];
   return (
     (STAGING_RESTAURANT_APPROVER_SLUGS as readonly string[]).includes(slug) ||
-    (STAGING_RETAIL_APPROVER_SLUGS as readonly string[]).includes(slug)
+    (STAGING_RETAIL_APPROVER_SLUGS as readonly string[]).includes(slug) ||
+    (STAGING_SALES_APPROVER_SLUGS as readonly string[]).includes(slug)
   );
 }
 

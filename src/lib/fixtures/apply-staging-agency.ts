@@ -296,7 +296,8 @@ export async function applyStagingAgencyFixture(
     sb
       .from("companies")
       .select("id,tenant_id,profile")
-      .eq("tenant_id", fixture.tenant.id),
+      .eq("tenant_id", fixture.tenant.id)
+      .in("id", fixtureCompanyIds),
   )) as unknown[];
   const accessRows = (await expectOk(
     "verify fixture approver access",
@@ -307,7 +308,13 @@ export async function applyStagingAgencyFixture(
     sb
       .from("tenant_members")
       .select("user_id,role,role_title,portal_only")
-      .eq("tenant_id", fixture.tenant.id),
+      .eq("tenant_id", fixture.tenant.id)
+      .in(
+        "user_id",
+        fixture.memberships
+          .map((m) => actualIds.get(m.userId))
+          .filter((id): id is string => Boolean(id)),
+      ),
   )) as unknown[];
   const assetRows = (await expectOk(
     "verify fixture assets",

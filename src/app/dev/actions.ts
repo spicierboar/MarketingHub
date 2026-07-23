@@ -32,6 +32,7 @@ import { logAction } from "@/lib/audit";
 import { resolvePlatformAgencyTenant } from "@/lib/platform-agency";
 import { applyStagingAgencyFixture } from "@/lib/fixtures/apply-staging-agency";
 import { applyStagingRetailFixture } from "@/lib/fixtures/apply-staging-retail";
+import { applyStagingSalesFixture } from "@/lib/fixtures/apply-staging-sales";
 import {
   STAGING_FIXTURE_KEY,
   STAGING_FIXTURE_TENANT_ID,
@@ -48,6 +49,14 @@ import {
   stagingRetailFixtureDisplayName,
   stagingRetailStoreFixtureKey,
 } from "@/lib/fixtures/staging-retail";
+import {
+  STAGING_SALES_APPROVER_SLUGS,
+  STAGING_SALES_EMAIL,
+  STAGING_SALES_FIXTURE_KEY,
+  createStagingSalesFixture,
+  stagingSalesClientFixtureKey,
+  stagingSalesFixtureDisplayName,
+} from "@/lib/fixtures/staging-sales";
 import type { ActingUser, Tenant, TenantMember, TenantRole, User } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 
@@ -120,7 +129,9 @@ export async function clearAndReseedAction(_formData?: FormData): Promise<void> 
 
 function nameFromEmail(email: string): string {
   const fixture =
-    stagingFixtureDisplayName(email) ?? stagingRetailFixtureDisplayName(email);
+    stagingFixtureDisplayName(email) ??
+    stagingRetailFixtureDisplayName(email) ??
+    stagingSalesFixtureDisplayName(email);
   if (fixture) return fixture;
   const local = email.split("@")[0] || email;
   const named = local
@@ -133,6 +144,12 @@ function nameFromEmail(email: string): string {
 type StagingQuickSeat =
   | { kind: "agency_owner"; appRole: User["role"]; tenantRole: TenantRole; roleTitle: "group_admin" }
   | { kind: "agency_staff"; appRole: User["role"]; tenantRole: TenantRole; roleTitle: "content_operator" }
+  | {
+      kind: "sales_rep";
+      appRole: User["role"];
+      tenantRole: TenantRole;
+      roleTitle: "sales_rep";
+    }
   | {
       kind: "client_approver";
       appRole: User["role"];
@@ -160,6 +177,14 @@ function stagingQuickSeat(email: string): StagingQuickSeat {
       roleTitle: "content_operator",
     };
   }
+  if (normalized === STAGING_SALES_EMAIL) {
+    return {
+      kind: "sales_rep",
+      appRole: "user",
+      tenantRole: "member",
+      roleTitle: "sales_rep",
+    };
+  }
   const approver = normalized.match(
     /^approver-([a-z0-9-]+)@staging-fixture\.invalid$/,
   );
@@ -180,9 +205,14 @@ async function resolveApproverCompanyId(
   companySlug: string,
 ): Promise<string> {
   const retail = findStagingRetailPackForSlug(companySlug);
+  const isSalesClient = (STAGING_SALES_APPROVER_SLUGS as readonly string[]).includes(
+    companySlug,
+  );
   const fixtureKey = retail
     ? stagingRetailStoreFixtureKey(retail.pack, companySlug)
-    : `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
+    : isSalesClient
+      ? stagingSalesClientFixtureKey(companySlug)
+      : `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
 
   // Quick-login has no cookie session yet — listCompanies uses the RLS client,
   // and anon cannot EXECUTE has_company_access. Resolve under service context.
@@ -204,6 +234,9 @@ async function resolveApproverCompanyId(
     if (retail) {
       await ensureStagingRetailPackApplied(retail.pack);
       companyId = await find(retail.tenantId);
+    } else if (isSalesClient) {
+      await ensureStagingSalesReady();
+      companyId = await find(STAGING_FIXTURE_TENANT_ID);
     } else {
       await ensureStagingAgencyFixtureApplied();
       companyId = await find(STAGING_FIXTURE_TENANT_ID);
@@ -213,7 +246,9 @@ async function resolveApproverCompanyId(
   throw new Error(
     retail
       ? `No retail company for approver slug "${companySlug}". On /dev, click “Seed staging IGA” or “Seed staging general retail”, then try again.`
-      : `No client company for approver slug "${companySlug}". On /dev, click “Seed staging restaurants”, then try again.`,
+      : isSalesClient
+        ? `No sales demo client for approver slug "${companySlug}". On /dev, click “Seed staging sales book”, then try again.`
+        : `No client company for approver slug "${companySlug}". On /dev, click “Seed staging restaurants”, then try again.`,
   );
 }
 
@@ -301,6 +336,30 @@ async function ensureStagingRetailReady(
   }
 }
 
+async function ensureStagingSalesFixtureApplied() {
+  const sb = getServiceSupabase();
+  if (!sb) throw new Error("Supabase service role is not configured.");
+  await ensureStagingRestaurantsReady();
+  return applyStagingSalesFixture(sb);
+}
+
+/** Ensure Casey's sales demo book exists on the restaurant fixture tenant. */
+async function ensureStagingSalesReady(): Promise<void> {
+  await ensureStagingRestaurantsReady();
+  const expected = createStagingSalesFixture().companies.length;
+  const companies = await runInServiceContext(STAGING_FIXTURE_TENANT_ID, () =>
+    listCompanies(STAGING_FIXTURE_TENANT_ID),
+  );
+  const salesCount = companies.filter((c) => {
+    const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
+      .stagingFixture;
+    return meta?.fixtureKey?.startsWith(`${STAGING_SALES_FIXTURE_KEY}:`);
+  }).length;
+  if (salesCount < expected) {
+    await ensureStagingSalesFixtureApplied();
+  }
+}
+
 async function assertStagingSeedRequest(formData: FormData): Promise<void> {
   if (!devToolsOpen() || appEnv() !== "staging") {
     throw new Error("Staging fixture seed is only available on staging.");
@@ -383,6 +442,24 @@ export async function seedStagingGeneralRetailFixtureAction(
   }
 }
 
+/** Staging-only: upsert field-sales seat + demo book (idempotent). */
+export async function seedStagingSalesFixtureAction(
+  formData: FormData,
+): Promise<void> {
+  try {
+    await assertStagingSeedRequest(formData);
+    const summary = await ensureStagingSalesFixtureApplied();
+    revalidatePath("/dev");
+    redirect(
+      `/dev?seeded=sales&companies=${summary.companies}&approvers=${summary.approvers}`,
+    );
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "Sales book seed failed";
+    failQuickLogin(msg);
+  }
+}
+
 /**
  * When auth.users already exists (e.g. prior magic-link attempts) but app_users
  * does not, createUser fails — link the identity via admin generateLink (no email).
@@ -433,15 +510,21 @@ async function linkExistingAuthUser(email: string, appRole: User["role"]): Promi
 async function ensureStagingUser(email: string): Promise<User> {
   const seat = stagingQuickSeat(email);
 
-  // Approver login needs the matching fixture pack under its tenant.
+  // Approver / sales login needs the matching fixture pack under its tenant.
   if (appEnv() === "staging" && isSupabaseConfigured()) {
     if (seat.kind === "client_approver") {
       const retail = findStagingRetailPackForSlug(seat.companySlug);
       if (retail) {
         await ensureStagingRetailReady(retail.pack);
+      } else if (
+        (STAGING_SALES_APPROVER_SLUGS as readonly string[]).includes(seat.companySlug)
+      ) {
+        await ensureStagingSalesReady();
       } else {
         await ensureStagingRestaurantsReady();
       }
+    } else if (seat.kind === "sales_rep") {
+      await ensureStagingSalesReady();
     } else {
       await ensureStagingRestaurantsReady();
     }
@@ -470,6 +553,7 @@ async function ensureStagingUser(email: string): Promise<User> {
   const desiredName =
     stagingFixtureDisplayName(email) ??
     stagingRetailFixtureDisplayName(email) ??
+    stagingSalesFixtureDisplayName(email) ??
     nameFromEmail(email);
   if (user.name !== desiredName) {
     user = (await updateUserName(user.id, desiredName)) ?? { ...user, name: desiredName };
@@ -496,6 +580,19 @@ async function ensureStagingUser(email: string): Promise<User> {
   if (seat.kind === "client_approver") {
     const companyId = await resolveApproverCompanyId(tenant.id, seat.companySlug);
     await grantAccess(user.id, companyId);
+  }
+
+  if (seat.kind === "sales_rep") {
+    const salesCompanies = await runInServiceContext(tenant.id, () =>
+      listCompanies(tenant.id),
+    );
+    for (const company of salesCompanies) {
+      const meta = (company.profile as { stagingFixture?: { fixtureKey?: string } })
+        .stagingFixture;
+      if (meta?.fixtureKey?.startsWith(`${STAGING_SALES_FIXTURE_KEY}:client:`)) {
+        await grantAccess(user.id, company.id);
+      }
+    }
   }
 
   return user;

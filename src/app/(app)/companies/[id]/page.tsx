@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { canAccessCompany, requireAdmin } from "@/lib/auth/rbac";
+import {
+  canAccessCompany,
+  requireSalesRepOrAdmin,
+} from "@/lib/auth/rbac";
 import {
   getCompany,
   getTenant,
@@ -63,7 +66,7 @@ export default async function CompanyOnboardingPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ scraped?: string; package?: string; saved?: string; error?: string }>;
 }) {
-  const user = await requireAdmin();
+  const user = await requireSalesRepOrAdmin();
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   let company = await getCompany(id);

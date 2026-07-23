@@ -4,6 +4,7 @@ import {
   STAGING_FIXTURE_TENANT_ID,
   createStagingAgencyFixture,
 } from "@/lib/fixtures/staging-agency";
+import { createStagingSalesFixture } from "@/lib/fixtures/staging-sales";
 import { resetManagedContentJobMemory } from "@/lib/managed-content-jobs/repository";
 
 const DAY = 86_400_000;
@@ -55,6 +56,13 @@ export function extendLocalDemoSeed(store: DataStore): DataStore {
   store.tenantMembers.push(...fixture.memberships);
   store.companies.push(...fixture.companies);
   store.access.push(...fixture.access);
+
+  const sales = createStagingSalesFixture();
+  store.users.push(sales.salesUser, ...sales.approvers);
+  store.tenantMembers.push(...sales.memberships);
+  store.companies.push(...sales.companies);
+  store.access.push(...sales.access);
+
   store.assets.push(
     ...fixture.assets.map((asset) =>
       asset.source === "upload"

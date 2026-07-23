@@ -17,19 +17,25 @@ import {
   seedStagingAgencyFixtureAction,
   seedStagingGeneralRetailFixtureAction,
   seedStagingIgaRetailFixtureAction,
+  seedStagingSalesFixtureAction,
 } from "./actions";
 import {
   GENERAL_RETAIL_STORES,
   IGA_RETAIL_STORES,
   STAGING_RETAIL_APPROVER_NAMES,
 } from "@/lib/fixtures/staging-retail";
+import {
+  STAGING_SALES_CLIENTS,
+  STAGING_SALES_DISPLAY_NAME,
+  STAGING_SALES_EMAIL,
+} from "@/lib/fixtures/staging-sales";
 
 export const dynamic = "force-dynamic";
 
 type DemoLogin = {
   email: string;
   label: string;
-  group: "Agency" | "Restaurants" | "IGA retail" | "General retail";
+  group: "Agency" | "Sales" | "Restaurants" | "IGA retail" | "General retail";
 };
 
 const DEMO_LOGINS: DemoLogin[] = [
@@ -44,10 +50,22 @@ const DEMO_LOGINS: DemoLogin[] = [
     group: "Agency",
   },
   {
+    email: STAGING_SALES_EMAIL,
+    label: `${STAGING_SALES_DISPLAY_NAME} — field sales`,
+    group: "Sales",
+  },
+  {
     email: "approver-saffron-laneway@staging-fixture.invalid",
     label: "Priya Mehta — Saffron Laneway Kitchen",
     group: "Restaurants",
   },
+  ...STAGING_SALES_CLIENTS.map(
+    (client): DemoLogin => ({
+      email: `approver-${client.slug}@staging-fixture.invalid`,
+      label: `${client.approverName} — ${client.name}`,
+      group: "Sales",
+    }),
+  ),
   ...IGA_RETAIL_STORES.map(
     (store): DemoLogin => ({
       email: `approver-${store.slug}@staging-fixture.invalid`,
@@ -66,6 +84,7 @@ const DEMO_LOGINS: DemoLogin[] = [
 
 const DEMO_GROUPS: DemoLogin["group"][] = [
   "Agency",
+  "Sales",
   "Restaurants",
   "IGA retail",
   "General retail",
@@ -107,6 +126,7 @@ export default async function DevToolsPage({
     params.seeded === "staging" ||
     params.seeded === "iga" ||
     params.seeded === "general-retail" ||
+    params.seeded === "sales" ||
     params.seeded === "1";
   const demoFlag = localDemoEnabled();
   const demoMutations = localDemoMutationAllowed(await headers());
@@ -123,7 +143,9 @@ export default async function DevToolsPage({
         ? `Staging IGA retail ready (${params.companies ?? "4"} stores, ${params.approvers ?? "4"} approvers). Use Quick login below.`
         : params.seeded === "general-retail"
           ? `Staging general retail ready (${params.companies ?? "4"} stores, ${params.approvers ?? "4"} approvers). Use Quick login below.`
-          : "Demo data re-seeded.";
+          : params.seeded === "sales"
+            ? `Sales demo book ready (${params.companies ?? "2"} clients, ${params.approvers ?? "2"} approvers). Use Quick login as Casey Rivera.`
+            : "Demo data re-seeded.";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-10">
@@ -216,9 +238,9 @@ export default async function DevToolsPage({
           )}
           {staging && !demoFlag && (
             <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
-              Staging: seed restaurants, IGA, and/or general retail once (or Sign
-              in as an approver — it auto-seeds that pack if missing). Quick login
-              is limited to the fixture emails below (same-origin POST
+              Staging: seed restaurants, sales book, IGA, and/or general retail
+              once (or Sign in as a seat — it auto-seeds that pack if missing).
+              Quick login is limited to the fixture emails below (same-origin POST
               {secretRequired ? "; CC_SELFTEST_SECRET required" : ""}
               ).
             </p>
@@ -240,6 +262,17 @@ export default async function DevToolsPage({
                 <form action={seedStagingAgencyFixtureAction} className="space-y-2">
                   <QuickLoginSecretFields required={secretRequired} />
                   <Button type="submit">Seed staging restaurants</Button>
+                </form>
+              </div>
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Upserts Casey Rivera (field sales) plus Harbour Roast Co and
+                  Northline Dental under the restaurant agency tenant. Client
+                  profiles read as live accounts; internal fixture metadata only.
+                </p>
+                <form action={seedStagingSalesFixtureAction} className="space-y-2">
+                  <QuickLoginSecretFields required={secretRequired} />
+                  <Button type="submit">Seed staging sales book</Button>
                 </form>
               </div>
               <div className="space-y-2 border-t border-border pt-4">

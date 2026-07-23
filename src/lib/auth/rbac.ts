@@ -247,3 +247,17 @@ export async function assertAdminCompanyAccess(companyId: string): Promise<Actin
   }
   return user;
 }
+
+/** Field sales (or admin) with company_access — for account / onboarding edits. */
+export async function assertSalesOrAdminCompanyAccess(
+  companyId: string,
+): Promise<ActingUser> {
+  const user = await requireUser();
+  if (!isAdmin(user) && !isSalesRep(user)) {
+    throw new Error("Only sales or admins can perform this action");
+  }
+  if (!(await canAccessCompany(user, companyId))) {
+    throw new Error("Forbidden: no access to this company");
+  }
+  return user;
+}

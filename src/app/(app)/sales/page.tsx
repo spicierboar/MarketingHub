@@ -26,9 +26,11 @@ export default async function SalesHomePage() {
   }
 
   const companies = clientCompaniesOnly(
-    (await listCompanies(user.tenantId)).filter(
-      (company) => company.createdBy === user.id,
-    ),
+    (await listCompanies(user.tenantId)).filter((company) => {
+      // PLACEHOLDER ownership: prefer soldByUserId when set; else createdBy.
+      const ownerId = company.soldByUserId?.trim() || company.createdBy;
+      return ownerId === user.id;
+    }),
   );
 
   return (
@@ -80,17 +82,19 @@ export default async function SalesHomePage() {
           ) : (
             <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
               {companies.map((company) => (
-                <li
-                  key={company.id}
-                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{company.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Signup {formatDate(company.createdAt)}
-                    </p>
-                  </div>
-                  <StatusBadge status={company.status} />
+                <li key={company.id}>
+                  <Link
+                    href={`/companies/${company.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{company.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Signup {formatDate(company.createdAt)}
+                      </p>
+                    </div>
+                    <StatusBadge status={company.status} />
+                  </Link>
                 </li>
               ))}
             </ul>

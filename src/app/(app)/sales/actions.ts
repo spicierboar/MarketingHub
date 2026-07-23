@@ -327,6 +327,8 @@ export async function saveWebsiteStepAction(formData: FormData) {
         name,
         createdBy: user.id,
       });
+      // Sales seats are tenant members — without access they cannot open /companies/[id].
+      await grantAccess(user.id, company.id);
       const nextProfile: CompanyProfile = { ...company.profile };
       if (effectiveAbn) nextProfile.abn = effectiveAbn;
       if (effectivePostcode) {
