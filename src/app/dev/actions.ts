@@ -31,12 +31,24 @@ import { runInServiceContext } from "@/lib/db/service-context";
 import { logAction } from "@/lib/audit";
 import { resolvePlatformAgencyTenant } from "@/lib/platform-agency";
 import { applyStagingAgencyFixture } from "@/lib/fixtures/apply-staging-agency";
+import { applyStagingRetailFixture } from "@/lib/fixtures/apply-staging-retail";
 import {
   STAGING_FIXTURE_KEY,
   STAGING_FIXTURE_TENANT_ID,
   stagingFixtureDisplayName,
 } from "@/lib/fixtures/staging-agency";
-import type { ActingUser, TenantMember, TenantRole, User } from "@/lib/types";
+import {
+  STAGING_GENERAL_RETAIL_FIXTURE_KEY,
+  STAGING_GENERAL_RETAIL_TENANT_ID,
+  STAGING_IGA_FIXTURE_KEY,
+  STAGING_IGA_TENANT_ID,
+  createStagingGeneralRetailFixture,
+  createStagingIgaRetailFixture,
+  findStagingRetailPackForSlug,
+  stagingRetailFixtureDisplayName,
+  stagingRetailStoreFixtureKey,
+} from "@/lib/fixtures/staging-retail";
+import type { ActingUser, Tenant, TenantMember, TenantRole, User } from "@/lib/types";
 import { TENANT_ROLE_TIER } from "@/lib/types";
 
 
@@ -107,7 +119,8 @@ export async function clearAndReseedAction(_formData?: FormData): Promise<void> 
 }
 
 function nameFromEmail(email: string): string {
-  const fixture = stagingFixtureDisplayName(email);
+  const fixture =
+    stagingFixtureDisplayName(email) ?? stagingRetailFixtureDisplayName(email);
   if (fixture) return fixture;
   const local = email.split("@")[0] || email;
   const named = local
@@ -166,13 +179,15 @@ async function resolveApproverCompanyId(
   tenantId: string,
   companySlug: string,
 ): Promise<string> {
+  const retail = findStagingRetailPackForSlug(companySlug);
+  const fixtureKey = retail
+    ? stagingRetailStoreFixtureKey(retail.pack, companySlug)
+    : `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
+
   // Quick-login has no cookie session yet — listCompanies uses the RLS client,
   // and anon cannot EXECUTE has_company_access. Resolve under service context.
-  const find = async () => {
-    const companies = await runInServiceContext(tenantId, () =>
-      listCompanies(tenantId),
-    );
-    const fixtureKey = `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
+  const find = async (tid: string) => {
+    const companies = await runInServiceContext(tid, () => listCompanies(tid));
     const byFixture = companies.find((c) => {
       const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
         .stagingFixture;
@@ -184,34 +199,26 @@ async function resolveApproverCompanyId(
     return byName?.id ?? null;
   };
 
-  let companyId = await find();
+  let companyId = await find(tenantId);
   if (!companyId && appEnv() === "staging" && isSupabaseConfigured()) {
-    await ensureStagingAgencyFixtureApplied();
-    // Seed always lands under the fixture tenant id.
-    const seededTenantId = STAGING_FIXTURE_TENANT_ID;
-    const companies = await runInServiceContext(seededTenantId, () =>
-      listCompanies(seededTenantId),
-    );
-    const fixtureKey = `${STAGING_FIXTURE_KEY}:restaurant:${companySlug}`;
-    companyId =
-      companies.find((c) => {
-        const meta = (c.profile as { stagingFixture?: { fixtureKey?: string } })
-          .stagingFixture;
-        return meta?.fixtureKey === fixtureKey;
-      })?.id ??
-      companies.find((c) =>
-        c.name.toLowerCase().includes(companySlug.replace(/-/g, " ").toLowerCase()),
-      )?.id ??
-      null;
+    if (retail) {
+      await ensureStagingRetailPackApplied(retail.pack);
+      companyId = await find(retail.tenantId);
+    } else {
+      await ensureStagingAgencyFixtureApplied();
+      companyId = await find(STAGING_FIXTURE_TENANT_ID);
+    }
   }
   if (companyId) return companyId;
   throw new Error(
-    `No client company for approver slug "${companySlug}". On /dev, click “Seed staging restaurants”, then try again.`,
+    retail
+      ? `No retail company for approver slug "${companySlug}". On /dev, click “Seed staging IGA” or “Seed staging general retail”, then try again.`
+      : `No client company for approver slug "${companySlug}". On /dev, click “Seed staging restaurants”, then try again.`,
   );
 }
 
 async function resolveStagingTenant() {
-  // Prefer the deterministic fixture tenant so restaurant companies resolve.
+  // Prefer the deterministic restaurant fixture tenant so restaurant companies resolve.
   const fixture = await getTenant(STAGING_FIXTURE_TENANT_ID);
   if (fixture?.status === "active") {
     return resolvePlatformAgencyTenant(STAGING_FIXTURE_TENANT_ID);
@@ -219,10 +226,40 @@ async function resolveStagingTenant() {
   return resolvePlatformAgencyTenant();
 }
 
+/** Resolve the tenant seat for a quick-login email (retail packs use their own tenants). */
+async function resolveTenantForQuickSeat(seat: StagingQuickSeat): Promise<Tenant> {
+  if (seat.kind === "client_approver") {
+    const retail = findStagingRetailPackForSlug(seat.companySlug);
+    if (retail) {
+      await ensureStagingRetailPackApplied(retail.pack);
+      const tenant = await getTenant(retail.tenantId);
+      if (!tenant || tenant.status !== "active") {
+        throw new Error(
+          `Retail fixture tenant missing for ${seat.companySlug}. Seed IGA / general retail on /dev.`,
+        );
+      }
+      return tenant;
+    }
+  }
+  return resolveStagingTenant();
+}
+
 async function ensureStagingAgencyFixtureApplied() {
   const sb = getServiceSupabase();
   if (!sb) throw new Error("Supabase service role is not configured.");
   return applyStagingAgencyFixture(sb);
+}
+
+async function ensureStagingRetailPackApplied(
+  pack: typeof STAGING_IGA_FIXTURE_KEY | typeof STAGING_GENERAL_RETAIL_FIXTURE_KEY,
+) {
+  const sb = getServiceSupabase();
+  if (!sb) throw new Error("Supabase service role is not configured.");
+  const fixture =
+    pack === STAGING_IGA_FIXTURE_KEY
+      ? createStagingIgaRetailFixture()
+      : createStagingGeneralRetailFixture();
+  return applyStagingRetailFixture(sb, fixture);
 }
 
 /** Create/refresh restaurants when the staging DB has an empty agency seat. */
@@ -240,34 +277,62 @@ async function ensureStagingRestaurantsReady(): Promise<void> {
   }
 }
 
+async function ensureStagingRetailReady(
+  pack: typeof STAGING_IGA_FIXTURE_KEY | typeof STAGING_GENERAL_RETAIL_FIXTURE_KEY,
+): Promise<void> {
+  const tenantId =
+    pack === STAGING_IGA_FIXTURE_KEY
+      ? STAGING_IGA_TENANT_ID
+      : STAGING_GENERAL_RETAIL_TENANT_ID;
+  const expected =
+    pack === STAGING_IGA_FIXTURE_KEY
+      ? createStagingIgaRetailFixture().companies.length
+      : createStagingGeneralRetailFixture().companies.length;
+  const fixtureTenant = await getTenant(tenantId);
+  if (!fixtureTenant) {
+    await ensureStagingRetailPackApplied(pack);
+    return;
+  }
+  const companies = await runInServiceContext(tenantId, () =>
+    listCompanies(tenantId),
+  );
+  if (companies.length < expected) {
+    await ensureStagingRetailPackApplied(pack);
+  }
+}
+
+async function assertStagingSeedRequest(formData: FormData): Promise<void> {
+  if (!devToolsOpen() || appEnv() !== "staging") {
+    throw new Error("Staging fixture seed is only available on staging.");
+  }
+  if (localDemoEnabled()) {
+    throw new Error("Local demo uses in-memory seed — use Seed / reset demo data.");
+  }
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured on this deployment.");
+  }
+  const hdrs = await headers();
+  const providedSecret = String(formData.get("selftestSecret") || "");
+  if (
+    !quickLoginRequestAllowed({
+      headers: hdrs,
+      providedSecret,
+    })
+  ) {
+    throw new Error(
+      selfTestSecretConfigured()
+        ? "Seed requires same-origin POST and a valid CC_SELFTEST_SECRET."
+        : "Seed requires a same-origin browser request.",
+    );
+  }
+}
+
 /** Staging-only: upsert ten restaurants + approvers into Supabase (idempotent). */
 export async function seedStagingAgencyFixtureAction(
   formData: FormData,
 ): Promise<void> {
   try {
-    if (!devToolsOpen() || appEnv() !== "staging") {
-      throw new Error("Staging restaurant seed is only available on staging.");
-    }
-    if (localDemoEnabled()) {
-      throw new Error("Local demo uses in-memory seed — use Seed / reset demo data.");
-    }
-    if (!isSupabaseConfigured()) {
-      throw new Error("Supabase is not configured on this deployment.");
-    }
-    const hdrs = await headers();
-    const providedSecret = String(formData.get("selftestSecret") || "");
-    if (
-      !quickLoginRequestAllowed({
-        headers: hdrs,
-        providedSecret,
-      })
-    ) {
-      throw new Error(
-        selfTestSecretConfigured()
-          ? "Seed requires same-origin POST and a valid CC_SELFTEST_SECRET."
-          : "Seed requires a same-origin browser request.",
-      );
-    }
+    await assertStagingSeedRequest(formData);
     const summary = await ensureStagingAgencyFixtureApplied();
     revalidatePath("/dev");
     redirect(
@@ -276,6 +341,44 @@ export async function seedStagingAgencyFixtureAction(
   } catch (e) {
     if (isRedirectError(e)) throw e;
     const msg = e instanceof Error ? e.message : "Staging seed failed";
+    failQuickLogin(msg);
+  }
+}
+
+/** Staging-only: upsert IGA retail stores + approvers (idempotent). */
+export async function seedStagingIgaRetailFixtureAction(
+  formData: FormData,
+): Promise<void> {
+  try {
+    await assertStagingSeedRequest(formData);
+    const summary = await ensureStagingRetailPackApplied(STAGING_IGA_FIXTURE_KEY);
+    revalidatePath("/dev");
+    redirect(
+      `/dev?seeded=iga&companies=${summary.companies}&approvers=${summary.approvers}`,
+    );
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "IGA retail seed failed";
+    failQuickLogin(msg);
+  }
+}
+
+/** Staging-only: upsert general retail stores + approvers (idempotent). */
+export async function seedStagingGeneralRetailFixtureAction(
+  formData: FormData,
+): Promise<void> {
+  try {
+    await assertStagingSeedRequest(formData);
+    const summary = await ensureStagingRetailPackApplied(
+      STAGING_GENERAL_RETAIL_FIXTURE_KEY,
+    );
+    revalidatePath("/dev");
+    redirect(
+      `/dev?seeded=general-retail&companies=${summary.companies}&approvers=${summary.approvers}`,
+    );
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    const msg = e instanceof Error ? e.message : "General retail seed failed";
     failQuickLogin(msg);
   }
 }
@@ -330,9 +433,18 @@ async function linkExistingAuthUser(email: string, appRole: User["role"]): Promi
 async function ensureStagingUser(email: string): Promise<User> {
   const seat = stagingQuickSeat(email);
 
-  // Approver login needs the ten restaurants under the fixture tenant.
+  // Approver login needs the matching fixture pack under its tenant.
   if (appEnv() === "staging" && isSupabaseConfigured()) {
-    await ensureStagingRestaurantsReady();
+    if (seat.kind === "client_approver") {
+      const retail = findStagingRetailPackForSlug(seat.companySlug);
+      if (retail) {
+        await ensureStagingRetailReady(retail.pack);
+      } else {
+        await ensureStagingRestaurantsReady();
+      }
+    } else {
+      await ensureStagingRestaurantsReady();
+    }
   }
 
   let user = await getUserByEmail(email);
@@ -355,12 +467,15 @@ async function ensureStagingUser(email: string): Promise<User> {
   }
   if (!user.active) throw new Error("Account deactivated.");
 
-  const desiredName = stagingFixtureDisplayName(email) ?? nameFromEmail(email);
+  const desiredName =
+    stagingFixtureDisplayName(email) ??
+    stagingRetailFixtureDisplayName(email) ??
+    nameFromEmail(email);
   if (user.name !== desiredName) {
     user = (await updateUserName(user.id, desiredName)) ?? { ...user, name: desiredName };
   }
 
-  const tenant = await resolveStagingTenant();
+  const tenant = await resolveTenantForQuickSeat(seat);
   const existing = await getMembership(tenant.id, user.id);
   const membershipPatch = {
     role: seat.tenantRole,
@@ -419,9 +534,11 @@ export async function quickLoginAction(formData: FormData): Promise<void> {
     );
     let membership = memberships[0];
     if (appEnv() === "staging" && isSupabaseConfigured()) {
-      const agency = await resolveStagingTenant();
+      const seat = stagingQuickSeat(email);
+      const preferredTenant = await resolveTenantForQuickSeat(seat);
       membership =
-        memberships.find((m) => m.tenantId === agency.id) ?? memberships[0];
+        memberships.find((m) => m.tenantId === preferredTenant.id) ??
+        memberships[0];
     }
     if (!membership) {
       throw new Error(

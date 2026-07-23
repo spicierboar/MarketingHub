@@ -15,24 +15,61 @@ import {
   quickLoginAction,
   seedDemoDataAction,
   seedStagingAgencyFixtureAction,
+  seedStagingGeneralRetailFixtureAction,
+  seedStagingIgaRetailFixtureAction,
 } from "./actions";
+import {
+  GENERAL_RETAIL_STORES,
+  IGA_RETAIL_STORES,
+  STAGING_RETAIL_APPROVER_NAMES,
+} from "@/lib/fixtures/staging-retail";
 
 export const dynamic = "force-dynamic";
 
-const DEMO_LOGINS = [
+type DemoLogin = {
+  email: string;
+  label: string;
+  group: "Agency" | "Restaurants" | "IGA retail" | "General retail";
+};
+
+const DEMO_LOGINS: DemoLogin[] = [
   {
     email: "admin@staging-fixture.invalid",
     label: "Alex Morgan — agency admin",
+    group: "Agency",
   },
   {
     email: "staff-1@staging-fixture.invalid",
     label: "Jordan Chen — content staff",
+    group: "Agency",
   },
   {
     email: "approver-saffron-laneway@staging-fixture.invalid",
     label: "Priya Mehta — Saffron Laneway Kitchen",
+    group: "Restaurants",
   },
-] as const;
+  ...IGA_RETAIL_STORES.map(
+    (store): DemoLogin => ({
+      email: `approver-${store.slug}@staging-fixture.invalid`,
+      label: `${STAGING_RETAIL_APPROVER_NAMES[store.slug] ?? store.approverName} — ${store.name}`,
+      group: "IGA retail",
+    }),
+  ),
+  ...GENERAL_RETAIL_STORES.map(
+    (store): DemoLogin => ({
+      email: `approver-${store.slug}@staging-fixture.invalid`,
+      label: `${STAGING_RETAIL_APPROVER_NAMES[store.slug] ?? store.approverName} — ${store.name}`,
+      group: "General retail",
+    }),
+  ),
+];
+
+const DEMO_GROUPS: DemoLogin["group"][] = [
+  "Agency",
+  "Restaurants",
+  "IGA retail",
+  "General retail",
+];
 
 function QuickLoginSecretFields({ required }: { required: boolean }) {
   if (!required) return null;
@@ -66,7 +103,11 @@ export default async function DevToolsPage({
 
   const params = (await searchParams) ?? {};
   const error = typeof params.error === "string" ? params.error.trim() : "";
-  const seededOk = params.seeded === "staging" || params.seeded === "1";
+  const seededOk =
+    params.seeded === "staging" ||
+    params.seeded === "iga" ||
+    params.seeded === "general-retail" ||
+    params.seeded === "1";
   const demoFlag = localDemoEnabled();
   const demoMutations = localDemoMutationAllowed(await headers());
   const staging = appEnv() === "staging";
@@ -74,6 +115,15 @@ export default async function DevToolsPage({
   const supabaseActive = isSupabaseConfigured();
   const secretRequired = selfTestSecretConfigured();
   const stagingSeedOk = staging && !demoFlag && supabaseActive;
+
+  const seededMessage =
+    params.seeded === "staging"
+      ? `Staging restaurants ready (${params.companies ?? "10"} companies, ${params.approvers ?? "10"} approvers). Use Quick login below.`
+      : params.seeded === "iga"
+        ? `Staging IGA retail ready (${params.companies ?? "4"} stores, ${params.approvers ?? "4"} approvers). Use Quick login below.`
+        : params.seeded === "general-retail"
+          ? `Staging general retail ready (${params.companies ?? "4"} stores, ${params.approvers ?? "4"} approvers). Use Quick login below.`
+          : "Demo data re-seeded.";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-10">
@@ -108,9 +158,7 @@ export default async function DevToolsPage({
           role="status"
           className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
         >
-          {params.seeded === "staging"
-            ? `Staging restaurants ready (${params.companies ?? "10"} companies, ${params.approvers ?? "10"} approvers). Use Quick login below.`
-            : "Demo data re-seeded."}
+          {seededMessage}
         </p>
       ) : null}
 
@@ -168,13 +216,10 @@ export default async function DevToolsPage({
           )}
           {staging && !demoFlag && (
             <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
-              Staging: use <strong>Seed staging restaurants</strong> once (or
-              Sign in as an approver — it auto-seeds if restaurants are
-              missing). Quick login is limited to the fixture emails below
-              (same-origin POST
-              {secretRequired
-                ? "; CC_SELFTEST_SECRET required"
-                : ""}
+              Staging: seed restaurants, IGA, and/or general retail once (or Sign
+              in as an approver — it auto-seeds that pack if missing). Quick login
+              is limited to the fixture emails below (same-origin POST
+              {secretRequired ? "; CC_SELFTEST_SECRET required" : ""}
               ).
             </p>
           )}
@@ -185,17 +230,42 @@ export default async function DevToolsPage({
         <CardContent className="space-y-4 p-6">
           <h2 className="font-semibold">Data</h2>
           {stagingSeedOk ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Upserts the ten fictional Australian Indian restaurants into
-                this staging Supabase project (agency tenant, approvers, access,
-                sample assets). Idempotent; no billing or live connectors.
-              </p>
-              <form action={seedStagingAgencyFixtureAction} className="space-y-2">
-                <QuickLoginSecretFields required={secretRequired} />
-                <Button type="submit">Seed staging restaurants</Button>
-              </form>
-            </>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Upserts the ten fictional Australian Indian restaurants into
+                  this staging Supabase project (agency tenant, approvers, access,
+                  sample assets). Idempotent; no billing or live connectors.
+                </p>
+                <form action={seedStagingAgencyFixtureAction} className="space-y-2">
+                  <QuickLoginSecretFields required={secretRequired} />
+                  <Button type="submit">Seed staging restaurants</Button>
+                </form>
+              </div>
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Upserts four fictional IGA stores under a separate retail agency
+                  tenant (Millbrook, Westgate Xpress, Harbour, Ridgeway).
+                </p>
+                <form action={seedStagingIgaRetailFixtureAction} className="space-y-2">
+                  <QuickLoginSecretFields required={secretRequired} />
+                  <Button type="submit">Seed staging IGA retail</Button>
+                </form>
+              </div>
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Upserts four fictional general-retail stores (homeware, gifts,
+                  coastal apparel, specialty pantry) under a third agency tenant.
+                </p>
+                <form
+                  action={seedStagingGeneralRetailFixtureAction}
+                  className="space-y-2"
+                >
+                  <QuickLoginSecretFields required={secretRequired} />
+                  <Button type="submit">Seed staging general retail</Button>
+                </form>
+              </div>
+            </div>
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
@@ -250,24 +320,33 @@ export default async function DevToolsPage({
               </Button>
             </form>
           )}
-          <ul className="space-y-2">
-            {DEMO_LOGINS.map((d) => (
-              <li key={d.email} className="flex flex-wrap items-center gap-2">
-                <form
-                  action={quickLoginAction}
-                  className="flex flex-wrap items-end gap-2"
-                >
-                  <input type="hidden" name="email" value={d.email} />
-                  <QuickLoginSecretFields required={secretRequired} />
-                  <Button type="submit" disabled={!quickLoginOk} size="sm">
-                    Sign in
-                  </Button>
-                </form>
-                <span className="font-mono text-xs text-primary">{d.email}</span>
-                <span className="text-sm text-muted-foreground">— {d.label}</span>
-              </li>
-            ))}
-          </ul>
+          {DEMO_GROUPS.map((group) => {
+            const rows = DEMO_LOGINS.filter((d) => d.group === group);
+            if (rows.length === 0) return null;
+            return (
+              <div key={group} className="space-y-2">
+                <h3 className="text-sm font-medium text-muted-foreground">{group}</h3>
+                <ul className="space-y-2">
+                  {rows.map((d) => (
+                    <li key={d.email} className="flex flex-wrap items-center gap-2">
+                      <form
+                        action={quickLoginAction}
+                        className="flex flex-wrap items-end gap-2"
+                      >
+                        <input type="hidden" name="email" value={d.email} />
+                        <QuickLoginSecretFields required={secretRequired} />
+                        <Button type="submit" disabled={!quickLoginOk} size="sm">
+                          Sign in
+                        </Button>
+                      </form>
+                      <span className="font-mono text-xs text-primary">{d.email}</span>
+                      <span className="text-sm text-muted-foreground">— {d.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
 

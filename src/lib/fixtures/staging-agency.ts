@@ -146,6 +146,20 @@ export function stagingFixtureDisplayName(email: string): string | null {
   return null;
 }
 
+/** Approver slug → email local-part `approver-{slug}@staging-fixture.invalid`. */
+export const STAGING_RESTAURANT_APPROVER_SLUGS = [
+  "saffron-laneway",
+  "copper-tiffin",
+  "monsoon-courtyard",
+  "pepperleaf-thali",
+  "clove-and-coal",
+  "tamarind-terrace",
+  "valley-masala",
+  "deccan-social",
+  "marigold-coast",
+  "riverstone-dhaba",
+] as const;
+
 const RESTAURANTS: readonly RestaurantDefinition[] = [
   {
     slug: "saffron-laneway",
