@@ -12,6 +12,9 @@ import {
 } from "@/lib/credit-wallet";
 import { stripeConfigured } from "@/lib/billing";
 import { resolveCompanyPackage } from "@/lib/marketing-packages";
+import { listClientPackageOptions } from "@/lib/client-package-change";
+import { ClientPackageChangePanel } from "@/components/client-package-change-panel";
+import { currentPackageId } from "@/lib/managed-service-billing";
 import { AD_PLATFORMS } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,8 +39,14 @@ function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-export default async function ClientPaymentsPage() {
+export default async function ClientPaymentsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ package?: string }>;
+}) {
   const { user, companyId } = await requirePortalUser();
+  const params = (await searchParams) ?? {};
+  const packageFlash = typeof params.package === "string" ? params.package : "";
   const [tenant, company, budget, campaigns, wallet, invoices] = await Promise.all([
     getTenant(user.tenantId),
     getCompany(companyId),
@@ -50,6 +59,16 @@ export default async function ClientPaymentsPage() {
   const marketingPackage = company
     ? resolveCompanyPackage(company, tenant)
     : null;
+  const packageOptions = listClientPackageOptions(tenant);
+  const packageChangePendingBilling = Boolean(
+    company?.profile.managedService?.packageChangePendingBilling,
+  );
+  const activePackageId = currentPackageId(
+    company?.profile.managedService?.serviceBilling?.activePackageId ??
+      company?.profile.managedService?.marketingPackageId ??
+      marketingPackage?.id ??
+      "starter",
+  );
   const activeCampaigns = campaigns.filter((c) => c.status === "active");
   const allocationEntries = budget
     ? Object.entries(budget.allocation).filter(([, frac]) => typeof frac === "number" && frac > 0)
@@ -73,6 +92,29 @@ export default async function ClientPaymentsPage() {
       />
 
       <div className="space-y-5 p-4 sm:p-5">
+        {packageFlash === "changed" ? (
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+            Package change confirmed. Your entitlements update immediately after settlement.
+          </p>
+        ) : null}
+        {packageFlash === "downgrade_scheduled" ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            Downgrade scheduled for the end of your billing period. Monthly savings were credited to
+            your account balance.
+          </p>
+        ) : null}
+        {packageFlash === "awaiting_webhook" ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            Payment received — confirming with the billing provider. This usually finishes within a
+            minute.
+          </p>
+        ) : null}
+        {packageFlash === "checkout_cancelled" ? (
+          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            Checkout cancelled. Your previous package is unchanged.
+          </p>
+        ) : null}
+
         <section className="space-y-3">
           <h2 className="text-base font-semibold">Account credit</h2>
           <Card>
@@ -217,25 +259,48 @@ export default async function ClientPaymentsPage() {
           <h2 className="text-lg font-semibold">Subscription &amp; plan</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">Marketing package</p>
-                <p className="mt-1 text-2xl font-semibold">
-                  {marketingPackage?.name ?? "Not set"}
-                </p>
-                {marketingPackage && marketingPackage.priceAudMonthly > 0 ? (
-                  <p className="mt-1 text-lg font-medium">
-                    {money(marketingPackage.priceAudMonthly)}
-                    <span className="text-sm font-normal text-muted-foreground"> / month</span>
-                  </p>
-                ) : null}
-                <p className="mt-2 text-sm text-muted-foreground">
+              <CardContent className="space-y-4 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Marketing package</p>
+                    <p className="mt-1 text-2xl font-semibold">
+                      {marketingPackage?.name ?? "Not set"}
+                    </p>
+                    {marketingPackage && marketingPackage.priceAudMonthly > 0 ? (
+                      <p className="mt-1 text-lg font-medium">
+                        {money(marketingPackage.priceAudMonthly)}
+                        <span className="text-sm font-normal text-muted-foreground"> / month</span>
+                      </p>
+                    ) : null}
+                  </div>
+                  {marketingPackage ? (
+                    <ClientPackageChangePanel
+                      companyId={companyId}
+                      currentPackageId={activePackageId}
+                      currentPackageName={marketingPackage.name}
+                      currentPriceAud={marketingPackage.priceAudMonthly}
+                      options={packageOptions}
+                      creditBalanceUsd={wallet.balanceUsd}
+                      packageChangePendingBilling={packageChangePendingBilling}
+                      periodEndIso={
+                        company?.profile.managedService?.serviceBilling?.currentPeriodEnd
+                      }
+                    />
+                  ) : null}
+                </div>
+                <p className="text-sm text-muted-foreground">
                   Your managed marketing package
                   {marketingPackage?.postsPerMonth
                     ? ` (${marketingPackage.postsPerMonth} posts / month)`
                     : ""}
-                  . Package changes stay agency-managed.
+                  . Upgrade or downgrade here — account credit applies to the monthly difference.
                 </p>
-                <p className="mt-3 text-sm text-muted-foreground">
+                {packageChangePendingBilling ? (
+                  <p className="text-sm text-amber-800">
+                    Billing pending — payment is still confirming. Nothing publishes without approval.
+                  </p>
+                ) : null}
+                <p className="text-sm text-muted-foreground">
                   {supportMailto ? (
                     <>
                       Questions about billing?{" "}

@@ -7,6 +7,9 @@ import {
   getOrCreateCreditWallet,
 } from "@/lib/credit-wallet";
 import { resolveCompanyPackage } from "@/lib/marketing-packages";
+import { listClientPackageOptions } from "@/lib/client-package-change";
+import { ClientPackageChangePanel } from "@/components/client-package-change-panel";
+import { currentPackageId } from "@/lib/managed-service-billing";
 import { storageConfigured } from "@/lib/storage";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +33,16 @@ export default async function ClientAccountPage() {
   ]);
 
   const marketingPkg = company ? resolveCompanyPackage(company, tenant) : null;
+  const packageOptions = listClientPackageOptions(tenant);
+  const packageChangePendingBilling = Boolean(
+    company?.profile.managedService?.packageChangePendingBilling,
+  );
+  const activePackageId = currentPackageId(
+    company?.profile.managedService?.serviceBilling?.activePackageId ??
+      company?.profile.managedService?.marketingPackageId ??
+      marketingPkg?.id ??
+      "starter",
+  );
   const openAsks = requests.filter(
     (r) => !["completed", "cancelled", "published"].includes(r.status),
   ).length;
@@ -59,13 +72,27 @@ export default async function ClientAccountPage() {
                   <p className="text-sm font-medium">{marketingPkg.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     A${marketingPkg.priceAudMonthly}/mo excl GST · {marketingPkg.imageQuotaPerMonth}{" "}
-                    campaign images + {marketingPkg.videoQuotaPerMonth} short videos / mo included ·
-                    package changes are agency-managed
+                    campaign images + {marketingPkg.videoQuotaPerMonth} short videos / mo included
                   </p>
+                  {packageChangePendingBilling ? (
+                    <p className="mt-1 text-xs text-amber-800">
+                      Your package payment is still being confirmed. Strategy prep can continue;
+                      nothing publishes without approval.
+                    </p>
+                  ) : null}
                 </div>
-                <Link href="/client/requests/new" className={buttonClasses("outline", "sm")}>
-                  Ask us to change
-                </Link>
+                <ClientPackageChangePanel
+                  companyId={companyId}
+                  currentPackageId={activePackageId}
+                  currentPackageName={marketingPkg.name}
+                  currentPriceAud={marketingPkg.priceAudMonthly}
+                  options={packageOptions}
+                  creditBalanceUsd={wallet.balanceUsd}
+                  packageChangePendingBilling={packageChangePendingBilling}
+                  periodEndIso={
+                    company?.profile.managedService?.serviceBilling?.currentPeriodEnd
+                  }
+                />
               </CardContent>
             </Card>
           </section>
