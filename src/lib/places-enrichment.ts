@@ -22,6 +22,8 @@ import type { CompanyProfile } from "@/lib/types";
 export interface PlaceMatchQuery {
   name: string;
   suburb?: string;
+  /** AU postcode — improves Text Search / simulated address accuracy. */
+  postcode?: string;
   region?: string;
 }
 
@@ -97,7 +99,10 @@ function simpleHash(s: string): number {
 }
 
 function buildSearchQuery(query: PlaceMatchQuery): string {
-  return [query.name, query.suburb, query.region].filter(Boolean).join(", ").trim();
+  return [query.name, query.suburb, query.postcode, query.region]
+    .filter(Boolean)
+    .join(", ")
+    .trim();
 }
 
 const CATEGORY_BY_HASH = [
@@ -130,13 +135,14 @@ function simulatePlaceMatch(query: PlaceMatchQuery): PlaceMatch {
   const h = simpleHash(q.toLowerCase());
   const suburb = query.suburb?.trim() || "CBD";
   const region = query.region?.trim() || "NSW";
+  const postcode = query.postcode?.trim() || "2000";
   const streetNo = 10 + (h % 180);
   const category = CATEGORY_BY_HASH[h % CATEGORY_BY_HASH.length];
 
   return {
     placeId: `sim_place_${h.toString(16)}`,
     name: query.name.trim(),
-    formattedAddress: `${streetNo} Example St, ${suburb} ${region} 2000, Australia`,
+    formattedAddress: `${streetNo} Example St, ${suburb} ${region} ${postcode}, Australia`,
     phone: `+61 2 ${9000 + (h % 999)} ${1000 + (h % 8999)}`,
     website: `https://${query.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.example`,
     types: [category.toLowerCase().replace(/\s+/g, "_"), "establishment", "point_of_interest"],

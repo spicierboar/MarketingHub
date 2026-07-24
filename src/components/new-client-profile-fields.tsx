@@ -21,7 +21,7 @@ function joinLines(items?: string[]): string {
   return (items ?? []).join("\n");
 }
 
-/** Profile step fields with industry-aware placeholders (not café-only). */
+/** Profile step — review auto-filled public data; marketing copy is optional/collapsed. */
 export function NewClientProfileFields({
   formId,
   initialName,
@@ -66,7 +66,6 @@ export function NewClientProfileFields({
         />
       </Field>
 
-      {/* Sync type for placeholders — BusinessTypeSection owns the select; we mirror via onChange on a wrapper */}
       <BusinessTypeSectionWithPlaceholderSync
         initialType={initialType}
         hotel={profile.hotel as HotelProfileFields | undefined}
@@ -74,13 +73,11 @@ export function NewClientProfileFields({
         onTypeChange={setType}
       />
 
-      <ProfileSuggestButton formId={formId} companyName={initialName} compact />
-
       <div className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
         <h3 className="text-sm font-semibold">Location, phone &amp; hours</h3>
         <p className="text-xs text-muted-foreground">
-          Prefer website scrape on the previous step (and Find on Google below). Review
-          structured fields — don&apos;t retype what we already filled from public sources.
+          Auto-filled from Google Business and the website when available. Confirm the
+          pin — don&apos;t retype what already looks right.
         </p>
         <BusinessInfoDetailsForm
           showWebsite={false}
@@ -146,45 +143,6 @@ export function NewClientProfileFields({
         </Field>
       )}
       <Field
-        label="Target customers"
-        htmlFor="targetCustomers"
-        hint={PROFILE_FIELD_HELP.targetCustomers}
-      >
-        <Textarea
-          id="targetCustomers"
-          name="targetCustomers"
-          rows={2}
-          defaultValue={profile.targetCustomers ?? ""}
-          placeholder={ph.targetCustomers}
-        />
-      </Field>
-      <Field
-        label="Brand voice"
-        htmlFor="brandVoice"
-        hint={PROFILE_FIELD_HELP.brandVoice}
-      >
-        <Textarea
-          id="brandVoice"
-          name="brandVoice"
-          rows={2}
-          defaultValue={profile.brandVoice ?? ""}
-          placeholder={ph.brandVoice}
-        />
-      </Field>
-      <Field
-        label="Calls to action"
-        htmlFor="callsToAction"
-        hint={PROFILE_FIELD_HELP.callsToAction}
-      >
-        <Textarea
-          id="callsToAction"
-          name="callsToAction"
-          rows={2}
-          defaultValue={joinLines(profile.callsToAction)}
-          placeholder={ph.callsToAction}
-        />
-      </Field>
-      <Field
         label="Service areas"
         htmlFor="serviceAreas"
         hint={PROFILE_FIELD_HELP.serviceAreas}
@@ -201,9 +159,62 @@ export function NewClientProfileFields({
       <details className="group rounded-lg border border-border">
         <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-medium text-muted-foreground marker:content-none hover:text-foreground [&::-webkit-details-marker]:hidden">
           <span className="flex items-center justify-between gap-2">
-            More details
+            Marketing copy (optional)
             <span className="text-xs font-normal group-open:hidden">
-              Compliance claims &amp; disclaimers
+              Voice, audience, CTAs — skip if prefilled looks fine
+            </span>
+          </span>
+        </summary>
+        <div className="space-y-4 border-t border-border px-3 py-3">
+          <ProfileSuggestButton formId={formId} companyName={initialName} compact />
+          <Field
+            label="Target customers"
+            htmlFor="targetCustomers"
+            hint={PROFILE_FIELD_HELP.targetCustomers}
+          >
+            <Textarea
+              id="targetCustomers"
+              name="targetCustomers"
+              rows={2}
+              defaultValue={profile.targetCustomers ?? ""}
+              placeholder={ph.targetCustomers}
+            />
+          </Field>
+          <Field
+            label="Brand voice"
+            htmlFor="brandVoice"
+            hint={PROFILE_FIELD_HELP.brandVoice}
+          >
+            <Textarea
+              id="brandVoice"
+              name="brandVoice"
+              rows={2}
+              defaultValue={profile.brandVoice ?? ""}
+              placeholder={ph.brandVoice}
+            />
+          </Field>
+          <Field
+            label="Calls to action"
+            htmlFor="callsToAction"
+            hint={PROFILE_FIELD_HELP.callsToAction}
+          >
+            <Textarea
+              id="callsToAction"
+              name="callsToAction"
+              rows={2}
+              defaultValue={joinLines(profile.callsToAction)}
+              placeholder={ph.callsToAction}
+            />
+          </Field>
+        </div>
+      </details>
+
+      <details className="group rounded-lg border border-border">
+        <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-medium text-muted-foreground marker:content-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center justify-between gap-2">
+            Compliance (optional)
+            <span className="text-xs font-normal group-open:hidden">
+              Claims &amp; disclaimers
             </span>
           </span>
         </summary>

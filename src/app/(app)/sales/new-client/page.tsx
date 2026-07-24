@@ -86,6 +86,7 @@ export default async function NewClientPage({
     companyId?: string;
     clientEmail?: string;
     scraped?: string;
+    places?: string;
     checkout?: string;
     session_id?: string;
     paid?: string;
@@ -175,7 +176,7 @@ export default async function NewClientPage({
     <div>
       <PageHeader
         title="New client"
-        description="Website scrape → profile → marketing package → checkout → client portal login."
+        description="Identity → auto-fill Profile (Google Business + website) → package → checkout → portal login."
       />
       <div className="mx-auto max-w-3xl p-6">
         <Card>
@@ -214,14 +215,15 @@ export default async function NewClientPage({
                 )}
                 {params.scraped === "1" && (
                   <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                    Pre-filled from the website and AI enrichment — review below,
-                    then continue.
+                    {params.places === "1"
+                      ? "Pre-filled from Google Business and public website data — confirm below, then continue. Marketing copy is optional."
+                      : "Pre-filled from the website and enrichment — review below, then continue. Marketing copy is optional."}
                   </p>
                 )}
                 {params.scraped === "0" && (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                    Scrape found little or failed — fill the profile manually, or go
-                    back to correct the website.
+                    Little public data came back — fill what&apos;s missing, use Find on
+                    Google for the listing, or go back to correct the website.
                   </p>
                 )}
                 <NewClientProfileFields

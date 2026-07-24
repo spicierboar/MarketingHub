@@ -35,12 +35,12 @@ import {
   verifyMarketingPackageCheckoutSession,
 } from "@/lib/billing";
 import { isAddonId } from "@/lib/addons";
-import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
 import { assertWebsiteReachable } from "@/lib/url-reachability";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
 import { applyBusinessInfoFormToProfile } from "@/lib/client-profile-edit";
 import { verifyBusinessNameAgainstAbr } from "@/lib/abn-lookup";
+import { prefillProfileFromPublicSources } from "@/lib/onboarding-public-prefill";
 import {
   duplicateNameAbnMessage,
   findDuplicateByNameAndAbn,
@@ -391,7 +391,7 @@ export async function saveWebsiteStepAction(formData: FormData) {
       });
     }
 
-    // Persist website + consent before scrape so Profile can open even if enrich is slow.
+    // Persist website + consent before enrich so Profile can open even if scrape is slow.
     if (websiteChecked && consent) {
       const withSite: CompanyProfile = {
         ...company.profile,
@@ -420,44 +420,43 @@ export async function saveWebsiteStepAction(formData: FormData) {
       company = { ...company, profile: next };
     }
 
-    // Cap scrape so Website → Profile never hangs on enrich/AI (still best-effort).
-    let scraped = "0";
-    if (websiteChecked && consent) {
-      const SCRAPE_BUDGET_MS = 12_000;
-      const result = await Promise.race([
-        scrapeAndApplyInitialProfile({
-          company,
-          website: websiteChecked,
-          actorId: user.id,
-        }),
-        new Promise<null>((resolve) =>
-          setTimeout(() => resolve(null), SCRAPE_BUDGET_MS),
-        ),
-      ]);
-      if (result) {
-        const saved = await salesCompanyWrite(user, () =>
-          updateCompany(company.id, { profile: result.profile }),
-        );
-        if (!saved) throw new Error("Could not save scraped profile");
-        if (result.mode !== "failed") {
-          await logAction(user, "auto_onboarding.scraped", {
-            targetType: "company",
-            targetId: company.id,
-            companyId: company.id,
-            detail: `mode=${result.mode} fields=${result.fieldCount} sales=1 enrich=${result.enrichMode ?? "none"}`,
-          });
-        }
-        if (result.fieldCount > 0) {
-          await logAction(user, "auto_onboarding.applied", {
-            targetType: "company",
-            targetId: company.id,
-            companyId: company.id,
-            detail: `fields=${result.fieldCount} sales=1`,
-          });
-          scraped = "1";
-        }
-      }
+    // Website scrape + Google Business (Places) in parallel — Places kept even if scrape times out.
+    const prefill = await prefillProfileFromPublicSources({
+      company,
+      actorId: user.id,
+      businessName: name,
+      postcode: effectivePostcode,
+      suburb: company.profile.structuredAddress?.suburb || undefined,
+      region: "Australia",
+      website: websiteChecked && consent ? websiteChecked : undefined,
+      scrapeBudgetMs: 14_000,
+    });
+    const savedProfile = await salesCompanyWrite(user, () =>
+      updateCompany(company.id, { profile: prefill.profile }),
+    );
+    if (!savedProfile) throw new Error("Could not save auto-filled profile");
+    company = savedProfile;
+
+    if (prefill.scrapeMode && prefill.scrapeMode !== "failed") {
+      await logAction(user, "auto_onboarding.scraped", {
+        targetType: "company",
+        targetId: company.id,
+        companyId: company.id,
+        detail: `mode=${prefill.scrapeMode} sales=1 enrich=${prefill.enrichMode ?? "none"} places=${prefill.placesMode ?? "none"}`,
+      });
     }
+    if (prefill.scraped || prefill.placesMode) {
+      await logAction(user, "auto_onboarding.applied", {
+        targetType: "company",
+        targetId: company.id,
+        companyId: company.id,
+        detail: `scraped=${prefill.scraped ? "1" : "0"} places=${prefill.placesMode ?? "none"} sources=${prefill.sources.join("|") || "none"} sales=1`,
+      });
+    }
+
+    const scraped =
+      prefill.scraped || Boolean(prefill.placesMode) ? "1" : "0";
+    const places = prefill.placesMode ? "1" : "0";
 
     // Profile step reads under user RLS — confirm access before redirect.
     const readable = await getCompany(company.id);
@@ -471,7 +470,7 @@ export async function saveWebsiteStepAction(formData: FormData) {
       }
     }
 
-    redirect(wizardPath("business", company.id, { scraped }));
+    redirect(wizardPath("business", company.id, { scraped, places }));
   } catch (e) {
     if (isRedirectError(e)) throw e;
     const msg = e instanceof Error ? e.message : "Could not save website step";

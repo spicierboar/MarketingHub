@@ -53,7 +53,7 @@ export default async function SalesHomePage() {
               <div>
                 <p className="text-sm font-medium">New client wizard</p>
                 <p className="text-xs text-muted-foreground">
-                  Website scrape → profile → marketing package → checkout → portal login.
+                  Website + Google Business auto-fill → profile review → package → checkout → portal login.
                 </p>
               </div>
               <Link

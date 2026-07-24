@@ -30,9 +30,9 @@ export function NewClientWebsiteStep({
     <form id="new-client-website-form" action={saveWebsiteStepAction} className="space-y-4">
       {companyId ? <input type="hidden" name="companyId" value={companyId} /> : null}
       <p className="text-sm text-muted-foreground">
-        Business name + ABN + postcode identify the account — another trading name
-        or location under the same ABN needs its own client. With consent we scrape
-        public website pages, then AI/template-enrich the profile before you review it.
+        Business name + ABN + postcode identify the account. With consent we pull a
+        Google Business listing and scrape the website so Profile is mostly filled —
+        you review, not retype.
       </p>
       <FormSeedButton
         formId="new-client-website-form"
@@ -138,9 +138,9 @@ export function NewClientWebsiteStep({
       <Button type="submit">
         {willScrape
           ? initialWebsite
-            ? "Re-scrape & continue to Profile"
-            : "Continue — scrape & open Profile"
-          : "Continue to Profile"}
+            ? "Re-enrich & continue to Profile"
+            : "Continue — auto-fill Profile"
+          : "Continue — find listing & open Profile"}
       </Button>
     </form>
   );

@@ -37,7 +37,7 @@ import {
 } from "@/lib/managed-service/delivery-runner";
 import { localDemoEnabled } from "@/lib/env";
 import { notifyClientException } from "@/lib/managed-service/exception-notify";
-import { scrapeAndApplyInitialProfile } from "@/lib/auto-onboarding";
+import { prefillProfileFromPublicSources } from "@/lib/onboarding-public-prefill";
 import {
   assertSocialLinksReachable,
   assertWebsiteReachable,
@@ -210,32 +210,37 @@ export async function createCompanyAction(
   });
 
   let scrapedParam = "";
-  if (websiteChecked && consent) {
-    const result = await scrapeAndApplyInitialProfile({
-      company: { ...company, profile: withAbn },
-      website: websiteChecked,
-      actorId: user.id,
+  const prefill = await prefillProfileFromPublicSources({
+    company: { ...company, profile: withAbn },
+    actorId: user.id,
+    businessName: name,
+    postcode: postcodeParsed.postcode,
+    region: "Australia",
+    website: websiteChecked && consent ? websiteChecked : undefined,
+  });
+  await updateCompany(company.id, { profile: prefill.profile });
+  if (prefill.scrapeMode && prefill.scrapeMode !== "failed") {
+    await logAction(user, "auto_onboarding.scraped", {
+      targetType: "company",
+      targetId: company.id,
+      companyId: company.id,
+      detail: `mode=${prefill.scrapeMode} fields=prefill initial=1 places=${prefill.placesMode ?? "none"}`,
     });
-    await updateCompany(company.id, { profile: result.profile });
-    if (result.mode !== "failed") {
-      await logAction(user, "auto_onboarding.scraped", {
-        targetType: "company",
-        targetId: company.id,
-        companyId: company.id,
-        detail: `mode=${result.mode} fields=${result.fieldCount} initial=1`,
-      });
-    }
-    if (result.fieldCount > 0) {
-      await logAction(user, "auto_onboarding.applied", {
-        targetType: "company",
-        targetId: company.id,
-        companyId: company.id,
-        detail: `fields=${result.fieldCount} initial=1`,
-      });
-    }
-    scrapedParam =
-      result.fieldCount > 0 ? "?scraped=1" : result.mode === "failed" ? "?scraped=0" : "?scraped=0";
   }
+  if (prefill.scraped || prefill.placesMode) {
+    await logAction(user, "auto_onboarding.applied", {
+      targetType: "company",
+      targetId: company.id,
+      companyId: company.id,
+      detail: `scraped=${prefill.scraped ? "1" : "0"} places=${prefill.placesMode ?? "none"} sources=${prefill.sources.join("|") || "none"} initial=1`,
+    });
+  }
+  scrapedParam =
+    prefill.scraped || prefill.placesMode
+      ? "?scraped=1"
+      : websiteChecked && consent
+        ? "?scraped=0"
+        : "";
 
   // Quick-add never visited the package wizard — default Basic + enqueue strategy
   // so Strategy is not stuck on opaque "Not started". Demo: eligible immediately.
