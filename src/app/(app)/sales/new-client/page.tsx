@@ -21,6 +21,7 @@ import { NewClientWebsiteStep } from "@/components/new-client-website-step";
 import { NewClientCheckoutStep } from "@/components/new-client-checkout-step";
 import { FormSeedButton } from "@/components/form-seed-button";
 import { OnboardingPackagePicker } from "@/components/onboarding-package-picker";
+import { ProfileAutoEnrich } from "@/components/profile-auto-enrich";
 import {
   confirmPackageCheckoutSuccessAction,
   provisionClientAction,
@@ -87,6 +88,7 @@ export default async function NewClientPage({
     clientEmail?: string;
     scraped?: string;
     places?: string;
+    pendingScrape?: string;
     checkout?: string;
     session_id?: string;
     paid?: string;
@@ -208,19 +210,23 @@ export default async function NewClientPage({
                 className="space-y-4"
               >
                 <input type="hidden" name="companyId" value={company.id} />
+                <ProfileAutoEnrich
+                  companyId={company.id}
+                  enabled={params.pendingScrape === "1"}
+                />
                 {profileError && (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                     {profileError}
                   </p>
                 )}
-                {params.scraped === "1" && (
+                {params.scraped === "1" && params.pendingScrape !== "1" && (
                   <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                     {params.places === "1"
                       ? "Pre-filled from Google Business and public website data — confirm below, then continue. Marketing copy is optional."
-                      : "Pre-filled from the website and enrichment — review below, then continue. Marketing copy is optional."}
+                      : "Pre-filled from public sources — review below, then continue. Marketing copy is optional."}
                   </p>
                 )}
-                {params.scraped === "0" && (
+                {params.scraped === "0" && params.pendingScrape !== "1" && (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                     Little public data came back — fill what&apos;s missing, use Find on
                     Google for the listing, or go back to correct the website.

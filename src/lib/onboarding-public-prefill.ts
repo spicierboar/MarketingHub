@@ -176,6 +176,10 @@ export async function prefillProfileFromPublicSources(input: {
   website?: string;
   /** Soft cap for website scrape + AI only; Places runs alongside and is kept. */
   scrapeBudgetMs?: number;
+  /** Soft cap for Places match (default 5s). */
+  placesBudgetMs?: number;
+  /** Skip website scrape/AI — use for fast Website→Profile handoff. */
+  skipScrape?: boolean;
 }): Promise<{
   profile: CompanyProfile;
   scraped: boolean;
@@ -185,14 +189,21 @@ export async function prefillProfileFromPublicSources(input: {
   sources: string[];
 }> {
   const scrapeBudgetMs = input.scrapeBudgetMs ?? 14_000;
-  const website = input.website?.trim();
+  const placesBudgetMs = input.placesBudgetMs ?? 5_000;
+  const website = input.skipScrape ? undefined : input.website?.trim();
+  const keepWebsite = input.website?.trim();
 
-  const placePromise = matchPlace({
-    name: input.businessName,
-    suburb: input.suburb,
-    postcode: input.postcode,
-    region: input.region ?? "Australia",
-  });
+  const placePromise = Promise.race([
+    matchPlace({
+      name: input.businessName,
+      suburb: input.suburb,
+      postcode: input.postcode,
+      region: input.region ?? "Australia",
+    }),
+    new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), placesBudgetMs),
+    ),
+  ]);
 
   const scrapePromise = website
     ? scrapeAndApplyInitialProfile({
@@ -214,8 +225,8 @@ export async function prefillProfileFromPublicSources(input: {
   const [place, scrape] = await Promise.all([placePromise, timedScrape]);
 
   let profile: CompanyProfile = scrape?.profile ?? { ...input.company.profile };
-  if (website && !hasText(profile.website)) {
-    profile = { ...profile, website };
+  if (keepWebsite && !hasText(profile.website)) {
+    profile = { ...profile, website: keepWebsite };
   }
 
   let placesMode: PlaceMatch["mode"] | undefined;

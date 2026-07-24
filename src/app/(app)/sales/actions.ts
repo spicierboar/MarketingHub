@@ -35,12 +35,15 @@ import {
   verifyMarketingPackageCheckoutSession,
 } from "@/lib/billing";
 import { isAddonId } from "@/lib/addons";
-import { assertWebsiteReachable } from "@/lib/url-reachability";
+import {
+  probePublicHttpUrl,
+} from "@/lib/url-reachability";
 import { logAction } from "@/lib/audit";
 import { linesFromForm } from "@/lib/business-profiles";
 import { applyBusinessInfoFormToProfile } from "@/lib/client-profile-edit";
 import { verifyBusinessNameAgainstAbr } from "@/lib/abn-lookup";
 import { prefillProfileFromPublicSources } from "@/lib/onboarding-public-prefill";
+import { normaliseHttpUrl } from "@/lib/auto-onboarding";
 import {
   duplicateNameAbnMessage,
   findDuplicateByNameAndAbn,
@@ -222,13 +225,16 @@ async function assertNoNameAbnDuplicate(
       "Postcode is required — business name + ABN + postcode identify a client account.",
     );
   }
-  const dup = findDuplicateByNameAndAbn(
-    await listCompanies(tenantId),
-    businessName,
-    abn,
-    postcode,
-    { excludeCompanyId },
-  );
+  let companies: Company[];
+  try {
+    companies = await runInServiceContext(tenantId, () => listCompanies(tenantId));
+  } catch {
+    // Infra blip (e.g. Supabase 522) — don't block onboarding on duplicate scan.
+    return;
+  }
+  const dup = findDuplicateByNameAndAbn(companies, businessName, abn, postcode, {
+    excludeCompanyId,
+  });
   if (dup) throw new Error(duplicateNameAbnMessage(dup.company));
 }
 
@@ -241,8 +247,31 @@ async function assertAbrIdentityAndNoDuplicate(
   excludeCompanyId?: string,
 ): Promise<{ legalName?: string; abrDetail: string }> {
   if (!abn) return { abrDetail: "abr=n/a" };
-  const abrGate = await verifyBusinessNameAgainstAbr(businessName, abn);
-  if (!abrGate.ok) throw new Error(abrGate.error);
+  let legalName: string | undefined;
+  let abrDetail = "abr=skipped";
+  try {
+    const abrGate = await verifyBusinessNameAgainstAbr(businessName, abn);
+    if (!abrGate.ok) throw new Error(abrGate.error);
+    legalName = abrGate.mode === "live" ? abrGate.legalName : undefined;
+    abrDetail =
+      abrGate.mode === "skipped"
+        ? `abr=${abrGate.warning ?? "skipped"}`
+        : "abr=verified";
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    // Hard ABR rejects (cancelled / mismatch) still block; infra soft-fails.
+    if (
+      msg &&
+      !/unavailable|skipped|522|DOCTYPE|Cloudflare|timeout/i.test(msg) &&
+      (/match|cancelled|not found|11 digits/i.test(msg) ||
+        msg.startsWith("Business name") ||
+        msg.startsWith("That ABN") ||
+        msg.startsWith("ABN "))
+    ) {
+      throw e instanceof Error ? e : new Error(msg);
+    }
+    abrDetail = "abr=soft-skip";
+  }
   await assertNoNameAbnDuplicate(
     tenantId,
     businessName,
@@ -250,13 +279,15 @@ async function assertAbrIdentityAndNoDuplicate(
     postcode,
     excludeCompanyId,
   );
-  return {
-    legalName: abrGate.mode === "live" ? abrGate.legalName : undefined,
-    abrDetail:
-      abrGate.mode === "skipped"
-        ? `abr=${abrGate.warning ?? "skipped"}`
-        : "abr=verified",
-  };
+  return { legalName, abrDetail };
+}
+
+function safeWizardError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : "Could not save website step";
+  if (/<!DOCTYPE|522:|Cloudflare|supabase\.co/i.test(msg)) {
+    return "Database temporarily unavailable — wait a moment and try Continue again.";
+  }
+  return msg.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
 /**
@@ -316,7 +347,21 @@ export async function saveWebsiteStepAction(formData: FormData) {
 
     let websiteChecked: string | undefined;
     if (websiteRaw) {
-      websiteChecked = await assertWebsiteReachable(websiteRaw);
+      const normalised = normaliseHttpUrl(websiteRaw);
+      if (!normalised) {
+        throw new Error(
+          "Enter a valid website URL (e.g. example.com or https://example.com).",
+        );
+      }
+      // Soft reachability — never block Profile on a slow/unreachable site.
+      const probe = await Promise.race([
+        probePublicHttpUrl(normalised, { timeoutMs: 3_000 }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_200)),
+      ]);
+      websiteChecked =
+        probe && probe.ok
+          ? probe.finalUrl || probe.url
+          : normalised;
     }
 
     // Always re-run ABR + (name+ABN+postcode) duplicate when an ABN is present.
@@ -391,7 +436,7 @@ export async function saveWebsiteStepAction(formData: FormData) {
       });
     }
 
-    // Persist website + consent before enrich so Profile can open even if scrape is slow.
+    // Persist website + consent before Places so Profile opens even if enrich is partial.
     if (websiteChecked && consent) {
       const withSite: CompanyProfile = {
         ...company.profile,
@@ -410,7 +455,6 @@ export async function saveWebsiteStepAction(formData: FormData) {
       if (!saved) throw new Error("Could not save website on the client draft");
       company = { ...company, profile: withSite };
     } else if (!websiteRaw && existingId) {
-      // Clearing website on back-edit — keep profile, drop URL if blank.
       const next = { ...company.profile };
       delete next.website;
       const saved = await salesCompanyWrite(user, () =>
@@ -420,7 +464,7 @@ export async function saveWebsiteStepAction(formData: FormData) {
       company = { ...company, profile: next };
     }
 
-    // Website scrape + Google Business (Places) in parallel — Places kept even if scrape times out.
+    // Fast path: Google Business only on Website → Profile. Website scrape runs on Profile.
     const prefill = await prefillProfileFromPublicSources({
       company,
       actorId: user.id,
@@ -429,7 +473,8 @@ export async function saveWebsiteStepAction(formData: FormData) {
       suburb: company.profile.structuredAddress?.suburb || undefined,
       region: "Australia",
       website: websiteChecked && consent ? websiteChecked : undefined,
-      scrapeBudgetMs: 14_000,
+      skipScrape: true,
+      placesBudgetMs: 5_000,
     });
     const savedProfile = await salesCompanyWrite(user, () =>
       updateCompany(company.id, { profile: prefill.profile }),
@@ -437,12 +482,81 @@ export async function saveWebsiteStepAction(formData: FormData) {
     if (!savedProfile) throw new Error("Could not save auto-filled profile");
     company = savedProfile;
 
+    if (prefill.placesMode) {
+      await logAction(user, "auto_onboarding.applied", {
+        targetType: "company",
+        targetId: company.id,
+        companyId: company.id,
+        detail: `scraped=0 places=${prefill.placesMode} sources=${prefill.sources.join("|") || "none"} sales=1 fast=1`,
+      });
+    }
+
+    // Heal access without blocking redirect on a slow user-scoped read.
+    await grantAccess(user.id, company.id).catch(() => undefined);
+
+    const places = prefill.placesMode ? "1" : "0";
+    const pendingScrape =
+      websiteChecked && consent && !company.profile.autoOnboarding?.lastScrapeAt
+        ? "1"
+        : "0";
+    redirect(
+      wizardPath("business", company.id, {
+        scraped: places,
+        places,
+        pendingScrape,
+      }),
+    );
+  } catch (e) {
+    if (isRedirectError(e)) throw e;
+    redirect(
+      wizardPath("website", existingId || undefined, {
+        error: safeWizardError(e),
+      }),
+    );
+  }
+}
+
+/**
+ * Profile-step follow-up: scrape/AI enrich after Website already advanced.
+ * Idempotent — safe to call once when pendingScrape=1.
+ */
+export async function enrichSalesProfileFromWebsiteAction(companyId: string): Promise<{
+  ok: boolean;
+  scraped: boolean;
+  error?: string;
+}> {
+  try {
+    const id = companyId.trim();
+    if (!id) return { ok: false, scraped: false, error: "Missing company" };
+    const { user, company } = await assertSalesCompanyInTenant(id);
+    const website = company.profile.website?.trim();
+    if (!website) return { ok: true, scraped: false };
+    if (company.profile.autoOnboarding?.lastScrapeAt) {
+      return { ok: true, scraped: true };
+    }
+
+    const prefill = await prefillProfileFromPublicSources({
+      company,
+      actorId: user.id,
+      businessName: company.name,
+      postcode: resolveCompanyPostcode(company.profile) || undefined,
+      suburb: company.profile.structuredAddress?.suburb || undefined,
+      region: "Australia",
+      website,
+      scrapeBudgetMs: 20_000,
+      placesBudgetMs: 4_000,
+      skipScrape: false,
+    });
+    const saved = await salesCompanyWrite(user, () =>
+      updateCompany(company.id, { profile: prefill.profile }),
+    );
+    if (!saved) return { ok: false, scraped: false, error: "Could not save enrich" };
     if (prefill.scrapeMode && prefill.scrapeMode !== "failed") {
       await logAction(user, "auto_onboarding.scraped", {
         targetType: "company",
         targetId: company.id,
         companyId: company.id,
-        detail: `mode=${prefill.scrapeMode} sales=1 enrich=${prefill.enrichMode ?? "none"} places=${prefill.placesMode ?? "none"}`,
+        detail: `mode=${prefill.scrapeMode} sales=1 enrich=${prefill.enrichMode ?? "none"} deferred=1`,
       });
     }
     if (prefill.scraped || prefill.placesMode) {
@@ -450,35 +564,17 @@ export async function saveWebsiteStepAction(formData: FormData) {
         targetType: "company",
         targetId: company.id,
         companyId: company.id,
-        detail: `scraped=${prefill.scraped ? "1" : "0"} places=${prefill.placesMode ?? "none"} sources=${prefill.sources.join("|") || "none"} sales=1`,
+        detail: `scraped=${prefill.scraped ? "1" : "0"} places=${prefill.placesMode ?? "none"} deferred=1`,
       });
     }
-
-    const scraped =
-      prefill.scraped || Boolean(prefill.placesMode) ? "1" : "0";
-    const places = prefill.placesMode ? "1" : "0";
-
-    // Profile step reads under user RLS — confirm access before redirect.
-    const readable = await getCompany(company.id);
-    if (!readable) {
-      await grantAccess(user.id, company.id);
-      const again = await getCompany(company.id);
-      if (!again) {
-        throw new Error(
-          "Client was created but could not be opened — refresh and try Continue again.",
-        );
-      }
-    }
-
-    redirect(wizardPath("business", company.id, { scraped, places }));
+    revalidatePath("/sales/new-client");
+    return { ok: true, scraped: prefill.scraped };
   } catch (e) {
-    if (isRedirectError(e)) throw e;
-    const msg = e instanceof Error ? e.message : "Could not save website step";
-    redirect(
-      wizardPath("website", existingId || undefined, {
-        error: msg.slice(0, 400),
-      }),
-    );
+    return {
+      ok: false,
+      scraped: false,
+      error: safeWizardError(e),
+    };
   }
 }
 
