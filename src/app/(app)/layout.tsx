@@ -8,11 +8,11 @@ import {
   isPortalUser,
   isSalesRep,
   canAccessFieldSales,
-  accessibleCompanyIds,
   userHasPermission,
   canCreateContent,
 } from "@/lib/auth/rbac";
 import {
+  accessForUser,
   getSecuritySettings,
   getTenant,
   listCompanies,
@@ -27,16 +27,28 @@ import type { AddonId } from "@/lib/types";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   if (await isPortalUser(user)) redirect("/client");
-  const [s, tenant, memberships, allCompanies, allowedIds, entitlements] =
+  const admin = isAdmin(user);
+
+  // One company list per navigation — accessibleCompanyIds would list again.
+  const [s, tenant, memberships, allCompanies, entitlements, accessRows] =
     await Promise.all([
       getSecuritySettings(user.tenantId),
       getTenant(user.tenantId),
       membershipsForUser(user.id),
       listCompanies(user.tenantId),
-      accessibleCompanyIds(user),
       listCompanyEntitlements(user.tenantId),
+      admin ? Promise.resolve(null) : accessForUser(user.id),
     ]);
-  const allowed = new Set(allowedIds);
+
+  const tenantCompanyIds = new Set(allCompanies.map((c) => c.id));
+  const allowed = admin
+    ? tenantCompanyIds
+    : new Set(
+        (accessRows ?? [])
+          .map((a) => a.companyId)
+          .filter((id) => tenantCompanyIds.has(id)),
+      );
+
   const activeByCompany = new Map<string, AddonId[]>();
   for (const e of entitlements) {
     if (e.status !== "active") continue;
@@ -57,14 +69,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         serviceLevel: c.profile.managedService?.serviceLevel,
       };
     });
-  const tenants = (await Promise.all(memberships.map(async (m) => {
-    const t = await getTenant(m.tenantId);
-    return t ? { id: t.id, name: t.name } : null;
-  }))).filter((t): t is { id: string; name: string } => t !== null);
+
+  // Reuse the active tenant row; only fetch other memberships.
+  const otherTenantIds = memberships
+    .map((m) => m.tenantId)
+    .filter((id) => id !== user.tenantId);
+  const otherTenants = await Promise.all(otherTenantIds.map((id) => getTenant(id)));
+  const tenants = [
+    ...(tenant ? [{ id: tenant.id, name: tenant.name }] : []),
+    ...otherTenants
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+      .map((t) => ({ id: t.id, name: t.name })),
+  ];
+
   const banner = s.crisisMode
     ? { tone: "danger" as const, text: `Crisis Communications Mode is active — publishing is frozen and all social replies are escalated.${s.crisisNote ? ` (${s.crisisNote})` : ""}` }
     : s.sandboxMode ? { tone: "warning" as const, text: "Sandbox / training mode is active — publishing is disabled." } : null;
-  const admin = isAdmin(user);
   return (
     <AppShell
       user={{ name: user.name, email: user.email, role: user.role }}
@@ -79,7 +99,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       canCreate={canCreateContent(user)}
       canViewAudit={userHasPermission(user, "view_audit")}
       canFieldSales={canAccessFieldSales(user)}
-      isSalesRepFocused={isSalesRep(user) && !isAdmin(user)}
+      isSalesRepFocused={isSalesRep(user) && !admin}
       branding={tenant?.branding ?? null}
       banner={banner}
       envLabel={envRibbonLabel()}

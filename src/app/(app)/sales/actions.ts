@@ -21,7 +21,6 @@ import {
 import { runInServiceContext } from "@/lib/db/service-context";
 import {
   isAdmin,
-  isSalesRep,
   requireSalesRepOrAdmin,
 } from "@/lib/auth/rbac";
 import {
@@ -117,7 +116,8 @@ async function assertSalesCompanyInTenant(companyId: string) {
  * under service context so create/update succeed (see sales_rep company RLS migration).
  */
 function salesCompanyWrite<T>(user: ActingUser, fn: () => Promise<T>): Promise<T> {
-  if (isSalesRep(user) && !isAdmin(user)) {
+  // Any non-admin who reached field-sales actions (sales_rep seat).
+  if (!isAdmin(user)) {
     return runInServiceContext(user.tenantId, fn);
   }
   return fn();
