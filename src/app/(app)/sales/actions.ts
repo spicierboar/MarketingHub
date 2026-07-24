@@ -103,9 +103,20 @@ function text(fd: FormData, key: string): string | undefined {
 
 async function assertSalesCompanyInTenant(companyId: string) {
   const user = await requireSalesRepOrAdmin();
-  const company = await getCompany(companyId);
+  let company = await getCompany(companyId);
+  if (!company) {
+    await grantAccess(user.id, companyId).catch(() => undefined);
+    company = await getCompany(companyId);
+  }
+  if (!company) {
+    company = await runInServiceContext(user.tenantId, () => getCompany(companyId));
+  }
   if (!company || company.tenantId !== user.tenantId) {
     throw new Error("Forbidden: no access to this company");
+  }
+  // Re-heal access so later user-scoped reads (layout, lists) see the draft.
+  if (!(await getCompany(companyId))) {
+    await grantAccess(user.id, company.id);
   }
   return { user, company };
 }
@@ -337,10 +348,11 @@ export async function saveWebsiteStepAction(formData: FormData) {
       if (identity.legalName && !nextProfile.legalName?.trim()) {
         nextProfile.legalName = identity.legalName;
       }
-      await salesCompanyWrite(user, () =>
+      const saved = await salesCompanyWrite(user, () =>
         updateCompany(company.id, { name, profile: nextProfile }),
       );
-      company = { ...company, name, profile: nextProfile };
+      if (!saved) throw new Error("Could not update the client draft");
+      company = saved;
     } else {
       await assertCompanyQuota(user.tenantId);
       company = await salesCompanyWrite(user, async () => {
@@ -366,10 +378,11 @@ export async function saveWebsiteStepAction(formData: FormData) {
         };
       }
       if (identity.legalName) nextProfile.legalName = identity.legalName;
-      await salesCompanyWrite(user, () =>
+      const saved = await salesCompanyWrite(user, () =>
         updateCompany(company.id, { profile: nextProfile }),
       );
-      company = { ...company, profile: nextProfile };
+      if (!saved) throw new Error("Could not save identity on the new client draft");
+      company = saved;
       await logAction(user, "company.created", {
         targetType: "company",
         targetId: company.id,
@@ -378,40 +391,84 @@ export async function saveWebsiteStepAction(formData: FormData) {
       });
     }
 
-    let scraped = "0";
+    // Persist website + consent before scrape so Profile can open even if enrich is slow.
     if (websiteChecked && consent) {
-      const result = await scrapeAndApplyInitialProfile({
-        company,
+      const withSite: CompanyProfile = {
+        ...company.profile,
         website: websiteChecked,
-        actorId: user.id,
-      });
-      await salesCompanyWrite(user, () =>
-        updateCompany(company.id, { profile: result.profile }),
+        autoOnboarding: {
+          ...company.profile.autoOnboarding,
+          consentRecordedAt:
+            company.profile.autoOnboarding?.consentRecordedAt ?? new Date().toISOString(),
+          consentRecordedBy:
+            company.profile.autoOnboarding?.consentRecordedBy ?? user.id,
+        },
+      };
+      const saved = await salesCompanyWrite(user, () =>
+        updateCompany(company.id, { profile: withSite }),
       );
-      if (result.mode !== "failed") {
-        await logAction(user, "auto_onboarding.scraped", {
-          targetType: "company",
-          targetId: company.id,
-          companyId: company.id,
-          detail: `mode=${result.mode} fields=${result.fieldCount} sales=1 enrich=${result.enrichMode ?? "none"}`,
-        });
-      }
-      if (result.fieldCount > 0) {
-        await logAction(user, "auto_onboarding.applied", {
-          targetType: "company",
-          targetId: company.id,
-          companyId: company.id,
-          detail: `fields=${result.fieldCount} sales=1`,
-        });
-        scraped = "1";
-      }
+      if (!saved) throw new Error("Could not save website on the client draft");
+      company = { ...company, profile: withSite };
     } else if (!websiteRaw && existingId) {
       // Clearing website on back-edit — keep profile, drop URL if blank.
       const next = { ...company.profile };
       delete next.website;
-      await salesCompanyWrite(user, () =>
+      const saved = await salesCompanyWrite(user, () =>
         updateCompany(company.id, { profile: next }),
       );
+      if (!saved) throw new Error("Could not clear website on the client draft");
+      company = { ...company, profile: next };
+    }
+
+    // Cap scrape so Website → Profile never hangs on enrich/AI (still best-effort).
+    let scraped = "0";
+    if (websiteChecked && consent) {
+      const SCRAPE_BUDGET_MS = 12_000;
+      const result = await Promise.race([
+        scrapeAndApplyInitialProfile({
+          company,
+          website: websiteChecked,
+          actorId: user.id,
+        }),
+        new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), SCRAPE_BUDGET_MS),
+        ),
+      ]);
+      if (result) {
+        const saved = await salesCompanyWrite(user, () =>
+          updateCompany(company.id, { profile: result.profile }),
+        );
+        if (!saved) throw new Error("Could not save scraped profile");
+        if (result.mode !== "failed") {
+          await logAction(user, "auto_onboarding.scraped", {
+            targetType: "company",
+            targetId: company.id,
+            companyId: company.id,
+            detail: `mode=${result.mode} fields=${result.fieldCount} sales=1 enrich=${result.enrichMode ?? "none"}`,
+          });
+        }
+        if (result.fieldCount > 0) {
+          await logAction(user, "auto_onboarding.applied", {
+            targetType: "company",
+            targetId: company.id,
+            companyId: company.id,
+            detail: `fields=${result.fieldCount} sales=1`,
+          });
+          scraped = "1";
+        }
+      }
+    }
+
+    // Profile step reads under user RLS — confirm access before redirect.
+    const readable = await getCompany(company.id);
+    if (!readable) {
+      await grantAccess(user.id, company.id);
+      const again = await getCompany(company.id);
+      if (!again) {
+        throw new Error(
+          "Client was created but could not be opened — refresh and try Continue again.",
+        );
+      }
     }
 
     redirect(wizardPath("business", company.id, { scraped }));
@@ -419,7 +476,9 @@ export async function saveWebsiteStepAction(formData: FormData) {
     if (isRedirectError(e)) throw e;
     const msg = e instanceof Error ? e.message : "Could not save website step";
     redirect(
-      wizardPath("website", existingId || undefined, { error: msg }),
+      wizardPath("website", existingId || undefined, {
+        error: msg.slice(0, 400),
+      }),
     );
   }
 }

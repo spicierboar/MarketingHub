@@ -497,11 +497,19 @@ export const supabaseRepo = {
   },
   async grantAccess(userId: string, companyId: string): Promise<void> {
     const sb = svc(); if (!sb) return;
-    await sb.from("company_access").upsert({ user_id: userId, company_id: companyId }, { onConflict: "user_id,company_id" });
+    const { error } = await sb
+      .from("company_access")
+      .upsert({ user_id: userId, company_id: companyId }, { onConflict: "user_id,company_id" });
+    if (error) throw new Error("grantAccess: " + error.message);
   },
   async revokeAccess(userId: string, companyId: string): Promise<void> {
     const sb = svc(); if (!sb) return;
-    await sb.from("company_access").delete().eq("user_id", userId).eq("company_id", companyId);
+    const { error } = await sb
+      .from("company_access")
+      .delete()
+      .eq("user_id", userId)
+      .eq("company_id", companyId);
+    if (error) throw new Error("revokeAccess: " + error.message);
   },
 
   // ============================ Companies (RLS) ============================
@@ -538,7 +546,13 @@ export const supabaseRepo = {
   },
   async updateCompany(companyId: string, patch: Partial<Company>): Promise<Company | undefined> {
     const sb = await usr(); if (!sb) return undefined;
-    const { data } = await sb.from("companies").update({ ...toRow(patch), updated_at: now() }).eq("id", companyId).select("*").maybeSingle();
+    const { data, error } = await sb
+      .from("companies")
+      .update({ ...toRow(patch), updated_at: now() })
+      .eq("id", companyId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error("updateCompany: " + error.message);
     return data ? normaliseCompany(toDomain<Company>(data, COMPANY_ALIAS)) : undefined;
   },
 

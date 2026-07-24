@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSalesRepOrAdmin } from "@/lib/auth/rbac";
-import { getCompany, getTenant } from "@/lib/db";
+import { getCompany, getTenant, grantAccess } from "@/lib/db";
+import { runInServiceContext } from "@/lib/db/service-context";
 import {
   mockPackageCheckoutEnabled,
   stripeConfigured,
@@ -108,8 +109,30 @@ export default async function NewClientPage({
   else if (params.step === "done" && companyId) step = "done";
   else if (params.step === "website") step = "website";
 
-  const company = companyId ? await getCompany(companyId) : null;
-  if (companyId && !company) redirect("/sales/new-client");
+  // Sales creates under service context; user RLS can lag/miss the draft.
+  // Never silently bounce to Website — that looks like the wizard is stuck.
+  let company = companyId ? await getCompany(companyId) : null;
+  if (companyId && !company) {
+    await grantAccess(user.id, companyId).catch(() => undefined);
+    company = await getCompany(companyId);
+  }
+  if (companyId && !company) {
+    const viaService = await runInServiceContext(user.tenantId, () =>
+      getCompany(companyId),
+    );
+    if (viaService && viaService.tenantId === user.tenantId) {
+      await grantAccess(user.id, viaService.id).catch(() => undefined);
+      company = (await getCompany(companyId)) ?? viaService;
+    }
+  }
+  if (companyId && !company) {
+    redirect(
+      wizardPath("website", undefined, {
+        error:
+          "Could not open that client draft (access). Start again from Website, or re-login as the sales seat.",
+      }),
+    );
+  }
   if (company && company.tenantId !== user.tenantId) redirect("/sales/new-client");
 
   // Stripe return: verify Checkout Session server-side, then continue.
